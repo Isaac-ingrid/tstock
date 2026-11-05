@@ -5,7 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="UtAxhALARdvyo7OAxfDPQA">
 <title>做T执行台 · 七格箱体 + 七底三仓</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23d32f2f'/><text x='16' y='24' font-size='21' font-weight='700' text-anchor='middle' fill='%23ffffff' font-family='sans-serif'>T</text></svg>">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/nav.css">
+<link rel="stylesheet" href="css/anim.css">
 </head>
 <body data-page-node-id="SJRFfJmSxa80xuojKC1VMs">
 <div class="wrap" data-page-node-id="0XLrWYQHUeaFRoHjLstNV7">
@@ -24,12 +26,12 @@
 <!-- 吸顶导航：一栏解决「我在哪 / 现在什么价 / 怎么跳」三个问题 -->
 <div class="topbar" id="topbar">
   <div class="tb-nav">
-    <a href="#secPlan">今日作战</a>
-    <a href="#accSec">账户</a>
-    <a href="#secLog">台账</a>
-    <a href="#secCog">认知</a>
-    <a href="#secPerf" style="color:var(--accent);font-weight:700">📊 战绩透视</a>
-    <a href="#secRule">纪律</a>
+    <a href="javascript:switchTab('tabConsole')">今日作战</a>
+    <a href="javascript:switchTab('tabAccount')">账户</a>
+    <a href="javascript:switchTab('tabLedger')">台账</a>
+    <a href="javascript:switchTab('tabLedger')">认知</a>
+    <a href="javascript:switchTab('tabAccount')" style="color:var(--accent);font-weight:700">📊 战绩透视</a>
+    <a href="javascript:switchTab('tabRules')">纪律</a>
   </div>
   <span class="tb-sep"></span>
   <!-- 常驻账户资产胶囊 -->
@@ -229,6 +231,12 @@
   </div>
 </div>
 
+
+<!-- 现代化 5-Tab 顶部主导航栏 -->
+<nav class="main-nav-bar" id="mainNavBar"></nav>
+
+<!-- TAB 1: 🎯 做T决策台 -->
+<div class="tab-panel active" id="tabConsole">
 <!-- 理论提炼 -->
 <section data-page-node-id="EHfUvnyCdaq9msqTnK1u5K">
   <details class="fold">
@@ -281,7 +289,6 @@
   </details>
 </section>
 
-<!-- 决策引擎 -->
 <section id="secPlan" data-page-node-id="o42HkBhAjb4GKz1AyovP1h">
   <h2 data-page-node-id="89AejKyznCvJyMlEGBxx6i">三、决策引擎（自动算买卖点）</h2>
   <div class="actions" data-page-node-id="PT9M7PEmZsLCy4NHSlmRLw">
@@ -302,9 +309,10 @@
     <b data-page-node-id="Z4aKw4HwxFNN1t2rm81omL">MA5 / MA10 / MA20</b> 用于判定日线趋势方向（决定今天允许不允许做T）。
   </p>
 </section>
+</div>
 
-
-<!-- 尾盘买入策略推荐（隔夜 T+0 战法） -->
+<!-- TAB 2: ⚡ 尾盘黑马 T+0 -->
+<div class="tab-panel" id="tabTail" style="display:none">
 <section id="secTailBuy">
   <div class="tail-head-bar">
     <div class="th-title-box">
@@ -321,8 +329,10 @@
   <div id="tailRadarBox"></div>
   <div class="tail-cards-grid" id="tailCardsGrid"></div>
 </section>
+</div>
 
-<!-- 账户总览与每日收益 -->
+<!-- TAB 3: 📊 账户与战绩 -->
+<div class="tab-panel" id="tabAccount" style="display:none">
 <section id="accSec">
   <h2>四、市场环境与账户总览</h2>
   <div id="mktBox"></div>
@@ -350,97 +360,6 @@
   </div>
 </section>
 
-<!-- 铁律 + 时间窗 -->
-<section id="secRule" data-page-node-id="He56G9VmOjxgUcQxEtTeE5">
-  <h2 data-page-node-id="jc3kDWeZQ2jdCeboVVhork">五、执行纪律</h2>
-  <div class="rules-grid" data-page-node-id="A4yRYY2F0rKP4vOLBp01pO">
-    <div data-page-node-id="QzheYObuPpPaC7Mb7QNpks">
-      <h4 style="font-size:13.5px;margin-bottom:8px" data-page-node-id="OjnUA9dBhuRXewe5F7VWKt">八条保命铁律</h4>
-      <ul class="rlist" data-page-node-id="0yzp4lwtzQpKyRyGZjllDj">
-        <li data-n="1" data-page-node-id="7lYjaPCLfFpHD9XXjYjJiG"><b data-page-node-id="UeorKRXI6QyiwzanakFWS9">趋势优先</b>：日线空头 / 大盘单边跌，分时再诱人也<em data-page-node-id="jxm1TDUamm8PpL5T9JgPfM">不T</em>。</li>
-        <li data-n="2" data-page-node-id="mbcqeHBRk66s3aXenEp43Y"><b data-page-node-id="U9XKTfIFAAH8VRAWGguZwR">仓位隔离</b>：底仓守趋势、T仓做套利，7:3，互不挪用。</li>
-        <li data-n="3" data-page-node-id="jysxGhhCehke4iOgXf46p8"><b data-page-node-id="vsG0UHjKct3Ob18jiUFgKR">当日闭环</b>：14:57 前T仓必须平掉，<em data-page-node-id="F3jDkhe4AKvXC9nanOsE7q">绝不隔夜</em>。</li>
-        <li data-n="4" data-page-node-id="sC07oQDBuN82IbGEyMH8EN"><b data-page-node-id="e2EnDIQ5ma0IM2Q5QkPw4A">无信号不交易</b>：没有明确高低点就空仓等。</li>
-        <li data-n="5" data-page-node-id="3hYCOhLPiFPH4tB7GD6QVT"><b data-page-node-id="UygzKMRWpVB3fL4HPPPIqv">止盈有度</b>：常规 3%~6% 落袋，强势最多 8%。</li>
-        <li data-n="6" data-page-node-id="HoBBgB6vtMZJKfDZDfwZWX"><b data-page-node-id="KyxWNG3D8iMsVPu6nypNOX">果断止损</b>：T仓浮亏 <em data-page-node-id="EVkHe9GloEWsPwB1g0ctBi">1.5% 无条件砍</em>，不补仓。</li>
-        <li data-n="7" data-page-node-id="BlrTZV9gWmsHdJ7Xgah18E"><b data-page-node-id="u8Xz3AOfHCZXweBRbXKYPr">只做活跃标的</b>：日均振幅 &lt; 4% 的票直接放弃。</li>
-        <li data-n="8" data-page-node-id="qhg8QwLoAE6KIImc5ZEX6a"><b data-page-node-id="HXF5MXVG4S7Z12AwJpQxOm">控制频率</b>：每天最多 1~2 次，不反复进出。</li>
-      </ul>
-    </div>
-    <div data-page-node-id="V0Qsj7vy2ezqShY0esmauw">
-      <h4 style="font-size:13.5px;margin-bottom:8px" data-page-node-id="PrSUDxnayZkLmzFo8b3DLX">三大量价口诀</h4>
-      <ul class="rlist" data-page-node-id="uaqtmXlG36xCwJXevVAM8U">
-        <li data-n="A" data-page-node-id="UgWn6j5cmwJKw1IoTTDXAx"><b data-page-node-id="0OIvioSQ2jzmV2A64U1cSs">缩量急跌是机会，放量急跌是陷阱。</b>早盘急跌要看前5分钟量能：缩量=洗盘可接，放量=真出逃不接。</li>
-        <li data-n="B" data-page-node-id="DVm7LMccjCzSFTioCGPHlL"><b data-page-node-id="TWsVNA0K9DX4g2OdFeqvoj">无量拉升全是耍流氓</b>：价格线拉升超 4%，量柱却小于前5分钟均量 —— 标准量价背离，卖。</li>
-        <li data-n="C" data-page-node-id="O1SLgAvPCElXcgWzPHEs78"><b data-page-node-id="8ddbdxB4C9GYYPh5XqeIxc">三格以内静观望，三至六格可做T，六格之上需谨慎。</b>日内振幅不足 4% 直接不做。</li>
-      </ul>
-      <h4 style="font-size:13.5px;margin:14px 0 8px" data-page-node-id="yeVBEVSemfqtVReqhiApGs">做反了怎么办</h4>
-      <ul class="rlist" data-page-node-id="ytmuYExvQ0MSEyNPZo6ngk">
-        <li data-n="1" data-page-node-id="C7xMi4UJLHCJlBJ5NTux4E"><b data-page-node-id="MAU00be2jjXBfVE38VFQ90">买跌了</b>：只认错，不补仓，不反手做空。砍掉，<em data-page-node-id="jrMDOnpBKPiHMpoCgsDvWR">今天不再碰这只票</em>。</li>
-        <li data-n="2" data-page-node-id="Oy5YEDCxvPz1xHxmy8RKGv"><b data-page-node-id="H2EYxSSXVSLpxbCb6H3upA">卖飞了</b>：<em data-page-node-id="3EyduEwNcYfqo1otLTdG4X">绝不追高接回</em>。想参与就去看同板块还没启动的跟风票。</li>
-      </ul>
-    </div>
-  </div>
-
-  <h2 style="margin-top:22px" data-page-node-id="KiUWdTUJISuisCSMfQuKCR">六、时间窗口</h2>
-  <div class="tw" data-page-node-id="kuMBFGOyFannvWjK9hkkvG">
-    <div class="b" data-page-node-id="iOswKFXfJV1zaTRDvqVlCv"><h4 data-page-node-id="aTXzAN2Mtd1GMMcfZHoLzv">09:30–10:00　情绪博弈期</h4><p data-page-node-id="aycGVvuYVH8M8K0wsIMG4T">只擒确定性：低开缩量急跌可试探正T，高开放量破位优先倒T避险。<b data-page-node-id="Yx5DEejOhBIqtOhabEx47H">不追高、不冲动。</b></p></div>
-    <div class="b" data-page-node-id="6c0S37UCYJdxToQV21WjxJ"><h4 data-page-node-id="tNGCGYXdTMw0WZMxwQiEGG">10:00–14:00　趋势稳定期</h4><p data-page-node-id="HLai1xQAgod0SbHpqQjIBs">分时高低点最清晰，全天最适合做T的时段。回踩均价线低吸、拉升背离高抛。</p></div>
-    <div class="b" data-page-node-id="HabHRUl9GDBwsFvva36M3C"><h4 data-page-node-id="nZLC2eMFUeTiaZVVgVg2sa">14:30–15:00　方向确认期</h4><p data-page-node-id="Zr9MHjyviYELj05Mm8QzPU"><b data-page-node-id="18XlfhGlwJ9PhCSr3teVt6">只了结、不开新仓。</b>尾盘无量拉升坚决高抛，规避次日低开。</p></div>
-  </div>
-</section>
-
-<!-- 执行台账 -->
-<section id="secLog" data-page-node-id="VxdRqyyDOxvz15O3Wb2GjO">
-  <h2 data-page-node-id="LCiaiUT5YJE5enMKqHbYyi">七、执行台账（复盘闭环）</h2>
-  <p class="hint" style="margin-bottom:12px" data-page-node-id="LTEV13nYlE1fz2xDDqzntR">
-    每做一次T记一笔。系统自动扣掉交易摩擦成本（佣金万2.5双边 + 印花税千0.5卖出 + 过户费），算出<b data-page-node-id="HLersxbCHcge7U7C0gQWHk">净差价</b>、<b data-page-node-id="98fgR5ae3UmoR8aJcIt5s9">胜率</b>和<b data-page-node-id="wbZTRQyPuRImgcf6UBYRGI">累计降本</b>。
-    这是唯一能证明"做T到底有没有用"的地方 —— 记满 20 笔，你就知道自己该不该继续做。
-  </p>
-  <div class="actions" data-page-node-id="V6XArVsjiDgYXPsNL2w6it">
-    <button class="primary" id="logAdd" data-page-node-id="DCc5GFqMgkN3c35BEatDvs">＋ 记一笔</button>
-    <button id="logClear" data-page-node-id="R94CCcQUWZVfoJnro2kVQ2">清空台账</button>
-  </div>
-  <div id="logSummary" class="log-sum" data-page-node-id="pkbbDLYsS8hUxUEAK3x7nT"></div>
-  <div style="overflow-x:auto" data-page-node-id="S2n1F6uSVPvYmPDGWTHcyI"><table id="logTable" data-page-node-id="P0TwORsP2ZqPUiSZSForkN"></table></div>
-</section>
-
-<!-- 认知台账 -->
-<section id="secCog">
-  <h2>八、认知台账（《认知术》三条检验法 · 落地）</h2>
-  <p class="hint" style="margin-bottom:14px">
-    这一块不是写感想的地方。<b>技术决定交易下限，认知决定交易上限</b>，但"认知"本身看不见 —— 只能靠数据把它照出来。
-    下面的体检报告直接读取上面台账与自选池的真实数据，自动算出你的<b>盈亏比、每笔期望、决策质量</b>，再对照《认知术》给出的标准逐条判定。
-    T1 原文的建议是<b>每月做一次</b>：做交易和做体检一样，定期检查，才能及时发现问题。
-  </p>
-
-  <h3 class="sub">8.1 认知体检报告</h3>
-  <div class="cog-top" id="cogTop"></div>
-
-  <h3 class="sub">8.2 盈亏比 × 胜率 敏感度矩阵</h3>
-  <div id="cogMatrix"></div>
-  <div class="cog-note" id="cogMatrixNote"></div>
-
-  <h3 class="sub">8.3 压力测试 —— 明天持仓跌 5%，你怎么办</h3>
-  <div style="overflow-x:auto"><table class="cog-tbl" id="cogStress"></table></div>
-  <div class="cog-note" id="cogStressNote"></div>
-
-  <h3 class="sub">8.4 五条红线自查</h3>
-  <div id="cogRedline" style="padding:4px 14px;border:1px solid var(--line);border-radius:10px;background:#fff"></div>
-
-  <div class="actions" style="margin-top:18px">
-    <button class="primary" id="cogCheck">✓ 今天完成体检打卡</button>
-    <button id="cogCopy">复制体检报告（纯文本）</button>
-    <button id="cogRefresh">⟳ 重新体检</button>
-  </div>
-  <div class="cog-note" id="cogCheckInfo"></div>
-  <div id="cogCopyBox" style="display:none;margin-top:10px">
-    <textarea id="cogCopyTa" readonly style="width:100%;height:190px;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:12px;font-family:ui-monospace,Consolas,monospace;color:var(--text);background:#fafbfc"></textarea>
-  </div>
-</section>
-
-
-<!-- 九、选股做T历史战绩与全量推选流水（客观落盘验证） -->
 <section id="secPerf">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
     <h2 style="margin:0"><span class="idx">九、战绩透视</span>选股做T历史战绩与全量推选流水 <span class="small" id="perfMeta" style="font-size:12px;color:var(--mute);font-weight:normal;margin-left:8px">全程客观落盘回算 · 验证规则是否可用，拒绝盲目瞎买</span></h2>
@@ -505,6 +424,99 @@
     </table>
   </div>
 </section>
+</div>
+
+<!-- TAB 4: 📒 执行台账与体检 -->
+<div class="tab-panel" id="tabLedger" style="display:none">
+<section id="secLog" data-page-node-id="VxdRqyyDOxvz15O3Wb2GjO">
+  <h2 data-page-node-id="LCiaiUT5YJE5enMKqHbYyi">七、执行台账（复盘闭环）</h2>
+  <p class="hint" style="margin-bottom:12px" data-page-node-id="LTEV13nYlE1fz2xDDqzntR">
+    每做一次T记一笔。系统自动扣掉交易摩擦成本（佣金万2.5双边 + 印花税千0.5卖出 + 过户费），算出<b data-page-node-id="HLersxbCHcge7U7C0gQWHk">净差价</b>、<b data-page-node-id="98fgR5ae3UmoR8aJcIt5s9">胜率</b>和<b data-page-node-id="wbZTRQyPuRImgcf6UBYRGI">累计降本</b>。
+    这是唯一能证明"做T到底有没有用"的地方 —— 记满 20 笔，你就知道自己该不该继续做。
+  </p>
+  <div class="actions" data-page-node-id="V6XArVsjiDgYXPsNL2w6it">
+    <button class="primary" id="logAdd" data-page-node-id="DCc5GFqMgkN3c35BEatDvs">＋ 记一笔</button>
+    <button id="logClear" data-page-node-id="R94CCcQUWZVfoJnro2kVQ2">清空台账</button>
+  </div>
+  <div id="logSummary" class="log-sum" data-page-node-id="pkbbDLYsS8hUxUEAK3x7nT"></div>
+  <div style="overflow-x:auto" data-page-node-id="S2n1F6uSVPvYmPDGWTHcyI"><table id="logTable" data-page-node-id="P0TwORsP2ZqPUiSZSForkN"></table></div>
+</section>
+
+<section id="secCog">
+  <h2>八、认知台账（《认知术》三条检验法 · 落地）</h2>
+  <p class="hint" style="margin-bottom:14px">
+    这一块不是写感想的地方。<b>技术决定交易下限，认知决定交易上限</b>，但"认知"本身看不见 —— 只能靠数据把它照出来。
+    下面的体检报告直接读取上面台账与自选池的真实数据，自动算出你的<b>盈亏比、每笔期望、决策质量</b>，再对照《认知术》给出的标准逐条判定。
+    T1 原文的建议是<b>每月做一次</b>：做交易和做体检一样，定期检查，才能及时发现问题。
+  </p>
+
+  <h3 class="sub">8.1 认知体检报告</h3>
+  <div class="cog-top" id="cogTop"></div>
+
+  <h3 class="sub">8.2 盈亏比 × 胜率 敏感度矩阵</h3>
+  <div id="cogMatrix"></div>
+  <div class="cog-note" id="cogMatrixNote"></div>
+
+  <h3 class="sub">8.3 压力测试 —— 明天持仓跌 5%，你怎么办</h3>
+  <div style="overflow-x:auto"><table class="cog-tbl" id="cogStress"></table></div>
+  <div class="cog-note" id="cogStressNote"></div>
+
+  <h3 class="sub">8.4 五条红线自查</h3>
+  <div id="cogRedline" style="padding:4px 14px;border:1px solid var(--line);border-radius:10px;background:#fff"></div>
+
+  <div class="actions" style="margin-top:18px">
+    <button class="primary" id="cogCheck">✓ 今天完成体检打卡</button>
+    <button id="cogCopy">复制体检报告（纯文本）</button>
+    <button id="cogRefresh">⟳ 重新体检</button>
+  </div>
+  <div class="cog-note" id="cogCheckInfo"></div>
+  <div id="cogCopyBox" style="display:none;margin-top:10px">
+    <textarea id="cogCopyTa" readonly style="width:100%;height:190px;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:12px;font-family:ui-monospace,Consolas,monospace;color:var(--text);background:#fafbfc"></textarea>
+  </div>
+</section>
+</div>
+
+<!-- TAB 5: 📖 作战纪律与时钟 -->
+<div class="tab-panel" id="tabRules" style="display:none">
+<section id="secRule" data-page-node-id="He56G9VmOjxgUcQxEtTeE5">
+  <h2 data-page-node-id="jc3kDWeZQ2jdCeboVVhork">五、执行纪律</h2>
+  <div class="rules-grid" data-page-node-id="A4yRYY2F0rKP4vOLBp01pO">
+    <div data-page-node-id="QzheYObuPpPaC7Mb7QNpks">
+      <h4 style="font-size:13.5px;margin-bottom:8px" data-page-node-id="OjnUA9dBhuRXewe5F7VWKt">八条保命铁律</h4>
+      <ul class="rlist" data-page-node-id="0yzp4lwtzQpKyRyGZjllDj">
+        <li data-n="1" data-page-node-id="7lYjaPCLfFpHD9XXjYjJiG"><b data-page-node-id="UeorKRXI6QyiwzanakFWS9">趋势优先</b>：日线空头 / 大盘单边跌，分时再诱人也<em data-page-node-id="jxm1TDUamm8PpL5T9JgPfM">不T</em>。</li>
+        <li data-n="2" data-page-node-id="mbcqeHBRk66s3aXenEp43Y"><b data-page-node-id="U9XKTfIFAAH8VRAWGguZwR">仓位隔离</b>：底仓守趋势、T仓做套利，7:3，互不挪用。</li>
+        <li data-n="3" data-page-node-id="jysxGhhCehke4iOgXf46p8"><b data-page-node-id="vsG0UHjKct3Ob18jiUFgKR">当日闭环</b>：14:57 前T仓必须平掉，<em data-page-node-id="F3jDkhe4AKvXC9nanOsE7q">绝不隔夜</em>。</li>
+        <li data-n="4" data-page-node-id="sC07oQDBuN82IbGEyMH8EN"><b data-page-node-id="e2EnDIQ5ma0IM2Q5QkPw4A">无信号不交易</b>：没有明确高低点就空仓等。</li>
+        <li data-n="5" data-page-node-id="3hYCOhLPiFPH4tB7GD6QVT"><b data-page-node-id="UygzKMRWpVB3fL4HPPPIqv">止盈有度</b>：常规 3%~6% 落袋，强势最多 8%。</li>
+        <li data-n="6" data-page-node-id="HoBBgB6vtMZJKfDZDfwZWX"><b data-page-node-id="KyxWNG3D8iMsVPu6nypNOX">果断止损</b>：T仓浮亏 <em data-page-node-id="EVkHe9GloEWsPwB1g0ctBi">1.5% 无条件砍</em>，不补仓。</li>
+        <li data-n="7" data-page-node-id="BlrTZV9gWmsHdJ7Xgah18E"><b data-page-node-id="u8Xz3AOfHCZXweBRbXKYPr">只做活跃标的</b>：日均振幅 &lt; 4% 的票直接放弃。</li>
+        <li data-n="8" data-page-node-id="qhg8QwLoAE6KIImc5ZEX6a"><b data-page-node-id="HXF5MXVG4S7Z12AwJpQxOm">控制频率</b>：每天最多 1~2 次，不反复进出。</li>
+      </ul>
+    </div>
+    <div data-page-node-id="V0Qsj7vy2ezqShY0esmauw">
+      <h4 style="font-size:13.5px;margin-bottom:8px" data-page-node-id="PrSUDxnayZkLmzFo8b3DLX">三大量价口诀</h4>
+      <ul class="rlist" data-page-node-id="uaqtmXlG36xCwJXevVAM8U">
+        <li data-n="A" data-page-node-id="UgWn6j5cmwJKw1IoTTDXAx"><b data-page-node-id="0OIvioSQ2jzmV2A64U1cSs">缩量急跌是机会，放量急跌是陷阱。</b>早盘急跌要看前5分钟量能：缩量=洗盘可接，放量=真出逃不接。</li>
+        <li data-n="B" data-page-node-id="DVm7LMccjCzSFTioCGPHlL"><b data-page-node-id="TWsVNA0K9DX4g2OdFeqvoj">无量拉升全是耍流氓</b>：价格线拉升超 4%，量柱却小于前5分钟均量 —— 标准量价背离，卖。</li>
+        <li data-n="C" data-page-node-id="O1SLgAvPCElXcgWzPHEs78"><b data-page-node-id="8ddbdxB4C9GYYPh5XqeIxc">三格以内静观望，三至六格可做T，六格之上需谨慎。</b>日内振幅不足 4% 直接不做。</li>
+      </ul>
+      <h4 style="font-size:13.5px;margin:14px 0 8px" data-page-node-id="yeVBEVSemfqtVReqhiApGs">做反了怎么办</h4>
+      <ul class="rlist" data-page-node-id="ytmuYExvQ0MSEyNPZo6ngk">
+        <li data-n="1" data-page-node-id="C7xMi4UJLHCJlBJ5NTux4E"><b data-page-node-id="MAU00be2jjXBfVE38VFQ90">买跌了</b>：只认错，不补仓，不反手做空。砍掉，<em data-page-node-id="jrMDOnpBKPiHMpoCgsDvWR">今天不再碰这只票</em>。</li>
+        <li data-n="2" data-page-node-id="Oy5YEDCxvPz1xHxmy8RKGv"><b data-page-node-id="H2EYxSSXVSLpxbCb6H3upA">卖飞了</b>：<em data-page-node-id="3EyduEwNcYfqo1otLTdG4X">绝不追高接回</em>。想参与就去看同板块还没启动的跟风票。</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2 style="margin-top:22px" data-page-node-id="KiUWdTUJISuisCSMfQuKCR">六、时间窗口</h2>
+  <div class="tw" data-page-node-id="kuMBFGOyFannvWjK9hkkvG">
+    <div class="b" data-page-node-id="iOswKFXfJV1zaTRDvqVlCv"><h4 data-page-node-id="aTXzAN2Mtd1GMMcfZHoLzv">09:30–10:00　情绪博弈期</h4><p data-page-node-id="aycGVvuYVH8M8K0wsIMG4T">只擒确定性：低开缩量急跌可试探正T，高开放量破位优先倒T避险。<b data-page-node-id="Yx5DEejOhBIqtOhabEx47H">不追高、不冲动。</b></p></div>
+    <div class="b" data-page-node-id="6c0S37UCYJdxToQV21WjxJ"><h4 data-page-node-id="tNGCGYXdTMw0WZMxwQiEGG">10:00–14:00　趋势稳定期</h4><p data-page-node-id="HLai1xQAgod0SbHpqQjIBs">分时高低点最清晰，全天最适合做T的时段。回踩均价线低吸、拉升背离高抛。</p></div>
+    <div class="b" data-page-node-id="HabHRUl9GDBwsFvva36M3C"><h4 data-page-node-id="nZLC2eMFUeTiaZVVgVg2sa">14:30–15:00　方向确认期</h4><p data-page-node-id="Zr9MHjyviYELj05Mm8QzPU"><b data-page-node-id="18XlfhGlwJ9PhCSr3teVt6">只了结、不开新仓。</b>尾盘无量拉升坚决高抛，规避次日低开。</p></div>
+  </div>
+</section>
+</div>
 
 <footer data-page-node-id="FgbSMgZFna2vpuw2ddLz1o">做T修的是技术，炼的是心性。系统给的是概率，纪律给的是复利。</footer>
 </div>
@@ -512,6 +524,7 @@
 <!-- 选股引擎统一数据契约 -->
 <script src="data/latest.js"></script>
 <!-- 做T执行台核心引擎与战绩交互脚本 -->
-<script src="script.js"></script>
+<!-- 做T执行台现代化ESM模块化引擎 -->
+<script type="module" src="js/main.js"></script>
 </body>
 </html>

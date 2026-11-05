@@ -4070,8 +4070,16 @@ function getTailBuyCandidates() {
   const tenPctBudget = totalAssets * 0.10;
   
   let cands = [];
-  if (typeof WB_LATEST !== 'undefined' && WB_LATEST && Array.isArray(WB_LATEST.candidates)) {
+  let src = 'none';
+  /* 优先读尾盘专用名单（14:30 盘中实时产出，tail-<日期>.json → latest.tail）。
+     其次是收盘候选（engine.js 的次日做T名单），最后才退回本地自选池。
+     这个顺序不能反：收盘候选是「明天做T」的口径，拿来当尾盘黑马是错位的。 */
+  if (typeof WB_LATEST !== 'undefined' && WB_LATEST && Array.isArray(WB_LATEST.tail) && WB_LATEST.tail.length) {
+    cands = WB_LATEST.tail;
+    src = 'tail';
+  } else if (typeof WB_LATEST !== 'undefined' && WB_LATEST && Array.isArray(WB_LATEST.candidates)) {
     cands = WB_LATEST.candidates;
+    src = 'close';
   } else if (typeof pool !== 'undefined' && Array.isArray(pool)) {
     cands = pool.map(s => ({
       name: s.name,
@@ -4083,11 +4091,15 @@ function getTailBuyCandidates() {
       volRatio: 1.5,
       retOpen: 2.5
     }));
+    src = 'pool';
   }
 
-  // 严格过滤：有分值、价格合法
+  // 严格过滤：有分值、价格合法。
+  // 门槛按来源区分：尾盘专用名单已由 tail.js 做过质量把关（其 scoreMin=70），
+  // 这里再用 80 会把 70–79 的「观察」票全部滤掉，等于白跑一遍打分。
+  const minScore = src === 'tail' ? 70 : 80;
   const valid = cands.filter(c => {
-    if (!c.score || c.score < 80) return false;
+    if (!c.score || c.score < minScore) return false;
     if (!c.price || c.price <= 0) return false;
     return true;
   });
@@ -4120,6 +4132,9 @@ function getTailBuyCandidates() {
       name: c.name,
       score: c.score,
       price: px,
+      chgPct: c.chgPct != null ? +c.chgPct : null,
+      limitRoom: c.limitRoom != null ? c.limitRoom : null,
+      tailRel: c.tailRel != null ? c.tailRel : null,
       retOpen: c.retOpen != null ? +c.retOpen.toFixed(2) : 2.5,
       vwapOnline: c.vwapOnline != null ? +c.vwapOnline.toFixed(1) : 95.0,
       volRatio: c.volRatio != null ? +c.volRatio.toFixed(2) : 2.0,
@@ -4142,7 +4157,9 @@ function getTailBuyCandidates() {
   return {
     totalAssets,
     tenPctBudget,
-    candidates: top2
+    candidates: top2,
+    src,
+    srcMeta: (typeof WB_LATEST !== 'undefined' && WB_LATEST && WB_LATEST.tailMeta) ? WB_LATEST.tailMeta : null
   };
 }
 
@@ -4168,8 +4185,27 @@ function renderTailBuySection() {
     const leftMins = 600 - mins;
     badgeHtml = `<span class="tb-status-pill exit">⚡ 09:30-10:00 隔夜T+0冲高止盈窗口 (距10:00还剩 ${leftMins} 分钟)</span>`;
   } else {
-    badgeHtml = `<span class="tb-status-pill idle">⏳ 预演观察期 (每日 14:30-14:50 自动触发精选黑马)</span>`;
+    badgeHtml = `<span class="tb-status-pill idle">⏳ 预演观察期 (每日 14:30 自动精选黑马)</span>`;
   }
+
+  /* 名单来源标签：三种来源的可信度差别很大，必须在页面上说清，
+     否则用户会把「昨天收盘的做T候选」当成「今天尾盘的实时黑马」。 */
+  const srcInfo = (() => {
+    if (data.src === 'tail') {
+      const m = data.srcMeta || {};
+      const sameDay = m.date === new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+      return {
+        cls: sameDay ? 'src-tail' : 'src-stale',
+        txt: sameDay
+          ? `🎯 今日 ${m.scanTime || ''} 盘中实时扫描（尾盘专用口径）`
+          : `⚠ 名单来自 ${m.date} ${m.scanTime || ''}，已非今日数据`,
+      };
+    }
+    if (data.src === 'close') {
+      return { cls: 'src-close', txt: '📋 来自昨日收盘选股（次日做T口径，非尾盘实时）' };
+    }
+    return { cls: 'src-pool', txt: '💾 来自本地自选池（未取到引擎名单）' };
+  })();
 
   // 2. 次日早盘 30 分钟冲高止盈雷达（支持多只并存！）
   let radarHtml = '';
@@ -4286,7 +4322,7 @@ function renderTailBuySection() {
         <div class="tcc-kpis">
           <div class="tcc-kpi">
             <span class="k">参考价格</span>
-            <span class="v">¥${c.price} <small class="up">(+${c.retOpen}%)</small></span>
+            <span class="v">¥${c.price} <small class="up">(+${c.chgPct != null ? c.chgPct : c.retOpen}%)</small></span>
           </div>
           <div class="tcc-kpi">
             <span class="k">均线时长</span>
@@ -4297,6 +4333,17 @@ function renderTailBuySection() {
             <span class="v">${c.volRatio} / ${c.turnover}%</span>
           </div>
         </div>
+        ${(c.limitRoom != null || c.tailRel != null) ? `
+        <div class="tcc-kpis" style="margin-top:-2px">
+          ${c.limitRoom != null ? `<div class="tcc-kpi">
+            <span class="k">距涨停</span>
+            <span class="v"><b style="color:var(--up)">${c.limitRoom}%</b> 空间（未封板买得进）</span>
+          </div>` : ''}
+          ${c.tailRel != null ? `<div class="tcc-kpi">
+            <span class="k">尾盘量能</span>
+            <span class="v">${c.tailRel}× 全市场中位</span>
+          </div>` : ''}
+        </div>` : ''}
         <div class="tcc-sizing-box">
           <div class="tcc-sz-row">
             <span>🎯 10% 顶格建议仓位: <b>${c.recShares} 股</b> (约 ¥${c.costAmt.toLocaleString('zh-CN')}，占总资产 ${c.actualPct}%)</span>
@@ -4334,7 +4381,10 @@ function renderTailBuySection() {
       </div>
     `).join('');
   } else {
-    cardsHtml = '<div style="color:var(--mute);padding:16px;text-align:center">暂无符合条件的 80分+ 尾盘黑马标的，请在盘中刷新行情或点击重新计算。</div>';
+    cardsHtml = `<div style="color:var(--mute);padding:16px;text-align:center">
+      今日尾盘暂无 ${src === 'tail' ? 70 : 80} 分以上的黑马标的 —— 宁缺毋滥，空仓也是操作。<br>
+      <span style="font-size:12px">名单由 <code>选股引擎/tail.js</code> 每交易日 14:30 盘中实时扫描生成；未到点或当日无合格标的时这里会是空的。</span>
+    </div>`;
   }
 
   // 组装 Section 内容
@@ -4342,7 +4392,8 @@ function renderTailBuySection() {
     <div class="tail-head-bar">
       <div class="th-title-box">
         <h3>🎯 尾盘买入策略推荐（隔夜 T+0 战法）</h3>
-        <p class="th-sub">14:30~14:50 锁定 TOP 1~2 只最强黑马 ｜ 10% 顶格仓位潜伏 ｜ 次日 09:30~10:00 冲高闭环兑现 ｜ 支持多只同时潜伏</p>
+        <p class="th-sub">14:30 自动精选 TOP 1~2 只最强黑马 ｜ 10% 顶格仓位潜伏 ｜ 次日 09:30~10:00 冲高闭环兑现 ｜ 支持多只同时潜伏</p>
+        <p class="th-src ${srcInfo.cls}">${srcInfo.txt}</p>
       </div>
       <div class="th-status-box">
         ${badgeHtml}

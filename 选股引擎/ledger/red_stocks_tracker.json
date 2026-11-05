@@ -56,21 +56,45 @@
         "label": "T+3",
         "date": "2026-11-03",
         "open": 16.61,
-        "close": 16.77,
+        "close": 16.73,
         "high": 17.05,
         "low": 16.48,
-        "closeReturn": 4.29,
+        "closeReturn": 4.04,
         "maxHighGain": 6.03,
+        "tSuccess": true
+      },
+      {
+        "day": 4,
+        "label": "T+4",
+        "date": "2026-11-04",
+        "open": 16.66,
+        "close": 16.93,
+        "high": 16.97,
+        "low": 16.59,
+        "closeReturn": 5.29,
+        "maxHighGain": 5.53,
+        "tSuccess": true
+      },
+      {
+        "day": 5,
+        "label": "T+5",
+        "date": "2026-11-05",
+        "open": 16.93,
+        "close": 17.2,
+        "high": 17.3,
+        "low": 16.73,
+        "closeReturn": 6.97,
+        "maxHighGain": 7.59,
         "tSuccess": true
       }
     ],
-    "maxSurgeGain": 6.03,
-    "bestDay": "T+3",
-    "bestDate": "2026-11-03",
+    "maxSurgeGain": 7.59,
+    "bestDay": "T+5",
+    "bestDate": "2026-11-05",
     "isSurgeAchieved": true,
-    "latestCloseReturn": 4.29,
+    "latestCloseReturn": 6.97,
     "tGainPct": 0,
-    "totalReturnWithT": 4.18,
+    "totalReturnWithT": 6.86,
     "whyReasons": [
       "🛡️ 主力控盘：日内均价线上方运行时间占比高达 88.8%，重心坚挺",
       "🔥 量价配合：开盘量比 4.92，放量突破且换手充分（9.5%）",
@@ -155,15 +179,39 @@
         "closeReturn": 16.11,
         "maxHighGain": 16.11,
         "tSuccess": true
+      },
+      {
+        "day": 4,
+        "label": "T+4",
+        "date": "2026-11-04",
+        "open": 8.64,
+        "close": 8.18,
+        "high": 8.64,
+        "low": 7.97,
+        "closeReturn": 8.92,
+        "maxHighGain": 15.05,
+        "tSuccess": true
+      },
+      {
+        "day": 5,
+        "label": "T+5",
+        "date": "2026-11-05",
+        "open": 8.02,
+        "close": 8.28,
+        "high": 8.58,
+        "low": 7.98,
+        "closeReturn": 10.25,
+        "maxHighGain": 14.25,
+        "tSuccess": true
       }
     ],
     "maxSurgeGain": 16.11,
     "bestDay": "T+3",
     "bestDate": "2026-11-03",
     "isSurgeAchieved": true,
-    "latestCloseReturn": 16.11,
+    "latestCloseReturn": 10.25,
     "tGainPct": 0,
-    "totalReturnWithT": 16,
+    "totalReturnWithT": 10.14,
     "whyReasons": [
       "🛡️ 主力控盘：日内均价线上方运行时间占比高达 97.9%，重心坚挺",
       "🔥 量价配合：开盘量比 1.41，放量突破且换手充分（11.8%）",
@@ -176,7 +224,7 @@
         {
           "level": "info",
           "type": "高估值溢价",
-          "desc": "PE市盈率约 264.69 倍，估值偏高，只适合快进快出做T，不宜长期死守"
+          "desc": "PE市盈率约 251.33 倍，估值偏高，只适合快进快出做T，不宜长期死守"
         },
         {
           "level": "danger",
@@ -247,21 +295,45 @@
         "label": "T+3",
         "date": "2026-11-03",
         "open": 94.5,
-        "close": 96.88,
+        "close": 95.01,
         "high": 100.98,
         "low": 93.79,
-        "closeReturn": 0.29,
+        "closeReturn": -1.65,
         "maxHighGain": 4.53,
+        "tSuccess": true
+      },
+      {
+        "day": 4,
+        "label": "T+4",
+        "date": "2026-11-04",
+        "open": 93.57,
+        "close": 100.82,
+        "high": 104,
+        "low": 90.4,
+        "closeReturn": 4.37,
+        "maxHighGain": 7.66,
+        "tSuccess": true
+      },
+      {
+        "day": 5,
+        "label": "T+5",
+        "date": "2026-11-05",
+        "open": 98.95,
+        "close": 100.59,
+        "high": 106.5,
+        "low": 98.2,
+        "closeReturn": 4.13,
+        "maxHighGain": 10.25,
         "tSuccess": true
       }
     ],
-    "maxSurgeGain": 4.95,
-    "bestDay": "T+1",
-    "bestDate": "2026-10-30",
+    "maxSurgeGain": 10.25,
+    "bestDay": "T+5",
+    "bestDate": "2026-11-05",
     "isSurgeAchieved": true,
-    "latestCloseReturn": 0.29,
-    "tGainPct": 0.93,
-    "totalReturnWithT": 1.11,
+    "latestCloseReturn": 4.13,
+    "tGainPct": 0,
+    "totalReturnWithT": 4.02,
     "whyReasons": [
       "🛡️ 主力控盘：日内均价线上方运行时间占比高达 86.4%，重心坚挺",
       "🔥 量价配合：开盘量比 2.06，放量突破且换手充分（25.2%）",
@@ -345,21 +417,45 @@
         "label": "T+3",
         "date": "2026-11-03",
         "open": 13.71,
-        "close": 13.73,
+        "close": 14,
         "high": 14.37,
-        "low": 13.43,
-        "closeReturn": 12.91,
+        "low": 12.86,
+        "closeReturn": 15.13,
         "maxHighGain": 18.17,
+        "tSuccess": true
+      },
+      {
+        "day": 4,
+        "label": "T+4",
+        "date": "2026-11-04",
+        "open": 13.31,
+        "close": 13.53,
+        "high": 14.25,
+        "low": 13.25,
+        "closeReturn": 11.27,
+        "maxHighGain": 17.19,
+        "tSuccess": true
+      },
+      {
+        "day": 5,
+        "label": "T+5",
+        "date": "2026-11-05",
+        "open": 13.33,
+        "close": 14.02,
+        "high": 14.57,
+        "low": 13.33,
+        "closeReturn": 15.3,
+        "maxHighGain": 19.82,
         "tSuccess": true
       }
     ],
-    "maxSurgeGain": 18.67,
-    "bestDay": "T+0",
-    "bestDate": "2026-10-29",
+    "maxSurgeGain": 19.82,
+    "bestDay": "T+5",
+    "bestDate": "2026-11-05",
     "isSurgeAchieved": true,
-    "latestCloseReturn": 12.91,
+    "latestCloseReturn": 15.3,
     "tGainPct": 0,
-    "totalReturnWithT": 12.8,
+    "totalReturnWithT": 15.19,
     "whyReasons": [
       "🛡️ 主力控盘：日内均价线上方运行时间占比高达 88.8%，重心坚挺",
       "🔥 量价配合：开盘量比 1.53，放量突破且换手充分（17.3%）",
@@ -426,21 +522,45 @@
         "label": "T+2",
         "date": "2026-11-03",
         "open": 6.07,
-        "close": 6.11,
+        "close": 6.01,
         "high": 6.23,
-        "low": 6.03,
-        "closeReturn": 2.86,
+        "low": 5.99,
+        "closeReturn": 1.18,
         "maxHighGain": 4.88,
+        "tSuccess": true
+      },
+      {
+        "day": 3,
+        "label": "T+3",
+        "date": "2026-11-04",
+        "open": 5.94,
+        "close": 6.03,
+        "high": 6.11,
+        "low": 5.93,
+        "closeReturn": 1.52,
+        "maxHighGain": 2.86,
+        "tSuccess": true
+      },
+      {
+        "day": 4,
+        "label": "T+4",
+        "date": "2026-11-05",
+        "open": 5.96,
+        "close": 6.28,
+        "high": 6.35,
+        "low": 5.95,
+        "closeReturn": 5.72,
+        "maxHighGain": 6.9,
         "tSuccess": true
       }
     ],
-    "maxSurgeGain": 4.88,
-    "bestDay": "T+2",
-    "bestDate": "2026-11-03",
+    "maxSurgeGain": 6.9,
+    "bestDay": "T+4",
+    "bestDate": "2026-11-05",
     "isSurgeAchieved": true,
-    "latestCloseReturn": 2.86,
+    "latestCloseReturn": 5.72,
     "tGainPct": 0,
-    "totalReturnWithT": 2.75,
+    "totalReturnWithT": 5.61,
     "whyReasons": [
       "🛡️ 主力控盘：日内均价线上方运行时间占比高达 75.6%，重心坚挺",
       "🔥 量价配合：开盘量比 1.55，放量突破且换手充分（6.0%）",
@@ -453,7 +573,7 @@
         {
           "level": "info",
           "type": "高估值溢价",
-          "desc": "PE市盈率约 308.08 倍，估值偏高，只适合快进快出做T，不宜长期死守"
+          "desc": "PE市盈率约 316.65 倍，估值偏高，只适合快进快出做T，不宜长期死守"
         },
         {
           "level": "danger",
@@ -500,21 +620,45 @@
         "label": "T+1",
         "date": "2026-11-03",
         "open": 16.42,
-        "close": 16.7,
+        "close": 16.44,
         "high": 17.06,
         "low": 15.96,
-        "closeReturn": 1.95,
+        "closeReturn": 0.37,
         "maxHighGain": 4.15,
+        "tSuccess": true
+      },
+      {
+        "day": 2,
+        "label": "T+2",
+        "date": "2026-11-04",
+        "open": 16.23,
+        "close": 16.7,
+        "high": 17.14,
+        "low": 16.23,
+        "closeReturn": 1.95,
+        "maxHighGain": 4.64,
+        "tSuccess": true
+      },
+      {
+        "day": 3,
+        "label": "T+3",
+        "date": "2026-11-05",
+        "open": 16.78,
+        "close": 17.38,
+        "high": 17.46,
+        "low": 16.66,
+        "closeReturn": 6.11,
+        "maxHighGain": 6.59,
         "tSuccess": true
       }
     ],
-    "maxSurgeGain": 4.15,
-    "bestDay": "T+1",
-    "bestDate": "2026-11-03",
+    "maxSurgeGain": 6.59,
+    "bestDay": "T+3",
+    "bestDate": "2026-11-05",
     "isSurgeAchieved": true,
-    "latestCloseReturn": 1.95,
-    "tGainPct": 0.92,
-    "totalReturnWithT": 2.76,
+    "latestCloseReturn": 6.11,
+    "tGainPct": 0,
+    "totalReturnWithT": 6,
     "whyReasons": [
       "🛡️ 主力控盘：日内均价线上方运行时间占比高达 95.9%，重心坚挺",
       "🔥 量价配合：开盘量比 3.12，放量突破且换手充分（4.5%）",
@@ -579,21 +723,45 @@
         "label": "T+1",
         "date": "2026-11-03",
         "open": 12.99,
-        "close": 13.2,
-        "high": 13.25,
+        "close": 13.32,
+        "high": 13.35,
         "low": 12.84,
-        "closeReturn": 2.56,
-        "maxHighGain": 2.95,
+        "closeReturn": 3.5,
+        "maxHighGain": 3.73,
+        "tSuccess": true
+      },
+      {
+        "day": 2,
+        "label": "T+2",
+        "date": "2026-11-04",
+        "open": 13.25,
+        "close": 13.34,
+        "high": 13.66,
+        "low": 13.09,
+        "closeReturn": 3.65,
+        "maxHighGain": 6.14,
+        "tSuccess": true
+      },
+      {
+        "day": 3,
+        "label": "T+3",
+        "date": "2026-11-05",
+        "open": 13.41,
+        "close": 13.57,
+        "high": 13.66,
+        "low": 13.19,
+        "closeReturn": 5.44,
+        "maxHighGain": 6.14,
         "tSuccess": true
       }
     ],
-    "maxSurgeGain": 2.95,
-    "bestDay": "T+1",
-    "bestDate": "2026-11-03",
+    "maxSurgeGain": 6.14,
+    "bestDay": "T+2",
+    "bestDate": "2026-11-04",
     "isSurgeAchieved": true,
-    "latestCloseReturn": 2.56,
-    "tGainPct": 0.95,
-    "totalReturnWithT": 3.4,
+    "latestCloseReturn": 5.44,
+    "tGainPct": 0,
+    "totalReturnWithT": 5.33,
     "whyReasons": [
       "🛡️ 主力控盘：日内均价线上方运行时间占比高达 95.0%，重心坚挺",
       "🔥 量价配合：开盘量比 3.30，放量突破且换手充分（6.9%）",
@@ -654,15 +822,39 @@
         "closeReturn": 10.74,
         "maxHighGain": 10.74,
         "tSuccess": true
+      },
+      {
+        "day": 2,
+        "label": "T+2",
+        "date": "2026-11-04",
+        "open": 12.55,
+        "close": 10.95,
+        "high": 12.71,
+        "low": 10.82,
+        "closeReturn": 4.99,
+        "maxHighGain": 21.86,
+        "tSuccess": true
+      },
+      {
+        "day": 3,
+        "label": "T+3",
+        "date": "2026-11-05",
+        "open": 10.02,
+        "close": 11.07,
+        "high": 11.33,
+        "low": 10.02,
+        "closeReturn": 6.14,
+        "maxHighGain": 8.63,
+        "tSuccess": true
       }
     ],
-    "maxSurgeGain": 10.74,
-    "bestDay": "T+1",
-    "bestDate": "2026-11-03",
+    "maxSurgeGain": 21.86,
+    "bestDay": "T+2",
+    "bestDate": "2026-11-04",
     "isSurgeAchieved": true,
-    "latestCloseReturn": 10.74,
+    "latestCloseReturn": 6.14,
     "tGainPct": 0.99,
-    "totalReturnWithT": 11.62,
+    "totalReturnWithT": 7.02,
     "whyReasons": [
       "🛡️ 主力控盘：日内均价线上方运行时间占比高达 96.3%，重心坚挺",
       "🔥 量价配合：开盘量比 1.13，放量突破且换手充分（9.4%）",
@@ -727,21 +919,45 @@
         "label": "T+1",
         "date": "2026-11-03",
         "open": 6.74,
-        "close": 6.74,
+        "close": 6.65,
         "high": 6.84,
-        "low": 6.69,
-        "closeReturn": -1.61,
+        "low": 6.57,
+        "closeReturn": -2.92,
         "maxHighGain": -0.15,
         "tSuccess": false
+      },
+      {
+        "day": 2,
+        "label": "T+2",
+        "date": "2026-11-04",
+        "open": 6.64,
+        "close": 6.74,
+        "high": 6.79,
+        "low": 6.59,
+        "closeReturn": -1.61,
+        "maxHighGain": -0.88,
+        "tSuccess": false
+      },
+      {
+        "day": 3,
+        "label": "T+3",
+        "date": "2026-11-05",
+        "open": 6.79,
+        "close": 7.04,
+        "high": 7.15,
+        "low": 6.78,
+        "closeReturn": 2.77,
+        "maxHighGain": 4.38,
+        "tSuccess": true
       }
     ],
     "maxSurgeGain": 6.13,
     "bestDay": "T+0",
     "bestDate": "2026-11-02",
     "isSurgeAchieved": true,
-    "latestCloseReturn": -1.61,
-    "tGainPct": -1.67,
-    "totalReturnWithT": -3.38,
+    "latestCloseReturn": 2.77,
+    "tGainPct": 0.96,
+    "totalReturnWithT": 3.63,
     "whyReasons": [
       "🛡️ 主力控盘：日内均价线上方运行时间占比高达 98.8%，重心坚挺",
       "🔥 量价配合：开盘量比 3.79，放量突破且换手充分（13.6%）",
@@ -801,21 +1017,45 @@
         "label": "T+1",
         "date": "2026-11-03",
         "open": 22.35,
-        "close": 23.91,
+        "close": 23.19,
         "high": 24.3,
         "low": 21.81,
-        "closeReturn": 2.97,
+        "closeReturn": -0.13,
         "maxHighGain": 4.65,
         "tSuccess": true
+      },
+      {
+        "day": 2,
+        "label": "T+2",
+        "date": "2026-11-04",
+        "open": 22.4,
+        "close": 22.45,
+        "high": 22.81,
+        "low": 21.5,
+        "closeReturn": -3.32,
+        "maxHighGain": -1.77,
+        "tSuccess": false
+      },
+      {
+        "day": 3,
+        "label": "T+3",
+        "date": "2026-11-05",
+        "open": 21.9,
+        "close": 22.79,
+        "high": 23.23,
+        "low": 21.79,
+        "closeReturn": -1.85,
+        "maxHighGain": 0.04,
+        "tSuccess": false
       }
     ],
     "maxSurgeGain": 4.65,
     "bestDay": "T+1",
     "bestDate": "2026-11-03",
     "isSurgeAchieved": true,
-    "latestCloseReturn": 2.97,
-    "tGainPct": 0.93,
-    "totalReturnWithT": 3.79,
+    "latestCloseReturn": -1.85,
+    "tGainPct": -1.57,
+    "totalReturnWithT": -3.53,
     "whyReasons": [
       "🛡️ 主力控盘：日内均价线上方运行时间占比高达 94.6%，重心坚挺",
       "🔥 量价配合：开盘量比 1.23，放量突破且换手充分（9.7%）",
@@ -828,7 +1068,7 @@
         {
           "level": "info",
           "type": "高估值溢价",
-          "desc": "PE市盈率约 248.49 倍，估值偏高，只适合快进快出做T，不宜长期死守"
+          "desc": "PE市盈率约 236.85 倍，估值偏高，只适合快进快出做T，不宜长期死守"
         },
         {
           "level": "warn",
@@ -886,15 +1126,39 @@
         "closeReturn": 10.78,
         "maxHighGain": 10.78,
         "tSuccess": true
+      },
+      {
+        "day": 2,
+        "label": "T+2",
+        "date": "2026-11-04",
+        "open": 3.68,
+        "close": 3.55,
+        "high": 3.97,
+        "low": 3.46,
+        "closeReturn": 6.29,
+        "maxHighGain": 18.86,
+        "tSuccess": true
+      },
+      {
+        "day": 3,
+        "label": "T+3",
+        "date": "2026-11-05",
+        "open": 3.4,
+        "close": 3.46,
+        "high": 3.56,
+        "low": 3.39,
+        "closeReturn": 3.59,
+        "maxHighGain": 6.59,
+        "tSuccess": true
       }
     ],
-    "maxSurgeGain": 10.78,
-    "bestDay": "T+1",
-    "bestDate": "2026-11-03",
+    "maxSurgeGain": 18.86,
+    "bestDay": "T+2",
+    "bestDate": "2026-11-04",
     "isSurgeAchieved": true,
-    "latestCloseReturn": 10.78,
-    "tGainPct": 0.84,
-    "totalReturnWithT": 11.51,
+    "latestCloseReturn": 3.59,
+    "tGainPct": 0,
+    "totalReturnWithT": 3.48,
     "whyReasons": [
       "🛡️ 主力控盘：日内均价线上方运行时间占比高达 97.1%，重心坚挺",
       "🔥 量价配合：开盘量比 1.05，放量突破且换手充分（10.8%）",
@@ -949,21 +1213,45 @@
         "label": "T+1",
         "date": "2026-11-03",
         "open": 15.09,
-        "close": 15.48,
-        "high": 15.58,
+        "close": 15.39,
+        "high": 15.6,
         "low": 14.85,
-        "closeReturn": 2.65,
-        "maxHighGain": 3.32,
+        "closeReturn": 2.06,
+        "maxHighGain": 3.45,
+        "tSuccess": true
+      },
+      {
+        "day": 2,
+        "label": "T+2",
+        "date": "2026-11-04",
+        "open": 15.4,
+        "close": 15.5,
+        "high": 15.62,
+        "low": 15.25,
+        "closeReturn": 2.79,
+        "maxHighGain": 3.58,
+        "tSuccess": true
+      },
+      {
+        "day": 3,
+        "label": "T+3",
+        "date": "2026-11-05",
+        "open": 15.7,
+        "close": 16.53,
+        "high": 16.58,
+        "low": 15.4,
+        "closeReturn": 9.62,
+        "maxHighGain": 9.95,
         "tSuccess": true
       }
     ],
-    "maxSurgeGain": 3.32,
-    "bestDay": "T+1",
-    "bestDate": "2026-11-03",
+    "maxSurgeGain": 9.95,
+    "bestDay": "T+3",
+    "bestDate": "2026-11-05",
     "isSurgeAchieved": true,
-    "latestCloseReturn": 2.65,
-    "tGainPct": 1,
-    "totalReturnWithT": 3.54,
+    "latestCloseReturn": 9.62,
+    "tGainPct": 0,
+    "totalReturnWithT": 9.51,
     "whyReasons": [
       "🛡️ 主力控盘：日内均价线上方运行时间占比高达 95.5%，重心坚挺",
       "🔥 量价配合：开盘量比 1.24，放量突破且换手充分（4.1%）",
@@ -1023,10 +1311,34 @@
         "label": "T+1",
         "date": "2026-11-03",
         "open": 26,
-        "close": 25.9,
+        "close": 25.6,
         "high": 26.31,
         "low": 25.16,
-        "closeReturn": -0.8,
+        "closeReturn": -1.95,
+        "maxHighGain": 0.77,
+        "tSuccess": false
+      },
+      {
+        "day": 2,
+        "label": "T+2",
+        "date": "2026-11-04",
+        "open": 25.57,
+        "close": 25.62,
+        "high": 25.98,
+        "low": 25,
+        "closeReturn": -1.88,
+        "maxHighGain": -0.5,
+        "tSuccess": false
+      },
+      {
+        "day": 3,
+        "label": "T+3",
+        "date": "2026-11-05",
+        "open": 25.32,
+        "close": 26.29,
+        "high": 26.31,
+        "low": 25.1,
+        "closeReturn": 0.69,
         "maxHighGain": 0.77,
         "tSuccess": false
       }
@@ -1035,9 +1347,9 @@
     "bestDay": "T+1",
     "bestDate": "2026-11-03",
     "isSurgeAchieved": false,
-    "latestCloseReturn": -0.8,
+    "latestCloseReturn": 0.69,
     "tGainPct": -1.55,
-    "totalReturnWithT": -2.47,
+    "totalReturnWithT": -0.97,
     "whyReasons": [
       "🛡️ 主力控盘：日内均价线上方运行时间占比高达 96.3%，重心坚挺",
       "🔥 量价配合：开盘量比 1.19，放量突破且换手充分（4.6%）",
@@ -1097,21 +1409,45 @@
         "label": "T+1",
         "date": "2026-11-03",
         "open": 10.03,
-        "close": 10.4,
-        "high": 10.48,
+        "close": 10.29,
+        "high": 10.54,
         "low": 10,
-        "closeReturn": 2.46,
-        "maxHighGain": 3.25,
+        "closeReturn": 1.38,
+        "maxHighGain": 3.84,
+        "tSuccess": true
+      },
+      {
+        "day": 2,
+        "label": "T+2",
+        "date": "2026-11-04",
+        "open": 10.22,
+        "close": 10.08,
+        "high": 10.4,
+        "low": 10.06,
+        "closeReturn": -0.69,
+        "maxHighGain": 2.46,
+        "tSuccess": true
+      },
+      {
+        "day": 3,
+        "label": "T+3",
+        "date": "2026-11-05",
+        "open": 10.13,
+        "close": 10.23,
+        "high": 10.33,
+        "low": 9.98,
+        "closeReturn": 0.79,
+        "maxHighGain": 1.77,
         "tSuccess": true
       }
     ],
-    "maxSurgeGain": 3.25,
+    "maxSurgeGain": 3.84,
     "bestDay": "T+1",
     "bestDate": "2026-11-03",
     "isSurgeAchieved": true,
-    "latestCloseReturn": 2.46,
+    "latestCloseReturn": 0.79,
     "tGainPct": 0.93,
-    "totalReturnWithT": 3.28,
+    "totalReturnWithT": 1.6,
     "whyReasons": [
       "🛡️ 主力控盘：日内均价线上方运行时间占比高达 99.6%，重心坚挺",
       "🔥 量价配合：开盘量比 1.01，放量突破且换手充分（6.8%）",
@@ -1125,6 +1461,1650 @@
           "level": "danger",
           "type": "大盘系统性否决",
           "desc": "大盘双破MA20/MA60处于下行退潮期，系统已锁死仓位，禁止新开正T！"
+        }
+      ],
+      "highlights": [
+        "非ST标的，无退市警示",
+        "流通市值适中，无极端流动性陷阱"
+      ]
+    }
+  },
+  {
+    "id": "2026-11-03_600285",
+    "date": "2026-11-03",
+    "code": "600285",
+    "tcode": "sh600285",
+    "name": "羚锐制药",
+    "score": 91,
+    "verdict": "可做",
+    "buy": 23.44,
+    "sell1": 23.68,
+    "sell2": 23.91,
+    "stop": 23.09,
+    "nextWeekFriday": "2026-11-13",
+    "status": "active",
+    "statusText": "活跃跟踪中",
+    "trajectory": [
+      {
+        "day": 0,
+        "label": "T+0",
+        "date": "2026-11-03",
+        "open": 22.52,
+        "close": 23.59,
+        "high": 23.64,
+        "low": 22.52,
+        "closeReturn": 0.64,
+        "maxHighGain": 0.85,
+        "tSuccess": false
+      },
+      {
+        "day": 1,
+        "label": "T+1",
+        "date": "2026-11-04",
+        "open": 23.46,
+        "close": 23.36,
+        "high": 23.83,
+        "low": 23.19,
+        "closeReturn": -0.34,
+        "maxHighGain": 1.66,
+        "tSuccess": true
+      },
+      {
+        "day": 2,
+        "label": "T+2",
+        "date": "2026-11-05",
+        "open": 23.36,
+        "close": 23.57,
+        "high": 23.67,
+        "low": 23.03,
+        "closeReturn": 0.55,
+        "maxHighGain": 0.98,
+        "tSuccess": false
+      }
+    ],
+    "maxSurgeGain": 1.66,
+    "bestDay": "T+1",
+    "bestDate": "2026-11-04",
+    "isSurgeAchieved": false,
+    "latestCloseReturn": 0.55,
+    "tGainPct": -1.55,
+    "totalReturnWithT": -1.11,
+    "whyReasons": [
+      "🛡️ 主力控盘：日内均价线上方运行时间占比高达 97.1%，重心坚挺",
+      "🔥 量价配合：开盘量比 1.50，放量突破且换手充分（4.4%）",
+      "🎯 明确做T预案：建议买点 23.44，目标止盈 23.68 / 23.91，严守止损 23.09"
+    ],
+    "riskCheck": {
+      "status": "danger",
+      "statusText": "🚨 存在重大利空/系统否决",
+      "risks": [
+        {
+          "level": "danger",
+          "type": "大盘系统性否决",
+          "desc": "大盘双破MA20/MA60处于下行退潮期，系统已锁死仓位，禁止新开正T！"
+        }
+      ],
+      "highlights": [
+        "非ST标的，无退市警示",
+        "流通市值适中，无极端流动性陷阱"
+      ]
+    }
+  },
+  {
+    "id": "2026-11-03_600960",
+    "date": "2026-11-03",
+    "code": "600960",
+    "tcode": "sh600960",
+    "name": "渤海汽车",
+    "score": 89,
+    "verdict": "可做",
+    "buy": 4.21,
+    "sell1": 4.26,
+    "sell2": 4.3,
+    "stop": 4.15,
+    "nextWeekFriday": "2026-11-13",
+    "status": "active",
+    "statusText": "活跃跟踪中",
+    "trajectory": [
+      {
+        "day": 0,
+        "label": "T+0",
+        "date": "2026-11-03",
+        "open": 4.18,
+        "close": 4.24,
+        "high": 4.36,
+        "low": 4.04,
+        "closeReturn": 0.71,
+        "maxHighGain": 3.56,
+        "tSuccess": true
+      },
+      {
+        "day": 1,
+        "label": "T+1",
+        "date": "2026-11-04",
+        "open": 4.17,
+        "close": 4.19,
+        "high": 4.27,
+        "low": 4.06,
+        "closeReturn": -0.48,
+        "maxHighGain": 1.43,
+        "tSuccess": false
+      },
+      {
+        "day": 2,
+        "label": "T+2",
+        "date": "2026-11-05",
+        "open": 4.15,
+        "close": 4.29,
+        "high": 4.3,
+        "low": 4.13,
+        "closeReturn": 1.9,
+        "maxHighGain": 2.14,
+        "tSuccess": true
+      }
+    ],
+    "maxSurgeGain": 3.56,
+    "bestDay": "T+0",
+    "bestDate": "2026-11-03",
+    "isSurgeAchieved": true,
+    "latestCloseReturn": 1.9,
+    "tGainPct": 1.13,
+    "totalReturnWithT": 2.92,
+    "whyReasons": [
+      "🛡️ 主力控盘：日内均价线上方运行时间占比高达 79.8%，重心坚挺",
+      "🔥 量价配合：开盘量比 4.96，放量突破且换手充分（6.0%）",
+      "🎯 明确做T预案：建议买点 4.21，目标止盈 4.26 / 4.3，严守止损 4.15"
+    ],
+    "riskCheck": {
+      "status": "danger",
+      "statusText": "🚨 存在重大利空/系统否决",
+      "risks": [
+        {
+          "level": "warn",
+          "type": "业绩亏损",
+          "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
+        },
+        {
+          "level": "danger",
+          "type": "大盘系统性否决",
+          "desc": "大盘双破MA20/MA60处于下行退潮期，系统已锁死仓位，禁止新开正T！"
+        }
+      ],
+      "highlights": [
+        "非ST标的，无退市警示",
+        "流通市值适中，无极端流动性陷阱"
+      ]
+    }
+  },
+  {
+    "id": "2026-11-03_002531",
+    "date": "2026-11-03",
+    "code": "002531",
+    "tcode": "sz002531",
+    "name": "天顺风能",
+    "score": 88,
+    "verdict": "可做",
+    "buy": 7.41,
+    "sell1": 7.49,
+    "sell2": 7.56,
+    "stop": 7.3,
+    "nextWeekFriday": "2026-11-13",
+    "status": "active",
+    "statusText": "活跃跟踪中",
+    "trajectory": [
+      {
+        "day": 0,
+        "label": "T+0",
+        "date": "2026-11-03",
+        "open": 7.07,
+        "close": 7.46,
+        "high": 7.54,
+        "low": 7,
+        "closeReturn": 0.67,
+        "maxHighGain": 1.75,
+        "tSuccess": true
+      },
+      {
+        "day": 1,
+        "label": "T+1",
+        "date": "2026-11-04",
+        "open": 7.3,
+        "close": 7.54,
+        "high": 7.8,
+        "low": 7.28,
+        "closeReturn": 1.75,
+        "maxHighGain": 5.26,
+        "tSuccess": true
+      },
+      {
+        "day": 2,
+        "label": "T+2",
+        "date": "2026-11-05",
+        "open": 7.4,
+        "close": 7.65,
+        "high": 7.93,
+        "low": 7.4,
+        "closeReturn": 3.24,
+        "maxHighGain": 7.02,
+        "tSuccess": true
+      }
+    ],
+    "maxSurgeGain": 7.02,
+    "bestDay": "T+2",
+    "bestDate": "2026-11-05",
+    "isSurgeAchieved": true,
+    "latestCloseReturn": 3.24,
+    "tGainPct": 1.02,
+    "totalReturnWithT": 4.15,
+    "whyReasons": [
+      "🛡️ 主力控盘：日内均价线上方运行时间占比高达 89.7%，重心坚挺",
+      "🔥 量价配合：开盘量比 1.60，放量突破且换手充分（7.8%）",
+      "🎯 明确做T预案：建议买点 7.41，目标止盈 7.49 / 7.56，严守止损 7.3"
+    ],
+    "riskCheck": {
+      "status": "danger",
+      "statusText": "🚨 存在重大利空/系统否决",
+      "risks": [
+        {
+          "level": "warn",
+          "type": "业绩亏损",
+          "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
+        },
+        {
+          "level": "danger",
+          "type": "大盘系统性否决",
+          "desc": "大盘双破MA20/MA60处于下行退潮期，系统已锁死仓位，禁止新开正T！"
+        }
+      ],
+      "highlights": [
+        "非ST标的，无退市警示",
+        "流通市值适中，无极端流动性陷阱"
+      ]
+    }
+  },
+  {
+    "id": "2026-11-03_000897",
+    "date": "2026-11-03",
+    "code": "000897",
+    "tcode": "sz000897",
+    "name": "津滨发展",
+    "score": 86,
+    "verdict": "可做",
+    "buy": 1.91,
+    "sell1": 1.93,
+    "sell2": 1.95,
+    "stop": 1.88,
+    "nextWeekFriday": "2026-11-13",
+    "status": "active",
+    "statusText": "活跃跟踪中",
+    "trajectory": [
+      {
+        "day": 0,
+        "label": "T+0",
+        "date": "2026-11-03",
+        "open": 1.86,
+        "close": 1.92,
+        "high": 1.99,
+        "low": 1.83,
+        "closeReturn": 0.52,
+        "maxHighGain": 4.19,
+        "tSuccess": true
+      },
+      {
+        "day": 1,
+        "label": "T+1",
+        "date": "2026-11-04",
+        "open": 1.9,
+        "close": 1.89,
+        "high": 1.93,
+        "low": 1.86,
+        "closeReturn": -1.05,
+        "maxHighGain": 1.05,
+        "tSuccess": false
+      },
+      {
+        "day": 2,
+        "label": "T+2",
+        "date": "2026-11-05",
+        "open": 1.89,
+        "close": 1.93,
+        "high": 1.94,
+        "low": 1.88,
+        "closeReturn": 1.05,
+        "maxHighGain": 1.57,
+        "tSuccess": true
+      }
+    ],
+    "maxSurgeGain": 4.19,
+    "bestDay": "T+0",
+    "bestDate": "2026-11-03",
+    "isSurgeAchieved": true,
+    "latestCloseReturn": 1.05,
+    "tGainPct": 0.99,
+    "totalReturnWithT": 1.92,
+    "whyReasons": [
+      "🛡️ 主力控盘：日内均价线上方运行时间占比高达 69.4%，重心坚挺",
+      "🔥 量价配合：开盘量比 2.34，放量突破且换手充分（6.5%）",
+      "🎯 明确做T预案：建议买点 1.91，目标止盈 1.93 / 1.95，严守止损 1.88"
+    ],
+    "riskCheck": {
+      "status": "danger",
+      "statusText": "🚨 存在重大利空/系统否决",
+      "risks": [
+        {
+          "level": "danger",
+          "type": "大盘系统性否决",
+          "desc": "大盘双破MA20/MA60处于下行退潮期，系统已锁死仓位，禁止新开正T！"
+        }
+      ],
+      "highlights": [
+        "非ST标的，无退市警示",
+        "流通市值适中，无极端流动性陷阱"
+      ]
+    }
+  },
+  {
+    "id": "2026-11-03_600853",
+    "date": "2026-11-03",
+    "code": "600853",
+    "tcode": "sh600853",
+    "name": "龙建股份",
+    "score": 81,
+    "verdict": "可做",
+    "buy": 3.56,
+    "sell1": 3.59,
+    "sell2": 3.63,
+    "stop": 3.5,
+    "nextWeekFriday": "2026-11-13",
+    "status": "active",
+    "statusText": "活跃跟踪中",
+    "trajectory": [
+      {
+        "day": 0,
+        "label": "T+0",
+        "date": "2026-11-03",
+        "open": 3.47,
+        "close": 3.58,
+        "high": 3.65,
+        "low": 3.44,
+        "closeReturn": 0.56,
+        "maxHighGain": 2.53,
+        "tSuccess": true
+      },
+      {
+        "day": 1,
+        "label": "T+1",
+        "date": "2026-11-04",
+        "open": 3.59,
+        "close": 3.58,
+        "high": 3.69,
+        "low": 3.53,
+        "closeReturn": 0.56,
+        "maxHighGain": 3.65,
+        "tSuccess": true
+      },
+      {
+        "day": 2,
+        "label": "T+2",
+        "date": "2026-11-05",
+        "open": 3.57,
+        "close": 3.59,
+        "high": 3.65,
+        "low": 3.5,
+        "closeReturn": 0.84,
+        "maxHighGain": 2.53,
+        "tSuccess": true
+      }
+    ],
+    "maxSurgeGain": 3.65,
+    "bestDay": "T+1",
+    "bestDate": "2026-11-04",
+    "isSurgeAchieved": true,
+    "latestCloseReturn": 0.84,
+    "tGainPct": 0.78,
+    "totalReturnWithT": 1.52,
+    "whyReasons": [
+      "🛡️ 主力控盘：日内均价线上方运行时间占比高达 95.9%，重心坚挺",
+      "🔥 量价配合：开盘量比 1.10，放量突破且换手充分（6.2%）",
+      "🎯 明确做T预案：建议买点 3.56，目标止盈 3.59 / 3.63，严守止损 3.5"
+    ],
+    "riskCheck": {
+      "status": "danger",
+      "statusText": "🚨 存在重大利空/系统否决",
+      "risks": [
+        {
+          "level": "danger",
+          "type": "大盘系统性否决",
+          "desc": "大盘双破MA20/MA60处于下行退潮期，系统已锁死仓位，禁止新开正T！"
+        }
+      ],
+      "highlights": [
+        "非ST标的，无退市警示",
+        "流通市值适中，无极端流动性陷阱"
+      ]
+    }
+  },
+  {
+    "id": "2026-11-04_688315",
+    "date": "2026-11-04",
+    "code": "688315",
+    "tcode": "sh688315",
+    "name": "诺禾致源",
+    "score": 92,
+    "verdict": "可做",
+    "buy": 17.14,
+    "sell1": 17.31,
+    "sell2": 17.48,
+    "stop": 16.88,
+    "nextWeekFriday": "2026-11-13",
+    "status": "active",
+    "statusText": "活跃跟踪中",
+    "trajectory": [
+      {
+        "day": 0,
+        "label": "T+0",
+        "date": "2026-11-04",
+        "open": 16.33,
+        "close": 17.25,
+        "high": 17.4,
+        "low": 15.38,
+        "closeReturn": 0.64,
+        "maxHighGain": 1.52,
+        "tSuccess": true
+      },
+      {
+        "day": 1,
+        "label": "T+1",
+        "date": "2026-11-05",
+        "open": 17.14,
+        "close": 19.25,
+        "high": 19.44,
+        "low": 17.03,
+        "closeReturn": 12.31,
+        "maxHighGain": 13.42,
+        "tSuccess": true
+      }
+    ],
+    "maxSurgeGain": 13.42,
+    "bestDay": "T+1",
+    "bestDate": "2026-11-05",
+    "isSurgeAchieved": true,
+    "latestCloseReturn": 12.31,
+    "tGainPct": 0.93,
+    "totalReturnWithT": 13.13,
+    "whyReasons": [
+      "🛡️ 主力控盘：日内均价线上方运行时间占比高达 100.0%，重心坚挺",
+      "🔥 量价配合：开盘量比 1.04，放量突破且换手充分（6.8%）",
+      "🎯 明确做T预案：建议买点 17.14，目标止盈 17.31 / 17.48，严守止损 16.88"
+    ],
+    "riskCheck": {
+      "status": "danger",
+      "statusText": "🚨 存在重大利空/系统否决",
+      "risks": [
+        {
+          "level": "warn",
+          "type": "高波动风险",
+          "desc": "日内振幅高达 12.27%，多空分歧剧烈，挂单需防单边大跳水"
+        },
+        {
+          "level": "danger",
+          "type": "大盘系统性否决",
+          "desc": "大盘双破MA20/MA60处于下行退潮期，系统已锁死仓位，禁止新开正T！"
+        }
+      ],
+      "highlights": [
+        "非ST标的，无退市警示",
+        "流通市值适中，无极端流动性陷阱"
+      ]
+    }
+  },
+  {
+    "id": "2026-11-04_600698",
+    "date": "2026-11-04",
+    "code": "600698",
+    "tcode": "sh600698",
+    "name": "湖南天雁",
+    "score": 92,
+    "verdict": "可做",
+    "buy": 6.94,
+    "sell1": 7.01,
+    "sell2": 7.07,
+    "stop": 6.83,
+    "nextWeekFriday": "2026-11-13",
+    "status": "active",
+    "statusText": "活跃跟踪中",
+    "trajectory": [
+      {
+        "day": 0,
+        "label": "T+0",
+        "date": "2026-11-04",
+        "open": 6.6,
+        "close": 6.98,
+        "high": 7,
+        "low": 6.5,
+        "closeReturn": 0.58,
+        "maxHighGain": 0.86,
+        "tSuccess": false
+      },
+      {
+        "day": 1,
+        "label": "T+1",
+        "date": "2026-11-05",
+        "open": 6.9,
+        "close": 7.11,
+        "high": 7.14,
+        "low": 6.83,
+        "closeReturn": 2.45,
+        "maxHighGain": 2.88,
+        "tSuccess": true
+      }
+    ],
+    "maxSurgeGain": 2.88,
+    "bestDay": "T+1",
+    "bestDate": "2026-11-05",
+    "isSurgeAchieved": true,
+    "latestCloseReturn": 2.45,
+    "tGainPct": 0.95,
+    "totalReturnWithT": 3.29,
+    "whyReasons": [
+      "🛡️ 主力控盘：日内均价线上方运行时间占比高达 97.9%，重心坚挺",
+      "🔥 量价配合：开盘量比 1.09，放量突破且换手充分（6.5%）",
+      "🎯 明确做T预案：建议买点 6.94，目标止盈 7.01 / 7.07，严守止损 6.83"
+    ],
+    "riskCheck": {
+      "status": "danger",
+      "statusText": "🚨 存在重大利空/系统否决",
+      "risks": [
+        {
+          "level": "warn",
+          "type": "业绩亏损",
+          "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
+        },
+        {
+          "level": "danger",
+          "type": "大盘系统性否决",
+          "desc": "大盘双破MA20/MA60处于下行退潮期，系统已锁死仓位，禁止新开正T！"
+        }
+      ],
+      "highlights": [
+        "非ST标的，无退市警示",
+        "流通市值适中，无极端流动性陷阱"
+      ]
+    }
+  },
+  {
+    "id": "2026-11-04_000635",
+    "date": "2026-11-04",
+    "code": "000635",
+    "tcode": "sz000635",
+    "name": "英 力 特",
+    "score": 84,
+    "verdict": "可做",
+    "buy": 7.89,
+    "sell1": 7.97,
+    "sell2": 8.05,
+    "stop": 7.77,
+    "nextWeekFriday": "2026-11-13",
+    "status": "active",
+    "statusText": "活跃跟踪中",
+    "trajectory": [
+      {
+        "day": 0,
+        "label": "T+0",
+        "date": "2026-11-04",
+        "open": 7.58,
+        "close": 7.94,
+        "high": 8,
+        "low": 7.48,
+        "closeReturn": 0.63,
+        "maxHighGain": 1.39,
+        "tSuccess": false
+      },
+      {
+        "day": 1,
+        "label": "T+1",
+        "date": "2026-11-05",
+        "open": 7.99,
+        "close": 8.73,
+        "high": 8.73,
+        "low": 7.9,
+        "closeReturn": 10.65,
+        "maxHighGain": 10.65,
+        "tSuccess": true
+      }
+    ],
+    "maxSurgeGain": 10.65,
+    "bestDay": "T+1",
+    "bestDate": "2026-11-05",
+    "isSurgeAchieved": true,
+    "latestCloseReturn": 10.65,
+    "tGainPct": 0,
+    "totalReturnWithT": 10.54,
+    "whyReasons": [
+      "🛡️ 主力控盘：日内均价线上方运行时间占比高达 95.0%，重心坚挺",
+      "🔥 量价配合：开盘量比 1.16，放量突破且换手充分（3.7%）",
+      "🎯 明确做T预案：建议买点 7.89，目标止盈 7.97 / 8.05，严守止损 7.77"
+    ],
+    "riskCheck": {
+      "status": "danger",
+      "statusText": "🚨 存在重大利空/系统否决",
+      "risks": [
+        {
+          "level": "warn",
+          "type": "业绩亏损",
+          "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
+        },
+        {
+          "level": "danger",
+          "type": "大盘系统性否决",
+          "desc": "大盘双破MA20/MA60处于下行退潮期，系统已锁死仓位，禁止新开正T！"
+        }
+      ],
+      "highlights": [
+        "非ST标的，无退市警示",
+        "流通市值适中，无极端流动性陷阱"
+      ]
+    }
+  },
+  {
+    "id": "2026-11-04_002174",
+    "date": "2026-11-04",
+    "code": "002174",
+    "tcode": "sz002174",
+    "name": "游族网络",
+    "score": 81,
+    "verdict": "可做",
+    "buy": 11.03,
+    "sell1": 11.14,
+    "sell2": 11.25,
+    "stop": 10.86,
+    "nextWeekFriday": "2026-11-13",
+    "status": "active",
+    "statusText": "活跃跟踪中",
+    "trajectory": [
+      {
+        "day": 0,
+        "label": "T+0",
+        "date": "2026-11-04",
+        "open": 10.67,
+        "close": 11.1,
+        "high": 11.3,
+        "low": 10.35,
+        "closeReturn": 0.63,
+        "maxHighGain": 2.45,
+        "tSuccess": true
+      },
+      {
+        "day": 1,
+        "label": "T+1",
+        "date": "2026-11-05",
+        "open": 11,
+        "close": 11.62,
+        "high": 11.72,
+        "low": 10.88,
+        "closeReturn": 5.35,
+        "maxHighGain": 6.26,
+        "tSuccess": true
+      }
+    ],
+    "maxSurgeGain": 6.26,
+    "bestDay": "T+1",
+    "bestDate": "2026-11-05",
+    "isSurgeAchieved": true,
+    "latestCloseReturn": 5.35,
+    "tGainPct": 0.94,
+    "totalReturnWithT": 6.18,
+    "whyReasons": [
+      "🛡️ 主力控盘：日内均价线上方运行时间占比高达 69.4%，重心坚挺",
+      "🔥 量价配合：开盘量比 1.34，放量突破且换手充分（5.5%）",
+      "🎯 明确做T预案：建议买点 11.03，目标止盈 11.14 / 11.25，严守止损 10.86"
+    ],
+    "riskCheck": {
+      "status": "danger",
+      "statusText": "🚨 存在重大利空/系统否决",
+      "risks": [
+        {
+          "level": "warn",
+          "type": "业绩亏损",
+          "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
+        },
+        {
+          "level": "danger",
+          "type": "大盘系统性否决",
+          "desc": "大盘双破MA20/MA60处于下行退潮期，系统已锁死仓位，禁止新开正T！"
+        }
+      ],
+      "highlights": [
+        "非ST标的，无退市警示",
+        "流通市值适中，无极端流动性陷阱"
+      ]
+    }
+  },
+  {
+    "id": "2026-11-05_600605",
+    "date": "2026-11-05",
+    "code": "600605",
+    "tcode": "sh600605",
+    "name": "汇通能源",
+    "score": 100,
+    "verdict": "可做",
+    "buy": 28.4,
+    "sell1": 28.68,
+    "sell2": 28.97,
+    "stop": 27.97,
+    "nextWeekFriday": "2026-11-13",
+    "status": "active",
+    "statusText": "活跃跟踪中",
+    "trajectory": [
+      {
+        "day": 0,
+        "label": "T+0",
+        "date": "2026-11-05",
+        "open": 26.58,
+        "close": 28.58,
+        "high": 29.63,
+        "low": 26.53,
+        "closeReturn": 0.63,
+        "maxHighGain": 4.33,
+        "tSuccess": true
+      }
+    ],
+    "maxSurgeGain": 4.33,
+    "bestDay": "T+0",
+    "bestDate": "2026-11-05",
+    "isSurgeAchieved": true,
+    "latestCloseReturn": 0.63,
+    "tGainPct": 0.93,
+    "totalReturnWithT": 1.45,
+    "whyReasons": [
+      "🛡️ 主力控盘：日内均价线上方运行时间占比高达 100.0%，重心坚挺",
+      "🔥 量价配合：开盘量比 2.20，放量突破且换手充分（6.1%）",
+      "🎯 明确做T预案：建议买点 28.4，目标止盈 28.68 / 28.97，严守止损 27.97"
+    ],
+    "riskCheck": {
+      "status": "safe",
+      "statusText": "🟢 未见重大恶性利空",
+      "risks": [
+        {
+          "level": "info",
+          "type": "高估值溢价",
+          "desc": "PE市盈率约 178.89 倍，估值偏高，只适合快进快出做T，不宜长期死守"
+        }
+      ],
+      "highlights": [
+        "非ST标的，无退市警示",
+        "流通市值适中，无极端流动性陷阱"
+      ]
+    }
+  },
+  {
+    "id": "2026-11-05_002174",
+    "date": "2026-11-05",
+    "code": "002174",
+    "tcode": "sz002174",
+    "name": "游族网络",
+    "score": 92,
+    "verdict": "可做",
+    "buy": 11.55,
+    "sell1": 11.66,
+    "sell2": 11.78,
+    "stop": 11.37,
+    "nextWeekFriday": "2026-11-13",
+    "status": "active",
+    "statusText": "活跃跟踪中",
+    "trajectory": [
+      {
+        "day": 0,
+        "label": "T+0",
+        "date": "2026-11-05",
+        "open": 11,
+        "close": 11.62,
+        "high": 11.72,
+        "low": 10.88,
+        "closeReturn": 0.61,
+        "maxHighGain": 1.47,
+        "tSuccess": false
+      }
+    ],
+    "maxSurgeGain": 1.47,
+    "bestDay": "T+0",
+    "bestDate": "2026-11-05",
+    "isSurgeAchieved": false,
+    "latestCloseReturn": 0.61,
+    "tGainPct": 0.89,
+    "totalReturnWithT": 1.39,
+    "whyReasons": [
+      "🛡️ 主力控盘：日内均价线上方运行时间占比高达 99.6%，重心坚挺",
+      "🔥 量价配合：开盘量比 1.10，放量突破且换手充分（5.0%）",
+      "🎯 明确做T预案：建议买点 11.55，目标止盈 11.66 / 11.78，严守止损 11.37"
+    ],
+    "riskCheck": {
+      "status": "warn",
+      "statusText": "⚠️ 存在中度警示项",
+      "risks": [
+        {
+          "level": "warn",
+          "type": "业绩亏损",
+          "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
+        }
+      ],
+      "highlights": [
+        "非ST标的，无退市警示",
+        "流通市值适中，无极端流动性陷阱"
+      ]
+    }
+  },
+  {
+    "id": "2026-11-05_000151",
+    "date": "2026-11-05",
+    "code": "000151",
+    "tcode": "sz000151",
+    "name": "中成股份",
+    "score": 92,
+    "verdict": "可做",
+    "buy": 9.91,
+    "sell1": 10.01,
+    "sell2": 10.11,
+    "stop": 9.76,
+    "nextWeekFriday": "2026-11-13",
+    "status": "active",
+    "statusText": "活跃跟踪中",
+    "trajectory": [
+      {
+        "day": 0,
+        "label": "T+0",
+        "date": "2026-11-05",
+        "open": 9.27,
+        "close": 9.97,
+        "high": 10.45,
+        "low": 9.21,
+        "closeReturn": 0.61,
+        "maxHighGain": 5.45,
+        "tSuccess": true
+      }
+    ],
+    "maxSurgeGain": 5.45,
+    "bestDay": "T+0",
+    "bestDate": "2026-11-05",
+    "isSurgeAchieved": true,
+    "latestCloseReturn": 0.61,
+    "tGainPct": 0.95,
+    "totalReturnWithT": 1.44,
+    "whyReasons": [
+      "🛡️ 主力控盘：日内均价线上方运行时间占比高达 100.0%，重心坚挺",
+      "🔥 量价配合：开盘量比 3.04，放量突破且换手充分（11.9%）",
+      "🎯 明确做T预案：建议买点 9.91，目标止盈 10.01 / 10.11，严守止损 9.76"
+    ],
+    "riskCheck": {
+      "status": "warn",
+      "statusText": "⚠️ 存在中度警示项",
+      "risks": [
+        {
+          "level": "warn",
+          "type": "高波动风险",
+          "desc": "日内振幅高达 13.05%，多空分歧剧烈，挂单需防单边大跳水"
+        }
+      ],
+      "highlights": [
+        "非ST标的，无退市警示",
+        "流通市值适中，无极端流动性陷阱"
+      ]
+    }
+  },
+  {
+    "id": "2026-11-05_000608",
+    "date": "2026-11-05",
+    "code": "000608",
+    "tcode": "sz000608",
+    "name": "阳光股份",
+    "score": 89,
+    "verdict": "可做",
+    "buy": 5.98,
+    "sell1": 6.04,
+    "sell2": 6.1,
+    "stop": 5.89,
+    "nextWeekFriday": "2026-11-13",
+    "status": "active",
+    "statusText": "活跃跟踪中",
+    "trajectory": [
+      {
+        "day": 0,
+        "label": "T+0",
+        "date": "2026-11-05",
+        "open": 5.71,
+        "close": 6.02,
+        "high": 6.08,
+        "low": 5.69,
+        "closeReturn": 0.67,
+        "maxHighGain": 1.67,
+        "tSuccess": true
+      }
+    ],
+    "maxSurgeGain": 1.67,
+    "bestDay": "T+0",
+    "bestDate": "2026-11-05",
+    "isSurgeAchieved": false,
+    "latestCloseReturn": 0.67,
+    "tGainPct": 0.94,
+    "totalReturnWithT": 1.5,
+    "whyReasons": [
+      "🛡️ 主力控盘：日内均价线上方运行时间占比高达 95.9%，重心坚挺",
+      "🔥 量价配合：开盘量比 1.27，放量突破且换手充分（6.3%）",
+      "🎯 明确做T预案：建议买点 5.98，目标止盈 6.04 / 6.1，严守止损 5.89"
+    ],
+    "riskCheck": {
+      "status": "warn",
+      "statusText": "⚠️ 存在中度警示项",
+      "risks": [
+        {
+          "level": "warn",
+          "type": "业绩亏损",
+          "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
+        }
+      ],
+      "highlights": [
+        "非ST标的，无退市警示",
+        "流通市值适中，无极端流动性陷阱"
+      ]
+    }
+  },
+  {
+    "id": "2026-11-05_603662",
+    "date": "2026-11-05",
+    "code": "603662",
+    "tcode": "sh603662",
+    "name": "柯力传感",
+    "score": 89,
+    "verdict": "可做",
+    "buy": 56.17,
+    "sell1": 56.74,
+    "sell2": 57.3,
+    "stop": 55.33,
+    "nextWeekFriday": "2026-11-13",
+    "status": "active",
+    "statusText": "活跃跟踪中",
+    "trajectory": [
+      {
+        "day": 0,
+        "label": "T+0",
+        "date": "2026-11-05",
+        "open": 54.2,
+        "close": 56.53,
+        "high": 56.55,
+        "low": 53,
+        "closeReturn": 0.64,
+        "maxHighGain": 0.68,
+        "tSuccess": false
+      }
+    ],
+    "maxSurgeGain": 0.68,
+    "bestDay": "T+0",
+    "bestDate": "2026-11-05",
+    "isSurgeAchieved": false,
+    "latestCloseReturn": 0.64,
+    "tGainPct": -1.56,
+    "totalReturnWithT": -1.02,
+    "whyReasons": [
+      "🛡️ 主力控盘：日内均价线上方运行时间占比高达 93.4%，重心坚挺",
+      "🔥 量价配合：开盘量比 1.92，放量突破且换手充分（8.0%）",
+      "🎯 明确做T预案：建议买点 56.17，目标止盈 56.74 / 57.3，严守止损 55.33"
+    ],
+    "riskCheck": {
+      "status": "safe",
+      "statusText": "🟢 未见重大恶性利空",
+      "risks": [],
+      "highlights": [
+        "非ST标的，无退市警示",
+        "流通市值适中，无极端流动性陷阱"
+      ]
+    }
+  },
+  {
+    "id": "2026-11-05_603767",
+    "date": "2026-11-05",
+    "code": "603767",
+    "tcode": "sh603767",
+    "name": "中马传动",
+    "score": 88,
+    "verdict": "可做",
+    "buy": 16.18,
+    "sell1": 16.34,
+    "sell2": 16.5,
+    "stop": 15.93,
+    "nextWeekFriday": "2026-11-13",
+    "status": "active",
+    "statusText": "活跃跟踪中",
+    "trajectory": [
+      {
+        "day": 0,
+        "label": "T+0",
+        "date": "2026-11-05",
+        "open": 16,
+        "close": 16.28,
+        "high": 16.98,
+        "low": 15.27,
+        "closeReturn": 0.62,
+        "maxHighGain": 4.94,
+        "tSuccess": true
+      }
+    ],
+    "maxSurgeGain": 4.94,
+    "bestDay": "T+0",
+    "bestDate": "2026-11-05",
+    "isSurgeAchieved": true,
+    "latestCloseReturn": 0.62,
+    "tGainPct": 0.93,
+    "totalReturnWithT": 1.44,
+    "whyReasons": [
+      "🛡️ 主力控盘：日内均价线上方运行时间占比高达 92.1%，重心坚挺",
+      "🔥 量价配合：开盘量比 1.47，放量突破且换手充分（8.1%）",
+      "🎯 明确做T预案：建议买点 16.18，目标止盈 16.34 / 16.5，严守止损 15.93"
+    ],
+    "riskCheck": {
+      "status": "warn",
+      "statusText": "⚠️ 存在中度警示项",
+      "risks": [
+        {
+          "level": "warn",
+          "type": "业绩亏损",
+          "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
+        }
+      ],
+      "highlights": [
+        "非ST标的，无退市警示",
+        "流通市值适中，无极端流动性陷阱"
+      ]
+    }
+  },
+  {
+    "id": "2026-11-05_688530",
+    "date": "2026-11-05",
+    "code": "688530",
+    "tcode": "sh688530",
+    "name": "欧莱新材",
+    "score": 85,
+    "verdict": "可做",
+    "buy": 46.07,
+    "sell1": 46.53,
+    "sell2": 46.99,
+    "stop": 45.38,
+    "nextWeekFriday": "2026-11-13",
+    "status": "active",
+    "statusText": "活跃跟踪中",
+    "trajectory": [
+      {
+        "day": 0,
+        "label": "T+0",
+        "date": "2026-11-05",
+        "open": 42,
+        "close": 46.36,
+        "high": 48.34,
+        "low": 41.51,
+        "closeReturn": 0.63,
+        "maxHighGain": 4.93,
+        "tSuccess": true
+      }
+    ],
+    "maxSurgeGain": 4.93,
+    "bestDay": "T+0",
+    "bestDate": "2026-11-05",
+    "isSurgeAchieved": true,
+    "latestCloseReturn": 0.63,
+    "tGainPct": 0.94,
+    "totalReturnWithT": 1.46,
+    "whyReasons": [
+      "🛡️ 主力控盘：日内均价线上方运行时间占比高达 100.0%，重心坚挺",
+      "🔥 量价配合：开盘量比 1.75，放量突破且换手充分（17.5%）",
+      "🎯 明确做T预案：建议买点 46.07，目标止盈 46.53 / 46.99，严守止损 45.38"
+    ],
+    "riskCheck": {
+      "status": "warn",
+      "statusText": "⚠️ 存在中度警示项",
+      "risks": [
+        {
+          "level": "warn",
+          "type": "高波动风险",
+          "desc": "日内振幅高达 15.18%，多空分歧剧烈，挂单需防单边大跳水"
+        }
+      ],
+      "highlights": [
+        "非ST标的，无退市警示",
+        "流通市值适中，无极端流动性陷阱"
+      ]
+    }
+  },
+  {
+    "id": "2026-11-05_603283",
+    "date": "2026-11-05",
+    "code": "603283",
+    "tcode": "sh603283",
+    "name": "赛腾股份",
+    "score": 84,
+    "verdict": "可做",
+    "buy": 37.06,
+    "sell1": 37.43,
+    "sell2": 37.8,
+    "stop": 36.5,
+    "nextWeekFriday": "2026-11-13",
+    "status": "active",
+    "statusText": "活跃跟踪中",
+    "trajectory": [
+      {
+        "day": 0,
+        "label": "T+0",
+        "date": "2026-11-05",
+        "open": 35.38,
+        "close": 37.29,
+        "high": 38.32,
+        "low": 35.04,
+        "closeReturn": 0.62,
+        "maxHighGain": 3.4,
+        "tSuccess": true
+      }
+    ],
+    "maxSurgeGain": 3.4,
+    "bestDay": "T+0",
+    "bestDate": "2026-11-05",
+    "isSurgeAchieved": true,
+    "latestCloseReturn": 0.62,
+    "tGainPct": 0.94,
+    "totalReturnWithT": 1.45,
+    "whyReasons": [
+      "🛡️ 主力控盘：日内均价线上方运行时间占比高达 85.1%，重心坚挺",
+      "🔥 量价配合：开盘量比 1.45，放量突破且换手充分（6.6%）",
+      "🎯 明确做T预案：建议买点 37.06，目标止盈 37.43 / 37.8，严守止损 36.5"
+    ],
+    "riskCheck": {
+      "status": "safe",
+      "statusText": "🟢 未见重大恶性利空",
+      "risks": [],
+      "highlights": [
+        "非ST标的，无退市警示",
+        "流通市值适中，无极端流动性陷阱"
+      ]
+    }
+  },
+  {
+    "id": "2026-11-05_603773",
+    "date": "2026-11-05",
+    "code": "603773",
+    "tcode": "sh603773",
+    "name": "沃格光电",
+    "score": 84,
+    "verdict": "可做",
+    "buy": 58.9,
+    "sell1": 59.49,
+    "sell2": 60.07,
+    "stop": 58.01,
+    "nextWeekFriday": "2026-11-13",
+    "status": "active",
+    "statusText": "活跃跟踪中",
+    "trajectory": [
+      {
+        "day": 0,
+        "label": "T+0",
+        "date": "2026-11-05",
+        "open": 56,
+        "close": 59.27,
+        "high": 61.12,
+        "low": 55.88,
+        "closeReturn": 0.63,
+        "maxHighGain": 3.77,
+        "tSuccess": true
+      }
+    ],
+    "maxSurgeGain": 3.77,
+    "bestDay": "T+0",
+    "bestDate": "2026-11-05",
+    "isSurgeAchieved": true,
+    "latestCloseReturn": 0.63,
+    "tGainPct": 0.94,
+    "totalReturnWithT": 1.46,
+    "whyReasons": [
+      "🛡️ 主力控盘：日内均价线上方运行时间占比高达 86.0%，重心坚挺",
+      "🔥 量价配合：开盘量比 1.35，放量突破且换手充分（8.2%）",
+      "🎯 明确做T预案：建议买点 58.9，目标止盈 59.49 / 60.07，严守止损 58.01"
+    ],
+    "riskCheck": {
+      "status": "warn",
+      "statusText": "⚠️ 存在中度警示项",
+      "risks": [
+        {
+          "level": "warn",
+          "type": "业绩亏损",
+          "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
+        }
+      ],
+      "highlights": [
+        "非ST标的，无退市警示",
+        "流通市值适中，无极端流动性陷阱"
+      ]
+    }
+  },
+  {
+    "id": "2026-11-05_002510",
+    "date": "2026-11-05",
+    "code": "002510",
+    "tcode": "sz002510",
+    "name": "天汽模",
+    "score": 84,
+    "verdict": "可做",
+    "buy": 6.24,
+    "sell1": 6.3,
+    "sell2": 6.37,
+    "stop": 6.15,
+    "nextWeekFriday": "2026-11-13",
+    "status": "active",
+    "statusText": "活跃跟踪中",
+    "trajectory": [
+      {
+        "day": 0,
+        "label": "T+0",
+        "date": "2026-11-05",
+        "open": 5.96,
+        "close": 6.28,
+        "high": 6.35,
+        "low": 5.95,
+        "closeReturn": 0.64,
+        "maxHighGain": 1.76,
+        "tSuccess": true
+      }
+    ],
+    "maxSurgeGain": 1.76,
+    "bestDay": "T+0",
+    "bestDate": "2026-11-05",
+    "isSurgeAchieved": false,
+    "latestCloseReturn": 0.64,
+    "tGainPct": 0.9,
+    "totalReturnWithT": 1.43,
+    "whyReasons": [
+      "🛡️ 主力控盘：日内均价线上方运行时间占比高达 94.2%，重心坚挺",
+      "🔥 量价配合：开盘量比 1.34，放量突破且换手充分（5.9%）",
+      "🎯 明确做T预案：建议买点 6.24，目标止盈 6.3 / 6.37，严守止损 6.15"
+    ],
+    "riskCheck": {
+      "status": "safe",
+      "statusText": "🟢 未见重大恶性利空",
+      "risks": [
+        {
+          "level": "info",
+          "type": "高估值溢价",
+          "desc": "PE市盈率约 316.65 倍，估值偏高，只适合快进快出做T，不宜长期死守"
+        }
+      ],
+      "highlights": [
+        "非ST标的，无退市警示",
+        "流通市值适中，无极端流动性陷阱"
+      ]
+    }
+  },
+  {
+    "id": "2026-11-05_603009",
+    "date": "2026-11-05",
+    "code": "603009",
+    "tcode": "sh603009",
+    "name": "北特科技",
+    "score": 84,
+    "verdict": "可做",
+    "buy": 51.8,
+    "sell1": 52.32,
+    "sell2": 52.84,
+    "stop": 51.02,
+    "nextWeekFriday": "2026-11-13",
+    "status": "active",
+    "statusText": "活跃跟踪中",
+    "trajectory": [
+      {
+        "day": 0,
+        "label": "T+0",
+        "date": "2026-11-05",
+        "open": 49.82,
+        "close": 52.13,
+        "high": 53.01,
+        "low": 48,
+        "closeReturn": 0.64,
+        "maxHighGain": 2.34,
+        "tSuccess": true
+      }
+    ],
+    "maxSurgeGain": 2.34,
+    "bestDay": "T+0",
+    "bestDate": "2026-11-05",
+    "isSurgeAchieved": true,
+    "latestCloseReturn": 0.64,
+    "tGainPct": 0.94,
+    "totalReturnWithT": 1.47,
+    "whyReasons": [
+      "🛡️ 主力控盘：日内均价线上方运行时间占比高达 93.8%，重心坚挺",
+      "🔥 量价配合：开盘量比 1.58，放量突破且换手充分（4.5%）",
+      "🎯 明确做T预案：建议买点 51.8，目标止盈 52.32 / 52.84，严守止损 51.02"
+    ],
+    "riskCheck": {
+      "status": "safe",
+      "statusText": "🟢 未见重大恶性利空",
+      "risks": [],
+      "highlights": [
+        "非ST标的，无退市警示",
+        "流通市值适中，无极端流动性陷阱"
+      ]
+    }
+  },
+  {
+    "id": "2026-11-05_600267",
+    "date": "2026-11-05",
+    "code": "600267",
+    "tcode": "sh600267",
+    "name": "海正药业",
+    "score": 84,
+    "verdict": "可做",
+    "buy": 13.74,
+    "sell1": 13.88,
+    "sell2": 14.02,
+    "stop": 13.54,
+    "nextWeekFriday": "2026-11-13",
+    "status": "active",
+    "statusText": "活跃跟踪中",
+    "trajectory": [
+      {
+        "day": 0,
+        "label": "T+0",
+        "date": "2026-11-05",
+        "open": 13.21,
+        "close": 13.83,
+        "high": 13.85,
+        "low": 13.18,
+        "closeReturn": 0.66,
+        "maxHighGain": 0.8,
+        "tSuccess": false
+      }
+    ],
+    "maxSurgeGain": 0.8,
+    "bestDay": "T+0",
+    "bestDate": "2026-11-05",
+    "isSurgeAchieved": false,
+    "latestCloseReturn": 0.66,
+    "tGainPct": -1.52,
+    "totalReturnWithT": -0.97,
+    "whyReasons": [
+      "🛡️ 主力控盘：日内均价线上方运行时间占比高达 99.2%，重心坚挺",
+      "🔥 量价配合：开盘量比 1.04，放量突破且换手充分（3.5%）",
+      "🎯 明确做T预案：建议买点 13.74，目标止盈 13.88 / 14.02，严守止损 13.54"
+    ],
+    "riskCheck": {
+      "status": "safe",
+      "statusText": "🟢 未见重大恶性利空",
+      "risks": [],
+      "highlights": [
+        "非ST标的，无退市警示",
+        "流通市值适中，无极端流动性陷阱"
+      ]
+    }
+  },
+  {
+    "id": "2026-11-05_688517",
+    "date": "2026-11-05",
+    "code": "688517",
+    "tcode": "sh688517",
+    "name": "金冠电气",
+    "score": 82,
+    "verdict": "可做",
+    "buy": 22.04,
+    "sell1": 22.26,
+    "sell2": 22.48,
+    "stop": 21.71,
+    "nextWeekFriday": "2026-11-13",
+    "status": "active",
+    "statusText": "活跃跟踪中",
+    "trajectory": [
+      {
+        "day": 0,
+        "label": "T+0",
+        "date": "2026-11-05",
+        "open": 21,
+        "close": 22.18,
+        "high": 22.94,
+        "low": 20.2,
+        "closeReturn": 0.64,
+        "maxHighGain": 4.08,
+        "tSuccess": true
+      }
+    ],
+    "maxSurgeGain": 4.08,
+    "bestDay": "T+0",
+    "bestDate": "2026-11-05",
+    "isSurgeAchieved": true,
+    "latestCloseReturn": 0.64,
+    "tGainPct": 0.94,
+    "totalReturnWithT": 1.46,
+    "whyReasons": [
+      "🛡️ 主力控盘：日内均价线上方运行时间占比高达 100.0%，重心坚挺",
+      "🔥 量价配合：开盘量比 1.64，放量突破且换手充分（13.6%）",
+      "🎯 明确做T预案：建议买点 22.04，目标止盈 22.26 / 22.48，严守止损 21.71"
+    ],
+    "riskCheck": {
+      "status": "warn",
+      "statusText": "⚠️ 存在中度警示项",
+      "risks": [
+        {
+          "level": "warn",
+          "type": "高波动风险",
+          "desc": "日内振幅高达 12.77%，多空分歧剧烈，挂单需防单边大跳水"
+        }
+      ],
+      "highlights": [
+        "非ST标的，无退市警示",
+        "流通市值适中，无极端流动性陷阱"
+      ]
+    }
+  },
+  {
+    "id": "2026-11-05_000676",
+    "date": "2026-11-05",
+    "code": "000676",
+    "tcode": "sz000676",
+    "name": "智度股份",
+    "score": 81,
+    "verdict": "可做",
+    "buy": 7,
+    "sell1": 7.07,
+    "sell2": 7.14,
+    "stop": 6.89,
+    "nextWeekFriday": "2026-11-13",
+    "status": "active",
+    "statusText": "活跃跟踪中",
+    "trajectory": [
+      {
+        "day": 0,
+        "label": "T+0",
+        "date": "2026-11-05",
+        "open": 6.79,
+        "close": 7.04,
+        "high": 7.15,
+        "low": 6.78,
+        "closeReturn": 0.57,
+        "maxHighGain": 2.14,
+        "tSuccess": true
+      }
+    ],
+    "maxSurgeGain": 2.14,
+    "bestDay": "T+0",
+    "bestDate": "2026-11-05",
+    "isSurgeAchieved": true,
+    "latestCloseReturn": 0.57,
+    "tGainPct": 0.94,
+    "totalReturnWithT": 1.4,
+    "whyReasons": [
+      "🛡️ 主力控盘：日内均价线上方运行时间占比高达 77.3%，重心坚挺",
+      "🔥 量价配合：开盘量比 1.10，放量突破且换手充分（8.7%）",
+      "🎯 明确做T预案：建议买点 7，目标止盈 7.07 / 7.14，严守止损 6.89"
+    ],
+    "riskCheck": {
+      "status": "safe",
+      "statusText": "🟢 未见重大恶性利空",
+      "risks": [],
+      "highlights": [
+        "非ST标的，无退市警示",
+        "流通市值适中，无极端流动性陷阱"
+      ]
+    }
+  },
+  {
+    "id": "2026-11-05_000681",
+    "date": "2026-11-05",
+    "code": "000681",
+    "tcode": "sz000681",
+    "name": "视觉中国",
+    "score": 81,
+    "verdict": "可做",
+    "buy": 16.56,
+    "sell1": 16.73,
+    "sell2": 16.9,
+    "stop": 16.32,
+    "nextWeekFriday": "2026-11-13",
+    "status": "active",
+    "statusText": "活跃跟踪中",
+    "trajectory": [
+      {
+        "day": 0,
+        "label": "T+0",
+        "date": "2026-11-05",
+        "open": 15.94,
+        "close": 16.67,
+        "high": 16.79,
+        "low": 15.9,
+        "closeReturn": 0.66,
+        "maxHighGain": 1.39,
+        "tSuccess": false
+      }
+    ],
+    "maxSurgeGain": 1.39,
+    "bestDay": "T+0",
+    "bestDate": "2026-11-05",
+    "isSurgeAchieved": false,
+    "latestCloseReturn": 0.66,
+    "tGainPct": 0.97,
+    "totalReturnWithT": 1.52,
+    "whyReasons": [
+      "🛡️ 主力控盘：日内均价线上方运行时间占比高达 83.9%，重心坚挺",
+      "🔥 量价配合：开盘量比 1.28，放量突破且换手充分（6.0%）",
+      "🎯 明确做T预案：建议买点 16.56，目标止盈 16.73 / 16.9，严守止损 16.32"
+    ],
+    "riskCheck": {
+      "status": "safe",
+      "statusText": "🟢 未见重大恶性利空",
+      "risks": [],
+      "highlights": [
+        "非ST标的，无退市警示",
+        "流通市值适中，无极端流动性陷阱"
+      ]
+    }
+  },
+  {
+    "id": "2026-11-05_002439",
+    "date": "2026-11-05",
+    "code": "002439",
+    "tcode": "sz002439",
+    "name": "启明星辰",
+    "score": 81,
+    "verdict": "可做",
+    "buy": 14.53,
+    "sell1": 14.67,
+    "sell2": 14.82,
+    "stop": 14.31,
+    "nextWeekFriday": "2026-11-13",
+    "status": "active",
+    "statusText": "活跃跟踪中",
+    "trajectory": [
+      {
+        "day": 0,
+        "label": "T+0",
+        "date": "2026-11-05",
+        "open": 14.02,
+        "close": 14.62,
+        "high": 14.63,
+        "low": 14,
+        "closeReturn": 0.62,
+        "maxHighGain": 0.69,
+        "tSuccess": false
+      }
+    ],
+    "maxSurgeGain": 0.69,
+    "bestDay": "T+0",
+    "bestDate": "2026-11-05",
+    "isSurgeAchieved": false,
+    "latestCloseReturn": 0.62,
+    "tGainPct": -1.57,
+    "totalReturnWithT": -1.06,
+    "whyReasons": [
+      "🛡️ 主力控盘：日内均价线上方运行时间占比高达 92.1%，重心坚挺",
+      "🔥 量价配合：开盘量比 1.05，放量突破且换手充分（6.0%）",
+      "🎯 明确做T预案：建议买点 14.53，目标止盈 14.67 / 14.82，严守止损 14.31"
+    ],
+    "riskCheck": {
+      "status": "warn",
+      "statusText": "⚠️ 存在中度警示项",
+      "risks": [
+        {
+          "level": "warn",
+          "type": "业绩亏损",
+          "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
+        }
+      ],
+      "highlights": [
+        "非ST标的，无退市警示",
+        "流通市值适中，无极端流动性陷阱"
+      ]
+    }
+  },
+  {
+    "id": "2026-11-05_605378",
+    "date": "2026-11-05",
+    "code": "605378",
+    "tcode": "sh605378",
+    "name": "野马电池",
+    "score": 81,
+    "verdict": "可做",
+    "buy": 14.64,
+    "sell1": 14.78,
+    "sell2": 14.93,
+    "stop": 14.42,
+    "nextWeekFriday": "2026-11-13",
+    "status": "active",
+    "statusText": "活跃跟踪中",
+    "trajectory": [
+      {
+        "day": 0,
+        "label": "T+0",
+        "date": "2026-11-05",
+        "open": 14.18,
+        "close": 14.73,
+        "high": 15.25,
+        "low": 14.1,
+        "closeReturn": 0.61,
+        "maxHighGain": 4.17,
+        "tSuccess": true
+      }
+    ],
+    "maxSurgeGain": 4.17,
+    "bestDay": "T+0",
+    "bestDate": "2026-11-05",
+    "isSurgeAchieved": true,
+    "latestCloseReturn": 0.61,
+    "tGainPct": 0.9,
+    "totalReturnWithT": 1.4,
+    "whyReasons": [
+      "🛡️ 主力控盘：日内均价线上方运行时间占比高达 91.7%，重心坚挺",
+      "🔥 量价配合：开盘量比 2.35，放量突破且换手充分（5.8%）",
+      "🎯 明确做T预案：建议买点 14.64，目标止盈 14.78 / 14.93，严守止损 14.42"
+    ],
+    "riskCheck": {
+      "status": "warn",
+      "statusText": "⚠️ 存在中度警示项",
+      "risks": [
+        {
+          "level": "warn",
+          "type": "业绩亏损",
+          "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
         }
       ],
       "highlights": [

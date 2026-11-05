@@ -40,6 +40,41 @@ const candFile = (() => {
 const steady = readJson(path.join(OUT, 'steady.json'), null);
 const timing = readJson(path.join(OUT, 'timing.json'), null);
 
+/* ---------- 尾盘黑马（tail.js 盘中产物） ----------
+   只在「扫描日 == 本次契约交易日」时才收，跨日的旧尾盘名单没有意义，
+   宁可不给也不能让页面拿昨天的黑马当今天的。 */
+const tailRaw = (() => {
+  if (!fs.existsSync(OUT)) return null;
+  const files = fs.readdirSync(OUT)
+    .filter((f) => /^tail-\d{4}-\d{2}-\d{2}\.json$/.test(f))
+    .map((f) => ({ f, m: fs.statSync(path.join(OUT, f)).mtimeMs }))
+    .sort((a, b) => b.m - a.m);
+  return files.length ? readJson(path.join(OUT, files[0].f)) : null;
+})();
+const tail = (() => {
+  if (!tailRaw) return null;
+  const d = tailRaw.date;
+  if (d !== (plan?.date || todayStr()) && d !== todayStr()) return null;
+  return {
+    date: tailRaw.date,
+    scanTime: tailRaw.scanTime,
+    env: tailRaw.env || null,
+    stats: tailRaw.stats || null,
+    picks: (tailRaw.picks || []).map((p) => ({
+      ...p,
+      /* 页面沿用 candidates 的字段名，减少前端分支 */
+      buy: p.price,
+      buyLo: +(p.price * 0.997).toFixed(2),
+      buyHi: +(p.price * 1.003).toFixed(2),
+      sell1: +(p.price * 1.025).toFixed(2),      // 次日冲高 +2.5%
+      sell2: +(p.price * 1.045).toFixed(2),      // 极限 +4.5%
+      stop: +(p.price * 0.985).toFixed(2),       // 纪律止损 −1.5%
+      allowT: '尾盘潜伏',
+      posPct: 10,
+    })),
+  };
+})();
+
 /* ---------- 交易日推算（用于复核日期） ---------- */
 const nextTradeDay = (d) => {
   const t = new Date(d + 'T00:00:00+08:00');
@@ -214,6 +249,8 @@ const payload = {
   },
 
   candidates: shortList,
+  tail: tail ? tail.picks : [],
+  tailMeta: tail ? { date: tail.date, scanTime: tail.scanTime, env: tail.env, stats: tail.stats } : null,
   steady: steadyList,
   steadyAll,
   auction: timing?.gapStat || null,          // 竞价五档（用于弱参考）
@@ -225,6 +262,7 @@ const payload = {
     candidates: candFile ? `${candFile.date}.json` : null,
     steady: steady ? 'steady.json' : null,
     timing: timing ? 'timing.json' : null,
+    tail: tail ? `tail-${tail.date}.json` : null,
   },
 };
 
@@ -242,5 +280,6 @@ console.log(`\n【契约发布】${payload.tradeDate}`);
 console.log(`  环境 ${env.level}｜可新开正T ${env.canNewLongT ? '是' : '否'}｜仓位系数 ${env.posFactor}`);
 console.log(`  短线候选 ${shortList.length} 只（可做 ${payload.counts.canDo} / 小做 ${payload.counts.smallDo} / 观察 ${payload.counts.watch}），可执行 ${payload.counts.executable} 只`);
 console.log(`  稳健底仓 ${steadyList.length} 只｜竞价分档 ${payload.auction ? payload.auction.length + ' 档' : '无'}`);
+console.log(`  尾盘黑马 ${payload.tail.length} 只` + (payload.tailMeta ? `（${payload.tailMeta.date} ${payload.tailMeta.scanTime} 扫描）` : '（今日未跑 tail.js）'));
 console.log(`  台账 ${ledgerDays} 个交易日 / ${retRows} 条持有期记录`);
 console.log(`  → data/latest.json  data/latest.js`);
