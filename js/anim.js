@@ -6,21 +6,28 @@
 let animateFn = null;
 let staggerFn = null;
 
-try {
-  // 按照规范引入 Anime.js v4 ESM 模块
-  const animeModule = await import("https://cdn.jsdelivr.net/npm/animejs@4/+esm");
-  animateFn = animeModule.animate;
-  staggerFn = animeModule.stagger;
-} catch (_) {
+export async function initAnime() {
+  if (animateFn) return;
   try {
-    // 本地离线备选模块
-    const localModule = await import("./vendor/anime.esm.js");
-    animateFn = localModule.animate;
-    staggerFn = localModule.stagger;
-  } catch (err) {
-    console.warn('[Anim] Anime.js 模块加载降级，改用标准 CSS 动效');
+    // 按照规范引入 Anime.js v4 ESM 模块
+    const animeModule = await import("https://cdn.jsdelivr.net/npm/animejs@4/+esm");
+    animateFn = animeModule.animate;
+    staggerFn = animeModule.stagger;
+  } catch (_) {
+    try {
+      // 本地离线备选模块
+      const localModule = await import("./vendor/anime.esm.js");
+      animateFn = localModule.animate;
+      staggerFn = localModule.stagger;
+    } catch (err) {
+      if (typeof window !== 'undefined' && window.anime) {
+        animateFn = window.anime;
+        staggerFn = window.anime.stagger;
+      }
+    }
   }
 }
+initAnime();
 
 /**
  * 1. 选项卡切换平滑入场动效

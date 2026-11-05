@@ -523,8 +523,22 @@
 
 <!-- 选股引擎统一数据契约 -->
 <script src="data/latest.js"></script>
-<!-- 做T执行台核心引擎与战绩交互脚本 -->
-<!-- 做T执行台现代化ESM模块化引擎 -->
-<script type="module" src="js/main.js"></script>
+<!-- Anime.js 动效库本地兜底 (支持本地 file:// 双击与离线运行) -->
+<script src="js/vendor/anime.min.js"></script>
+<!-- 
+  双模智能路由：
+  1. 本地双击 file:/// 访问时：自动加载已打包的 js/bundle.js，彻底免除 Chrome 对 ES 模块的 CORS 拦截！
+  2. 线上或本地服务器 http:///https:// 访问时：原生加载 ES Modules (js/main.js)，支持原生按需加载与开发调试！
+-->
+<script>
+  if (location.protocol === 'file:') {
+    document.write('<script src="js/bundle.js"><\/script>');
+  }
+</script>
+<script type="module">
+  if (location.protocol !== 'file:') {
+    import('./js/main.js');
+  }
+</script>
 </body>
 </html>
