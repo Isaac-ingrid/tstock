@@ -1,5 +1,6 @@
 import React from 'react';
 import { f2, pct, money } from '../services/utils.js';
+import { NAV_ROUTES } from '../data/site.js';
 
 export default function TopNav({
   activeTab,
@@ -21,59 +22,36 @@ export default function TopNav({
   onToggleNotify,
   notifyActive
 }) {
+  const getBadge = (key) => {
+    if (key === 'poolCount') return pool.length > 0 ? pool.length : null;
+    if (key === 'tailCount') return tailCount > 0 ? tailCount : null;
+    if (key === 'ledgerCount') return ledgerCount > 0 ? ledgerCount : null;
+    return null;
+  };
+
   return (
     <div className="topbar" id="topbar">
       <div className="tb-nav" id="topNav">
-        <a
-          href="#secPlan"
-          className={activeTab === 'tabConsole' ? 'active' : ''}
-          onClick={(e) => { e.preventDefault(); onTabChange('tabConsole'); }}
-        >
-          今日作战{pool.length > 0 ? <span className="tb-badge">{pool.length}</span> : null}
-        </a>
-        <a
-          href="#secTailBuy"
-          className={activeTab === 'tabTail' ? 'active' : ''}
-          onClick={(e) => { e.preventDefault(); onTabChange('tabTail'); }}
-        >
-          ⚡ 尾盘黑马{tailCount > 0 ? <span className="tb-badge">{tailCount}</span> : null}
-        </a>
-        <a
-          href="#accSec"
-          className={activeTab === 'tabAccount' ? 'active' : ''}
-          onClick={(e) => { e.preventDefault(); onTabChange('tabAccount'); }}
-        >
-          账户
-        </a>
-        <a
-          href="#secLog"
-          className={activeTab === 'tabLedger' ? 'active' : ''}
-          onClick={(e) => { e.preventDefault(); onTabChange('tabLedger'); }}
-        >
-          台账{ledgerCount > 0 ? <span className="tb-badge">{ledgerCount}</span> : null}
-        </a>
-        <a
-          href="#secPerf"
-          className={activeTab === 'tabPerf' ? 'active' : ''}
-          style={{ color: 'var(--accent)', fontWeight: 700 }}
-          onClick={(e) => { e.preventDefault(); onTabChange('tabPerf'); }}
-        >
-          📊 战绩透视
-        </a>
-        <a
-          href="#secRule"
-          className={activeTab === 'tabRules' ? 'active' : ''}
-          onClick={(e) => { e.preventDefault(); onTabChange('tabRules'); }}
-        >
-          纪律
-        </a>
-        <a
-          href="#secAll"
-          className={activeTab === 'tabAll' ? 'active' : ''}
-          onClick={(e) => { e.preventDefault(); onTabChange('tabAll'); }}
-        >
-          🌐 全览
-        </a>
+        {NAV_ROUTES.map(item => {
+          const badge = getBadge(item.badgeKey);
+          const isActive = activeTab === item.tab;
+          return (
+            <a
+              key={item.path}
+              href={`#${item.path}`}
+              className={isActive ? 'active' : ''}
+              style={item.highlight ? { color: 'var(--accent)', fontWeight: 700 } : undefined}
+              onClick={(e) => {
+                e.preventDefault();
+                onTabChange(item.path);
+              }}
+              title={item.desc}
+            >
+              {item.label}
+              {badge != null && <span className="tb-badge">{badge}</span>}
+            </a>
+          );
+        })}
       </div>
 
       <span className="tb-sep"></span>
@@ -83,7 +61,7 @@ export default function TopNav({
         className="tb-acc-pill"
         id="tbAccPill"
         title="点击跳转至账户总览与资金详情"
-        onClick={() => onTabChange('tabAccount')}
+        onClick={() => onTabChange('/account')}
         style={{ cursor: 'pointer' }}
       >
         <span className="tb-acc-k">总资产</span>
@@ -98,55 +76,82 @@ export default function TopNav({
 
       <span className="tb-sep"></span>
 
-      <span className="tb-stamp" title="数据时间：最近一次成功取到行情的时间">
-        {quoteStamp || '—'}
-      </span>
-      {isStale && <span className="tb-stale-tag" style={{ display: 'inline-block' }}>数据已过期</span>}
-
-      {/* 分时时钟胶囊 */}
+      {/* 盘中时钟状态胶囊 */}
       <div
         className="tb-clock-pill"
-        title="点击查看 A股日内分时作战法则与当前时段操作禁忌"
+        id="tbClockPill"
+        title="点击展开全天交易纪律时钟与窗口说明"
         onClick={onOpenClock}
         style={{ cursor: 'pointer' }}
       >
-        <span className="dot-live pulse-green"></span>
-        <span>{clockPhase}</span>
+        <span className="clock-dot"></span>
+        <span id="tbClockPhase">{clockPhase}</span>
+        <span className={`tb-quote-time ${isStale ? 'tb-quote-stale' : ''}`} id="tbQuoteTime">
+          {quoteStamp}
+        </span>
       </div>
 
-      {/* 快捷现价展示 */}
-      <div className="tb-px">
-        {pool.length > 0 ? (
-          <div style={{ display: 'inline-flex', gap: '6px' }}>
-            {pool.slice(0, 3).map(s => {
-              const chg = s.prevClose > 0 ? ((s.price - s.prevClose) / s.prevClose) * 100 : 0;
+      {/* 滚动轮播价格卡（选股池行情简报） */}
+      {pool && pool.length > 0 && (
+        <div className="tb-ticker-wrap" title="当前做T股池实时报价速览">
+          <div className="tb-ticker-track">
+            {pool.map(s => {
+              const chg = s.prevClose ? (((s.price || s.prevClose) - s.prevClose) / s.prevClose) * 100 : 0;
+              const cls = chg > 0 ? 'up' : chg < 0 ? 'down' : '';
               return (
-                <span
-                  key={s.code}
-                  className="tb-px-item"
-                  title={`${s.name} 点击跳转`}
-                  onClick={() => onTabChange('tabConsole')}
-                >
-                  <span className="tb-name">{s.name}</span>
-                  <b className={chg >= 0 ? 'up' : 'down'}>{f2(s.price)} ({pct(chg)})</b>
-                </span>
+                <div key={s.code} className="tb-ticker-item">
+                  <span className="nm">{s.name}</span>
+                  <span className="px">{f2(s.price || s.prevClose)}</span>
+                  <span className={`chg ${cls}`}>{chg >= 0 ? '+' : ''}{chg.toFixed(2)}%</span>
+                </div>
               );
             })}
           </div>
-        ) : (
-          <span style={{ color: 'var(--mute)' }}>载入中…</span>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* 操作按钮区 */}
-      <div className="tb-act">
-        <button onClick={onCopyPlan} title="复制今日作战计划（纯文本，可直接粘贴到微信）">📋 作战计划</button>
-        <button onClick={onExport} title="把自选池 / 台账 / 快照 / 红线 / 体检全部导出为 JSON 备份">⬇ 导出</button>
-        <button onClick={onImportClick} title="从之前导出的 JSON 恢复数据">⬆ 导入</button>
-        <button onClick={onToggleNotify} title="开启桌面通知：价格触及买点 / 卖点时由系统通知你">
-          {notifyActive ? '🔔 已开启' : '🔔 提醒'}
+      {/* 操作快捷按钮组 */}
+      <div className="tb-actions">
+        <button
+          className="tb-btn"
+          id="btnCopyTodayPlan"
+          onClick={onCopyPlan}
+          title="将当前全池股票的做T预案一键复制到剪贴板，方便发送到复盘笔记或微信"
+        >
+          📋 作战计划
         </button>
-        <button onClick={onRefresh} title="强制全量刷新实时行情与K线">⟳ 刷新</button>
+        <button
+          className="tb-btn"
+          id="btnExportPlan"
+          onClick={onExport}
+          title="导出全部数据为 JSON 文件备份"
+        >
+          ⬇ 导出
+        </button>
+        <button
+          className="tb-btn"
+          id="btnImportPlan"
+          onClick={onImportClick}
+          title="从 JSON 备份文件恢复数据"
+        >
+          ⬆ 导入
+        </button>
+        <button
+          className={`tb-btn ${notifyActive ? 'tb-btn-active' : ''}`}
+          id="btnToggleNotify"
+          onClick={onToggleNotify}
+          title="开启/关闭盘中冲高回落预警桌面通知"
+        >
+          🔔 提醒
+        </button>
+        <button
+          className="tb-btn tb-btn-refresh"
+          id="btnRefreshAll"
+          onClick={onRefresh}
+          title="立即拉取最新行情与深度分时"
+        >
+          ↻ 刷新
+        </button>
       </div>
     </div>
   );

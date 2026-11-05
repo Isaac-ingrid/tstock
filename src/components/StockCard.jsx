@@ -181,11 +181,19 @@ export default function StockCard({
 
       {/* 主体区 */}
       <div className="card-bd">
-        {/* 判定条 */}
+        {/* 判定条与买卖点指令 */}
         <div className={`verdict v-${mbd[0]}`}>
           <div className="dot"></div>
-          <div className="txt">
-            <b>{c.title}</b> · {c.desc}
+          <div className="txt" style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, fontSize: '13px', marginBottom: '3px' }}>{c.title}</div>
+            {c.detail ? (
+              <div
+                style={{ fontSize: '12px', lineHeight: 1.6, opacity: 0.95 }}
+                dangerouslySetInnerHTML={{ __html: c.detail }}
+              />
+            ) : (
+              c.desc && <div style={{ fontSize: '12px' }}>{c.desc}</div>
+            )}
           </div>
         </div>
 

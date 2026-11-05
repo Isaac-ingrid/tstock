@@ -1,37 +1,35 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Header from './components/Header.jsx';
 import TopNav from './components/TopNav.jsx';
-import MethodologyFold from './components/MethodologyFold.jsx';
-import SelectionSection from './components/SelectionSection.jsx';
-import ConsoleSection from './components/ConsoleSection.jsx';
-import TailSection from './components/TailSection.jsx';
-import AccountSection from './components/AccountSection.jsx';
-import LedgerSection from './components/LedgerSection.jsx';
-import RulesSection from './components/RulesSection.jsx';
+import TradePage from './pages/TradePage.jsx';
+import TailPage from './pages/TailPage.jsx';
+import AccountPage from './pages/AccountPage.jsx';
+import LedgerPage from './pages/LedgerPage.jsx';
+import RulesPage from './pages/RulesPage.jsx';
 import { QuickTModal, StockReasonModal, TradingClockModal, ToastHost, OvernightBanner } from './components/Modals.jsx';
 
-import { DEFAULT, todayStr, f2, toast, toastOk, toastWarn, toastErr, setToastListener, copyPlain } from './services/utils.js';
+import { SITE_META, STORAGE_KEYS, DEFAULT_POOL } from './data/site.js';
+import useRoute from './router/useRoute.js';
+import { todayStr, f2, toast, toastOk, toastWarn, toastErr, setToastListener, copyPlain } from './services/utils.js';
 import { loadStock, loadChart, loadResearch, loadMarket, addByQuery, selfTest, checkPriceAlerts } from './services/api.js';
 import { registerChartLoader } from './services/chart.js';
 import { getTailBuyCandidates } from './services/tail.js';
 
 export default function App() {
-  /* ================= 1. 响应式核心状态 ================= */
+  /* ================= 1. 响应式 URL 路由与核心状态 ================= */
+  const { path, activeTab, navigate } = useRoute();
+
   const [pool, setPool] = useState(() => {
     try {
-      const raw = localStorage.getItem('t-system-pool');
+      const raw = localStorage.getItem(STORAGE_KEYS.POOL);
       if (raw) return JSON.parse(raw);
     } catch (_) {}
-    return JSON.parse(JSON.stringify(DEFAULT));
-  });
-
-  const [activeTab, setActiveTab] = useState(() => {
-    return localStorage.getItem('t-active-tab') || 'tabConsole';
+    return JSON.parse(JSON.stringify(DEFAULT_POOL));
   });
 
   const [totalAssets, setTotalAssets] = useState(() => {
     try {
-      const v = localStorage.getItem('t-account-total');
+      const v = localStorage.getItem(STORAGE_KEYS.ACCOUNT_TOTAL);
       if (v && +v > 0) return +v;
     } catch (_) {}
     return 100000;
@@ -39,7 +37,7 @@ export default function App() {
 
   const [tradeLogs, setTradeLogs] = useState(() => {
     try {
-      const raw = localStorage.getItem('t-system-log');
+      const raw = localStorage.getItem(STORAGE_KEYS.TRADE_LOG);
       if (raw) return JSON.parse(raw);
     } catch (_) {}
     return [];
@@ -47,7 +45,7 @@ export default function App() {
 
   const [tailActives, setTailActives] = useState(() => {
     try {
-      const raw = localStorage.getItem('t-tail-buy-active');
+      const raw = localStorage.getItem(STORAGE_KEYS.TAIL_ACTIVE);
       if (raw) return JSON.parse(raw);
     } catch (_) {}
     return [];
@@ -55,7 +53,7 @@ export default function App() {
 
   const [snapshots, setSnapshots] = useState(() => {
     try {
-      const raw = localStorage.getItem('t-system-snap');
+      const raw = localStorage.getItem(STORAGE_KEYS.SNAPSHOTS);
       if (raw) return JSON.parse(raw);
     } catch (_) {}
     return [];
@@ -87,28 +85,28 @@ export default function App() {
         Object.keys(s).forEach(k => { if (k.charAt(0) !== '_') o[k] = s[k]; });
         return o;
       });
-      localStorage.setItem('t-system-pool', JSON.stringify(slim));
+      localStorage.setItem(STORAGE_KEYS.POOL, JSON.stringify(slim));
     } catch (_) {}
   }, [pool]);
 
   useEffect(() => {
-    localStorage.setItem('t-active-tab', activeTab);
+    localStorage.setItem(STORAGE_KEYS.ACTIVE_TAB, activeTab);
   }, [activeTab]);
 
   useEffect(() => {
-    localStorage.setItem('t-account-total', String(totalAssets));
+    localStorage.setItem(STORAGE_KEYS.ACCOUNT_TOTAL, String(totalAssets));
   }, [totalAssets]);
 
   useEffect(() => {
-    localStorage.setItem('t-system-log', JSON.stringify(tradeLogs));
+    localStorage.setItem(STORAGE_KEYS.TRADE_LOG, JSON.stringify(tradeLogs));
   }, [tradeLogs]);
 
   useEffect(() => {
-    localStorage.setItem('t-tail-buy-active', JSON.stringify(tailActives));
+    localStorage.setItem(STORAGE_KEYS.TAIL_ACTIVE, JSON.stringify(tailActives));
   }, [tailActives]);
 
   useEffect(() => {
-    localStorage.setItem('t-system-snap', JSON.stringify(snapshots));
+    localStorage.setItem(STORAGE_KEYS.SNAPSHOTS, JSON.stringify(snapshots));
   }, [snapshots]);
 
   /* 注册全局图表自愈装载器与 Toast 分发器 */
@@ -493,25 +491,9 @@ export default function App() {
     });
   };
 
-  /* 滚动定位到各Tab锚点 */
-  const handleTabChange = (tab) => {
-    setActiveTab(tab);
-    if (tab === 'tabConsole') {
-      const el = document.getElementById('secPlan');
-      if (el) el.scrollIntoView({ behavior: 'smooth' });
-    } else if (tab === 'tabTail') {
-      const el = document.getElementById('secTailBuy');
-      if (el) el.scrollIntoView({ behavior: 'smooth' });
-    } else if (tab === 'tabAccount') {
-      const el = document.getElementById('accSec');
-      if (el) el.scrollIntoView({ behavior: 'smooth' });
-    } else if (tab === 'tabLedger') {
-      const el = document.getElementById('secLog');
-      if (el) el.scrollIntoView({ behavior: 'smooth' });
-    } else if (tab === 'tabRules') {
-      const el = document.getElementById('secRule');
-      if (el) el.scrollIntoView({ behavior: 'smooth' });
-    }
+  /* 切换页面路由 */
+  const handleTabChange = (target) => {
+    navigate(target);
   };
 
   const tailCount = tailActives.length > 0 ? tailActives.length : getTailBuyCandidates().length;
@@ -521,7 +503,7 @@ export default function App() {
       {/* 顶部标题区 */}
       <Header />
 
-      {/* 吸顶导航栏 */}
+      {/* 吸顶导航栏（绑定 URL 路由） */}
       <TopNav
         activeTab={activeTab}
         onTabChange={handleTabChange}
@@ -558,108 +540,101 @@ export default function App() {
         onClose={() => setOvernightBannerOpen(false)}
       />
 
-      {/* 一、方法论内核（四条定理）折叠 */}
-      <MethodologyFold />
+      {/* 页面主体区：基于 URL 路由解耦展示 */}
+      <main className="main-content">
+        {/* 今日作战（选股池 + 做T决策台） */}
+        {(activeTab === 'tabConsole' || activeTab === 'tabAll') && (
+          <TradePage
+            pool={pool}
+            wbLatest={typeof window !== 'undefined' ? window.WB_LATEST : null}
+            dbStatus={dbStatus}
+            onAddStock={handleAddStockByQuery}
+            onBatchAdd={handleBatchAdd}
+            onOpenReason={(st, have) => setReasonModal({ open: true, stock: st, inPool: have })}
+            onRefresh={() => handleRefresh(false)}
+            onSelfTest={selfTest}
+            onJumpPerf={() => navigate('/perf')}
+            onUpdateStock={handleUpdateStock}
+            onRemoveStock={handleRemoveStock}
+            onAddBlank={handleAddBlank}
+            onSaveLocal={handleSaveLocal}
+            onResetDefault={handleResetDefault}
+            onOpenQuickT={(stock, dir, px) => setQuickTModal({ open: true, stock, defaultDir: dir, defaultPx: px })}
+            onRefreshSingle={async (stock) => {
+              await loadStock(stock);
+              await loadChart(stock, true);
+              setPool([...pool]);
+              toastOk(`✓ ${stock.name} 行情与K线已更新！`);
+            }}
+            onCopySinglePlan={handleCopySinglePlan}
+          />
+        )}
 
-      {/* 二、选股池与自选股 */}
-      <SelectionSection
-        wbLatest={typeof window !== 'undefined' ? window.WB_LATEST : null}
-        pool={pool}
-        onAddStock={handleAddStockByQuery}
-        onBatchAdd={handleBatchAdd}
-        onOpenReason={(st, have) => setReasonModal({ open: true, stock: st, inPool: have })}
-        onRefresh={() => handleRefresh(false)}
-        onSelfTest={selfTest}
-        onJumpPerf={() => handleTabChange('tabPerf')}
-        dbStatus={dbStatus}
-      />
+        {/* ⚡ 尾盘黑马 T+0 看板 */}
+        {(activeTab === 'tabTail' || activeTab === 'tabAll') && (
+          <TailPage
+            totalAssets={totalAssets}
+            actives={tailActives}
+            onExecTailBuy={handleExecTailBuy}
+            onExecTailExit={handleExecTailExit}
+          />
+        )}
 
-      {/* 三、决策引擎（做T执行卡片池） */}
-      {(activeTab === 'tabConsole' || activeTab === 'tabAll') && (
-        <ConsoleSection
-          pool={pool}
-          onUpdateStock={handleUpdateStock}
-          onRemoveStock={handleRemoveStock}
-          onAddBlank={handleAddBlank}
-          onSaveLocal={handleSaveLocal}
-          onResetDefault={handleResetDefault}
-          onRefresh={() => handleRefresh(false)}
-          onOpenQuickT={(stock, dir, px) => setQuickTModal({ open: true, stock, defaultDir: dir, defaultPx: px })}
-          onOpenReason={(stock, have) => setReasonModal({ open: true, stock, inPool: have })}
-          onRefreshSingle={async (stock) => {
-            await loadStock(stock);
-            await loadChart(stock, true);
-            setPool([...pool]);
-            toastOk(`✓ ${stock.name} 行情与K线已更新！`);
-          }}
-          onCopySinglePlan={handleCopySinglePlan}
-        />
-      )}
+        {/* 账户资产与战绩透视 */}
+        {(activeTab === 'tabAccount' || activeTab === 'tabPerf' || activeTab === 'tabAll') && (
+          <AccountPage
+            totalAssets={totalAssets}
+            marketValue={marketValue}
+            posRate={posRate}
+            cash={cash}
+            pool={pool}
+            snapshots={snapshots}
+            onTakeSnapshot={() => {
+              const today = todayStr();
+              const snap = { date: today, total: totalAssets, mkt: marketValue, cash, rate: posRate.toFixed(1) };
+              setSnapshots(prev => [snap, ...prev.filter(x => x.date !== today)]);
+              toastOk('✓ 今日收盘资产快照已成功落盘！');
+            }}
+            onClearSnap={() => {
+              if (window.confirm('确定清空所有历史收益快照吗？')) {
+                setSnapshots([]);
+                toast('快照已清空', 'info');
+              }
+            }}
+            onUpdateTotalAssets={(val) => {
+              setTotalAssets(val);
+              toastOk(`✓ 账户总资产已更新为 ¥${f2(val)}`);
+            }}
+          />
+        )}
 
-      {/* ⚡ 尾盘黑马 T+0 推荐看板 */}
-      {(activeTab === 'tabTail' || activeTab === 'tabAll') && (
-        <TailSection
-          totalAssets={totalAssets}
-          actives={tailActives}
-          onExecTailBuy={handleExecTailBuy}
-          onExecTailExit={handleExecTailExit}
-        />
-      )}
+        {/* 台账与体检 */}
+        {(activeTab === 'tabLedger' || activeTab === 'tabAll') && (
+          <LedgerPage
+            logs={tradeLogs}
+            onAddLog={(log) => {
+              setTradeLogs(prev => [log, ...prev]);
+              toastOk('✓ 新做T台账流水记录已成功写入！');
+            }}
+            onDeleteLog={(id) => {
+              setTradeLogs(prev => prev.filter(x => x.id !== id));
+              toast('流水记录已删除', 'info');
+            }}
+            pool={pool}
+            onExport={handleExport}
+            onImportClick={() => importInputRef.current && importInputRef.current.click()}
+          />
+        )}
 
-      {/* 四、账户与战绩看板 */}
-      {(activeTab === 'tabAccount' || activeTab === 'tabPerf' || activeTab === 'tabAll') && (
-        <AccountSection
-          totalAssets={totalAssets}
-          marketValue={marketValue}
-          posRate={posRate}
-          cash={cash}
-          pool={pool}
-          snapshots={snapshots}
-          onTakeSnapshot={() => {
-            const today = todayStr();
-            const snap = { date: today, total: totalAssets, mkt: marketValue, cash, rate: posRate.toFixed(1) };
-            setSnapshots(prev => [snap, ...prev.filter(x => x.date !== today)]);
-            toastOk('✓ 今日收盘资产快照已成功落盘！');
-          }}
-          onClearSnap={() => {
-            if (window.confirm('确定清空所有历史收益快照吗？')) {
-              setSnapshots([]);
-              toast('快照已清空', 'info');
-            }
-          }}
-          onUpdateTotalAssets={(val) => {
-            setTotalAssets(val);
-            toastOk(`✓ 账户总资产已更新为 ¥${f2(val)}`);
-          }}
-        />
-      )}
-
-      {/* 台账与体检 */}
-      {(activeTab === 'tabLedger' || activeTab === 'tabAll') && (
-        <LedgerSection
-          logs={tradeLogs}
-          onAddLog={(log) => {
-            setTradeLogs(prev => [log, ...prev]);
-            toastOk('✓ 新做T台账流水记录已成功写入！');
-          }}
-          onDeleteLog={(id) => {
-            setTradeLogs(prev => prev.filter(x => x.id !== id));
-            toast('流水记录已删除', 'info');
-          }}
-          pool={pool}
-          onExport={handleExport}
-          onImportClick={() => importInputRef.current && importInputRef.current.click()}
-        />
-      )}
-
-      {/* 五、纪律与时间窗 */}
-      {(activeTab === 'tabRules' || activeTab === 'tabAll') && (
-        <RulesSection />
-      )}
+        {/* 作战纪律与时钟 */}
+        {(activeTab === 'tabRules' || activeTab === 'tabAll') && (
+          <RulesPage />
+        )}
+      </main>
 
       {/* 底部语录 */}
       <footer>
-        做T修的是技术，炼的是心性。系统给的是概率，纪律给的是复利。
+        {SITE_META.footer}
       </footer>
 
       {/* ================= 3. 模态弹窗系统 ================= */}
