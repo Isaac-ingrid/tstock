@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { AUCTION_TIERS, getAuctionStatusInfo, getAuctionTier } from '../services/auction.js';
 
 export default function SelectionSection({
   wbLatest,
@@ -44,6 +45,7 @@ export default function SelectionSection({
   const dateStr = D.tradeDate || (D.generatedAt ? D.generatedAt.slice(0, 10) : '今日');
   const genTimeStr = D.generatedAt ? new Date(D.generatedAt).toLocaleTimeString('zh-CN', { hour12: false }) : '';
   const inCnt = short.concat(steady).filter(r => inPoolCodes.has(String(r.code).padStart(6, '0'))).length;
+  const aucStatus = getAuctionStatusInfo();
 
   const handleManualAdd = () => {
     const q = manualInput.trim();
@@ -57,6 +59,11 @@ export default function SelectionSection({
     const have = inPoolCodes.has(code6);
     const vCls = r.verdict === '可做' ? 'c-can' : r.verdict === '小做' ? 'c-small' : 'c-watch';
 
+    const rGap = (r.open > 0 && r.prevClose > 0)
+      ? ((r.open - r.prevClose) / r.prevClose) * 100
+      : (r.retOpen != null ? +r.retOpen : null);
+    const rTier = rGap != null ? getAuctionTier(rGap) : null;
+
     return (
       <div
         key={code6}
@@ -68,6 +75,15 @@ export default function SelectionSection({
         <span className="sc-code">{code6}</span>
         <span className="sc-score">{r.score || 80}分</span>
         <span className="sc-vd">{r.verdict || '观察'}</span>
+        {rTier && (
+          <span
+            className="sc-auc"
+            style={{ fontSize: '10.5px', padding: '1px 4px', borderRadius: '4px', background: rTier.bg, color: rTier.color, border: '1px solid', borderColor: rTier.color }}
+            title={`开盘跳空: ${rGap >= 0 ? '+' : ''}${rGap.toFixed(2)}% · ${rTier.tag}`}
+          >
+            竞价{rGap >= 0 ? '+' : ''}{rGap.toFixed(1)}%
+          </span>
+        )}
         {have && <span className="sc-in">已在池</span>}
       </div>
     );
@@ -169,6 +185,51 @@ export default function SelectionSection({
               加入自选后系统将统一启动毫秒级分时监控、七格箱体计算与日内高抛低吸提醒。
             </div>
           </div>
+
+          {/* 开盘前集合竞价弱参考看板 */}
+          <details className="fold" style={{ marginTop: '12px', background: 'var(--surface2)', borderRadius: '8px', border: '1px solid var(--line)' }}>
+            <summary style={{ padding: '8px 12px', cursor: 'pointer', fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span>⏰ 开盘前集合竞价弱参考（09:25~09:30 定盘五档与胜率大数据）</span>
+              <span className="tag" style={{ background: '#fff', fontSize: '11px', color: 'var(--text)' }}>{aucStatus.label}</span>
+            </summary>
+            <div className="fold-bd" style={{ padding: '10px 14px 14px', fontSize: '12px' }}>
+              <div style={{ marginBottom: '8px', color: 'var(--sub)', lineHeight: 1.6 }}>
+                <b>战法定位（基于213条大样本实测）：</b>竞价强弱不改变“能否摸到 +1%”（五档触及率均稳定在 78%~80%），但直接决定了<b>“冲高空间多大”</b>与<b>“冲高后回撤多惨”</b>。09:25 集合竞价定盘后，对照下表校准挂单预期与止盈止损策略：
+              </div>
+              <div className="tbl-scroll" style={{ maxHeight: '180px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                  <thead>
+                    <tr style={{ background: 'var(--surface)', textAlign: 'left' }}>
+                      <th style={{ padding: '5px 8px' }}>竞价跳空档位</th>
+                      <th style={{ padding: '5px 8px' }}>属性标签</th>
+                      <th style={{ padding: '5px 8px' }}>平均冲高空间</th>
+                      <th style={{ padding: '5px 8px' }}>+1% 触及率</th>
+                      <th style={{ padding: '5px 8px' }}>+2% 触及率</th>
+                      <th style={{ padding: '5px 8px' }}>冲高后回撤</th>
+                      <th style={{ padding: '5px 8px' }}>开盘做T纪律指引</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {AUCTION_TIERS.map(t => (
+                      <tr key={t.key}>
+                        <td style={{ fontWeight: 700 }}>{t.label}</td>
+                        <td>
+                          <span className="tag" style={{ color: t.color, borderColor: t.color, background: t.bg, fontWeight: 700, padding: '1px 6px', fontSize: '11px' }}>
+                            {t.tag}
+                          </span>
+                        </td>
+                        <td style={{ color: 'var(--accent)', fontWeight: 700 }}>+{t.space}%</td>
+                        <td>{t.hit1}%</td>
+                        <td style={{ fontWeight: 700, color: t.hit2 >= 70 ? 'var(--down)' : 'inherit' }}>{t.hit2}%</td>
+                        <td style={{ color: 'var(--warn-d)' }}>−{t.give}%</td>
+                        <td style={{ color: 'var(--sub)' }}>{t.advice}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </details>
 
           <div className="sel-sep">手动添加 / 刷新行情</div>
 

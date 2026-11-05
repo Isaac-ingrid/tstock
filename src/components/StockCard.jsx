@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { f2, pct, money, money$, fmtIn, GRID, TIER_LABEL, AUTO_FIELDS, AUTO_FIELD_LABELS } from '../services/utils.js';
 import { calc, posCalc, computeTA, rsCalc, drawRS } from '../services/api.js';
+import { getAuctionTier } from '../services/auction.js';
 import ChartCanvas from './ChartCanvas.jsx';
 
 export const MODE_BADGE = {
@@ -29,6 +30,11 @@ export default function StockCard({
   const pos = posCalc(stock);
   const ta = stock._ta || computeTA(stock);
   const mbd = MODE_BADGE[c.mode] || MODE_BADGE.WAIT;
+
+  const openGap = (stock.open > 0 && stock.prevClose > 0)
+    ? ((stock.open - stock.prevClose) / stock.prevClose) * 100
+    : null;
+  const aucTier = openGap != null ? getAuctionTier(openGap) : null;
 
   const handleToggleTier = () => {
     const nextTier = (stock.tier === 'short' || stock.poolTag === '短线') ? 'long' : 'short';
@@ -155,6 +161,20 @@ export default function StockCard({
             </span>
           )}
           <span className="snap-tag tag-trend">日线{c.trend}</span>
+          {aucTier && (
+            <span
+              className="snap-tag"
+              style={{
+                borderColor: aucTier.color,
+                color: aucTier.color,
+                background: aucTier.bg,
+                fontWeight: 700
+              }}
+              title={`09:25 集合竞价定盘：开盘跳空 ${openGap >= 0 ? '+' : ''}${openGap.toFixed(2)}% · ${aucTier.tag}\n历史大样本：平均冲高空间 ${aucTier.space}%，+2% 触及率 ${aucTier.hit2}%\n操作指引：${aucTier.advice}`}
+            >
+              竞价 {openGap >= 0 ? '+' : ''}{openGap.toFixed(2)}% · {aucTier.tag}
+            </span>
+          )}
           {stock._t && <span className="snap-time">更新于 {stock._t}</span>}
         </div>
       </div>
