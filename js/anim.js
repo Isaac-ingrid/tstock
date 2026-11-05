@@ -90,7 +90,13 @@ export function animPricePulse(el, isUp = true) {
 /**
  * 5. 尾盘雷达卡片发光呼吸动效
  */
-export function animRadarGlow(radarEl) {
-  if (!radarEl) return;
-  radarEl.classList.add('live-pulse');
+export function animRadarGlow(target) {
+  if (!target) return;
+  const els = typeof target === 'string'
+    ? document.querySelectorAll(target)
+    : (target.nodeType ? [target] : target);
+  if (!els || !els.forEach) return;
+  els.forEach(el => {
+    if (el && el.classList) el.classList.add('live-pulse');
+  });
 }

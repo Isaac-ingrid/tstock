@@ -13,6 +13,7 @@ import { renderAccount, renderMarket, renderPerfTable, renderEquity, takeSnapsho
 import { renderLog, logAdd, renderCheckup, exportAll, importAll, copyPlan } from './ledger.js';
 import { initTabs, switchTab, updateTabBadges, updateTradingClock, paintStamp, renderTopbar, renderPoolTabs, focusStock, setView, openClockModal, closeClockModal, openStockReasonModal, closeStockReasonModal } from './nav.js';
 import { animCardsStagger, animPricePulse } from './anim.js';
+import { renderSelectionPool, syncSelectionChips, mergeSelectionToPool } from './selection.js';
 
 /* ===================== 全局全量刷新调度 ===================== */
 export async function refreshAll(silent = false) {
@@ -83,6 +84,7 @@ export async function refreshAll(silent = false) {
     }
   }
 
+  syncSelectionChips();
   checkPriceAlerts();
   checkMarketAlerts();
 
@@ -136,6 +138,16 @@ window.renderAccount = renderAccount;
 window.render = render;
 window.renderEquity = renderEquity;
 window.renderTailBuySection = renderTailBuySection;
+window.renderSelectionPool = renderSelectionPool;
+window.syncSelectionChips = syncSelectionChips;
+window.mergeSelectionToPool = mergeSelectionToPool;
+window.__applyPool = () => {
+  render(pool);
+  renderPoolTabs();
+  renderTopbar();
+  updateTabBadges();
+  syncSelectionChips();
+};
 
 window.syncSingleStock = async (idx) => {
   const s = pool[idx];
@@ -234,6 +246,7 @@ function initApp() {
 
   // 基础渲染
   render(pool);
+  renderSelectionPool();
   renderAccount();
   renderMarket();
   renderTailBuySection();
@@ -293,7 +306,7 @@ function initApp() {
 
   // 添加自选输入框绑定
   const dbInput = document.getElementById('dbInput');
-  const dbBtn = document.getElementById('dbBtn');
+  const dbBtn = document.getElementById('dbAdd') || document.getElementById('dbBtn');
   if (dbBtn && dbInput) {
     const doAdd = () => {
       const q = dbInput.value.trim();
@@ -303,6 +316,7 @@ function initApp() {
         renderPoolTabs();
         renderTopbar();
         updateTabBadges();
+        syncSelectionChips();
       });
     };
     dbBtn.onclick = doAdd;
@@ -311,14 +325,20 @@ function initApp() {
     };
   }
 
-  // 全量刷新按钮绑定
-  const dbSync = document.getElementById('dbSync');
+  // 全量刷新按钮绑定 (兼容页面中 dbRefresh 以及旧 ID dbSync)
+  const dbSync = document.getElementById('dbRefresh') || document.getElementById('dbSync');
   if (dbSync) {
     dbSync.onclick = () => refreshAll(false);
   }
 
-  // 网络自检按钮绑定
-  const dbSelfTest = document.getElementById('dbSelfTest');
+  // 顶栏刷新按钮绑定
+  const tbRefresh = document.getElementById('tbRefresh');
+  if (tbRefresh) {
+    tbRefresh.onclick = () => refreshAll(false);
+  }
+
+  // 网络自检按钮绑定 (兼容页面中 dbTest 以及旧 ID dbSelfTest)
+  const dbSelfTest = document.getElementById('dbTest') || document.getElementById('dbSelfTest');
   if (dbSelfTest) {
     dbSelfTest.onclick = selfTest;
   }
@@ -337,6 +357,46 @@ function initApp() {
         importAll(e.target.files[0]);
       }
     };
+  }
+
+  // 顶栏功能按钮绑定
+  const tbCopyPlan = document.getElementById('tbCopyPlan');
+  if (tbCopyPlan) tbCopyPlan.onclick = copyPlan;
+
+  const tbExport = document.getElementById('tbExport');
+  if (tbExport) tbExport.onclick = exportAll;
+
+  const tbImport = document.getElementById('tbImport');
+  const importFile = document.getElementById('importFile');
+  if (tbImport && importFile) {
+    tbImport.onclick = () => importFile.click();
+    importFile.onchange = (e) => {
+      if (e.target.files && e.target.files[0]) importAll(e.target.files[0]);
+    };
+  }
+
+  const tbNotify = document.getElementById('tbNotify');
+  if (tbNotify) {
+    tbNotify.onclick = () => {
+      if (!('Notification' in window)) { toastWarn('当前浏览器不支持桌面通知'); return; }
+      if (Notification.permission === 'granted') { toastOk('桌面通知已处于开启状态'); return; }
+      if (Notification.permission === 'denied') { toastWarn('桌面通知权限已被禁止，请在地址栏设置中允许'); return; }
+      Notification.requestPermission().then(p => {
+        if (p === 'granted') { toastOk('✓ 桌面通知已成功开启！'); tbNotify.textContent = '🔔 已开启'; }
+        else toastWarn('未授权桌面通知');
+      });
+    };
+    if ('Notification' in window && Notification.permission === 'granted') {
+      tbNotify.textContent = '🔔 已开启';
+    }
+  }
+
+  const toTop = document.getElementById('toTop');
+  if (toTop) {
+    toTop.onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.addEventListener('scroll', () => {
+      toTop.style.display = window.scrollY > 400 ? 'block' : 'none';
+    });
   }
 
   // 启动后台定时任务

@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="UtAxhALARdvyo7OAxfDPQA">
 <title>做T执行台 · 七格箱体 + 七底三仓</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23d32f2f'/><text x='16' y='24' font-size='21' font-weight='700' text-anchor='middle' fill='%23ffffff' font-family='sans-serif'>T</text></svg>">
-  <script type="module" crossorigin src="./assets/index-D08sCw-a.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-Bm35Bejx.css">
+  <script type="module" crossorigin src="./assets/index-CE7ehC4O.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-VRWhcA7m.css">
 </head>
 <body data-page-node-id="SJRFfJmSxa80xuojKC1VMs">
 <div class="wrap" data-page-node-id="0XLrWYQHUeaFRoHjLstNV7">
@@ -24,14 +24,7 @@
 
 <!-- 吸顶导航：一栏解决「我在哪 / 现在什么价 / 怎么跳」三个问题 -->
 <div class="topbar" id="topbar">
-  <div class="tb-nav">
-    <a href="javascript:switchTab('tabConsole')">今日作战</a>
-    <a href="javascript:switchTab('tabAccount')">账户</a>
-    <a href="javascript:switchTab('tabLedger')">台账</a>
-    <a href="javascript:switchTab('tabLedger')">认知</a>
-    <a href="javascript:switchTab('tabAccount')" style="color:var(--accent);font-weight:700">📊 战绩透视</a>
-    <a href="javascript:switchTab('tabRules')">纪律</a>
-  </div>
+  <div class="tb-nav" style="display:none"></div>
   <span class="tb-sep"></span>
   <!-- 常驻账户资产胶囊 -->
   <div class="tb-acc-pill" id="tbAccPill" title="点击跳转至账户总览与资金详情">
@@ -57,6 +50,10 @@
     <button id="tbRefresh">⟳ 刷新</button>
   </div>
 </div>
+
+<!-- 现代化 5-Tab 顶部主导航栏 -->
+<nav class="main-nav-bar" id="mainNavBar"></nav>
+
 <div id="overnightAlertBanner" class="overnight-alert-banner" style="display:none">
   <div class="oab-txt" id="oabTxt">🚨 尾盘强制风控：检测到今日存在尚未平仓的正T买入！做T铁律：绝不过夜变加仓！请在 14:55 前果断挂卖平仓或止损！</div>
   <button class="oab-close" id="oabClose">×</button>
@@ -230,9 +227,6 @@
   </div>
 </div>
 
-
-<!-- 现代化 5-Tab 顶部主导航栏 -->
-<nav class="main-nav-bar" id="mainNavBar"></nav>
 
 <!-- TAB 1: 🎯 做T决策台 -->
 <div class="tab-panel active" id="tabConsole">

@@ -6,14 +6,13 @@
 .main-nav-bar {
   position: sticky;
   top: 48px;
-  z-index: 900;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border-bottom: 1px solid var(--line);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-  margin: 0 -20px 20px;
-  padding: 8px 20px 0;
+  z-index: 100;
+  background: rgba(244, 245, 247, 0.96);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 2px solid var(--line);
+  margin: 12px 0 20px;
+  padding: 4px 0 0;
   transition: all .2s ease;
 }
 
@@ -21,10 +20,11 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  max-width: 1180px;
+  max-width: 1200px;
   margin: 0 auto;
   overflow-x: auto;
   scrollbar-width: none;
+  padding: 0 4px;
 }
 .nav-tabs-wrap::-webkit-scrollbar {
   display: none;
@@ -35,34 +35,37 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: transparent;
-  border: none;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-bottom: 2px solid transparent;
   outline: none;
-  padding: 10px 16px 14px;
+  padding: 10px 18px;
   font-size: 14px;
   font-weight: 600;
   color: var(--sub);
   cursor: pointer;
   white-space: nowrap;
-  transition: all .2s cubic-bezier(0.4, 0, 0.2, 1);
-  border-bottom: 3px solid transparent;
+  border-radius: 8px 8px 0 0;
+  transition: all .18s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .nav-tab-btn:hover {
   color: var(--text);
-  background: rgba(0, 0, 0, 0.02);
-  border-radius: 6px 6px 0 0;
+  background: #ffffff;
+  border-color: var(--line2);
 }
 
 .nav-tab-btn.active {
   color: var(--accent);
+  background: #ffffff;
   font-weight: 700;
-  border-bottom-color: var(--accent);
+  border-color: var(--accent-b);
+  border-bottom: 3px solid var(--accent);
+  box-shadow: 0 -2px 8px rgba(124, 58, 237, 0.08);
 }
 
-.nt-icon {
-  font-size: 16px;
-  line-height: 1;
+.nav-tab-btn.btn-hot {
+  border-color: #fbcfe8;
 }
 
 .nt-text {
@@ -74,7 +77,7 @@
   align-items: center;
   font-size: 11px;
   font-weight: 700;
-  padding: 1px 7px;
+  padding: 2px 7px;
   border-radius: 10px;
   background: var(--surface2);
   color: var(--sub);
@@ -87,22 +90,23 @@
   color: var(--accent-d);
 }
 
-.nt-badge.highlight {
-  background: #fef3c7;
-  color: #92400e;
+.nt-badge.nt-badge-pulse {
+  background: #fee2e2;
+  color: #dc2626;
+  animation: pulse-badge 1.8s infinite;
 }
 
-.nt-badge.pulse {
-  background: #fdf2f8;
-  color: #be185d;
-  box-shadow: 0 0 0 1px #fbcfe8;
+@keyframes pulse-badge {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.08); opacity: 0.85; }
+  100% { transform: scale(1); opacity: 1; }
 }
 
 /* 选项卡面板容器 */
 .tab-panel {
   display: none;
   opacity: 0;
-  transform: translateY(8px);
+  transform: translateY(6px);
   will-change: opacity, transform;
 }
 
@@ -116,15 +120,12 @@
 @media (max-width: 768px) {
   .main-nav-bar {
     top: 42px;
-    margin: 0 -12px 14px;
-    padding: 6px 12px 0;
+    margin: 8px 0 14px;
+    padding: 4px 0 0;
   }
   .nav-tab-btn {
-    padding: 8px 12px 10px;
+    padding: 8px 12px;
     font-size: 13px;
     gap: 6px;
-  }
-  .nt-icon {
-    font-size: 14px;
   }
 }

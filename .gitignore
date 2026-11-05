@@ -57,4 +57,4 @@ desktop.ini
 
 # ---------- 依赖 ----------
 node_modules/
-package-lock.json
+dist/

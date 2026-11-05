@@ -816,12 +816,12 @@ function renderAllCharts(){
   document.querySelectorAll('canvas[data-ki]').forEach(cv => {
     const idx = +cv.dataset.ki;
     const s = pool[idx];
-    if (s) drawChart(cv, s);
+    if (s && cv && cv.getContext) drawChart(cv, s);
   });
   document.querySelectorAll('canvas[data-rs]').forEach(cv => {
     const idx = +cv.dataset.rs;
     const s = pool[idx];
-    if (s) {
+    if (s && cv && cv.getContext) {
       const rs = rsCalc(s);
       if (rs) drawRS(cv, rs);
     }

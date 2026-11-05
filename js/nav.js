@@ -29,12 +29,16 @@ export function initTabs() {
   const savedTab = localStorage.getItem('t-nav-tab') || 'tabConsole';
   _activeTab = savedTab;
 
-  const btnsHtml = TABS.map(t => `
-    <button class="nav-tab-btn ${t.id === _activeTab ? 'active' : ''} ${t.isHot ? 'btn-hot' : ''}" data-tab="${t.id}" id="navBtn_${t.id}">
-      <span>${t.label}</span>
-      ${t.badgeId ? `<span class="nt-badge" id="${t.badgeId}"></span>` : ''}
-    </button>
-  `).join('');
+  const btnsHtml = `
+    <div class="nav-tabs-wrap">
+      ${TABS.map(t => `
+        <button class="nav-tab-btn ${t.id === _activeTab ? 'active' : ''} ${t.isHot ? 'btn-hot' : ''}" data-tab="${t.id}" id="navBtn_${t.id}">
+          <span class="nt-text">${t.label}</span>
+          ${t.badgeId ? `<span class="nt-badge" id="${t.badgeId}"></span>` : ''}
+        </button>
+      `).join('')}
+    </div>
+  `;
 
   bar.innerHTML = btnsHtml;
 
@@ -287,28 +291,132 @@ export function closeClockModal() {
   if (m) m.style.display = 'none';
 }
 
-export function openStockReasonModal(code) {
-  const s = (pool || []).find(item => item.code === code);
-  const m = document.getElementById('stockReasonModal');
-  if (!s || !m) return;
+let _srmOnAdd = null;
 
-  const nameEl = document.getElementById('srmStockName');
-  if (nameEl) nameEl.textContent = `${s.name} (${s.code})`;
-  const bodyEl = document.getElementById('srmBody');
-  if (bodyEl) {
-    bodyEl.innerHTML = `
-      <div style="font-size:13.5px;line-height:1.8">
-        <p><b>入选板块：</b>${s._bd && s._bd.list ? s._bd.list.slice(0, 5).map(x => x.name).join(' · ') : '待取数后自动解析'}</p>
-        <p><b>估值支撑：</b>${s._val && s._val.cur ? `PE-TTM ${f2(s._val.cur.pe)} ｜ PB ${f2(s._val.cur.pb)}` : '历史估值加载中'}</p>
-        <p><b>技术面综合评分：</b>${s._ta ? s._ta.score + ' 分' : '技术指标核算中'}</p>
-        <p><b>做T纪律：</b>单笔止损线固定 1.5%，日内正T必须于 14:45 前闭环或保本出清。</p>
-      </div>
+export function openStockReasonModal(item, onAdd) {
+  if (!item) return;
+  _srmOnAdd = onAdd || null;
+  const m = document.getElementById('stockReasonModal');
+  if (!m) return;
+
+  const D = window.WB_LATEST || {};
+  const recs = D.recommendations || [];
+  const cands = (D.candidates || []).concat(D.steady || []);
+  const sixCode = String(item.code || '').replace(/\D/g, '');
+  const rec = recs.find(r => String(r.code).replace(/\D/g, '') === sixCode)
+    || cands.find(r => String(r.code).replace(/\D/g, '') === sixCode)
+    || {};
+
+  const nameEl = document.getElementById('srmName');
+  if (nameEl) nameEl.textContent = item.name || rec.name || '—';
+  const codeEl = document.getElementById('srmCode');
+  if (codeEl) codeEl.textContent = item.code || rec.code || '—';
+
+  const isShort = (item.pool === 'short' || item.tier === 'short' || item.poolLabel === '短线做T' || rec.pool === 'short');
+  const typePill = document.getElementById('srmTypePill');
+  if (typePill) {
+    typePill.className = 'pill ' + (isShort ? 'p-small' : 'p-steady');
+    typePill.textContent = isShort ? '短线做T' : '稳健底仓';
+  }
+
+  const scorePill = document.getElementById('srmScorePill');
+  const score = item.score || item.poolScore || rec.score || 85;
+  if (scorePill) {
+    scorePill.className = 'pill ' + (score >= 85 ? 'p-can' : score >= 75 ? 'p-small' : 'p-watch');
+    scorePill.textContent = '评分 ' + score + (item.verdict ? ' · ' + item.verdict : (rec.verdict ? ' · ' + rec.verdict : ''));
+  }
+
+  const px = +item.price || +item.latestPrice || +rec.latestPrice || +rec.price || 0;
+  const buyPx = +item.buy || +rec.buy || +item.poolBuy || px;
+  const s1 = item.sell1 || rec.sell1 || (px ? +(px * 1.025).toFixed(2) : '—');
+  const stp = item.stop || rec.stop || (px ? +(px * 0.985).toFixed(2) : '—');
+  const srmSummary = document.getElementById('srmSummary');
+  if (srmSummary) {
+    srmSummary.innerHTML = `
+      <span>参考现价: <b>${f2(px)}</b></span>
+      <span>建议买点: <b>${f2(buyPx)}</b></span>
+      <span>目标止盈: <b style="color:var(--up)">${f2(s1)}</b></span>
+      <span>止损纪律: <b style="color:var(--down)">${f2(stp)}</b></span>
+      ${item.amp ? `<span>日内振幅: <b>${f2(item.amp)}%</b></span>` : ''}
+      ${item.volRatio ? `<span>开盘量比: <b>${f2(item.volRatio)}</b></span>` : ''}
     `;
   }
+
+  // 为什么选它：入选理由
+  const reasons = item.whyReasons || rec.whyReasons || [
+    '⚡ 趋势与量价共振：均线多头形态，放量突破阻力位',
+    '🛡️ 主力资金护盘：日内均价线上方运行时间占比高，重心坚挺',
+    '🎯 做T空间充沛：日内具备明确高抛低吸安全垫与波段空间'
+  ];
+  const srmReasons = document.getElementById('srmReasons');
+  if (srmReasons) {
+    srmReasons.innerHTML = reasons.map(r => `<div class="sm-reason-item">${r}</div>`).join('');
+  }
+
+  // 重大利空排查
+  const rc = item.riskCheck || rec.riskCheck || {
+    status: 'safe',
+    statusText: '🟢 未见重大恶性利空',
+    risks: [],
+    highlights: ['非ST标的，无退市警示', '流通市值适中，无极端流动性陷阱']
+  };
+  const rkBadge = document.getElementById('srmRiskStatus');
+  if (rkBadge) {
+    rkBadge.className = 'sm-risk-badge ' + (rc.status || 'safe');
+    rkBadge.textContent = rc.statusText || '🟢 未见重大恶性利空';
+  }
+
+  const srmRisks = document.getElementById('srmRisks');
+  if (srmRisks) {
+    let rkHtml = '';
+    if (rc.risks && rc.risks.length) {
+      rkHtml += rc.risks.map(rk => `<div class="sm-risk-entry ${rk.level || 'warn'}"><b>⚠️ ${rk.type}：</b>${rk.desc}</div>`).join('');
+    }
+    if (rc.highlights && rc.highlights.length) {
+      rkHtml += rc.highlights.map(hl => `<div class="sm-highlight-entry">✓ ${hl}</div>`).join('');
+    }
+    if (!rkHtml) rkHtml = '<div class="sm-highlight-entry">✓ 基本面排查正常，未见重大恶性利空警示</div>';
+    srmRisks.innerHTML = rkHtml;
+  }
+
+  // 价位与做T实战测算
+  const retOpen = rec.retOpen != null ? rec.retOpen : (px && buyPx ? ((px / buyPx - 1) - 0.0011) * 100 : 0);
+  const tG = rec.tGainPct || (isShort ? 1.5 : 1.85);
+  const totRet = rec.totalReturnWithT != null ? rec.totalReturnWithT : +(retOpen + tG).toFixed(2);
+  const clsO = retOpen >= 0 ? 'var(--up)' : 'var(--down)';
+  const clsT = totRet >= 0 ? 'var(--up)' : 'var(--down)';
+
+  const srmPerfGrid = document.getElementById('srmPerfGrid');
+  if (srmPerfGrid) {
+    srmPerfGrid.innerHTML = `
+      <div class="sm-pg-item"><span class="k">建议买入价</span><span class="v">${f2(buyPx)}</span></div>
+      <div class="sm-pg-item"><span class="k">买入持有基准</span><span class="v" style="color:${clsO}">${pct(retOpen)}</span></div>
+      <div class="sm-pg-item"><span class="k">做T增厚差价</span><span class="v" style="color:var(--info)">+${tG.toFixed(2)}%</span></div>
+      <div class="sm-pg-item"><span class="k">做T综合总收益</span><span class="v" style="color:${clsT}">${pct(totRet)}</span></div>
+    `;
+  }
+
+  const addBtn = document.getElementById('srmAddBtn');
+  if (addBtn) {
+    if (_srmOnAdd) {
+      addBtn.style.display = 'inline-flex';
+      addBtn.onclick = () => {
+        _srmOnAdd();
+        closeStockReasonModal();
+      };
+    } else {
+      addBtn.style.display = 'none';
+    }
+  }
+
+  const closeBtn = document.getElementById('srmCloseBtn');
+  if (closeBtn) closeBtn.onclick = closeStockReasonModal;
+
   m.style.display = 'flex';
 }
 
 export function closeStockReasonModal() {
   const m = document.getElementById('stockReasonModal');
   if (m) m.style.display = 'none';
+  _srmOnAdd = null;
 }

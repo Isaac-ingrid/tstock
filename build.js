@@ -1,6 +1,10 @@
-const { execSync } = require('child_process');
-const path = require('path');
-const fs = require('fs');
+import { execSync } from 'child_process';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 console.log('[Build] 正在打包 A股做T执行台 模块化代码到 js/bundle.js...');
 const projectRoot = path.resolve(__dirname);

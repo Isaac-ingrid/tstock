@@ -25,14 +25,7 @@
 
 <!-- 吸顶导航：一栏解决「我在哪 / 现在什么价 / 怎么跳」三个问题 -->
 <div class="topbar" id="topbar">
-  <div class="tb-nav">
-    <a href="javascript:switchTab('tabConsole')">今日作战</a>
-    <a href="javascript:switchTab('tabAccount')">账户</a>
-    <a href="javascript:switchTab('tabLedger')">台账</a>
-    <a href="javascript:switchTab('tabLedger')">认知</a>
-    <a href="javascript:switchTab('tabAccount')" style="color:var(--accent);font-weight:700">📊 战绩透视</a>
-    <a href="javascript:switchTab('tabRules')">纪律</a>
-  </div>
+  <div class="tb-nav" style="display:none"></div>
   <span class="tb-sep"></span>
   <!-- 常驻账户资产胶囊 -->
   <div class="tb-acc-pill" id="tbAccPill" title="点击跳转至账户总览与资金详情">
@@ -58,6 +51,10 @@
     <button id="tbRefresh">⟳ 刷新</button>
   </div>
 </div>
+
+<!-- 现代化 5-Tab 顶部主导航栏 -->
+<nav class="main-nav-bar" id="mainNavBar"></nav>
+
 <div id="overnightAlertBanner" class="overnight-alert-banner" style="display:none">
   <div class="oab-txt" id="oabTxt">🚨 尾盘强制风控：检测到今日存在尚未平仓的正T买入！做T铁律：绝不过夜变加仓！请在 14:55 前果断挂卖平仓或止损！</div>
   <button class="oab-close" id="oabClose">×</button>
@@ -231,9 +228,6 @@
   </div>
 </div>
 
-
-<!-- 现代化 5-Tab 顶部主导航栏 -->
-<nav class="main-nav-bar" id="mainNavBar"></nav>
 
 <!-- TAB 1: 🎯 做T决策台 -->
 <div class="tab-panel active" id="tabConsole">
