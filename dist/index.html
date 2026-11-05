@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="UtAxhALARdvyo7OAxfDPQA">
 <title>做T执行台 · 七格箱体 + 七底三仓</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23d32f2f'/><text x='16' y='24' font-size='21' font-weight='700' text-anchor='middle' fill='%23ffffff' font-family='sans-serif'>T</text></svg>">
-  <script type="module" crossorigin src="./assets/index-CE7ehC4O.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-VRWhcA7m.css">
+  <script type="module" crossorigin src="./assets/index-06hrTp5H.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-IimFPb1z.css">
 </head>
 <body data-page-node-id="SJRFfJmSxa80xuojKC1VMs">
 <div class="wrap" data-page-node-id="0XLrWYQHUeaFRoHjLstNV7">
@@ -24,7 +24,15 @@
 
 <!-- 吸顶导航：一栏解决「我在哪 / 现在什么价 / 怎么跳」三个问题 -->
 <div class="topbar" id="topbar">
-  <div class="tb-nav" style="display:none"></div>
+  <div class="tb-nav" id="topNav">
+    <a href="#secPlan" class="active" data-tab="tabConsole">今日作战<span class="tb-badge" id="ntBadgeConsole"></span></a>
+    <a href="#secTailBuy" data-tab="tabTail">⚡ 尾盘黑马<span class="tb-badge" id="ntBadgeTail"></span></a>
+    <a href="#accSec" data-tab="tabAccount">账户</a>
+    <a href="#secLog" data-tab="tabLedger">台账<span class="tb-badge" id="ntBadgeLedger"></span></a>
+    <a href="#secPerf" data-tab="tabPerf" style="color:var(--accent);font-weight:700">📊 战绩透视</a>
+    <a href="#secRule" data-tab="tabRules">纪律</a>
+    <a href="#secAll" data-tab="tabAll">🌐 全览</a>
+  </div>
   <span class="tb-sep"></span>
   <!-- 常驻账户资产胶囊 -->
   <div class="tb-acc-pill" id="tbAccPill" title="点击跳转至账户总览与资金详情">
@@ -50,9 +58,6 @@
     <button id="tbRefresh">⟳ 刷新</button>
   </div>
 </div>
-
-<!-- 现代化 5-Tab 顶部主导航栏 -->
-<nav class="main-nav-bar" id="mainNavBar"></nav>
 
 <div id="overnightAlertBanner" class="overnight-alert-banner" style="display:none">
   <div class="oab-txt" id="oabTxt">🚨 尾盘强制风控：检测到今日存在尚未平仓的正T买入！做T铁律：绝不过夜变加仓！请在 14:55 前果断挂卖平仓或止损！</div>

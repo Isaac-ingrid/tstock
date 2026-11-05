@@ -2,8 +2,9 @@
    A股做T执行台 · 行情数据与技术分析引擎 (api.js)
    ============================================================ */
 
-import { f2, f3, pct, money, money$, fmtIn, fvol, GRID, STOP, FLY, toast, toastOk, toastWarn, toastErr, soundChime } from './utils.js';
-import { ALERT_CENTER, saveAlerts, stampData, pool } from './state.js';
+import { f2, f3, pct, money, money$, fmtIn, fvol, GRID, STOP, FLY, toast, toastOk, toastWarn, toastErr, soundChime, AUTO_FIELDS } from './utils.js';
+import { ALERT_CENTER, saveAlerts, stampData, pool, SNAP } from './state.js';
+import { chartInd } from './chart.js';
 
 /* ===================== 数据层：全腾讯源（行情 / 检索 / 日K） =====================
    选源原则：实测本机到东财域名严重不稳（searchapi 首包 11s+，push2his 直接连不上），

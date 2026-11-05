@@ -2,11 +2,25 @@
    A股做T执行台 · 自选个股做T决策卡片与实时买卖模块 (card.js)
    ============================================================ */
 
-import { f2, f3, pct, money, money2, fmtIn, todayStr, toast, toastOk, toastWarn, toastErr, soundChime, GRID, STOP, FLY, FEE, VAL_WIN, TIER_LABEL, AUTO_FIELDS } from './utils.js';
-import { pool, savePool, LOG, saveLog, tierOf, CUR, setCur } from './state.js';
-import { calc, computeTA, rsCalc, drawRS, loadStock, loadChart, loadDD, loadResearch } from './api.js';
-import { drawChart, kbarHTML, chartLegendHTML, chartStat } from './chart.js';
+import { f2, f3, pct, money, money$, money2, fmtIn, todayStr, toast, toastOk, toastWarn, toastErr, copyPlain, soundChime, GRID, STOP, FLY, FEE, VAL_WIN, TIER_LABEL, AUTO_FIELDS } from './utils.js';
+import { pool, savePool, LOG, saveLog, tierOf, CUR, setCur, TIER, setTier, paintTierBar, stampData } from './state.js';
+import { calc, computeTA, rsCalc, drawRS, loadStock, loadChart, loadDD, loadResearch, checkPriceAlerts } from './api.js';
+import { drawChart, kbarHTML, chartLegendHTML, chartStat, PERIOD_LABEL, _hover, setHover } from './chart.js';
+import { renderTopbar, applyCur, renderPoolTabs, openStockReasonModal } from './nav.js';
 import { animCardsStagger, animPricePulse } from './anim.js';
+
+export const MODE_BADGE = {
+  BUY : ['buy',  '正T'],
+  REV : ['rev',  '倒T'],
+  CUT : ['cut',  '只减'],
+  WAIT: ['wait', '观望']
+};
+
+export const AUTO_FIELD_LABELS = {
+  prevClose: '昨收', open: '今开', high: '最高', low: '最低',
+  price: '最新价', avg: '分时均价', vr: '量比',
+  ma5: 'MA5', ma10: 'MA10', ma20: 'MA20'
+};
 
 /* ===================== 持仓与成本核算 ===================== */
 export function tRealOf(code){
@@ -55,7 +69,7 @@ export function posBar(s, p, i){
   const dCls = (p.dayPL||0) >= 0 ? 'up' : 'dn';
   const today = todayStr();
   const todayTBuys = (typeof LOG !== 'undefined' ? LOG : [])
-    .filter(r => r.date === today && (r.stock === s.name || r.stock === s.code) && r.dir === '正T')
+    .filter(r => r.date === today && (r.stock === s.name || r.stock === s.code) && (r.dir === '正T' || r.dir === '买入建仓'))
     .reduce((a, b) => a + (+b.qty || 0), 0);
   const shTotal = Math.round(+s.shares || 0);
   const availSell = Math.max(0, shTotal - todayTBuys);
@@ -127,142 +141,175 @@ export function liveTradeBar(s, p, c, i){
   const defaultSellPx = s._sellPx != null ? s._sellPx : (c.tp1 || curPx || +s.cost);
   const recQty = c.t1Lots || (s.shares >= 300 ? 300 : Math.min(100, s.shares || 100));
 
+  // 今日正T冻结与可卖底仓计算
   const today = todayStr();
   const todayTBuys = (typeof LOG !== 'undefined' ? LOG : [])
-    .filter(r => r.date === today && (r.stock === s.name || r.stock === s.code) && r.dir === '正T')
+    .filter(r => r.date === today && (r.stock === s.name || r.stock === s.code) && (r.dir === '正T' || r.dir === '买入建仓'))
     .reduce((a, b) => a + (+b.qty || 0), 0);
-  const shTotal = Math.round(+s.shares || 0);
-  const availSell = Math.max(0, shTotal - todayTBuys);
+  const availSell = Math.max(0, (s.shares || 0) - todayTBuys);
 
-  const activeTab = s._tradeTab || (hasPos ? 'sell' : 'buy');
+  const activeTab = s._tradeTab || 'sell';
 
-  return `
-    <div class="live-trade-section">
-      <div class="lts-tabs">
-        <button type="button" class="lts-tab-btn ${activeTab === 'sell' ? 'active' : ''}" onclick="window.switchTradeTab(${i}, 'sell')">
-          ⚡ 实时卖出记账 ${hasPos ? `<span class="lts-badge-pos">持仓 ${s.shares}股</span>` : ''}
-        </button>
-        <button type="button" class="lts-tab-btn ${activeTab === 'buy' ? 'active' : ''}" onclick="window.switchTradeTab(${i}, 'buy')">
-          ➕ 实时买入/建仓
-        </button>
-      </div>
+  if (hasPos) {
+    if (activeTab === 'buy') {
+      // 持仓状态下的追加买入 / 加仓
+      const defAddBuy = c.inA || curPx || +s.cost;
+      return `
+        <div class="live-trade-strip buy-strip" data-lts="${i}">
+          <div class="lts-header">
+            <div class="lts-tabs">
+              <button type="button" class="lts-tab-btn" data-switch-tab="sell" data-i="${i}">⚡ 做T / 卖出记账</button>
+              <button type="button" class="lts-tab-btn active" data-switch-tab="buy" data-i="${i}">➕ 追加买入 / 加仓</button>
+            </div>
+            <div class="lts-sub">当前持仓: <b>${s.shares}股</b> (成本 ¥${f2(s.cost)}) ｜ 追加买入将按加权平均法重新核算底仓成本</div>
+          </div>
+          <div class="lts-body">
+            <div class="lts-item">
+              <span class="lts-k">加仓买入价</span>
+              <div class="lts-val-box">
+                <span class="lts-unit">¥</span>
+                <input class="lts-inp lts-buy" id="ltbBuy_${i}" data-lt-i="${i}" type="number" step="0.01" value="${f2(defAddBuy)}" placeholder="买入价">
+                <div class="lts-quick-pills">
+                  <button type="button" class="lts-pill-btn" data-fill-buy="${f2(curPx)}" data-i="${i}" title="填入最新现价">现价 ${f2(curPx)}</button>
+                  ${c.inA ? `<button type="button" class="lts-pill-btn" data-fill-buy="${f2(c.inA)}" data-i="${i}" title="填入建议低吸买点">低吸 ${f2(c.inA)}</button>` : ''}
+                </div>
+              </div>
+            </div>
+            <div class="lts-item">
+              <span class="lts-k">加仓股数</span>
+              <div class="lts-val-box">
+                <input class="lts-inp lts-qty" id="ltbQty_${i}" data-lt-i="${i}" type="number" step="100" value="${recQty}" style="width:78px">
+                <span class="lts-unit-text">股</span>
+                <div class="lts-quick-pills">
+                  <button type="button" class="lts-pill-btn" data-fill-bqty="100" data-i="${i}">1手</button>
+                  <button type="button" class="lts-pill-btn" data-fill-bqty="300" data-i="${i}">3手</button>
+                  <button type="button" class="lts-pill-btn" data-fill-bqty="${recQty}" data-i="${i}">T仓(${recQty})</button>
+                </div>
+              </div>
+            </div>
+            <div class="lts-act">
+              <button type="button" class="btn-lts-exec buy" data-exec-buy="${i}">🟢 确认追加买入</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
 
-      <!-- TAB 1: 实时卖出 (减仓 / 做T闭环) -->
-      <div class="lts-pane" id="ltbPaneSell_${i}" style="${activeTab === 'sell' ? 'display:block' : 'display:none'}">
-        <div class="ltb-flex">
-          <div class="ltb-field">
-            <label class="ltb-label">卖出模式</label>
-            <select class="ltb-select" id="ltbMode_${i}" onchange="window.updateLtbPreview(${i})">
-              <option value="t">🎯 正T闭环 (底仓不变，差价降本)</option>
-              <option value="reduce">📉 减仓卖出 (减少持仓股数)</option>
+    // 默认：持仓状态下的实时卖出及卖出价选项
+    return `
+      <div class="live-trade-strip sell-strip" data-lts="${i}">
+        <div class="lts-header">
+          <div class="lts-tabs">
+            <button type="button" class="lts-tab-btn active" data-switch-tab="sell" data-i="${i}">⚡ 实时卖出记账</button>
+            <button type="button" class="lts-tab-btn" data-switch-tab="buy" data-i="${i}">➕ 追加买入</button>
+          </div>
+          <div class="lts-sub">
+            持仓买入成本: <b>¥${f2(s.cost)}</b> ｜ 持仓: <b>${s.shares}</b> 股 ｜ 可卖底仓: <b>${availSell}</b> 股
+          </div>
+        </div>
+        <div class="lts-body">
+          <div class="lts-item">
+            <span class="lts-k">买入价(持仓)</span>
+            <div class="lts-val-box">
+              <span class="lts-unit">¥</span>
+              <input class="lts-inp lts-buy" id="ltbBuy_${i}" data-lt-i="${i}" type="number" step="0.01" value="${f2(s.cost)}" title="持仓成本买入价，可微调核算">
+            </div>
+          </div>
+          <span class="lts-arrow">➔</span>
+          <div class="lts-item">
+            <span class="lts-k">卖出目标价</span>
+            <div class="lts-val-box">
+              <span class="lts-unit">¥</span>
+              <input class="lts-inp lts-sell" id="ltbSell_${i}" data-lt-i="${i}" type="number" step="0.01" value="${f2(defaultSellPx)}" placeholder="卖出价">
+              <div class="lts-quick-pills">
+                <button type="button" class="lts-pill-btn" data-fill-sell="${f2(curPx)}" data-i="${i}" title="填入最新现价">现价 ${f2(curPx)}</button>
+                ${c.tp1 ? `<button type="button" class="lts-pill-btn" data-fill-sell="${f2(c.tp1)}" data-i="${i}" title="填入T1止盈目标价">T1 ${f2(c.tp1)}</button>` : ''}
+                ${c.tp2 ? `<button type="button" class="lts-pill-btn" data-fill-sell="${f2(c.tp2)}" data-i="${i}" title="填入T2高抛目标价">T2 ${f2(c.tp2)}</button>` : ''}
+              </div>
+            </div>
+          </div>
+          <div class="lts-item">
+            <span class="lts-k">卖出股数</span>
+            <div class="lts-val-box">
+              <input class="lts-inp lts-qty" id="ltbQty_${i}" data-lt-i="${i}" type="number" step="100" value="${recQty}" style="width:72px">
+              <span class="lts-unit-text">股</span>
+              <div class="lts-quick-pills">
+                <button type="button" class="lts-pill-btn" data-fill-qty="100" data-i="${i}">1手</button>
+                ${c.t1Lots && c.t1Lots !== 100 ? `<button type="button" class="lts-pill-btn" data-fill-qty="${c.t1Lots}" data-i="${i}">T仓${c.t1Lots}</button>` : ''}
+                <button type="button" class="lts-pill-btn" data-fill-qty="${availSell}" data-i="${i}">全卖(${availSell})</button>
+              </div>
+            </div>
+          </div>
+          <div class="lts-item">
+            <span class="lts-k">记账模式</span>
+            <select class="lts-sel" id="ltbMode_${i}" data-lt-i="${i}">
+              <option value="t">做T平仓（冲减成本，股数不变）</option>
+              <option value="reduce">减仓出局（扣减股数，回笼资金）</option>
             </select>
           </div>
-          <div class="ltb-field">
-            <label class="ltb-label">买入价 (成本)</label>
-            <div class="ltb-input-wrap">
-              <input type="number" step="0.01" class="ltb-input" id="ltbBuy_${i}" value="${f2(s.cost || curPx)}" oninput="window.updateLtbPreview(${i})">
-              <span class="ltb-unit">元</span>
-            </div>
-          </div>
-          <div class="ltb-field">
-            <label class="ltb-label">卖出成交价</label>
-            <div class="ltb-input-wrap">
-              <input type="number" step="0.01" class="ltb-input" id="ltbSell_${i}" value="${f2(defaultSellPx)}" oninput="window.updateLtbPreview(${i})">
-              <span class="ltb-unit">元</span>
-            </div>
-          </div>
-          <div class="ltb-field">
-            <label class="ltb-label">卖出股数 ${availSell < shTotal ? `<span style="color:var(--warn-d)">(可卖 ${availSell}股)</span>` : ''}</label>
-            <div class="ltb-input-wrap">
-              <input type="number" step="100" class="ltb-input" id="ltbQty_${i}" value="${recQty}" max="${availSell}" oninput="window.updateLtbPreview(${i})">
-              <span class="ltb-unit">股</span>
-            </div>
-          </div>
-          <div class="ltb-field ltb-action-field">
-            <label class="ltb-label">&nbsp;</label>
-            <button type="button" class="btn-live-sell" onclick="window.execLiveSell(${i})">
-              🚀 立即执行卖出
-            </button>
+          <div class="lts-act">
+            <button type="button" class="btn-lts-exec sell" data-exec-sell="${i}">🔴 确认卖出记账</button>
           </div>
         </div>
-
-        <div class="lts-chips">
-          <span class="lts-chip-title">卖出价快捷：</span>
-          <button type="button" class="lts-chip" onclick="window.setLtbSellPx(${i}, ${curPx})">现价 ${f2(curPx)}</button>
-          ${c.tp1 ? `<button type="button" class="lts-chip" onclick="window.setLtbSellPx(${i}, ${c.tp1})">止盈目标一 ${f2(c.tp1)}</button>` : ''}
-          ${c.tp2 ? `<button type="button" class="lts-chip" onclick="window.setLtbSellPx(${i}, ${c.tp2})">止盈目标二 ${f2(c.tp2)}</button>` : ''}
-          ${c.outA ? `<button type="button" class="lts-chip" onclick="window.setLtbSellPx(${i}, ${c.outA})">倒T减仓位 ${f2(c.outA)}</button>` : ''}
-          <span class="lts-chip-title" style="margin-left:10px">股数快捷：</span>
-          ${recQty ? `<button type="button" class="lts-chip" onclick="window.setLtbQty(${i}, ${recQty})">建议T仓 ${recQty}股</button>` : ''}
-          ${availSell >= 200 ? `<button type="button" class="lts-chip" onclick="window.setLtbQty(${i}, 200)">200股</button>` : ''}
-          ${availSell > 0 ? `<button type="button" class="lts-chip" onclick="window.setLtbQty(${i}, ${availSell})">全部可卖 ${availSell}股</button>` : ''}
+        <div class="lts-preview" id="ltbPrev_${i}"></div>
+      </div>
+    `;
+  } else {
+    // 尚未持仓：引导买入建仓，录入买入价后立即激活卖出选项
+    const defBuy = c.inA || curPx || 10.0;
+    return `
+      <div class="live-trade-strip buy-strip empty-pos" data-lts="${i}">
+        <div class="lts-header">
+          <div class="lts-tabs">
+            <span class="lts-badge buy">🟢 实时买入建仓</span>
+          </div>
+          <div class="lts-sub">设置买入建仓价与股数，确认买入后将实时记账并立即激活卖出及卖出价选项</div>
         </div>
-
-        <div class="ltb-preview" id="ltbPreview_${i}">
-          <span class="lts-prev-tag">实时测算</span>
-          <span>净做T差价: <b style="color:var(--up)">+0.00 元</b></span>
-          <span class="lts-dot">·</span>
-          <span>做T收益率: <b>0.00%</b></span>
-          <span class="lts-dot">·</span>
-          <span>底仓降本: <b>-0.000 元/股</b></span>
+        <div class="lts-body">
+          <div class="lts-item">
+            <span class="lts-k">买入建仓价</span>
+            <div class="lts-val-box">
+              <span class="lts-unit">¥</span>
+              <input class="lts-inp lts-buy" id="ltbBuy_${i}" data-lt-i="${i}" type="number" step="0.01" value="${f2(defBuy)}" placeholder="买入价">
+              <div class="lts-quick-pills">
+                <button type="button" class="lts-pill-btn" data-fill-buy="${f2(curPx)}" data-i="${i}" title="填入最新现价">现价 ${f2(curPx)}</button>
+                ${c.inA ? `<button type="button" class="lts-pill-btn" data-fill-buy="${f2(c.inA)}" data-i="${i}" title="填入建议低吸买点">低吸 ${f2(c.inA)}</button>` : ''}
+              </div>
+            </div>
+          </div>
+          <div class="lts-item">
+            <span class="lts-k">买入股数</span>
+            <div class="lts-val-box">
+              <input class="lts-inp lts-qty" id="ltbQty_${i}" data-lt-i="${i}" type="number" step="100" value="${c.t1Lots || 300}" style="width:78px">
+              <span class="lts-unit-text">股</span>
+              <div class="lts-quick-pills">
+                <button type="button" class="lts-pill-btn" data-fill-bqty="100" data-i="${i}">1手</button>
+                <button type="button" class="lts-pill-btn" data-fill-bqty="300" data-i="${i}">3手</button>
+                <button type="button" class="lts-pill-btn" data-fill-bqty="500" data-i="${i}">5手</button>
+              </div>
+            </div>
+          </div>
+          <div class="lts-act">
+            <button type="button" class="btn-lts-exec buy" data-exec-buy="${i}">🟢 确认买入记账</button>
+          </div>
         </div>
       </div>
-
-      <!-- TAB 2: 实时买入 (建仓 / 加仓) -->
-      <div class="lts-pane" id="ltbPaneBuy_${i}" style="${activeTab === 'buy' ? 'display:block' : 'display:none'}">
-        <div class="ltb-flex">
-          <div class="ltb-field">
-            <label class="ltb-label">买入类型</label>
-            <input class="ltb-select" style="background:var(--card);cursor:default" readonly value="${hasPos ? '➕ 加仓买入 (加权计算新成本)' : '🎯 建仓买入 (确立底仓成本)'}">
-          </div>
-          <div class="ltb-field">
-            <label class="ltb-label">买入成交价</label>
-            <div class="ltb-input-wrap">
-              <input type="number" step="0.01" class="ltb-input" id="ltbBuyPx_${i}" value="${f2(curPx)}">
-              <span class="ltb-unit">元</span>
-            </div>
-          </div>
-          <div class="ltb-field">
-            <label class="ltb-label">买入股数</label>
-            <div class="ltb-input-wrap">
-              <input type="number" step="100" class="ltb-input" id="ltbBuyQty_${i}" value="${recQty || 100}">
-              <span class="ltb-unit">股</span>
-            </div>
-          </div>
-          <div class="ltb-field ltb-action-field">
-            <label class="ltb-label">&nbsp;</label>
-            <button type="button" class="btn-live-buy" onclick="window.execLiveBuy(${i})">
-              📥 确认记入买入
-            </button>
-          </div>
-        </div>
-
-        <div class="lts-chips">
-          <span class="lts-chip-title">买入价快捷：</span>
-          <button type="button" class="lts-chip" onclick="document.getElementById('ltbBuyPx_${i}').value='${f2(curPx)}'">现价 ${f2(curPx)}</button>
-          ${c.inA ? `<button type="button" class="lts-chip" onclick="document.getElementById('ltbBuyPx_${i}').value='${f2(c.inA)}'">正T建议买点 ${f2(c.inA)}</button>` : ''}
-          ${c.inB ? `<button type="button" class="lts-chip" onclick="document.getElementById('ltbBuyPx_${i}').value='${f2(c.inB)}'">第二低吸点 ${f2(c.inB)}</button>` : ''}
-          <span class="lts-chip-title" style="margin-left:10px">股数快捷：</span>
-          <button type="button" class="lts-chip" onclick="document.getElementById('ltbBuyQty_${i}').value='100'">100股</button>
-          <button type="button" class="lts-chip" onclick="document.getElementById('ltbBuyQty_${i}').value='200'">200股</button>
-          ${recQty ? `<button type="button" class="lts-chip" onclick="document.getElementById('ltbBuyQty_${i}').value='${recQty}'">建议T仓 ${recQty}股</button>` : ''}
-        </div>
-      </div>
-    </div>
-  `;
+    `;
+  }
 }
 
 export function updateLtbPreview(idx){
   const s = pool[idx];
   if (!s) return;
+  const prevBox = document.getElementById(`ltbPrev_${idx}`);
+  if (!prevBox) return;
 
   const buyInp = document.getElementById(`ltbBuy_${idx}`);
   const sellInp = document.getElementById(`ltbSell_${idx}`);
   const qtyInp = document.getElementById(`ltbQty_${idx}`);
   const modeSel = document.getElementById(`ltbMode_${idx}`);
-  const prevBox = document.getElementById(`ltbPreview_${idx}`);
 
-  if (!buyInp || !sellInp || !qtyInp || !prevBox) return;
+  if (!buyInp || !sellInp || !qtyInp) return;
 
   const buyPx = parseFloat(buyInp.value) || 0;
   const sellPx = parseFloat(sellInp.value) || 0;
@@ -271,7 +318,7 @@ export function updateLtbPreview(idx){
   const totalShares = s.shares || 0;
 
   if (buyPx <= 0 || sellPx <= 0 || qty <= 0) {
-    prevBox.innerHTML = '<span style="color:var(--mute)">输入有效买价、卖价和股数后自动计算做T降本与盈亏</span>';
+    prevBox.innerHTML = '<span style="color:var(--mute)">请输入有效买卖价与股数以测算预估差价</span>';
     return;
   }
 
@@ -281,19 +328,19 @@ export function updateLtbPreview(idx){
 
   if (mode === 't') {
     prevBox.innerHTML = `
-      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;font-size:12px">
+      <div class="lts-prev-content">
         <span class="lts-prev-tag">做T测算</span>
-        <span>净做T差价: <b style="color:${col}">${isUp ? '+' : ''}${money2(res.netProfit)} 元</b> (${res.profitRatio >= 0 ? '+' : ''}${res.profitRatio}%)</span>
+        <span>预估净差价: <b style="color:${col}">${isUp ? '+' : ''}${money2(res.netProfit)} 元</b> (${res.profitRatio >= 0 ? '+' : ''}${res.profitRatio}%)</span>
         <span class="lts-dot">·</span>
-        <span>底仓降本: <b style="color:${col}">-${f3(res.costReduction)} 元/股</b></span>
+        <span>底仓降本: <b style="color:${col}">${res.costReduction >= 0 ? '−' : '+'}${Math.abs(res.costReduction)} 元/股</b></span>
         <span class="lts-dot">·</span>
-        <span>更新后成本: <b>${f3(res.newCost)} 元</b></span>
+        <span>做T后新成本: <b style="color:var(--text);font-family:ui-monospace,Consolas,monospace">¥${res.newCost}</b></span>
         <span class="lts-friction">(已扣佣金+印花税约 ¥${res.friction})</span>
       </div>
     `;
   } else {
     prevBox.innerHTML = `
-      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;font-size:12px">
+      <div class="lts-prev-content">
         <span class="lts-prev-tag">减仓测算</span>
         <span>减仓盈亏: <b style="color:${col}">${isUp ? '+' : ''}${money2(res.netProfit)} 元</b> (${res.profitRatio >= 0 ? '+' : ''}${res.profitRatio}%)</span>
         <span class="lts-dot">·</span>
@@ -369,8 +416,8 @@ export function execLiveBuy(idx){
   const s = pool[idx];
   if (!s) return;
 
-  const buyInp = document.getElementById(`ltbBuyPx_${idx}`);
-  const qtyInp = document.getElementById(`ltbBuyQty_${idx}`);
+  const buyInp = document.getElementById(`ltbBuy_${idx}`);
+  const qtyInp = document.getElementById(`ltbQty_${idx}`);
 
   const buyPx = parseFloat(buyInp.value) || 0;
   const qty = parseInt(qtyInp.value, 10) || 0;
@@ -445,8 +492,9 @@ export function valRow(label, cur, win, all){
       <div style="font-size:11.5px;color:var(--sub);line-height:1.7">${winTxt(all)}</div>
     </div>`;
 }
-export function researchBlock(s, i, pool){
+export function researchBlock(s, i, poolRef){
   const v = s._val, bd = s._bd, rs = rsCalc(s);
+  const targetPool = poolRef || pool;
 
   let valHTML;
   if (s._valErr){
@@ -478,7 +526,7 @@ export function researchBlock(s, i, pool){
     const mine = {};
     (bd.list||[]).filter(meaningful).forEach(x=>{ mine[x.name] = 1; });
     const others = {};
-    (pool||[]).forEach((o,j)=>{ if (j===i || !o._bd) return;
+    (targetPool||[]).forEach((o,j)=>{ if (j===i || !o._bd) return;
       (o._bd.list||[]).filter(meaningful).forEach(x=>{
         if (mine[x.name]) (others[x.name] = others[x.name]||[]).push(o.name); }); });
     const hits = Object.keys(others).filter(n=> others[n].length);
@@ -604,20 +652,35 @@ export function taCards(s, ta, c){
   return `<div class="ta-grid">${out.join('')}</div>`;
 }
 
-export function quoteFoldHTML(s){
-  return `
-    <div class="qfold-grid">
-      <div class="qf-item"><span class="k">今开</span><span class="v">${f2(+s.open)}</span></div>
-      <div class="qf-item"><span class="k">昨收</span><span class="v">${f2(+s.prevClose)}</span></div>
-      <div class="qf-item"><span class="k">最高</span><span class="v">${f2(+s.high)}</span></div>
-      <div class="qf-item"><span class="k">最低</span><span class="v">${f2(+s.low)}</span></div>
-      <div class="qf-item"><span class="k">分时均价</span><span class="v">${f2(+s.avg)}</span></div>
-      <div class="qf-item"><span class="k">量比</span><span class="v">${f2(+s.vr)}</span></div>
-      <div class="qf-item"><span class="k">MA5</span><span class="v">${f2(+s.ma5)}</span></div>
-      <div class="qf-item"><span class="k">MA10</span><span class="v">${f2(+s.ma10)}</span></div>
-      <div class="qf-item"><span class="k">MA20</span><span class="v">${f2(+s.ma20)}</span></div>
-    </div>
-  `;
+/* ===================== 作战计划纯文本生成 ===================== */
+export function planText(s){
+  const c = calc(s);
+  const L = [];
+  L.push(`${s.name} ${s.code}　现价 ${f2(+s.price)}（${pct(c.chg)}）· 振幅 ${c.amp.toFixed(2)}% · ${c.grid.toFixed(1)}格`);
+  L.push('  判定：' + c.title.replace(/<[^>]+>/g,''));
+  if (c.mode === 'BUY'){
+    L.push(`  正T买入区：${f2(c.inA)} / ${f2(c.inB)}`);
+    L.push(`  止盈目标：${f2(c.tp1)} / ${f2(c.tp2)}`);
+    L.push(`  止损：${f2(c.slA)} / ${f2(c.slB)}`);
+  } else if (c.mode === 'REV' || c.mode === 'CUT'){
+    L.push(`  倒T卖出区：${f2(c.outA)} ~ ${f2(c.outB)}`);
+    L.push(`  倒T接回位：${f2(c.bkA)} / ${f2(c.bkB)}`);
+    L.push(`  卖飞线：${f2(c.fly)}（放量突破即认卖飞，不接）`);
+  } else {
+    L.push('  今日观望，不挂单。');
+  }
+  L.push(`  T仓：${c.sh ? `${c.t} 股（30%）→ 实盘建议挂单 ${c.t1Lots} 股/份 (${c.t1Lots/100}手)` : '— 股（30%），每份 — 股'}`);
+  return L.join('\n');
+}
+
+export function planTextAll(){
+  const L = ['【今日做T作战计划】' + todayStr()];
+  pool.forEach(s=>{ L.push(''); L.push(planText(s)); });
+  L.push('');
+  L.push('——');
+  L.push('纪律：T仓浮亏 1.5% 无条件砍；14:57 前必须平掉，绝不隔夜。');
+  L.push('本计划由本机做T执行台生成，仅供研究参考，不构成投资建议。');
+  return L.join('\n');
 }
 
 /* ===================== 主渲染函数 ===================== */
@@ -629,17 +692,36 @@ export function render(poolData){
   if (!targetPool || !targetPool.length){
     box.innerHTML = `<div style="padding:40px 20px;text-align:center;color:var(--mute);background:var(--card);border-radius:12px;border:1px dashed var(--line)">
       <h3>自选池是空的</h3>
-      <p style="margin-top:8px">在顶部输入股票代码（如 605128）或名称，点击「+ 加入做T池」开始监控。</p>
+      <p style="margin-top:8px">在顶部输入股票代码（如 605128）或名称，点击「+ 添加」开始监控。</p>
     </div>`;
     return;
   }
 
-  box.innerHTML = targetPool.map((s, i)=>{
+  box.innerHTML = targetPool.map((s,i)=>{
     const c = calc(s);
     const cls = c.chg>=0 ? 'up' : 'down';
     const p = posCalc(s);
     s._ta = computeTA(s);
     const ta = s._ta;
+
+    const VOL_STATE_TXT = { heavy:'显著超预期', above:'略超预期', normal:'符合预期', below:'不及预期', light:'明显缩量' };
+    if (ta && ta.volProgress != null){
+      c.gate3 = `量比 ${f2(c.vr)}　时段达成 <b>${(ta.volProgress*100).toFixed(0)}%</b>`
+        + `（该时点应完成 ${(ta.volShare*100).toFixed(0)}%）→ ${VOL_STATE_TXT[ta.volState]}`;
+    } else if (ta && ta.volProgress == null && ta.volRatio != null){
+      const _m = (new Date()).getHours()*60 + (new Date()).getMinutes();
+      c.gate3 = _m < 570
+        ? `量比 ${f2(c.vr)}　时段达成 —（未开盘，量能口径尚未建立）`
+        : `量比 ${f2(c.vr)}　时段达成 —（开盘不足 5 分钟，样本不够，不做量能判定）`;
+    }
+
+    const _vm = s._vm;
+    const vmTag = (_vm && _vm.ok && _vm.state !== 'na' && _vm.r3 != null)
+      ? `　│　分时量能 <b>${_vm.r3.toFixed(2)}×</b>（同时段常态）→ ${_vm.label}`
+      : (_vm && _vm.err) ? `　│　分时量能 —（${_vm.err}）`
+      : (_vm && _vm.ok)  ? `　│　分时量能 —（今日仅 ${_vm.nBars || 0} 根 5 分钟K，样本不足）`
+      : '　│　分时量能 —（未取到）';
+    if (c.gate3) c.gate3 += vmTag;
 
     if (!s.p)   s.p = 'day';
     if (!s.ov)  s.ov = { ma:1, boll:1, box:1, cost:1, sr:0 };
@@ -652,180 +734,464 @@ export function render(poolData){
       [ 3, '倒T第一减仓位', 'sell'],
       [ 2, '倒T观察位',     'none'],
       [ 1, '正T止盈上限',   'sell'],
-      [ 0, '基准价(昨收/均)', 'base'],
-      [-1, '第一支撑·可买',  'buy'],
-      [-2, '第二支撑·加仓',  'buy'],
-      [-3, '强支撑·最后防线','buy'],
-      [-4, '跌破观望',      'none'],
-      [-5, '破位·禁止抄底', 'none'],
-      [-6, '空头陷阱',      'none']
-    ];
-
-    const stepRows = rows.map(([g, tag, act])=>{
-      const basePx = +s.prevClose || +s.price;
-      const px = basePx * (1 + g * GRID / 100);
-      const isCur = Math.abs(c.grid - g) < 0.5;
-      const actCls = act === 'buy' ? 'act-buy' : act === 'sell' ? 'act-sell' : '';
-      return `<tr class="${isCur ? 'cur-step' : ''}">
-        <td class="st-g">${g > 0 ? '+' + g : g}</td>
-        <td class="st-p ${actCls}">${f2(px)}</td>
-        <td class="st-pct">${pct(g * GRID)}</td>
-        <td class="st-t ${actCls}">${tag}</td>
+      [ 0, '基准·正T止盈位','buy' ],
+      [-1, '浅回踩观察',    'none'],
+      [-2, '正T第一买点',   'buy' ],
+      [-3, '正T第二买点',   'buy' ],
+      [-4, '深水区·需缩量企稳','none'],
+      [-6, '破位·停止做T',  'none']
+    ].map(([k,label,act])=>{
+      const p = c.pc*(1+k*GRID/100);
+      const pv = +s.price || 0;
+      const isNow = pv ? Math.abs(pv-p) <= c.pc*GRID/800 : false;
+      const dNow  = pv ? (p-pv)/pv*100 : null;
+      const pill = act==='buy' ? '<span class="pill p-buy">买点</span>'
+                 : act==='sell'? '<span class="pill p-sell">卖点</span>'
+                 : '<span class="pill p-none">观察</span>';
+      return `<tr class="${act==='buy'?'act-buy':act==='sell'?'act-sell':''}">
+        <td style="color:var(--sub)">${k>0?'+':''}${(k*GRID).toFixed(2)}%</td>
+        <td style="font-family:ui-monospace,Consolas,monospace;color:${act==='buy'?'var(--down)':act==='sell'?'var(--up)':'var(--text)'}">${f2(p)}</td>
+        <td style="text-align:right;font-family:ui-monospace,Consolas,monospace;color:${dNow==null?'var(--sub)':(dNow>0?'var(--up)':(dNow<0?'var(--down)':'var(--text)'))}">${dNow==null?'—':(dNow>=0?'+':'')+dNow.toFixed(2)+'%'}</td>
+        <td>${label}${isNow?' <b style="color:var(--info)">◀现价</b>':''}</td>
+        <td style="text-align:right;white-space:nowrap">${pill}${(act==='buy'||act==='sell')?`<button class="pill-act" data-qt-row="${i}" data-dir="${act==='buy'?'正T':'倒T'}" data-p="${f2(p)}" title="以此档位价格 ${f2(p)} 快速记一笔做T">⚡ 记T</button>`:''}</td>
       </tr>`;
     }).join('');
 
-    const cardModeBadges = {
-      BUY : ['mode-buy',  '正T信号已出'],
-      REV : ['mode-rev',  '倒T减仓窗口'],
-      CUT : ['mode-cut',  '强势只减不加'],
-      WAIT: ['mode-wait', '观望不伸手']
-    };
-    const curBadge = cardModeBadges[c.mode] || cardModeBadges.WAIT;
+    const pxNow = +s.price || 0;
+    const gNow  = c.chg / GRID;
+    const kLo   = Math.floor(gNow), kHi = kLo + 1;
+    const pLo   = c.pc*(1+kLo*GRID/100), pHi = c.pc*(1+kHi*GRID/100);
+    const dLo   = pxNow ? (pLo-pxNow)/pxNow*100 : null;
+    const dHi   = pxNow ? (pHi-pxNow)/pxNow*100 : null;
+    const nowLine = `<div class="nowline">现价 <b>${f2(pxNow)}</b>（<b class="${cls}">${pct(c.chg)}</b>）`
+      + `　│　位于 <b>${kLo>0?'+':''}${(kLo*GRID).toFixed(2)}% → ${f2(pLo)}</b> 与 <b>${kHi>0?'+':''}${(kHi*GRID).toFixed(2)}% → ${f2(pHi)}</b> 两格之间`
+      + (dLo!=null ? `　│　距下格 ${dLo>=0?'+':''}${dLo.toFixed(2)}%、距上格 ${dHi>=0?'+':''}${dHi.toFixed(2)}%` : '')
+      + `</div>`;
+
+    const levelsHTML = `<div class="levels">
+            <div class="lv buy ${c.mode==='BUY'?'':'off'}"><div class="k"><span>正T 买入区（先买后卖）</span><button class="pill-act" data-qt-row="${i}" data-dir="正T" data-p="${f2(c.inA)}">⚡ 记买</button></div><div class="v">${f2(c.inA)} — ${f2(c.inB)}</div><div class="d">第一份 / 第二份挂单价</div></div>
+            <div class="lv sell ${c.mode==='BUY'?'':'off'}"><div class="k"><span>正T 止盈目标</span><button class="pill-act" data-qt-row="${i}" data-dir="正T" data-p="${f2(c.tp1)}">⚡ 记止盈</button></div><div class="v">${f2(c.tp1)} / ${f2(c.tp2)}</div><div class="d">约 +${c.gain1.toFixed(1)}% ~ +${c.gain2.toFixed(1)}%</div></div>
+            <div class="lv stop ${c.mode==='BUY'?'':'off'}"><div class="k"><span>正T 止损（-1.5%）</span><button class="pill-act" data-qt-row="${i}" data-dir="正T" data-p="${f2(c.slA)}">⚡ 记止损</button></div><div class="v">${f2(c.slA)} / ${f2(c.slB)}</div><div class="d">对应上面两个买点</div></div>
+            <div class="lv sell ${(c.mode==='REV'||c.mode==='CUT')?'':'off'}"><div class="k"><span>倒T 卖出区（先卖后买）</span><button class="pill-act" data-qt-row="${i}" data-dir="倒T" data-p="${f2(c.outA)}">⚡ 记卖</button></div><div class="v">${f2(c.outA)} — ${f2(c.outB)}</div><div class="d">无量冲高时减T仓</div></div>
+            <div class="lv buy ${(c.mode==='REV'||c.mode==='CUT')?'':'off'}"><div class="k"><span>倒T 接回位</span><button class="pill-act" data-qt-row="${i}" data-dir="倒T" data-p="${f2(c.bkA)}">⚡ 记接回</button></div><div class="v">${f2(c.bkA)} / ${f2(c.bkB)}</div><div class="d">回落缩量后再接</div></div>
+            <div class="lv stop ${(c.mode==='REV'||c.mode==='CUT')?'':'off'}"><div class="k"><span>卖飞线（不得追高）</span></div><div class="v">${f2(c.fly)}</div><div class="d">放量突破此价即认卖飞，不接</div></div>
+          </div>`;
+
+    const gatesHTML = `<div class="gates" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;font-size:12.5px;color:var(--sub);margin-bottom:12px">
+            <div>闸门1 · 格位：${c.gate1}</div>
+            <div>闸门3 · 量能：${c.gate3}</div>
+            <div style="grid-column:1/-1">闸门2 · 趋势：${c.gate2}</div>
+            <div style="grid-column:1/-1">闸门4 · 市场环境：${c.gate4}</div>
+          </div>`;
+
+    const tableHTML = `<div class="tbl-scroll"><table>
+            <thead><tr><th>相对昨收</th><th>价格</th><th style="text-align:right">距现价</th><th>含义</th><th style="text-align:right">操作</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table></div>`;
+
+    let midHTML;
+    if (c.mode === 'WAIT'){
+      midHTML = gatesHTML
+        + `<details class="plan-fold">
+             <summary>⚠️ 今日不可执行 · 点击查看预案价格（仅供观察，不要挂单）</summary>
+             <div class="pf-warn">系统判定为「观望」，下列价格是<b>预案</b>而非今日指令 —— 请勿照此挂单。</div>
+             <div class="pf-bd">${levelsHTML}${nowLine}${tableHTML}</div>
+           </details>`;
+    } else {
+      midHTML = levelsHTML + gatesHTML + nowLine + tableHTML;
+    }
+
+    const mbd = MODE_BADGE[c.mode] || MODE_BADGE.WAIT;
+    const quoteFoldHTML = `
+      <details class="quote-fold"${(s._qfo || (s.manual && Object.keys(s.manual).length))?' open':''}>
+        <summary>⚙️ 行情参数与手工微调（10项指标已由行情接口自动同步${(s.manual && Object.keys(s.manual).length)?' · <b style="color:var(--warn-d)">● 含有手动修改项</b>':''} · 点击展开微调/压力推演）</summary>
+        <div class="quote-bd">
+          <div class="ig">
+            ${AUTO_FIELDS.map(k=>{
+              const lb = AUTO_FIELD_LABELS[k] || k;
+              const man = !!(s.manual && s.manual[k]);
+              return `<div class="fld"><label>${lb}${man?'<b class="man-dot" title="已手动修改：自动刷新不会覆盖这个值">●</b>':''}</label>`
+                + `<input data-i="${i}" data-k="${k}" value="${fmtIn(s[k])}" class="${man?'man':''}"`
+                + ` title="${man?'已手动修改，自动刷新不会覆盖；点表头「⟲ 恢复行情值」解除':''}"`
+                + ` inputmode="decimal" step="0.01" enterkeyhint="next"></div>`;
+            }).join('')}
+          </div>
+          <div class="quote-hint">
+            <span>说明：行情接口每分钟会自动同步上述 10 项数据。若手动修改任意数字，该项将加黄锁定并即时重算决策，不受自动刷新影响。</span>
+            ${(s.manual && Object.keys(s.manual).length)?`<button class="mini" data-clr="${i}" style="margin-left:auto">⟲ 恢复全部行情值</button>`:''}
+          </div>
+        </div>
+      </details>
+    `;
 
     return `
-      <div class="card ${s.tier === 'long' ? 'c-tier-long' : ''}" id="stockCard_${i}" data-code="${s.code}">
-        <div class="card-hd">
-          <div class="ch-left">
-            <span class="card-tier-tag ${s.tier==='long'?'ct-long':'ct-short'}">${TIER_LABEL[tierOf(s)]}</span>
-            <h2 class="stock-title">${s.name}</h2>
-            <span class="stock-code">${s.code}</span>
-            <button class="btn-reason" onclick="window.openStockReasonModal('${s.code}')" title="查看入选逻辑与利空排查">
-              📋 入选逻辑
-            </button>
-            <span class="mode-badge ${curBadge[0]}">${curBadge[1]}</span>
-          </div>
-          <div class="ch-right">
-            <div class="ch-px ${cls}">${f2(+s.price)}</div>
-            <div class="ch-chg ${cls}">${pct(c.chg)}</div>
-            <button class="btn-sync-single" onclick="window.syncSingleStock(${i})" title="单独刷新这只票的行情与K线">⟳</button>
-            <button class="btn-del-single" onclick="window.delSingleStock(${i})" title="从自选池移除">×</button>
-          </div>
+    <div class="card m-${mbd[0]}" id="stockCard_${i}" data-tier="${tierOf(s)}">
+      <div class="card-hd">
+        <span class="nm">${s.name}</span>
+        <span class="cd">${s.code}</span>
+        <span class="tier-tag t-${tierOf(s)}" data-tier-toggle="${i}" title="当前：${TIER_LABEL[tierOf(s)]}　点击切换成另一类">${TIER_LABEL[tierOf(s)]}</span>
+        <span class="mg ${mbd[0]}">${mbd[1]}</span>
+        <button class="mini primary" data-quickt="${i}" title="盘中做T快捷记一笔，自动计算差价并摊薄成本">⚡ 快捷记T</button>
+        <button class="mini" data-reason="${i}" title="查看入选理由、量化支撑与重大利空排查">🔍 逻辑与利空</button>
+        <button class="mini" data-ref="${i}">⟳ 取数</button>
+        <button class="mini" data-plan="${i}">📋 计划</button>
+        ${(s.manual && Object.keys(s.manual).length)?`<button class="mini" data-clr="${i}" title="解除手动标记，恢复由行情自动刷新">⟲ 恢复行情值</button>`:''}
+        <button class="mini" data-del="${i}">移除</button>
+        <div class="card-hd-snap">
+          <span class="snap-px"><b class="${cls}">${f2(+s.price)}</b> <b class="${cls}">${pct(c.chg)}</b></span>
+          <span class="snap-tag" title="日内振幅与折合格数">振幅 ${c.amp.toFixed(2)}% (${c.grid.toFixed(1)}格)</span>
+          <span class="snap-tag" title="开盘至当前量比">量比 ${f2(c.vr)}</span>
+          ${(ta&&ta.turnover)?`<span class="snap-tag">换手 ${ta.turnover.toFixed(2)}%</span>`:''}
+          ${(ta&&ta.volProgress!=null)?`<span class="snap-tag vq vq-${ta.volState}" title="今日累计量 ÷（5日均量 × 该时点应完成 ${(ta.volShare*100).toFixed(0)}%），>120% 才算超预期">时段量能 ${(ta.volProgress*100).toFixed(0)}%</span>`:''}
+          ${(s._dd&&s._dd.dd)?`<span class="snap-tag">主力 <b class="${s._dd.dd.main.net>=0?'up':'down'}">${s._dd.dd.main.net>=0?'+':''}${money$(s._dd.dd.main.net)}</b></span>`:''}
+          <span class="snap-tag tag-trend">日线${c.trend}</span>
+          ${s._t?`<span class="snap-time">更新于 ${s._t}${s._maOk===false?'(均线未同步)':''}</span>`:''}
         </div>
-
-        ${posBar(s, p, i)}
-
-        <div class="sec-gate ${c.vcls}">
-          <div class="sg-hd"><b>三闸门决策：${c.title}</b></div>
-          <div class="sg-body">${c.detail}</div>
-        </div>
-
-        <div class="price-targets-grid">
-          <div class="ptg-cell target-buy">
-            <span class="ptg-k">建议正T买点 (跌至低吸)</span>
-            <span class="ptg-v">${f2(c.inA)} ~ ${f2(c.inB)}</span>
-            <span class="ptg-d">首仓 ${f2(c.inA)} ｜ 补仓 ${f2(c.inB)}</span>
-          </div>
-          <div class="ptg-cell target-sell">
-            <span class="ptg-k">建议止盈目标 (冲高兑现)</span>
-            <span class="ptg-v">${f2(c.tp1)} ~ ${f2(c.tp2)}</span>
-            <span class="ptg-d">T1目标 ${f2(c.tp1)} ｜ 极限 ${f2(c.tp2)}</span>
-          </div>
-          <div class="ptg-cell target-stop">
-            <span class="ptg-k">硬止损底线 (-1.5%)</span>
-            <span class="ptg-v" style="color:var(--down)">${f2(c.slA)}</span>
-            <span class="ptg-d">破此价无条件离场，保住本金</span>
-          </div>
-          <div class="ptg-cell target-rev">
-            <span class="ptg-k">倒T卖出区 (无量滞涨减)</span>
-            <span class="ptg-v">${f2(c.outA)} ~ ${f2(c.outB)}</span>
-            <span class="ptg-d">卖出后在 ${f2(c.bkA)} 缩量接回</span>
-          </div>
-        </div>
-
-        ${liveTradeBar(s, p, c, i)}
-
-        <div class="chart-box">
-          <div class="cb-toolbar">
-            <div class="cbt-group">
-              <button class="cbt-btn ${s.p==='day'?'cur':''}" onclick="window.changePeriod(${i}, 'day')">日K</button>
-              <button class="cbt-btn ${s.p==='week'?'cur':''}" onclick="window.changePeriod(${i}, 'week')">周K</button>
-              <button class="cbt-btn ${s.p==='m15'?'cur':''}" onclick="window.changePeriod(${i}, 'm15')">15分</button>
-              <button class="cbt-btn ${s.p==='m5'?'cur':''}" onclick="window.changePeriod(${i}, 'm5')">5分</button>
-              <button class="cbt-btn ${s.p==='rt'?'cur':''}" onclick="window.changePeriod(${i}, 'rt')">分时</button>
-            </div>
-            <div class="cbt-group">
-              <button class="cbt-btn ${s.ov.ma?'cur':''}" onclick="window.toggleOverlay(${i}, 'ma')">均线</button>
-              <button class="cbt-btn ${s.ov.boll?'cur':''}" onclick="window.toggleOverlay(${i}, 'boll')">布林</button>
-              <button class="cbt-btn ${s.ov.box?'cur':''}" onclick="window.toggleOverlay(${i}, 'box')">箱体</button>
-              <button class="cbt-btn ${s.ov.cost?'cur':''}" onclick="window.toggleOverlay(${i}, 'cost')">成本线</button>
-            </div>
-            <div class="cbt-group">
-              <button class="cbt-btn ${s.sub==='macd'?'cur':''}" onclick="window.changeSub(${i}, 'macd')">MACD</button>
-              <button class="cbt-btn ${s.sub==='rsi'?'cur':''}" onclick="window.changeSub(${i}, 'rsi')">RSI</button>
-              <button class="cbt-btn ${s.sub==='kdj'?'cur':''}" onclick="window.changeSub(${i}, 'kdj')">KDJ</button>
-            </div>
-          </div>
-          <div class="chart-canvas-wrap">
-            <canvas data-ki="${i}" style="width:100%;height:320px"></canvas>
-          </div>
-          <div class="chart-meta-bar" id="chartMeta_${i}">
-            ${chartLegendHTML(s)}
-          </div>
-        </div>
-
-        <details class="sec-fold">
-          <summary>📊 技术面体检与日内成交量特征</summary>
-          ${taCards(s, ta, c)}
-        </details>
-
-        <details class="sec-fold">
-          <summary>🔬 估值分位 · 板块归属 · 相对强弱 (RS)</summary>
-          ${researchBlock(s, i, targetPool)}
-        </details>
-
-        <details class="sec-fold">
-          <summary>📋 七格箱体做T点位明细表</summary>
-          <div class="tbl-scroll">
-            <table class="grid-table">
-              <thead><tr><th>格数</th><th>价格</th><th>距昨收</th><th>战术动作</th></tr></thead>
-              <tbody>${stepRows}</tbody>
-            </table>
-          </div>
-        </details>
       </div>
-    `;
+      <div class="card-bd">
+        ${posBar(s, p, i)}
+        ${liveTradeBar(s, p, c, i)}
+        <div class="verdict ${c.vcls}">
+          <span class="dot"></span>
+          <div class="txt">
+            <b>${c.title}</b><br>
+            <span style="color:var(--sub)">${c.detail}</span>
+          </div>
+        </div>
+        ${midHTML}
+
+        ${c.sellFlyTriggered ? `<div class="fly-melt-box">🚨 倒T卖飞熔断警报：现价 ${f2(+s.price)} 已突破倒T卖出位 ${f2(c.outA)} 达 +2.0%！出现卖飞现象！严禁盲目追高接回（极易买在天花板），严格等待缩量回踩或次日再寻接回点！</div>` : ''}
+        <div class="pos-row">
+          <span>持仓 <b>${c.sh||'—'}</b> 股 → 底仓 70% ≈ <b>${c.sh?c.base:'—'}</b> 股（不动）</span>
+          <span>T仓 30% ≈ <b>${c.sh?c.t:'—'}</b> 股 → 实盘挂单 <b>${c.sh?(c.t1Lots ? c.t1Lots+' 股/份 ('+(c.t1Lots/100)+'手)' : '不足1手'):'—'}</b>${c.sh && c.tLots && c.t1!==c.t1Lots && c.t1Lots ? ` <span style="font-size:11px;color:var(--mute)">（理论 ${c.t1} 股，已按100股整手取整）</span>` : ''}</span>
+          ${c.cap?`<span>可用现金 <b>${c.cap}</b> 元 → T仓预算约 <b>${Math.round(c.cap*0.3)}</b> 元</span>`:''}
+        </div>
+        ${c.sh > 0 && c.sh < 200 ? `<div class="pos-warn">⚠️ 当前持仓仅 ${c.sh} 股（不足 200 股）：按 A 股买入整百股规则，无法将底仓与 T 仓（至少需 1 手 100 股）隔离，做T极易误动底仓，建议持仓 ≥300 股再做T。</div>` : ''}
+        ${c.bear?`<div class="pos-warn">⚠️ 满仓者注意：日线空头时不要用现金补仓，改用「底仓倒T法」—— 只卖出底仓的 30% 筹码做倒T，当日必须原数接回，底仓股数一股不变，只把成本往下推。</div>`:''}
+
+        ${quoteFoldHTML}
+      </div>
+
+      <details class="chart-fold"${s._fo?' open':''}>
+        <summary>⌄ 展开图表与技术细节（K线 / 副图 / 指标卡 / 估值·板块·强弱）</summary>
+        <div class="kline-box">
+          ${kbarHTML(i, s)}
+          <canvas id="kln-${i}" data-ki="${i}"></canvas>
+          ${chartLegendHTML(s)}
+          ${chartStat(s)}
+        </div>
+        <div style="padding:0 14px 2px">
+          ${taCards(s, ta, c)}
+          ${researchBlock(s, i, targetPool)}
+        </div>
+      </details>
+    </div>`;
   }).join('');
 
-  bindCardEvents();
-  renderAllCharts();
-  animCardsStagger('#pool');
-}
-
-/* ===================== 事件绑定与图表渲染 ===================== */
-function bindCardEvents(){
-  document.querySelectorAll('.pb-inp').forEach(inp => {
-    inp.onchange = () => {
-      const idx = +inp.dataset.i;
-      const key = inp.dataset.k;
-      const s = pool[idx];
-      if (!s) return;
-      const val = parseFloat(inp.value) || 0;
-      s[key] = val;
-      savePool();
-      render(pool);
-      if (window.renderAccount) window.renderAccount();
-      toastOk(`已更新 ${s.name} 的 ${key === 'shares' ? '持仓股数' : key === 'cost' ? '持仓成本' : '可用现金'} 为 ${val}`);
-    };
-    inp.onkeydown = (e) => {
-      if (e.key === 'Enter') inp.blur();
-    };
+  // 相对强弱迷你图
+  box.querySelectorAll('canvas[data-rs]').forEach(cv=>{
+    const st = targetPool[+cv.dataset.rs];
+    if (!st) return;
+    const rs = rsCalc(st);
+    if (rs) drawRS(cv, rs);
   });
-}
 
-function renderAllCharts(){
-  document.querySelectorAll('canvas[data-ki]').forEach(cv => {
-    const idx = +cv.dataset.ki;
-    const s = pool[idx];
-    if (s && cv && cv.getContext) drawChart(cv, s);
-  });
-  document.querySelectorAll('canvas[data-rs]').forEach(cv => {
-    const idx = +cv.dataset.rs;
-    const s = pool[idx];
-    if (s && cv && cv.getContext) {
-      const rs = rsCalc(s);
-      if (rs) drawRS(cv, rs);
+  // 输入监听与防抖重算
+  let _raf = 0;
+  const applyInput = ()=>{
+    _raf = 0;
+    const active = document.activeElement;
+    const sel = [active?.dataset?.i, active?.dataset?.k, active?.selectionStart];
+    render(pool);
+    if (sel[0] !== undefined){
+      const el = document.querySelector(`input[data-i="${sel[0]}"][data-k="${sel[1]}"]`);
+      if (el){ el.focus(); try{ el.setSelectionRange(sel[2],sel[2]); }catch(_){} }
     }
+  };
+  box.querySelectorAll('input[data-i][data-k]').forEach(inp=>{
+    let composing = false;
+    inp.addEventListener('compositionstart', ()=>{ composing = true; });
+    const markManual = (i, k)=>{
+      if (AUTO_FIELDS.indexOf(k) < 0) return;
+      const st = pool[i];
+      if (!st.manual) st.manual = {};
+      st.manual[k] = 1;
+    };
+    inp.addEventListener('compositionend', e=>{
+      composing = false;
+      const i = +e.target.dataset.i, k = e.target.dataset.k;
+      pool[i][k] = e.target.value === '' ? '' : parseFloat(e.target.value);
+      markManual(i, k);
+      if (!_raf) _raf = requestAnimationFrame(applyInput);
+    });
+    inp.addEventListener('input', e=>{
+      if (composing) return;
+      const i = +e.target.dataset.i, k = e.target.dataset.k;
+      pool[i][k] = e.target.value === '' ? '' : parseFloat(e.target.value);
+      markManual(i, k);
+      if (!_raf) _raf = requestAnimationFrame(applyInput);
+    });
+    inp.addEventListener('change', ()=>{ savePool(); });
   });
+
+  // 实时买卖记账输入与快捷按钮绑定
+  box.querySelectorAll('.lts-inp, .lts-sel').forEach(inp=>{
+    inp.addEventListener('input', e=>{
+      const idx = +e.target.dataset.ltI;
+      updateLtbPreview(idx);
+    });
+    inp.addEventListener('change', e=>{
+      const idx = +e.target.dataset.ltI;
+      updateLtbPreview(idx);
+    });
+  });
+
+  box.querySelectorAll('[data-fill-sell]').forEach(btn=>{
+    btn.onclick = e=>{
+      e.stopPropagation();
+      const idx = +btn.dataset.i;
+      const targetInp = document.getElementById(`ltbSell_${idx}`);
+      if (targetInp){
+        targetInp.value = btn.dataset.fillSell;
+        updateLtbPreview(idx);
+      }
+    };
+  });
+
+  box.querySelectorAll('[data-fill-qty]').forEach(btn=>{
+    btn.onclick = e=>{
+      e.stopPropagation();
+      const idx = +btn.dataset.i;
+      const targetInp = document.getElementById(`ltbQty_${idx}`);
+      if (targetInp){
+        targetInp.value = btn.dataset.fillQty;
+        updateLtbPreview(idx);
+      }
+    };
+  });
+
+  box.querySelectorAll('[data-fill-buy]').forEach(btn=>{
+    btn.onclick = e=>{
+      e.stopPropagation();
+      const idx = +btn.dataset.i;
+      const targetInp = document.getElementById(`ltbBuy_${idx}`);
+      if (targetInp){
+        targetInp.value = btn.dataset.fillBuy;
+      }
+    };
+  });
+
+  box.querySelectorAll('[data-fill-bqty]').forEach(btn=>{
+    btn.onclick = e=>{
+      e.stopPropagation();
+      const idx = +btn.dataset.i;
+      const targetInp = document.getElementById(`ltbQty_${idx}`);
+      if (targetInp){
+        targetInp.value = btn.dataset.fillBqty;
+      }
+    };
+  });
+
+  box.querySelectorAll('[data-switch-tab]').forEach(btn=>{
+    btn.onclick = e=>{
+      e.stopPropagation();
+      const idx = +btn.dataset.i;
+      const tab = btn.dataset.switchTab;
+      if (pool[idx]){
+        pool[idx]._tradeTab = tab;
+        render(pool);
+      }
+    };
+  });
+
+  box.querySelectorAll('[data-exec-sell]').forEach(btn=>{
+    btn.onclick = e=>{
+      e.stopPropagation();
+      const idx = +btn.dataset.execSell;
+      execLiveSell(idx);
+    };
+  });
+
+  box.querySelectorAll('[data-exec-buy]').forEach(btn=>{
+    btn.onclick = e=>{
+      e.stopPropagation();
+      const idx = +btn.dataset.execBuy;
+      execLiveBuy(idx);
+    };
+  });
+
+  // 刷新持仓条预估差价
+  targetPool.forEach((_, idx) => {
+    updateLtbPreview(idx);
+  });
+
+  // 复制计划
+  box.querySelectorAll('button[data-plan]').forEach(b=>{
+    b.onclick = ()=>{
+      const s = pool[+b.dataset.plan];
+      if (s) copyPlain(planText(s), s.name + ' 的作战计划已复制，可直接粘贴。');
+    };
+  });
+  // 恢复行情值
+  box.querySelectorAll('button[data-clr]').forEach(b=>{
+    b.onclick = ()=>{
+      const st = pool[+b.dataset.clr];
+      if (!st) return;
+      st.manual = {};
+      savePool(); render(pool);
+    };
+  });
+  // 池别切换
+  box.querySelectorAll('[data-tier-toggle]').forEach(el=>{
+    el.onclick = ()=>{
+      const s = pool[+el.dataset.tierToggle];
+      if (!s) return;
+      s.tier = tierOf(s) === 'short' ? 'long' : 'short';
+      savePool();
+      let backToAll = false;
+      if (TIER !== 'all' && s.tier !== TIER){
+        setTier('all');
+        backToAll = true;
+      }
+      paintTierBar();
+      render(pool);
+      renderPoolTabs();
+      toastOk(s.name + ' 已归入「' + TIER_LABEL[s.tier] + '」' + (backToAll ? '，已切回「全部」视图方便你看到它' : ''));
+    };
+  });
+  paintTierBar();
+
+  // 移除 / 取数
+  box.querySelectorAll('button[data-del]').forEach(b=>{
+    b.onclick = ()=>{ pool.splice(+b.dataset.del,1); render(pool); savePool(); };
+  });
+  box.querySelectorAll('button[data-ref]').forEach(b=>{
+    b.onclick = async ()=>{
+      const s = pool[+b.dataset.ref];
+      b.textContent = '⟳ 取数中';
+      try{
+        await loadStock(s);
+        s._k = {};
+        s._vm = null;
+        await loadChart(s, true);
+        await loadResearch(s, true);
+        if (s.ddOn){ try{ await loadDD(s, true); }catch(_){} }
+        render(pool); savePool();
+        stampData();
+        checkPriceAlerts();
+      }catch(e){ toastErr('取数失败：' + e.message); b.textContent = '⟳ 取数'; }
+    };
+  });
+
+  // 周期切换
+  box.querySelectorAll('[data-pd]').forEach(el=>{
+    el.onclick = async ()=>{
+      const s = pool[+el.dataset.pd], p = el.dataset.v;
+      if (s.p === p) return;
+      s.p = p;
+      savePool();
+      if (!(s._k && s._k[p])){ el.classList.add('ld'); el.textContent = PERIOD_LABEL[p] + '…'; }
+      render(pool);
+      try{ await loadChart(s, true); }
+      catch(e){ if (s._k) delete s._k[p]; toastErr(PERIOD_LABEL[p] + ' 取数失败：' + e.message); }
+      render(pool); savePool();
+    };
+  });
+  // 叠加开关
+  box.querySelectorAll('[data-ovl]').forEach(el=>{
+    el.onclick = ()=>{
+      const s = pool[+el.dataset.ovl], k = el.dataset.v;
+      s.ov = s.ov || {};
+      s.ov[k] = s.ov[k] ? 0 : 1;
+      render(pool); savePool();
+    };
+  });
+  // 副图切换
+  box.querySelectorAll('[data-sub]').forEach(el=>{
+    el.onclick = ()=>{
+      const s = pool[+el.dataset.sub];
+      s.sub = el.dataset.v;
+      render(pool); savePool();
+    };
+  });
+  // 大单资金
+  box.querySelectorAll('[data-ddload]').forEach(el=>{
+    el.onclick = async ()=>{
+      const s = pool[+el.dataset.ddload];
+      s.ddOn = 1;
+      el.classList.add('ld'); el.textContent = '💰 取数中…';
+      try{ await loadDD(s, true); }
+      catch(e){ toastErr('大单数据获取失败：' + e.message); }
+      render(pool); savePool();
+    };
+  });
+
+  // 绘图与悬停十字光标
+  box.querySelectorAll('canvas[data-ki]').forEach(cv=>{
+    const i = +cv.dataset.ki;
+    if (pool[i]) drawChart(cv, pool[i]);
+    cv.addEventListener('mousemove', ev=>{
+      const g = cv._geo; if (!g) return;
+      const r = cv.getBoundingClientRect();
+      const x = ev.clientX - r.left;
+      let idx = g.kind === 'bar' ? Math.floor((x - g.PL)/g.bw)
+                                 : Math.round((x - g.PL)/(g.innerW || 1)*(g.n - 1));
+      if (!(idx >= 0 && idx < g.n)) idx = -1;
+      if (_hover[cv.id] !== idx){ setHover(cv.id, idx); drawChart(cv, pool[i]); }
+    });
+    cv.addEventListener('mouseleave', ()=>{
+      if (_hover[cv.id] != null){ setHover(cv.id, null); drawChart(cv, pool[i]); }
+    });
+  });
+
+  // 折叠状态记忆
+  box.querySelectorAll('details.quote-fold').forEach(d=>{
+    const inp = d.querySelector('input[data-i]');
+    const ci = inp ? +inp.dataset.i : -1;
+    d.addEventListener('toggle', ()=>{
+      if (ci >= 0 && pool[ci]) pool[ci]._qfo = d.open ? 1 : 0;
+    });
+  });
+  box.querySelectorAll('button[data-quickt]').forEach(b => {
+    b.onclick = () => openQuickTModal({ idx: +b.dataset.quickt });
+  });
+  box.querySelectorAll('button[data-reason]').forEach(b => {
+    b.onclick = () => {
+      const idx = +b.dataset.reason;
+      const s = pool[idx];
+      if (s) openStockReasonModal(s);
+    };
+  });
+  box.querySelectorAll('button[data-qt-row]').forEach(b => {
+    b.onclick = () => {
+      openQuickTModal({
+        idx: +b.dataset.qtRow,
+        dir: b.dataset.dir,
+        price: parseFloat(b.dataset.p)
+      });
+    };
+  });
+
+  box.querySelectorAll('details.chart-fold').forEach(d=>{
+    const kc = d.querySelector('canvas[data-ki]');
+    const ci = kc ? +kc.dataset.ki : -1;
+    d.addEventListener('toggle', ()=>{
+      if (ci >= 0 && pool[ci]) pool[ci]._fo = d.open ? 1 : 0;
+      if (!d.open) return;
+      d.querySelectorAll('canvas[data-ki]').forEach(cv=>{ const st = pool[+cv.dataset.ki]; if (st) drawChart(cv, st); });
+      d.querySelectorAll('canvas[data-rs]').forEach(cv=>{
+        const st = pool[+cv.dataset.rs]; if (!st) return;
+        const rs = rsCalc(st); if (rs) drawRS(cv, rs);
+      });
+    });
+  });
+
+  renderTopbar();
+  applyCur();
+  renderPoolTabs();
+  if (window.renderCogStressIfChanged) window.renderCogStressIfChanged();
+  if (window.renderAccount) window.renderAccount();
+  animCardsStagger('#pool');
 }
 
 /* ===================== 闪电记T Modal ===================== */
@@ -873,9 +1239,9 @@ export function setQtDir(dir){
 }
 
 export function updateQtPreview(){
-  const rawBuy = parseFloat(document.getElementById('qtBuy').value) || 0;
-  const rawSell = parseFloat(document.getElementById('qtSell').value) || 0;
-  const qty = parseInt(document.getElementById('qtQty').value, 10) || 0;
+  const rawBuy = parseFloat(document.getElementById('qtBuy')?.value) || 0;
+  const rawSell = parseFloat(document.getElementById('qtSell')?.value) || 0;
+  const qty = parseInt(document.getElementById('qtQty')?.value, 10) || 0;
   const grossEl = document.getElementById('qtGrossPL');
   const netEl = document.getElementById('qtNetPL');
   const retEl = document.getElementById('qtRatio');

@@ -9,11 +9,13 @@ import { animTabTransition } from './anim.js';
 
 /* 5大导航选项卡定义 */
 export const TABS = [
-  { id: 'tabConsole', label: '🎯 做T决策台', badgeId: 'ntBadgeConsole' },
-  { id: 'tabTail',    label: '⚡ 尾盘黑马 T+0', badgeId: 'ntBadgeTail', isHot: true },
-  { id: 'tabAccount', label: '📊 账户与战绩', badgeId: 'ntBadgeAccount' },
-  { id: 'tabLedger',  label: '📒 执行台账与体检', badgeId: 'ntBadgeLedger' },
-  { id: 'tabRules',   label: '📖 作战纪律与时钟', badgeId: null }
+  { id: 'tabConsole', label: '今日作战', badgeId: 'ntBadgeConsole' },
+  { id: 'tabTail',    label: '⚡ 尾盘黑马', badgeId: 'ntBadgeTail' },
+  { id: 'tabAccount', label: '账户', badgeId: null },
+  { id: 'tabLedger',  label: '台账', badgeId: 'ntBadgeLedger' },
+  { id: 'tabPerf',    label: '📊 战绩透视', badgeId: null },
+  { id: 'tabRules',   label: '纪律', badgeId: null },
+  { id: 'tabAll',     label: '🌐 全览', badgeId: null }
 ];
 
 let _activeTab = 'tabConsole';
@@ -23,29 +25,17 @@ export function getActiveTab() {
 }
 
 export function initTabs() {
-  const bar = document.getElementById('mainNavBar');
-  if (!bar) return;
+  const topNav = document.getElementById('topNav');
+  if (!topNav) return;
 
   const savedTab = localStorage.getItem('t-nav-tab') || 'tabConsole';
   _activeTab = savedTab;
 
-  const btnsHtml = `
-    <div class="nav-tabs-wrap">
-      ${TABS.map(t => `
-        <button class="nav-tab-btn ${t.id === _activeTab ? 'active' : ''} ${t.isHot ? 'btn-hot' : ''}" data-tab="${t.id}" id="navBtn_${t.id}">
-          <span class="nt-text">${t.label}</span>
-          ${t.badgeId ? `<span class="nt-badge" id="${t.badgeId}"></span>` : ''}
-        </button>
-      `).join('')}
-    </div>
-  `;
-
-  bar.innerHTML = btnsHtml;
-
-  bar.querySelectorAll('.nav-tab-btn').forEach(btn => {
-    btn.onclick = () => {
-      const targetTab = btn.dataset.tab;
-      switchTab(targetTab);
+  topNav.querySelectorAll('a[data-tab]').forEach(a => {
+    a.onclick = (e) => {
+      e.preventDefault();
+      const tabId = a.dataset.tab;
+      switchTab(tabId);
     };
   });
 
@@ -54,33 +44,53 @@ export function initTabs() {
 }
 
 export function switchTab(tabId) {
-  if (!TABS.some(t => t.id === tabId)) return;
   _activeTab = tabId;
   try { localStorage.setItem('t-nav-tab', tabId); } catch (_) {}
 
-  document.querySelectorAll('.nav-tab-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.tab === tabId);
+  document.querySelectorAll('#topNav a[data-tab]').forEach(a => {
+    a.classList.toggle('active', a.dataset.tab === tabId);
   });
 
   applyTabVisibility(tabId, true);
   updateTabBadges();
 
-  if (tabId === 'tabAccount' && window.renderEquity) {
+  if (tabId === 'tabPerf') {
+    const el = document.getElementById('secPerf');
+    if (el) {
+      setTimeout(() => {
+        const tbH = (document.getElementById('topbar')?.offsetHeight || 50) + 16;
+        const top = el.getBoundingClientRect().top + window.pageYOffset - tbH;
+        window.scrollTo({ top, behavior: 'smooth' });
+      }, 50);
+    }
+  } else if (tabId === 'tabAccount' && window.renderEquity) {
     setTimeout(() => window.renderEquity(), 80);
   }
 }
 
 function applyTabVisibility(tabId, animate = true) {
-  TABS.forEach(t => {
-    const panel = document.getElementById(t.id);
-    if (!panel) return;
-    if (t.id === tabId) {
-      panel.classList.add('active');
-      panel.style.display = 'block';
-      if (animate) animTabTransition(panel);
+  const panels = ['tabConsole', 'tabTail', 'tabAccount', 'tabLedger', 'tabRules'];
+  if (tabId === 'tabAll') {
+    panels.forEach(id => {
+      const p = document.getElementById(id);
+      if (p) {
+        p.classList.add('active');
+        p.style.display = 'block';
+      }
+    });
+    return;
+  }
+  const activePanelId = (tabId === 'tabPerf') ? 'tabLedger' : tabId;
+  panels.forEach(id => {
+    const p = document.getElementById(id);
+    if (!p) return;
+    if (id === activePanelId) {
+      p.classList.add('active');
+      p.style.display = 'block';
+      if (animate) animTabTransition(p);
     } else {
-      panel.classList.remove('active');
-      panel.style.display = 'none';
+      p.classList.remove('active');
+      p.style.display = 'none';
     }
   });
 }
@@ -89,19 +99,22 @@ export function updateTabBadges() {
   const bConsole = document.getElementById('ntBadgeConsole');
   if (bConsole) {
     const posCount = (pool || []).filter(s => (s.shares || 0) > 0).length;
-    bConsole.textContent = posCount > 0 ? posCount : (pool ? pool.length : 0);
+    bConsole.textContent = posCount > 0 ? posCount : '';
+    bConsole.style.display = posCount > 0 ? 'inline-flex' : 'none';
   }
 
   const bTail = document.getElementById('ntBadgeTail');
   if (bTail) {
     const activeTailCount = (TAIL_ACTIVES || []).filter(x => x && x.status === 'active').length;
-    bTail.textContent = activeTailCount > 0 ? `${activeTailCount}持仓` : '推荐';
-    bTail.classList.toggle('nt-badge-pulse', activeTailCount > 0);
+    bTail.textContent = activeTailCount > 0 ? activeTailCount : '';
+    bTail.style.display = activeTailCount > 0 ? 'inline-flex' : 'none';
   }
 
   const bLedger = document.getElementById('ntBadgeLedger');
   if (bLedger) {
-    bLedger.textContent = LOG ? LOG.length : 0;
+    const count = (LOG || []).length;
+    bLedger.textContent = count > 0 ? count : '';
+    bLedger.style.display = count > 0 ? 'inline-flex' : 'none';
   }
 }
 
@@ -123,14 +136,16 @@ export function focusStock(idx) {
   applyCur();
   renderPoolTabs();
 
-  // 若不在做T决策台，自动切到决策台
-  if (_activeTab !== 'tabConsole') {
+  // 若不在做T决策台或全览，自动切到决策台
+  if (_activeTab !== 'tabConsole' && _activeTab !== 'tabAll') {
     switchTab('tabConsole');
   }
 
   const card = document.getElementById(`stockCard_${idx}`);
   if (card) {
-    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const tbH = (document.getElementById('topbar')?.offsetHeight || 50) + 16;
+    const top = card.getBoundingClientRect().top + window.pageYOffset - tbH;
+    window.scrollTo({ top, behavior: 'smooth' });
     card.classList.add('hl-focus');
     setTimeout(() => card.classList.remove('hl-focus'), 1200);
   }

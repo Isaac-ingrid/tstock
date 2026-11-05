@@ -22,9 +22,19 @@ export const CH = { up:'#d32f2f', dn:'#0a7f42', grid:'#eef1f4', txt:'#515c69', m
              /* 参考线各归其位：压力=深红 0°、成本=紫 262°、均价=青 193°，
                 箱体与 VMA 都是中性参考，用同色相的一深一浅两档灰，避免完全同色 */
              sr:'#991b1b', cost:'#7c3aed', box:'#6b7280', avg:'#0e7490', vma:'#4b5563' };
-const _hover = {};                       // 每张图的悬停索引
+export const _hover = {};                       // 每张图的悬停索引
+export function setHover(id, idx) { _hover[id] = idx; }
 export const OV_DEF = { ma:'均线', boll:'BOLL', box:'箱体', cost:'成本', sr:'支撑压力' };
 export const SUB_DEF = { macd:'MACD', rsi:'RSI' };
+
+export const PERIODS = [
+  ['rt','分时'], ['m1','1分'], ['m5','5分'], ['m15','15分'], ['m30','30分'], ['m60','60分'],
+  ['day','日K'], ['week','周K'], ['month','月K']
+];
+export const PERIOD_LABEL = {}; PERIODS.forEach(([k,v])=> PERIOD_LABEL[k]=v);
+export const P_MAIN = ['rt','day','week','month'];
+export const P_MORE = PERIODS.filter(([k])=> P_MAIN.indexOf(k) < 0);
+export const VIEWS = { rt:999, m1:240, m5:64, m15:64, m30:64, m60:64, day:60, week:60, month:40 };
 
 /* 图表用指标：同一套函数在任意周期上复用 —— 周期一换，指标就跟着换成该周期的口径 */
 export function chartInd(ks){
