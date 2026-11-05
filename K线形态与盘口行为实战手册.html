@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="nTIfTCe9YOqqGaOR6O4VxK">
+<head data-page-node-id="961FlPPM1qT4o1ZQRitI6B">
+<meta charset="UTF-8" data-page-node-id="cmUBVYgmjduKpiApRF2Nz4">
+<meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="wTH6tL3WWPxoLnDNaIxG8o">
+<title>K线形态与盘口行为实战手册</title>
+<style>
+  :root{
+    --bg:#faf9f6; --card:#ffffff; --ink:#2c2c2a; --ink2:#5f5e5a; --ink3:#888780;
+    --line:#e4e2da; --red:#a32d2d; --red-bg:#fcebeb; --green:#3b6d11; --green-bg:#eaf3de;
+    --amber:#854f0b; --amber-bg:#faeeda; --blue:#185fa5; --blue-bg:#e6f1fb; --teal:#0f6e56; --teal-bg:#e1f5ee;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:var(--bg);color:var(--ink);line-height:1.7;font-size:14px}
+  .wrap{max-width:920px;margin:0 auto;padding:32px 20px 60px}
+  header{border-bottom:2px solid var(--ink);padding-bottom:16px;margin-bottom:8px}
+  header h1{font-size:24px;font-weight:600;letter-spacing:1px}
+  header .meta{color:var(--ink3);font-size:12px;margin-top:6px}
+  .hero{background:var(--card);border:0.5px solid var(--line);border-left:4px solid var(--red);border-radius:10px;padding:16px 20px;margin:20px 0}
+  .hero b{color:var(--red)}
+  h2{font-size:18px;font-weight:600;margin:36px 0 14px;padding-left:10px;border-left:4px solid var(--ink)}
+  h3{font-size:15px;font-weight:600;margin:20px 0 8px;color:var(--ink)}
+  p{margin:8px 0;color:var(--ink)}
+  .muted{color:var(--ink2)}
+  .card{background:var(--card);border:0.5px solid var(--line);border-radius:12px;padding:18px 20px;margin:14px 0}
+  .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:14px}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px;background:var(--card)}
+  th{background:#f1efe8;font-weight:600;text-align:left;padding:9px 12px;border:0.5px solid var(--line)}
+  td{padding:9px 12px;border:0.5px solid var(--line);vertical-align:top}
+  .tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:10px;margin-right:6px}
+  .tag-red{background:var(--red-bg);color:var(--red)}
+  .tag-green{background:var(--green-bg);color:var(--green)}
+  .tag-amber{background:var(--amber-bg);color:var(--amber)}
+  .tag-blue{background:var(--blue-bg);color:var(--blue)}
+  .tag-teal{background:var(--teal-bg);color:var(--teal)}
+  .fig{background:var(--card);border:0.5px solid var(--line);border-radius:12px;padding:14px;margin:14px 0}
+  .fig figcaption{font-size:12px;color:var(--ink3);margin-top:8px;text-align:center}
+  .kgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:14px}
+  .kcard{background:var(--card);border:0.5px solid var(--line);border-radius:12px;padding:16px}
+  .kcard .ktitle{font-weight:600;font-size:14px;margin-bottom:4px}
+  .kcard .ksub{font-size:12px;color:var(--ink3);margin-bottom:10px}
+  .kcard p{font-size:13px;margin:6px 0}
+  .kcard .mean{color:var(--ink)}
+  .kcard .act{color:var(--red)}
+  .kcard .low{color:var(--teal)}
+  ul{margin:8px 0 8px 20px}
+  li{margin:5px 0}
+  .check li{list-style:none;position:relative;padding-left:24px}
+  .check li::before{content:"✓";position:absolute;left:2px;color:var(--teal);font-weight:600}
+  .warn{background:var(--red-bg);border:0.5px solid #f0c4c4;border-radius:10px;padding:12px 16px;margin:12px 0;font-size:13px}
+  footer{margin-top:40px;padding-top:16px;border-top:0.5px solid var(--line);font-size:12px;color:var(--ink3)}
+  .toc{background:var(--card);border:0.5px solid var(--line);border-radius:12px;padding:14px 20px;margin:16px 0;font-size:13px}
+  .toc a{color:var(--blue);text-decoration:none;margin-right:16px;white-space:nowrap}
+</style>
+</head>
+<body data-page-node-id="Z26MWidbwqjRzGYlrSspeA">
+<div class="wrap" data-page-node-id="hsvNywquTdveI7EO2l9NBh">
+
+<header data-page-node-id="nDYqB7JrT2knTAtApcmJT0">
+  <h1 data-page-node-id="Q8zxPlewQPL6UAcyoQzu5V">K线形态与盘口行为实战手册</h1>
+  <div class="meta" data-page-node-id="Q0ttKgFim11jQfMKinkIRJ">整理日期：2026-09-08（09-09更新买卖点决策） ｜ 内容：见顶信号 · 梅开二度 · 盘口诡计 · K线形态图解 · 买卖点决策 ｜ 仅供学习参考，不构成投资建议</div>
+</header>
+
+<div class="toc" data-page-node-id="11EmKvwadKsnT3UaixwEDh">
+  <a href="#s1" data-page-node-id="T6LM8R7kAeiKFtaG7Ew6aV">一、见顶信号</a>
+  <a href="#s2" data-page-node-id="44VX2fGLHifVtAPqAHGRDm">二、梅开二度</a>
+  <a href="#s3" data-page-node-id="AwqqEt4UKCZPJ7gg5YAxXP">三、盘口诡计</a>
+  <a href="#s4" data-page-node-id="OxW3kGUttLjzS1guhqZlfv">四、K线形态图解</a>
+  <a href="#s5" data-page-node-id="s5new01">五、K线怎么看与买卖点</a>
+  <a href="#s6" data-page-node-id="s6new01">六、防守清单</a>
+</div>
+
+<div class="hero" data-page-node-id="8UkpE6Wmcasx17UKp2b1ph">
+  核心结论：<b data-page-node-id="RhEwEmOpA8wdRoUgFDwM1D">位置决定含义，量价决定真假</b>。同一根K线、同一组量能，出现在高位是出货、出现在低位是吸筹；所有盘口"强势假象"的破绽都露在量价配合上。单一信号不下结论，多信号共振才可靠。
+</div>
+
+<!-- ============ 一、见顶信号 ============ -->
+<h2 id="s1" data-page-node-id="RmXPyJXCDv0inEP0EwsPLH">一、见顶信号特征（放量上涨后连续下跌等）</h2>
+<p class="muted" data-page-node-id="1DQCFTr7q4o8nMcrksAlI5">顶不是某一天形成的，而是"多方力量逐步衰竭 → 空方接管"的过程。</p>
+
+<figure class="fig" data-page-node-id="L5U76eEfFL2XyFRvoJ8JDn">
+<svg viewBox="0 0 680 270" width="100%" role="img" xmlns="http://www.w3.org/2000/svg" data-page-node-id="V9EhAlNlIHs3c4oKjRZKJh">
+  <title>典型见顶过程链条</title>
+  <defs data-page-node-id="gWIMg3bor9eeaN3Cw0ZBlE">
+    <marker id="ar1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse" data-page-node-id="9YLfyAsNiv0Ax0KCcjdENH">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#888780" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="eOL3zOQkaMJdntZwnVdIQR"/>
+    </marker>
+  </defs>
+  <g data-page-node-id="wSjHYw2JSu0EV6C4Ewq2kE"><rect x="40" y="40" width="180" height="56" rx="8" fill="#faeeda" stroke="#854f0b" stroke-width="0.5" data-page-node-id="4AHDLFb2x6m7rpefs20zBw"/>
+    <text x="130" y="60" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="500" fill="#633806" data-page-node-id="79G24yIAesyvIhPA16JLat">① 放量上涨</text>
+    <text x="130" y="80" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#854f0b" data-page-node-id="z7URyqdyN7Fu7yehRCnOOQ">情绪高涨·换手充分</text></g>
+  <line x1="220" y1="68" x2="246" y2="68" stroke="#888780" stroke-width="1.5" marker-end="url(#ar1)" data-page-node-id="ewFdddKy1vZZRfIiNZ5tsZ"/>
+  <g data-page-node-id="eg4owsDSijqdfhlOmU5wNL"><rect x="250" y="40" width="180" height="56" rx="8" fill="#faeeda" stroke="#854f0b" stroke-width="0.5" data-page-node-id="0sDL79h8AnG5VHFSfB0kwj"/>
+    <text x="340" y="60" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="500" fill="#633806" data-page-node-id="T197tZdGg81bOE5UwFUSLS">② 冲高滞涨</text>
+    <text x="340" y="80" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#854f0b" data-page-node-id="q7gcfiFDtDorH3rwjMBEEr">长上影·高位十字星</text></g>
+  <line x1="430" y1="68" x2="456" y2="68" stroke="#888780" stroke-width="1.5" marker-end="url(#ar1)" data-page-node-id="oHuiAYzoEsGmFczmF5TqEM"/>
+  <g data-page-node-id="ter4G20T1atCpSWjHvbhZG"><rect x="460" y="40" width="180" height="56" rx="8" fill="#fcebeb" stroke="#a32d2d" stroke-width="0.5" data-page-node-id="MBuqaewkaR9PfYKJ0p2k29"/>
+    <text x="550" y="60" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="500" fill="#993c1d" data-page-node-id="H142jTiPjClZGjHyYAcEFi">③ 量价背离</text>
+    <text x="550" y="80" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#993c1d" data-page-node-id="6d0WYBKMICaxeyHmHEcx7y">创新高但量能萎缩</text></g>
+  <line x1="550" y1="96" x2="550" y2="166" stroke="#888780" stroke-width="1.5" marker-end="url(#ar1)" data-page-node-id="ZayOcNBn3UCaMJ0whuOAe9"/>
+  <g data-page-node-id="hRoGzZf0vBitpJpxlKToWx"><rect x="460" y="170" width="180" height="56" rx="8" fill="#fcebeb" stroke="#a32d2d" stroke-width="0.5" data-page-node-id="onMoe8o7PvVoiHIeBzS1i7"/>
+    <text x="550" y="190" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="500" fill="#993c1d" data-page-node-id="WkoHjyZEb6TIEqPKG0AdAB">④ 破位长阴</text>
+    <text x="550" y="210" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#993c1d" data-page-node-id="RWf1JBNh2jGqbqPbSXbxhH">跌破颈线或趋势线</text></g>
+  <line x1="456" y1="198" x2="430" y2="198" stroke="#888780" stroke-width="1.5" marker-end="url(#ar1)" data-page-node-id="MWOkHatsgQcmx2KnpxCoh1"/>
+  <g data-page-node-id="8rXfWauBGr8g4v81OCIeo2"><rect x="250" y="170" width="180" height="56" rx="8" fill="#fcebeb" stroke="#a32d2d" stroke-width="0.5" data-page-node-id="WnZt0aa9vDwWWIdkIFayDD"/>
+    <text x="340" y="190" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="500" fill="#993c1d" data-page-node-id="EnoBZHmkRwwLiVQshJxigM">⑤ 连续阴跌</text>
+    <text x="340" y="210" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#993c1d" data-page-node-id="kATue3FNIgxRE1MyIwlMW1">反弹缩量·均线空头</text></g>
+  <line x1="246" y1="198" x2="220" y2="198" stroke="#888780" stroke-width="1.5" marker-end="url(#ar1)" data-page-node-id="dbCXGo7oV0w86WybMXLHp8"/>
+  <g data-page-node-id="M1IvGqs1jEP5xwkLY3y3Qd"><rect x="40" y="170" width="180" height="56" rx="8" fill="#e1f5ee" stroke="#0f6e56" stroke-width="0.5" data-page-node-id="jxB8cPp5MEFbFVoSGcDaeI"/>
+    <text x="130" y="190" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="500" fill="#0f6e56" data-page-node-id="3vijd8wtBLeghI6rP8A8dY">⑥ 共振确认</text>
+    <text x="130" y="210" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#0f6e56" data-page-node-id="DrZzOqUimMnItVlAD4MHdD">多类信号叠加才可靠</text></g>
+</svg>
+<figcaption data-page-node-id="0FRYu8wN8XF3XAQGBNqXUS">见顶六阶段：从放量上涨到共振确认</figcaption>
+</figure>
+
+<table data-page-node-id="emmdfR9FaTTuyY2RjlrBte">
+  <tr data-page-node-id="JXPAMJkTMcwlJUWUJm4DLb"><th style="width:120px" data-page-node-id="HGUE7lVFWQ1tuG8QwgxpGU">信号类别</th><th data-page-node-id="dqDsxDrHDiCZzUUubFiAtl">具体特征</th></tr>
+  <tr data-page-node-id="Oz1jaqe3FoCEURg944miPZ"><td data-page-node-id="CpQTp3qDsTztcRqYbZIxcf"><span class="tag tag-red" data-page-node-id="5HjOjRrv0dYsrMzvRlg209">量价</span></td><td data-page-node-id="HxA8rGuHA1c1PVlIZq8B2D">高位放量滞涨（只放量不走价）；缩量创新高（顶背离）；冲高回落放量（诱多兑现）；连续下跌放量（恐慌加速）</td></tr>
+  <tr data-page-node-id="dHRxnW7K4283Y8vRKji9Hp"><td data-page-node-id="8JK5ryTHjcUWqzG47y6L7M"><span class="tag tag-amber" data-page-node-id="YBV6uIQB6dM2A4RO9kBuAs">K线形态</span></td><td data-page-node-id="pvMs18hnlQNqpDKEXrji7e">长上影射星、高位十字星、乌云盖顶、黄昏之星、三只乌鸦；双顶/头肩顶/圆弧顶；跌破颈线、趋势线、20/30日均线且反抽不回</td></tr>
+  <tr data-page-node-id="DKlQPrkJlYFdJ53cNVLoGY"><td data-page-node-id="IICBqDQYWgo8kSBKR9dAJz"><span class="tag tag-blue" data-page-node-id="Odzjk3sDXXNDs51OSQIfdQ">技术指标</span></td><td data-page-node-id="099PhtZbHS7sV9xSAreeKT">MACD顶背离+死叉；RSI/KDJ超买钝化后拐头；均线极度发散后粘合拐头</td></tr>
+  <tr data-page-node-id="21gJyzbmorCqJsTgegXUDb"><td data-page-node-id="QVJe2lMjBDGmgwcIFSCJVN"><span class="tag tag-blue" data-page-node-id="LkmHbQmmToNc1fbeiFIY2H">市场结构</span></td><td data-page-node-id="XDhaSaKtqWgCyFCPkj61pw">指数新高但上涨家数减少；龙头率先滞涨补跌、轮动加快；涨停数骤减、亏钱效应扩散</td></tr>
+  <tr data-page-node-id="qWggsY7C5EhnRzOThf2pjm"><td data-page-node-id="r3oyDCwHbXrqJVQRwNCnr8"><span class="tag tag-amber" data-page-node-id="shTQwcz8Bk5sz3RWaXFQuC">情绪资金</span></td><td data-page-node-id="5xFk6STUA05habqoG5r6xQ">融资余额高位回落、主力/北向持续净流出；开户暴增、爆款基金、媒体一致唱多（极端亢奋）；利好公布不涨（利好出尽）</td></tr>
+  <tr data-page-node-id="AAUPYgZI4xwHtWewWfZnKt"><td data-page-node-id="P59PU1vyLyuZSsRwWQTUBN"><span class="tag tag-teal" data-page-node-id="vOoXkLCDfHpdXwsvVHCUmB">基本面背离</span></td><td data-page-node-id="qunsqenvR7SBjekBN3hAxN">估值处历史高分位；周期股股价高点与业绩高点同步（业绩最好时往往是卖点）</td></tr>
+</table>
+
+<div class="warn" data-page-node-id="Zgc60wAAgyLKaTvyguFIaD">三条避坑：① 脱离位置谈量价没有意义——低位放量是吸筹，高位放量可能是出货；② 超买钝化≠反转，拐头才是；③ 右侧确认优先——等破位+反抽不回再行动，宁可少赚不深套。</div>
+
+<!-- ============ 二、梅开二度 ============ -->
+<h2 id="s2" data-page-node-id="cEKYDK8HteAKD3dg4s1nJA">二、牛股梅开二度的成交量特征</h2>
+<p class="muted" data-page-node-id="ELCXVRIhiVtDN7Ev8FPHoZ">梅开二度 = 第一波主升后经充分整理，再启动第二波。整理期量能有两条路径：<b data-page-node-id="m3TIOIneH0MHfjRH6wkX4m">巨量横盘</b>与<b data-page-node-id="6247H05UI3tEgbVF3dZUDd">缩量横盘</b>。</p>
+
+<figure class="fig" data-page-node-id="aUHymvRwzFjXCXBh0IFkOf">
+<svg viewBox="0 0 680 400" width="100%" role="img" xmlns="http://www.w3.org/2000/svg" data-page-node-id="w67vP5EIJwGIL6eTWauyaR">
+  <title>巨量横盘与缩量横盘对比</title>
+  <text x="40" y="30" font-size="14" font-weight="500" fill="#791f1f" data-page-node-id="Xr7dNRllG1GLGuSpQC6oAe">A 巨量横盘（充分换手型）</text>
+  <text x="350" y="30" font-size="14" font-weight="500" fill="#0f6e56" data-page-node-id="Ceh5GEByEB1RwauG5AMfTB">B 缩量横盘（锁仓惜售型）</text>
+  <path d="M55,215 L85,175 L115,135 L145,95 L165,85 L185,105 L205,90 L225,110 L245,92 L265,105 L285,88 L305,82 L325,78" fill="none" stroke="#444441" stroke-width="2" stroke-linejoin="round" data-page-node-id="aE1C04ERJXm1sD0OtugTk1"/>
+  <path d="M365,215 L395,175 L425,135 L455,95 L475,85 L495,88 L515,86 L535,89 L555,87 L575,88 L595,86 L615,88 L635,87" fill="none" stroke="#444441" stroke-width="2" stroke-linejoin="round" data-page-node-id="1HR0YeGHjvf4ZP4ka9TH4d"/>
+  <rect x="55" y="335" width="11" height="25" fill="#f09595" data-page-node-id="GKhjXhYC7CNCavCyEWOFOS"/><rect x="75" y="315" width="11" height="45" fill="#f09595" data-page-node-id="k4QPGGh83gYlfEeoGFA6sl"/>
+  <rect x="95" y="295" width="11" height="65" fill="#f09595" data-page-node-id="E01Myw2uoDVaH4j6DGTycV"/><rect x="115" y="275" width="11" height="85" fill="#f09595" data-page-node-id="ZwIKY81FSrzBjMBk7iR5zL"/>
+  <rect x="135" y="270" width="11" height="90" fill="#f09595" data-page-node-id="BTbHXQy4tYvgQgOqxLXNl3"/><rect x="155" y="290" width="11" height="70" fill="#f09595" data-page-node-id="o62U7RzhhkO2FCYzZUmABK"/>
+  <rect x="185" y="310" width="11" height="50" fill="#f09595" data-page-node-id="YqPet2oFmOHWwysUa4w3wo"/><rect x="205" y="322" width="11" height="38" fill="#c0dd97" data-page-node-id="efeCWJi1zwH16WG0xvZzI2"/>
+  <rect x="225" y="318" width="11" height="42" fill="#f09595" data-page-node-id="YnEYSxgZzACsf4k7Fd2DJ3"/><rect x="245" y="330" width="11" height="30" fill="#c0dd97" data-page-node-id="pHJSE8FPhLXGZBrqVGs2kY"/>
+  <rect x="265" y="327" width="11" height="33" fill="#f09595" data-page-node-id="oP5M76RIgXqaKHqAv3sYzw"/><rect x="285" y="336" width="11" height="24" fill="#c0dd97" data-page-node-id="uf5SdHAD4CnlXz1WsGXuIE"/>
+  <rect x="305" y="334" width="11" height="26" fill="#f09595" data-page-node-id="VqA6mhsaqHXhpB1CnkxH5c"/>
+  <rect x="365" y="335" width="11" height="25" fill="#f09595" data-page-node-id="SvovP0bxWukl3ppmDFYQSH"/><rect x="385" y="310" width="11" height="50" fill="#f09595" data-page-node-id="fqr8GPkYplXjNoot07Aiit"/>
+  <rect x="405" y="290" width="11" height="70" fill="#f09595" data-page-node-id="TioEEXgz33XPDJWGtECHsX"/><rect x="425" y="272" width="11" height="88" fill="#f09595" data-page-node-id="OZxvOqPfJT3OVFOPpI7nyF"/>
+  <rect x="445" y="285" width="11" height="75" fill="#f09595" data-page-node-id="QDywILk9fm8MDyVxvtVHKy"/><rect x="465" y="300" width="11" height="60" fill="#f09595" data-page-node-id="H4R6zl3Wn6ODAdzbK5226Q"/>
+  <rect x="485" y="350" width="11" height="10" fill="#f09595" data-page-node-id="GinXnd3DsYeQu9rUBtCQup"/><rect x="505" y="352" width="11" height="8" fill="#c0dd97" data-page-node-id="05FoPU0RTivmTTDW9x2nt7"/>
+  <rect x="525" y="349" width="11" height="11" fill="#f09595" data-page-node-id="S6Fz1GjaC1vuirsc5HxCXw"/><rect x="545" y="353" width="11" height="7" fill="#c0dd97" data-page-node-id="f3LTFS9TbrlAtSmDind7Ar"/>
+  <rect x="565" y="351" width="11" height="9" fill="#f09595" data-page-node-id="V7GWYkaMDuIIuyY4xxESaS"/><rect x="585" y="352" width="11" height="8" fill="#c0dd97" data-page-node-id="X5QuHWtjN4H07LxuGgMDad"/>
+  <rect x="605" y="350" width="11" height="10" fill="#f09595" data-page-node-id="B1eAEWTdSxemc8xuVhj1u9"/><rect x="625" y="352" width="11" height="8" fill="#c0dd97" data-page-node-id="MlQrVxuxqysrcOJ18mcxLC"/>
+  <line x1="40" y1="360" x2="330" y2="360" stroke="#b4b2a9" stroke-width="0.5" data-page-node-id="EdBKZUBArcqp808V4f9aGw"/>
+  <line x1="350" y1="360" x2="640" y2="360" stroke="#b4b2a9" stroke-width="0.5" data-page-node-id="UJIGjsrYUcX1qMDAesz8bX"/>
+  <text x="40" y="380" font-size="12" fill="#888780" data-page-node-id="kr09ZFA8SFfyUFfG4vDTrx">横盘期：量大但阶梯萎缩，回调缩量</text>
+  <text x="350" y="380" font-size="12" fill="#888780" data-page-node-id="M0dPfGQkQzTPrwtGOs4kDL">横盘期：持续地量，波动极窄</text>
+  <text x="180" y="145" font-size="12" fill="#854f0b" data-page-node-id="lo7NqvWSwq7QoAet3yD8U0">回调缩量、反弹温和放量</text>
+  <text x="478" y="145" font-size="12" fill="#0f6e56" data-page-node-id="GauIhAD4itAzRoP1ETLxT4">抛压极轻，筹码高度锁定</text>
+</svg>
+<figcaption data-page-node-id="GCFpLmEdYUGGYmSqadzj6z">两条整理路径：A 充分换手型 ｜ B 锁仓惜售型</figcaption>
+</figure>
+
+<div class="grid2" data-page-node-id="uMaZH90mkcBWfy6gekloSx">
+  <div class="card" data-page-node-id="bfvxZ5fwQGmGvDGNjLqGw4">
+    <h3 style="margin-top:0" data-page-node-id="byZVVk8ESWzvVGYdG8GsJo">A 巨量横盘（换手承接型）</h3>
+    <ul data-page-node-id="yPQFYOcqDFrdDJSyleiQfm">
+      <li data-page-node-id="gbwqLhbAG7plveAHkN5Wzi">第一波末段放巨量冲高，但<b data-page-node-id="vxsb1ZWcJdvSvqAP1h7ndn">不跟放量长阴</b>——巨量是换手不是出货</li>
+      <li data-page-node-id="RBQlHzMt7GvXVq6amT3UiM">横盘期量大但阶梯萎缩；<b data-page-node-id="LDXesvNAA3T6xhjGbMBvZS">回调缩量、反弹温和放量</b></li>
+      <li data-page-node-id="gQzWnUrE5c2kih0W5thFRu">重心持平微升，不破10/20日线，回调不深（0.382以内）</li>
+      <li data-page-node-id="EBSGnMC9hUHciRp7TJ2AAS">二次启动：突破平台需<b data-page-node-id="aw1NlMWCSsko43h9ZIWoLR">1.5~2倍量</b>并收盘站稳</li>
+    </ul>
+  </div>
+  <div class="card" data-page-node-id="KSeOyjqmdEMSz7RLRp2TNL">
+    <h3 style="margin-top:0" data-page-node-id="KqQsGDiogFFzelYBwFk6BS">B 持续缩量横盘（锁仓惜售型）</h3>
+    <ul data-page-node-id="fEPmgjsLAy5BfbfL0r75qO">
+      <li data-page-node-id="mH0HQiFPgRHhqkBRqVxbeR">量能缩至第一波高峰的<b data-page-node-id="3oxNGgvMyDTzVMEhiZkX9l">1/4~1/3甚至更低</b>，双向都缩量</li>
+      <li data-page-node-id="vYpFVr8Qt98sMDYwsFgYsw">K线实体小、排列紧密，重心水平，波动极窄</li>
+      <li data-page-node-id="mcaL54OnWMMQhmf9DsGU5C">含义：筹码高度锁定，浮筹极少——供给衰竭的极致</li>
+      <li data-page-node-id="kiaxhA6DvVwPr0acqiSbUd">二次启动：<b data-page-node-id="VEsRWFWHLYBNsxU3Cjz5c6">温和放量即可</b>（浮筹少不要求天量），收中大阳站稳平台</li>
+    </ul>
+  </div>
+</div>
+
+<table data-page-node-id="YLMHDBOHSWHmVonmiDIFPz">
+  <tr data-page-node-id="0o6X9CrCEHUeq2DqVGjGfL"><th data-page-node-id="QFjyGZFKs3aFNh0IBHfsy6">维度</th><th data-page-node-id="4QUcO9MHsWOacvG0TIytYC">A 巨量横盘</th><th data-page-node-id="2k0zYAw5asDnklHF4BFEbK">B 缩量横盘</th></tr>
+  <tr data-page-node-id="3uxbc6rxNarBHSmEi7vHCK"><td data-page-node-id="aZGj1AtztS3AjOgIqas1b4">筹码结构</td><td data-page-node-id="ib1OeCGbRWqlrASF617Mb7">浮筹充分交换，成本趋同</td><td data-page-node-id="8OPr1IZJACO2sMVjHMhdx7">高度锁定，浮筹极少</td></tr>
+  <tr data-page-node-id="EQqDyG8GkhyEhUDXWJExYb"><td data-page-node-id="orNTOkPgkvaUvktDuFh7l8">突破所需量能</td><td data-page-node-id="PhKNJqB7ls5sNwZEX6mxV8">1.5~2倍放量消化获利盘</td><td data-page-node-id="WRGdLmwMjNocMUgoJj8mL9">温和放量即可</td></tr>
+  <tr data-page-node-id="CjT4qb8l0yPPQQdgxDIVZg"><td data-page-node-id="Vg5PiRGgtw7jY7uUFx55XD">二波特点</td><td data-page-node-id="FmESEnkzDbiK8KtL4mFsmu">更稳、更持久</td><td data-page-node-id="L1yFKzteXQxBa3jMNmYn8w">更急、更凌厉，常连续拉升</td></tr>
+  <tr data-page-node-id="DFUWyhGoFDonhDU3gEuzoI"><td data-page-node-id="f0v2Ruceaze90m3WJbdkZm">主要风险</td><td data-page-node-id="yKc3oOsFhpYlJVPhbBI3gk">换手变出货（放量下跌）</td><td data-page-node-id="Vbmq40AdfcnQWaIUhfTh6I">人气耗散阴跌；大盘转弱时补跌快</td></tr>
+  <tr data-page-node-id="IIKAVhkkE6CPm7CAtQb7PE"><td data-page-node-id="WKxGDg9Hui8Dpzpwnq2a27">失效边界</td><td colspan="2" data-page-node-id="tbmjMj1a29tXzGIqBvHFAu">放量跌破横盘下沿，或突破后放量回踩跌破平台——梅开二度逻辑作废</td></tr>
+</table>
+
+<div class="warn" data-page-node-id="rxPEkhq2YEzCzQf0uj5eUH">缩量横盘最大的坑：<b data-page-node-id="tH8HDS9lM7tHo89Xwre7yJ">惜售 ≠ 无人问津</b>。惜售型=主线龙头+题材/业绩支撑+横盘不回落+下探被快速收回；无人问津型=题材退潮+板块无跟随+重心阴跌——缩量只是没人关注，不是没人卖。</div>
+
+<!-- ============ 三、盘口诡计 ============ -->
+<h2 id="s3" data-page-node-id="VuWELb4DaAnL8sFeHejGg8">三、价格诡计：集合竞价与盘中行为</h2>
+
+<figure class="fig" data-page-node-id="GWxPL01iiC508dkWFB7EN9">
+<svg viewBox="0 0 680 270" width="100%" role="img" xmlns="http://www.w3.org/2000/svg" data-page-node-id="Nhme8MFz8oenyekQZZLA3N">
+  <title>集合竞价时间轴与诡计</title>
+  <text x="40" y="30" font-size="14" font-weight="500" fill="#2c2c2a" data-page-node-id="XApoPISMvH2ry1LcEkNBpT">A股集合竞价时间轴（9:15-9:25）</text>
+  <rect x="70" y="110" width="200" height="50" rx="8" fill="#fac775" stroke="#854f0b" stroke-width="0.5" data-page-node-id="6K6DLvFGNx7qgp9QBQXDmk"/>
+  <rect x="270" y="110" width="200" height="50" rx="8" fill="#d3d1c7" stroke="#5f5e5a" stroke-width="0.5" data-page-node-id="blp8ltmKY1qKhSyGkknkcZ"/>
+  <rect x="470" y="110" width="150" height="50" rx="8" fill="#b5d4f4" stroke="#185fa5" stroke-width="0.5" data-page-node-id="nGjNpdtD8ap5e22ZqOMrK3"/>
+  <text x="170" y="135" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#633806" data-page-node-id="8ZinxDS6ERKeWnChhuvQbi">可以撤单</text>
+  <text x="370" y="135" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#2c2c2a" data-page-node-id="KQ89SGHTEWNlyFjscMDWCG">不可撤单</text>
+  <text x="545" y="135" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#0c447c" data-page-node-id="sGR9f3R5ld11D4anwr8FHP">撮合开盘价</text>
+  <text x="70" y="95" font-size="12" fill="#5f5e5a" data-page-node-id="8VMDDiyBLzzULEJ8QpwXXk">9:15</text>
+  <text x="270" y="95" font-size="12" fill="#5f5e5a" data-page-node-id="LClLD8pjuqrNicFf2dJgWS">9:20</text>
+  <text x="470" y="95" font-size="12" fill="#5f5e5a" data-page-node-id="LDf54AnhLkSRh1UViUBbc2">9:25</text>
+  <text x="620" y="95" text-anchor="end" font-size="12" fill="#5f5e5a" data-page-node-id="U6XKRRTurRyr1BRC9wFBRL">9:30 开盘</text>
+  <text x="170" y="190" text-anchor="middle" font-size="12" font-weight="500" fill="#993c1d" data-page-node-id="5HRNChRqUhAw1I72cIRlMH">虚假涨停/跌停高发区</text>
+  <text x="170" y="210" text-anchor="middle" font-size="12" fill="#5f5e5a" data-page-node-id="UPyxxzAwcVn4aXY3HPE8H7">大单诱多吓空，9:20前撤单现原形</text>
+  <text x="370" y="190" text-anchor="middle" font-size="12" font-weight="500" fill="#2c2c2a" data-page-node-id="9bGyG9CSpKvP9tWlOUr3WV">挂单作数，价格更真实</text>
+  <text x="370" y="210" text-anchor="middle" font-size="12" fill="#5f5e5a" data-page-node-id="p0o1sGGoD1dFYIgAB52aM2">高开价若撑过9:20，是真金白银</text>
+  <text x="545" y="190" text-anchor="middle" font-size="12" font-weight="500" fill="#0c447c" data-page-node-id="fBB4Rgcp57kjbMsXUEA6OD">9:25产生开盘价</text>
+  <text x="545" y="210" text-anchor="middle" font-size="12" fill="#5f5e5a" data-page-node-id="AjcX5hOcq2T6fJhEmphdh9">以9:20后竞价为操作基准</text>
+  <text x="40" y="250" font-size="12" fill="#791f1f" data-page-node-id="tqV7bLdYXrTcvEPLic7d6o">切忌：竞价异动不等于开盘急操作——等9:30后15-30分钟分时量价确认再动</text>
+</svg>
+<figcaption data-page-node-id="U3BekZazygm4wLBUipdmu3">竞价诡计的规则缝隙：9:15-9:20可撤单</figcaption>
+</figure>
+
+<figure class="fig" data-page-node-id="jjAowamnf36rUTzfPjYqxs">
+<svg viewBox="0 0 680 340" width="100%" role="img" xmlns="http://www.w3.org/2000/svg" data-page-node-id="UHNu6DCDTCrfgOJAJpzjM3">
+  <title>三种盘中诡计分时示意</title>
+  <text x="40" y="55" font-size="13" font-weight="500" fill="#791f1f" data-page-node-id="ZRvXCbLeLI5jIkAB8XhquN">开盘急拉回落（诱多出货）</text>
+  <rect x="40" y="65" width="190" height="210" rx="8" fill="#f1efe8" stroke="#b4b2a9" stroke-width="0.5" data-page-node-id="bPNJE3RhEvA1aEj0boxXGN"/>
+  <path d="M50,235 L60,220 L68,100 L80,135 L105,170 L140,200 L180,225 L220,250" fill="none" stroke="#a32d2d" stroke-width="2" stroke-linejoin="round" data-page-node-id="hkrwe0gTyrERvxSV91g8B9"/>
+  <circle cx="68" cy="100" r="4" fill="#a32d2d" data-page-node-id="9PnZdaidnDbA3jSG8i8lNs"/>
+  <text x="80" y="95" font-size="12" fill="#791f1f" data-page-node-id="zXyXV1WMs3N04Ir6G8nI4J">放量急拉</text>
+  <text x="150" y="250" font-size="12" fill="#791f1f" data-page-node-id="ivjLNsKZI9hqlnju6lcVQ3">快速回落</text>
+  <text x="245" y="55" font-size="13" font-weight="500" fill="#791f1f" data-page-node-id="BdA34jkokGzrwuJrNrjC9A">开盘急砸拉起（假支撑）</text>
+  <rect x="245" y="65" width="190" height="210" rx="8" fill="#f1efe8" stroke="#b4b2a9" stroke-width="0.5" data-page-node-id="C8XkG89QSTwIYR5231HAJL"/>
+  <path d="M255,230 L262,205 L270,250 L285,150 L315,110 L345,135 L375,165 L405,195 L425,235" fill="none" stroke="#a32d2d" stroke-width="2" stroke-linejoin="round" data-page-node-id="QvsIv5FBozHa6XpF19oTzW"/>
+  <circle cx="270" cy="250" r="4" fill="#0f6e56" data-page-node-id="C6nV4MhkNwuEcpDUeqH28d"/>
+  <text x="250" y="265" font-size="12" fill="#0f6e56" data-page-node-id="3wcrTAMZ7Awsso5phOFrc4">急砸</text>
+  <text x="300" y="105" font-size="12" fill="#791f1f" data-page-node-id="q6s83GHv5rlyFcxG41y4CK">快速拉起</text>
+  <text x="450" y="55" font-size="13" font-weight="500" fill="#791f1f" data-page-node-id="ym0sHbPUhM7XzGAiZ92Dx7">尾盘集合竞价偷袭</text>
+  <rect x="450" y="65" width="190" height="210" rx="8" fill="#f1efe8" stroke="#b4b2a9" stroke-width="0.5" data-page-node-id="shsvJ95SpswpkTmB4C7rII"/>
+  <path d="M460,200 L480,190 L500,205 L520,195 L540,205 L560,195 L585,185 L615,95 L632,90" fill="none" stroke="#a32d2d" stroke-width="2" stroke-linejoin="round" data-page-node-id="F0WnuRQy32wT3ulxL7vBe3"/>
+  <line x1="585" y1="80" x2="585" y2="265" stroke="#888780" stroke-width="0.8" stroke-dasharray="4 3" data-page-node-id="FCd7TuyJwdmg76Ch5pwhYk"/>
+  <text x="590" y="275" font-size="11" fill="#5f5e5a" data-page-node-id="zcL0ADFDqIO8EoTXcQyrGO">14:57</text>
+  <text x="500" y="85" font-size="12" fill="#791f1f" data-page-node-id="AJ5kzwrAD0HIYVJWn5SScj">尾盘偷袭拉升</text>
+  <text x="40" y="300" font-size="12" fill="#791f1f" data-page-node-id="w95UhMZmjQcYqYdrNOVEbr">冲高不维持=诱多，忌盘中追涨</text>
+  <text x="245" y="300" font-size="12" fill="#791f1f" data-page-node-id="OD2uHARBgGfNkWYYBpbQsh">反弹不过前高，重心下移即出货</text>
+  <text x="450" y="300" font-size="12" fill="#791f1f" data-page-node-id="GHd0aB9a8PhOExOmepKuu0">控盘实力单薄，次日高开常为出逃空间</text>
+  <text x="40" y="330" font-size="12" fill="#2c2c2a" data-page-node-id="dyuAmw4PzSPws8G8b2rOYG">共同点：制造强势或支撑的错觉——破绽都露在量价配合上</text>
+</svg>
+<figcaption data-page-node-id="PTEURR0Cs1EUXIJk9lnPVa">三种盘中诡计的分时形态</figcaption>
+</figure>
+
+<table data-page-node-id="4nfdidWqkMSViFEcks9N5G">
+  <tr data-page-node-id="YeTGTWJaudFeRqRMGEFcT4"><th style="width:150px" data-page-node-id="oKG88cn2iQ0ESALkfZqpxo">诡计</th><th data-page-node-id="wEYPIyCj3RxmYoCCOHp5tm">手法</th><th data-page-node-id="esoHeZvZet28SuHBJ5mnnb">识别要点</th></tr>
+  <tr data-page-node-id="rYkJvF1nih7QnJ11lQZciX"><td data-page-node-id="QBZEGELUujokH6tQjlNxnW">虚假涨停/跌停</td><td data-page-node-id="QlL472xxMmp7nOgz9EFvdm">9:15-9:20大单高挂吓空/诱多，临近9:20撤单</td><td data-page-node-id="KAOUvGVncSaC5P4VHlYJrv">只看9:20-9:25竞价；撑不过9:20的单都是假的</td></tr>
+  <tr data-page-node-id="qH5KFmx6w6V5KrGhIqVwob"><td data-page-node-id="nhqtmmxtg1BFchWbhVgelF">开盘急拉回落</td><td data-page-node-id="bB3HI2a6fYXvwESbKKg2dH">放量冲高不维持，利用"要涨停"预期出货</td><td data-page-node-id="epWziP7qIrXFm8gITfHAei">冲高放巨量、回落量不减、重心下移、反弹不过前高</td></tr>
+  <tr data-page-node-id="muQtvx1w3NfCfCmN9tWw9m"><td data-page-node-id="qaWmu8zUakO2fAmnJjS9DW">开盘急砸拉起</td><td data-page-node-id="hkCSEqZWnQmhbxvHCIGs5G">砸出"下方有支撑"假象，吓出止损盘再拉起接盘</td><td data-page-node-id="XdxCB4LS6Cid58tj5pEXlR">真洗盘量小、快速收回、能创新高；假支撑反弹无量、不过前高</td></tr>
+  <tr data-page-node-id="kBLAHKI19OJkjdNZ5x4WBb"><td data-page-node-id="zOXNspuLTNBF4kKAN02UUv">放量后缩量阴跌</td><td data-page-node-id="y3zsuakLmFFY6up18cjirB">放量滞涨完成出货后进入阴跌</td><td data-page-node-id="EBw3xwp6Bi2XebtlwQmYG8">缩量≠没人卖，是买盘消失；"放量不涨→缩量阴跌"=出逃确认</td></tr>
+  <tr data-page-node-id="076fGnKSohgyctjZQVY9uu"><td data-page-node-id="XMnux2g49pcBos3WM0i7jq">尾盘竞价偷袭</td><td data-page-node-id="fZVVOcCw41HbxFH3POacR4">14:57后小资金拉高收盘价，为次日高开出货造空间</td><td data-page-node-id="MzgV6cYhiGrESKRBID732a">控盘实力单薄的表现；次日高开不追，等回补</td></tr>
+</table>
+
+<p data-page-node-id="PtLlCCbALRnfy9e5kLrRja"><b data-page-node-id="i1DBwpSDssmT25UBuFJ8XF">"横有多长，竖有多高"</b>——这句谚语是诡计的镜像：主力低位吸筹横盘越久，锁定筹码越多，拉升空间越大。抓"狐狸尾巴"的正确姿势不是盯盘中诡计，而是提前蹲伏：长期低位横盘 + 波动收敛 + 股东户数下降（筹码集中）+ 温和放量突破横盘上沿且回踩缩量不破。</p>
+
+<!-- ============ 四、K线形态图解 ============ -->
+<h2 id="s4" data-page-node-id="5n4QbYUVwMU6vtqrKJEXsc">四、K线基础形态图解（十字星等）</h2>
+<p class="muted" data-page-node-id="BDUDQARdhEvvH59rV5W0j0">每根K线由实体（开盘价—收盘价）与影线（最高/最低价）组成。A股配色：红=阳线（收&gt;开），绿=阴线（收&lt;开）。<b data-page-node-id="WVq5ucjMdObc2mefUUbFuF">同一形态在不同位置含义相反，位置比形态本身更重要。</b></p>
+
+<div class="kgrid" data-page-node-id="YQy58CZEQsjhQpOoGPDd3l">
+
+  <div class="kcard" data-page-node-id="RmzQwCMtktokrx9UtRXfxA">
+    <div class="ktitle" data-page-node-id="BMgUhQr5gcgqUXzPA31lHe">十字星</div>
+    <div class="ksub" data-page-node-id="nEWTbpQ9oPdJincFqSMdFx">开盘价 ≈ 收盘价，上下影线相近</div>
+    <svg viewBox="0 0 120 140" width="100%" role="img" aria-label="十字星示意图" data-page-node-id="c01sUKCQNgGBFwHFzTKNOZ">
+      <line x1="60" y1="15" x2="60" y2="125" stroke="#a32d2d" stroke-width="1.5" data-page-node-id="x5nBwAyRw0ajrbnd0Z7ZbA"/>
+      <rect x="50" y="66" width="20" height="8" fill="#e24b4a" data-page-node-id="5DsERYiOWBPB1WDN2TsaCO"/>
+      <text x="60" y="138" text-anchor="middle" font-size="10" fill="#888780" data-page-node-id="5JpWGWpHWaAv13UyPVTq0Z">多空平衡·变盘前兆</text>
+    </svg>
+    <p class="mean" data-page-node-id="9tdqWimsdsUrKzFQQmdy0e"><b data-page-node-id="wV7LP03iVGe6CMuKZdMBqt">含义</b>：开盘与收盘几乎同价，多空拉锯后回到原点——力量平衡被打破的临界点，常是趋势变盘的前兆。</p>
+    <p data-page-node-id="9JffgWyDiMZ21slmHddDbB"><b data-page-node-id="XIADO7J5JSQComhtlBmUAL">高位出现</b>（尤其长上影十字）：<span class="act" data-page-node-id="mnHg0DXIeMHdzKzlsJSrM1">上方抛压重，见顶警示，先减仓或收紧止损，等次日确认</span></p>
+    <p class="low" data-page-node-id="lnXsk4aRt7yPjOMQHvhqKb"><b data-page-node-id="D1wZDMVBm07zJRedMy7dgH">低位出现</b>：下跌动能衰竭，止跌观察信号，需次日阳线确认再动手</p>
+    <p class="muted" data-page-node-id="GwoBDvHT4wnPZO27nt6BWV">变体：长上影十字（避雷针，高位最凶险）；T字/倒T字十字（单边试探）。</p>
+  </div>
+
+  <div class="kcard" data-page-node-id="B9sJ1qHGIBbj4WfmHJN3in">
+    <div class="ktitle" data-page-node-id="5OBwzCaoeBxEGKP3AXlSnq">长上影线（射星/流星）</div>
+    <div class="ksub" data-page-node-id="J8t1m6vSpSoSSgHSR9Gc0g">小实体 + 长上影，形似倒锤</div>
+    <svg viewBox="0 0 120 140" width="100%" role="img" aria-label="长上影线示意图" data-page-node-id="kKXODWs9Nl1Klv4G0T3Txg">
+      <line x1="60" y1="15" x2="60" y2="80" stroke="#639922" stroke-width="1.5" data-page-node-id="0HJWODATPiwaWxJlJk8CVI"/>
+      <rect x="50" y="80" width="20" height="28" fill="#639922" data-page-node-id="jLRD8g1Z0Q3jnhZnBjIVFk"/>
+      <line x1="60" y1="108" x2="60" y2="118" stroke="#639922" stroke-width="1.5" data-page-node-id="fKQVArMgXhlO51cyRs5tWg"/>
+      <text x="60" y="138" text-anchor="middle" font-size="10" fill="#888780" data-page-node-id="8Bg2jesyJt0biFAe6wzUNJ">冲高回落·上方抛压重</text>
+    </svg>
+    <p class="mean" data-page-node-id="EiPEdK9IgxCMnoTDFbBybo"><b data-page-node-id="UuVzUw2qRkyYOvJA8qPuhH">含义</b>：盘中冲高被大量卖单打回，收盘接近低位——上影线就是"上方卖压"的可视化。</p>
+    <p data-page-node-id="GrgyuqJptz6uiJl3RmvaAp"><b data-page-node-id="sDzdVNwyxoJNozLSTeREui">高位长上影</b>：<span class="act" data-page-node-id="DUqObEtErbp2GoN54mGxhB">典型见顶信号，配合放量更凶，常出现在主升末端</span></p>
+    <p class="low" data-page-node-id="PP76m8SWfI34NG4UQqFXNt"><b data-page-node-id="zIpm0g6N0UZP7vmvX77S9w">低位长上影</b>：可能是主力试盘或洗盘，看后续能否快速收复上影</p>
+  </div>
+
+  <div class="kcard" data-page-node-id="9lgkGfYORpYugEZqTcstOD">
+    <div class="ktitle" data-page-node-id="yurlNCxV6MiufzLWQIfzmL">锤子线 / 上吊线</div>
+    <div class="ksub" data-page-node-id="rhQncj2GYqEEcE6xIGwDJ5">小实体 + 长下影（同形反义）</div>
+    <svg viewBox="0 0 120 140" width="100%" role="img" aria-label="锤子线示意图" data-page-node-id="t27odgMt2xxL1x521LQoGk">
+      <line x1="60" y1="30" x2="60" y2="45" stroke="#3b6d11" stroke-width="1.5" data-page-node-id="2FmYCuxoeoTBt7QgoegYk4"/>
+      <rect x="50" y="45" width="20" height="26" fill="#e24b4a" data-page-node-id="viPHSC4vP4F58G4pYwmwgE"/>
+      <line x1="60" y1="71" x2="60" y2="125" stroke="#3b6d11" stroke-width="1.5" data-page-node-id="yFrj1VPyPXsqsZ1CVfMFg4"/>
+      <text x="60" y="138" text-anchor="middle" font-size="10" fill="#888780" data-page-node-id="Uevr5sA2GsauYiudLpFwQ9">下方有承接</text>
+    </svg>
+    <p class="mean" data-page-node-id="0RNBZ5y9T2RB5u5m7mLUUe"><b data-page-node-id="IJSFQw0cwuqyFb2bz8oWbZ">含义</b>：盘中深跌后被买盘拉回，长下影证明"下方有承接"。</p>
+    <p class="low" data-page-node-id="oXUO72eHGLrWHZn9z0wQOh"><b data-page-node-id="Z1nYjE0dxEYtbRk88OSHSt">低位出现=锤子线</b>：止跌反转信号，次日阳线确认则更可靠</p>
+    <p data-page-node-id="VUN5GdW97YBfWCBjffZmFA"><b data-page-node-id="Br5CS0mnpbLgO5wsEDnk7H">高位出现=上吊线</b>：<span class="act" data-page-node-id="1kFyHaLahOjyeamGHJed6D">名字即含义——主力借下影"展示支撑"吸引接盘，是出货警示</span></p>
+  </div>
+
+  <div class="kcard" data-page-node-id="GQlAUGco1OInjzNC2M2q3S">
+    <div class="ktitle" data-page-node-id="t5mh4fBU68xEi1SZuqagDb">乌云盖顶 / 看跌吞噬</div>
+    <div class="ksub" data-page-node-id="SvjDY8uvU3GEgy0qrJBquu">阳线之后大阴线反杀</div>
+    <svg viewBox="0 0 120 140" width="100%" role="img" aria-label="乌云盖顶示意图" data-page-node-id="KvUUNpaNNFzSHMXFpMJ7lC">
+      <rect x="30" y="55" width="20" height="50" fill="#e24b4a" data-page-node-id="F3Ku99XESB0Xu07lBw50lD"/>
+      <line x1="40" y1="45" x2="40" y2="55" stroke="#3b6d11" stroke-width="1.5" data-page-node-id="L3RyLS6YJEMj2cnSjMuO3F"/>
+      <line x1="40" y1="105" x2="40" y2="112" stroke="#3b6d11" stroke-width="1.5" data-page-node-id="qv7HXKNDKSRonDu9VGNH7X"/>
+      <rect x="70" y="40" width="20" height="58" fill="#639922" data-page-node-id="8cKOwMInbu8eAtmLi3IKV1"/>
+      <line x1="80" y1="30" x2="80" y2="40" stroke="#639922" stroke-width="1.5" data-page-node-id="kG1yQB26befozBOA3giyAR"/>
+      <line x1="80" y1="98" x2="80" y2="108" stroke="#639922" stroke-width="1.5" data-page-node-id="KVHCnqhn0M22ytpadqkS9P"/>
+      <text x="60" y="138" text-anchor="middle" font-size="10" fill="#888780" data-page-node-id="CB3GBscdbd45dR9RiQazqV">阴线插入前阳线实体过半</text>
+    </svg>
+    <p class="mean" data-page-node-id="fNAkBeAN604jCmpT7FXLYM"><b data-page-node-id="vsYelNCHbwxt7f2gHkbjD2">含义</b>：前一日阳线还给人希望，次日高开后一路低走，阴线实体插入前阳线实体一半以上——多头措手不及。</p>
+    <p data-page-node-id="WNZsamHX95c8UYhGX4yCkc"><b data-page-node-id="b1BA6P9vckx7RwqUO334Lo">高位出现</b>：<span class="act" data-page-node-id="4rHbbRZcg2fHthx3iVvX0D">强反转信号；若阴线完全吞没前实体（看跌吞噬），信号更强</span></p>
+  </div>
+
+  <div class="kcard" data-page-node-id="d6BcVKrLS5j6ykRC1Vhx4g">
+    <div class="ktitle" data-page-node-id="lB5Tnv3xenKENMAr5415T7">黄昏之星</div>
+    <div class="ksub" data-page-node-id="4TzNTo9RfY6pWDxWDgh3d7">大阳 → 高位小星 → 大阴（三根组合）</div>
+    <svg viewBox="0 0 120 140" width="100%" role="img" aria-label="黄昏之星示意图" data-page-node-id="OXEHhCjjdkSYoYTfcdEtNV">
+      <rect x="15" y="60" width="18" height="45" fill="#e24b4a" data-page-node-id="VQfzezKZVgEo1WUne2Fbah"/>
+      <line x1="24" y1="52" x2="24" y2="60" stroke="#3b6d11" stroke-width="1.5" data-page-node-id="gMPloDMDprugP2v92D8F04"/>
+      <rect x="51" y="42" width="14" height="10" fill="#d3d1c7" data-page-node-id="OLhbMuxfF6qfi0fhCfm2mh"/>
+      <line x1="58" y1="32" x2="58" y2="42" stroke="#888780" stroke-width="1.2" data-page-node-id="akRtmgGkstFxmAoW2UVcI7"/>
+      <line x1="58" y1="52" x2="58" y2="60" stroke="#888780" stroke-width="1.2" data-page-node-id="VgOIduRvSBgezLX2E7oZoz"/>
+      <rect x="85" y="52" width="18" height="52" fill="#639922" data-page-node-id="AljrvmRjNEqxjqVVODX6os"/>
+      <line x1="94" y1="44" x2="94" y2="52" stroke="#639922" stroke-width="1.5" data-page-node-id="XtNThEvcBwqSsO4Xk3LP3J"/>
+      <text x="60" y="138" text-anchor="middle" font-size="10" fill="#888780" data-page-node-id="wZN9ohYDN8zEuhe1x4mDNk">第三根阴线收进第一根实体</text>
+    </svg>
+    <p class="mean" data-page-node-id="7iYwHJ2F70eddTkVk8FA1b"><b data-page-node-id="MoE2mCup1mZxLkefoc9Tru">含义</b>：大阳冲顶 → 高位小星（多空僵持、上攻乏力）→ 大阴确认。三根K线讲完一个"由强转弱"的完整故事，是<b data-page-node-id="TujoRHI7bJ5PjMCLFe3e1y">最经典的顶部组合形态之一</b>。</p>
+    <p data-page-node-id="zDUPtGTDwO5ST39jmqKYtx"><b data-page-node-id="gVT7jR9mzD5WNyzj4Ux06r">高位出现</b>：<span class="act" data-page-node-id="dPZ0nJ0WZfpaAMhZ30HgZU">见顶确认度高，第三根阴线收盘通常已是最后的从容离场点</span></p>
+    <p class="low" data-page-node-id="hac8BcHj6mI00LkqwiH4o3"><b data-page-node-id="aW6GTKCISEZoDJxdIjIGvw">低位镜像</b>：晨星（启明星）= 底部反转组合</p>
+  </div>
+
+  <div class="kcard" data-page-node-id="2UsaA9tG3sX2DcOeboAeHH">
+    <div class="ktitle" data-page-node-id="7kt38pieVC0KVWeepoI9EI">三只乌鸦</div>
+    <div class="ksub" data-page-node-id="0TSQLbLXw9kpvFIcPBMQkS">高位连续三根阴线</div>
+    <svg viewBox="0 0 120 140" width="100%" role="img" aria-label="三只乌鸦示意图" data-page-node-id="4uPQbdn2u2FKKjIjaCPccP">
+      <rect x="22" y="35" width="18" height="30" fill="#639922" data-page-node-id="Ol4froC0lIBGSEeZumbM3g"/>
+      <rect x="50" y="55" width="18" height="30" fill="#639922" data-page-node-id="sbQQxQ9heF21jsdQfnCElG"/>
+      <rect x="78" y="75" width="18" height="30" fill="#639922" data-page-node-id="pzHHrg7MKW9uwSNtUrJ4Vj"/>
+      <text x="60" y="138" text-anchor="middle" font-size="10" fill="#888780" data-page-node-id="xHd4wn1w4w8le0kGnQKsrV">三连阴·逐级下移</text>
+    </svg>
+    <p class="mean" data-page-node-id="Gk71Tkpmeg2qLl7DP7hPuX"><b data-page-node-id="PG877cDBVWKgMaCXAvD3U0">含义</b>：高位连续三根中阴、收盘价逐级走低——空头接管，接盘力量枯竭。</p>
+    <p data-page-node-id="8kRE2piPmQGnrmDJd9TQnr"><b data-page-node-id="mHsAV1EiGU6NZJHFSlUtAb">高位出现</b>：<span class="act" data-page-node-id="e8uVwrVqhnuYoCdSd3fjsf">下跌趋势启动信号，不宜抄底；配合放量破位则确定性更高</span></p>
+  </div>
+
+</div>
+
+<div class="warn" data-page-node-id="2f5SkzdQnQrLUiE1nGBwd5">K线形态使用三原则：① <b data-page-node-id="5igTMyHujrL0A2qmMTBsMt">必须结合大周期与位置</b>——同一根锤子线，低位是机会、高位是陷阱；② <b data-page-node-id="JnNdPyeuXr7oymrGnPOpxz">等次一根K线确认</b>——形态是概率不是铁律；③ <b data-page-node-id="eXbGHymr3mNyPjtR4kkqGU">形态+量能互相印证</b>——见顶形态配放量、止跌形态配缩量，可信度才高。</div>
+
+<!-- ============ 五、K线怎么看与买卖点 ============ -->
+<h2 id="s5">五、K线具体怎么看：什么时候买、什么时候卖</h2>
+
+<h3>1. 一根K线先看三层</h3>
+<figure class="fig">
+<svg viewBox="0 0 680 175" width="100%" role="img" xmlns="http://www.w3.org/2000/svg">
+  <title>一根K线的三层读法</title>
+  <text x="40" y="42" font-size="12" fill="#791f1f">上影线：冲高遭抛压（高位出现=危险）</text>
+  <line x1="245" y1="38" x2="334" y2="46" stroke="#888780" stroke-width="0.5" stroke-dasharray="3 3"/>
+  <line x1="340" y1="28" x2="340" y2="140" stroke="#a32d2d" stroke-width="1.5"/>
+  <rect x="329" y="60" width="22" height="52" fill="#e24b4a"/>
+  <text x="452" y="88" font-size="12" fill="#2c2c2a">实体：开→收的距离 = 动能大小</text>
+  <line x1="448" y1="85" x2="356" y2="85" stroke="#888780" stroke-width="0.5" stroke-dasharray="3 3"/>
+  <text x="40" y="132" font-size="12" fill="#0f6e56">下影线：下探获承接（低位出现=机会）</text>
+  <line x1="245" y1="128" x2="334" y2="126" stroke="#888780" stroke-width="0.5" stroke-dasharray="3 3"/>
+  <text x="340" y="163" text-anchor="middle" font-size="12" fill="#5f5e5a">红=收＞开（阳），绿=收＜开（阴）；实体越长动能越强，影线越长争夺越激烈</text>
+</svg>
+<figcaption>一根K线的三层读法：实体看动能、影线看争夺、位置定含义</figcaption>
+</figure>
+
+<div class="card">
+<p><b>第一层 · 实体（动能）</b>：开→收的距离就是多空对决的净结果。实体越长，赢的一方越坚决；实体很小（如十字星）= 势均力敌，变盘临界。</p>
+<p><b>第二层 · 影线（争夺痕迹）</b>：上影线=冲高被压回（上方有卖压），下影线=下探被拉起（下方有承接）。影线越长，代表该方向的力量越强。</p>
+<p><b>第三层 · 位置 + 量能（含义开关）</b>：同样的K线，涨了一大段后的高位=见顶语言，跌了很久后的低位=反转语言；再叠加量能——见顶形态配放量可信度高，止跌形态要缩量企稳。</p>
+<p><b>多周期配合</b>：周线定大势（牛熊）、日线定方向（趋势与关键位）、60分钟/30分钟找具体买卖点。大小周期矛盾时，长周期优先。</p>
+</div>
+
+<h3>2. 买卖决策流程</h3>
+<figure class="fig">
+<svg viewBox="0 0 680 410" width="100%" role="img" xmlns="http://www.w3.org/2000/svg">
+  <title>K线买卖决策流程</title>
+  <defs>
+    <marker id="ar2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#888780" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+  <rect x="240" y="24" width="200" height="44" rx="8" fill="#b5d4f4" stroke="#185fa5" stroke-width="0.5"/>
+  <text x="340" y="46" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="500" fill="#0c447c">K线信号出现</text>
+  <path d="M340,68 L340,80 L135,80 L135,94" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#ar2)"/>
+  <path d="M340,68 L340,94" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#ar2)"/>
+  <path d="M340,68 L340,80 L545,80 L545,94" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#ar2)"/>
+  <text x="340" y="86" text-anchor="middle" font-size="11" fill="#5f5e5a">第一问：现在什么位置？</text>
+  <rect x="40" y="100" width="190" height="44" rx="8" fill="#fcebeb" stroke="#a32d2d" stroke-width="0.5"/>
+  <text x="135" y="122" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#791f1f">高位</text>
+  <text x="135" y="136" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#a32d2d">已大涨一段</text>
+  <rect x="245" y="100" width="190" height="44" rx="8" fill="#faeeda" stroke="#854f0b" stroke-width="0.5"/>
+  <text x="340" y="122" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#633806">中继</text>
+  <text x="340" y="136" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#854f0b">趋势中的回调</text>
+  <rect x="450" y="100" width="190" height="44" rx="8" fill="#e1f5ee" stroke="#0f6e56" stroke-width="0.5"/>
+  <text x="545" y="122" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#0f6e56">低位</text>
+  <text x="545" y="136" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#0f6e56">长期下跌/横盘末端</text>
+  <rect x="40" y="160" width="190" height="56" rx="8" fill="#fcebeb" stroke="#a32d2d" stroke-width="0.5"/>
+  <text x="135" y="179" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#791f1f">见顶形态：长上影·十字星</text>
+  <text x="135" y="198" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#791f1f">乌云盖顶·黄昏之星</text>
+  <rect x="245" y="160" width="190" height="56" rx="8" fill="#faeeda" stroke="#854f0b" stroke-width="0.5"/>
+  <text x="340" y="179" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#633806">缩量回踩10/20日线</text>
+  <text x="340" y="198" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#633806">或前平台获支撑</text>
+  <rect x="450" y="160" width="190" height="56" rx="8" fill="#e1f5ee" stroke="#0f6e56" stroke-width="0.5"/>
+  <text x="545" y="179" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#0f6e56">止跌形态：锤子线·晨星</text>
+  <text x="545" y="198" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#0f6e56">低位十字星·放量反包</text>
+  <line x1="135" y1="216" x2="135" y2="236" stroke="#888780" stroke-width="1.5" marker-end="url(#ar2)"/>
+  <line x1="340" y1="216" x2="340" y2="236" stroke="#888780" stroke-width="1.5" marker-end="url(#ar2)"/>
+  <line x1="545" y1="216" x2="545" y2="236" stroke="#888780" stroke-width="1.5" marker-end="url(#ar2)"/>
+  <rect x="40" y="240" width="190" height="48" rx="8" fill="#ffffff" stroke="#a32d2d" stroke-width="0.8"/>
+  <text x="135" y="264" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500" fill="#a32d2d">减仓或清仓，反抽不回走人</text>
+  <rect x="245" y="240" width="190" height="48" rx="8" fill="#ffffff" stroke="#854f0b" stroke-width="0.8"/>
+  <text x="340" y="264" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500" fill="#854f0b">持有或低吸，破位则退</text>
+  <rect x="450" y="240" width="190" height="48" rx="8" fill="#ffffff" stroke="#0f6e56" stroke-width="0.8"/>
+  <text x="545" y="264" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500" fill="#0f6e56">等次日阳线确认，分批买</text>
+  <rect x="40" y="316" width="600" height="48" rx="8" fill="#fcebeb" stroke="#a32d2d" stroke-width="0.5"/>
+  <text x="340" y="340" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#791f1f">共同纪律：买入即设止损（关键位下方3%–5%）</text>
+  <text x="340" y="356" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#a32d2d">单笔亏损≤总资金2% · 逻辑消失即离场，不与K线谈恋爱</text>
+</svg>
+<figcaption>K线买卖决策流程：先问位置，再对信号，最后按纪律执行</figcaption>
+</figure>
+
+<h3>3. 四类经典买点（触发 → 确认 → 止损）</h3>
+<table>
+  <tr><th style="width:130px">买点类型</th><th>触发条件</th><th>确认信号</th><th style="width:150px">失效/止损</th></tr>
+  <tr><td>趋势回调买</td><td>上升趋势中缩量回调至10/20日线或前平台</td><td>出现止跌K线（锤子线/低位十字星）+ 次日阳线确认</td><td>收盘跌破支撑位即出</td></tr>
+  <tr><td>平台突破买</td><td>放量1.5~2倍突破平台上沿/前高</td><td>收盘站稳突破位；突破后缩量回踩不破可加仓</td><td>放量回踩跌破突破位</td></tr>
+  <tr><td>梅开二度启动</td><td>高位整理末端量能温和回升</td><td>中大阳收在平台上方，回踩缩量不破</td><td>跌回平台内部</td></tr>
+  <tr><td>超跌反转买（慎用）</td><td>低位长下影锤子线/晨星 + 缩量止跌</td><td>放量阳线反包前阴线；基本面无雷为前提</td><td>创出新低无条件退出</td></tr>
+</table>
+
+<h3>4. 四类经典卖点（触发 → 动作 → 例外）</h3>
+<table>
+  <tr><th style="width:130px">卖点类型</th><th>触发条件</th><th>动作</th><th style="width:150px">例外（可收回）</th></tr>
+  <tr><td>形态卖点</td><td>高位长上影/十字星/乌云盖顶/黄昏之星</td><td>先减仓，剩余仓位收紧止损</td><td>次日大阳收复实体，形态失效</td></tr>
+  <tr><td>破位卖点</td><td>放量跌破颈线/上升趋势线/20日均线，反抽不回</td><td>清仓，不等反弹</td><td>缩量假破位、次日快速收回可接回</td></tr>
+  <tr><td>背离卖点</td><td>价格新高 + 量能萎缩 + MACD顶背离</td><td>分批兑现利润</td><td>后续放量消化背离则重新评估</td></tr>
+  <tr><td>阴跌卖点</td><td>放量滞涨后进入缩量阴跌</td><td>按主力出逃处理，不赌反弹</td><td>重新放量收复失地再说</td></tr>
+</table>
+
+<div class="warn">买卖的共同前提：<b>买点必须"信号+位置+量能"三要素齐备</b>，缺一个就等；<b>卖点可以右侧执行</b>——宁可少卖几个点，也不赌最高点。所有买入动作必须与预设止损同时发生，止损位只上移不下移。</div>
+
+<h3>5. 实战示例：K线序列演示（红=阳线，绿=阴线）</h3>
+
+<figure class="fig">
+<svg viewBox="0 0 680 330" width="100%" role="img" xmlns="http://www.w3.org/2000/svg">
+  <title>示例1：趋势回调买点</title>
+  <desc>上升趋势中缩量回调至20日线，出现锤子线止跌，放量阳线反包确认买入</desc>
+  <text x="40" y="24" font-size="13" font-weight="500" fill="#0f6e56">示例1 · 趋势回调买点：缩量回踩 → 锤子线止跌 → 放量反包确认</text>
+  <line x1="50" y1="190" x2="640" y2="190" stroke="#888780" stroke-width="1" stroke-dasharray="5 4"/>
+  <text x="54" y="184" font-size="10" fill="#888780">20日线</text>
+  <line x1="380" y1="206" x2="640" y2="206" stroke="#a32d2d" stroke-width="1" stroke-dasharray="4 3"/>
+  <text x="636" y="220" text-anchor="end" font-size="10" fill="#a32d2d">止损：跌破锤子线低点</text>
+  <line x1="64" y1="222" x2="64" y2="244" stroke="#a32d2d" stroke-width="1.5"/><rect x="56" y="222" width="16" height="16" fill="#e24b4a"/>
+  <line x1="108" y1="198" x2="108" y2="228" stroke="#a32d2d" stroke-width="1.5"/><rect x="100" y="202" width="16" height="22" fill="#e24b4a"/>
+  <line x1="152" y1="176" x2="152" y2="208" stroke="#a32d2d" stroke-width="1.5"/><rect x="144" y="180" width="16" height="24" fill="#e24b4a"/>
+  <line x1="196" y1="178" x2="196" y2="200" stroke="#639922" stroke-width="1.5"/><rect x="188" y="182" width="16" height="14" fill="#639922"/>
+  <line x1="240" y1="148" x2="240" y2="190" stroke="#a32d2d" stroke-width="1.5"/><rect x="232" y="152" width="16" height="34" fill="#e24b4a"/>
+  <line x1="284" y1="124" x2="284" y2="158" stroke="#a32d2d" stroke-width="1.5"/><rect x="276" y="128" width="16" height="26" fill="#e24b4a"/>
+  <line x1="328" y1="100" x2="328" y2="130" stroke="#a32d2d" stroke-width="1.5"/><rect x="320" y="104" width="16" height="22" fill="#e24b4a"/>
+  <line x1="372" y1="102" x2="372" y2="138" stroke="#639922" stroke-width="1.5"/><rect x="364" y="106" width="16" height="28" fill="#639922"/>
+  <line x1="416" y1="126" x2="416" y2="160" stroke="#639922" stroke-width="1.5"/><rect x="408" y="130" width="16" height="26" fill="#639922"/>
+  <line x1="460" y1="144" x2="460" y2="196" stroke="#639922" stroke-width="1.5"/><rect x="452" y="148" width="16" height="14" fill="#639922"/>
+  <line x1="504" y1="104" x2="504" y2="154" stroke="#a32d2d" stroke-width="1.5"/><rect x="496" y="108" width="16" height="42" fill="#e24b4a"/>
+  <line x1="548" y1="80" x2="548" y2="114" stroke="#a32d2d" stroke-width="1.5"/><rect x="540" y="84" width="16" height="26" fill="#e24b4a"/>
+  <line x1="592" y1="60" x2="592" y2="90" stroke="#a32d2d" stroke-width="1.5"/><rect x="584" y="64" width="16" height="22" fill="#e24b4a"/>
+  <line x1="636" y1="44" x2="636" y2="70" stroke="#a32d2d" stroke-width="1.5"/><rect x="628" y="48" width="16" height="18" fill="#e24b4a"/>
+  <rect x="56" y="296" width="16" height="22" fill="#f09595"/><rect x="100" y="290" width="16" height="28" fill="#f09595"/>
+  <rect x="144" y="286" width="16" height="32" fill="#f09595"/><rect x="188" y="300" width="16" height="18" fill="#c0dd97"/>
+  <rect x="232" y="283" width="16" height="35" fill="#f09595"/><rect x="276" y="288" width="16" height="30" fill="#f09595"/>
+  <rect x="320" y="280" width="16" height="38" fill="#f09595"/><rect x="364" y="298" width="16" height="20" fill="#c0dd97"/>
+  <rect x="408" y="303" width="16" height="15" fill="#c0dd97"/><rect x="452" y="306" width="16" height="12" fill="#c0dd97"/>
+  <rect x="496" y="266" width="16" height="52" fill="#e24b4a"/><rect x="540" y="282" width="16" height="36" fill="#f09595"/>
+  <rect x="584" y="286" width="16" height="32" fill="#f09595"/><rect x="628" y="290" width="16" height="28" fill="#f09595"/>
+  <line x1="40" y1="318" x2="640" y2="318" stroke="#b4b2a9" stroke-width="0.5"/>
+  <text x="300" y="252" font-size="11" fill="#854f0b">缩量回调不破位</text>
+  <line x1="356" y1="248" x2="418" y2="240" stroke="#888780" stroke-width="0.5" stroke-dasharray="3 3"/>
+  <text x="500" y="212" font-size="11" fill="#0f6e56">锤子线触及20日线</text>
+  <line x1="496" y1="209" x2="466" y2="199" stroke="#888780" stroke-width="0.5" stroke-dasharray="3 3"/>
+  <text x="522" y="96" font-size="11" fill="#a32d2d">放量反包=买点</text>
+  <line x1="518" y1="99" x2="508" y2="106" stroke="#888780" stroke-width="0.5" stroke-dasharray="3 3"/>
+</svg>
+<figcaption>买点①：上升趋势中缩量回调至20日线，锤子线止跌，次日放量阳线反包确认——买入，止损设锤子线低点下方</figcaption>
+</figure>
+
+<figure class="fig">
+<svg viewBox="0 0 680 330" width="100%" role="img" xmlns="http://www.w3.org/2000/svg">
+  <title>示例2：平台突破买点</title>
+  <desc>放量突破平台上沿后缩量回踩不破，加仓展开主升</desc>
+  <text x="40" y="24" font-size="13" font-weight="500" fill="#0f6e56">示例2 · 平台突破买点：放量站稳上沿 → 缩量回踩不破 → 加仓</text>
+  <line x1="180" y1="134" x2="640" y2="134" stroke="#888780" stroke-width="1" stroke-dasharray="5 4"/>
+  <text x="636" y="128" text-anchor="end" font-size="10" fill="#888780">平台上沿=触发位</text>
+  <line x1="480" y1="146" x2="640" y2="146" stroke="#a32d2d" stroke-width="1" stroke-dasharray="4 3"/>
+  <text x="636" y="160" text-anchor="end" font-size="10" fill="#a32d2d">跌回平台内=失效</text>
+  <line x1="64" y1="196" x2="64" y2="226" stroke="#a32d2d" stroke-width="1.5"/><rect x="56" y="200" width="16" height="20" fill="#e24b4a"/>
+  <line x1="108" y1="176" x2="108" y2="206" stroke="#a32d2d" stroke-width="1.5"/><rect x="100" y="180" width="16" height="22" fill="#e24b4a"/>
+  <line x1="152" y1="180" x2="152" y2="204" stroke="#639922" stroke-width="1.5"/><rect x="144" y="184" width="16" height="14" fill="#639922"/>
+  <line x1="196" y1="156" x2="196" y2="190" stroke="#a32d2d" stroke-width="1.5"/><rect x="188" y="160" width="16" height="26" fill="#e24b4a"/>
+  <line x1="240" y1="140" x2="240" y2="166" stroke="#a32d2d" stroke-width="1.5"/><rect x="232" y="144" width="16" height="18" fill="#e24b4a"/>
+  <line x1="284" y1="142" x2="284" y2="162" stroke="#639922" stroke-width="1.5"/><rect x="276" y="146" width="16" height="12" fill="#639922"/>
+  <line x1="328" y1="134" x2="328" y2="154" stroke="#a32d2d" stroke-width="1.5"/><rect x="320" y="138" width="16" height="12" fill="#e24b4a"/>
+  <line x1="372" y1="136" x2="372" y2="158" stroke="#639922" stroke-width="1.5"/><rect x="364" y="140" width="16" height="14" fill="#639922"/>
+  <line x1="416" y1="132" x2="416" y2="152" stroke="#a32d2d" stroke-width="1.5"/><rect x="408" y="136" width="16" height="12" fill="#e24b4a"/>
+  <line x1="460" y1="134" x2="460" y2="154" stroke="#639922" stroke-width="1.5"/><rect x="452" y="138" width="16" height="12" fill="#639922"/>
+  <line x1="504" y1="96" x2="504" y2="144" stroke="#a32d2d" stroke-width="1.5"/><rect x="496" y="100" width="16" height="40" fill="#e24b4a"/>
+  <line x1="548" y1="108" x2="548" y2="133" stroke="#639922" stroke-width="1.5"/><rect x="540" y="112" width="16" height="16" fill="#639922"/>
+  <line x1="592" y1="84" x2="592" y2="120" stroke="#a32d2d" stroke-width="1.5"/><rect x="584" y="88" width="16" height="28" fill="#e24b4a"/>
+  <line x1="636" y1="62" x2="636" y2="94" stroke="#a32d2d" stroke-width="1.5"/><rect x="628" y="66" width="16" height="24" fill="#e24b4a"/>
+  <rect x="56" y="294" width="16" height="24" fill="#f09595"/><rect x="100" y="288" width="16" height="30" fill="#f09595"/>
+  <rect x="144" y="302" width="16" height="16" fill="#c0dd97"/><rect x="188" y="292" width="16" height="26" fill="#f09595"/>
+  <rect x="232" y="290" width="16" height="28" fill="#f09595"/><rect x="276" y="304" width="16" height="14" fill="#c0dd97"/>
+  <rect x="320" y="300" width="16" height="18" fill="#f09595"/><rect x="364" y="306" width="16" height="12" fill="#c0dd97"/>
+  <rect x="408" y="302" width="16" height="16" fill="#f09595"/><rect x="452" y="306" width="16" height="12" fill="#c0dd97"/>
+  <rect x="496" y="263" width="16" height="55" fill="#e24b4a"/><rect x="540" y="300" width="16" height="18" fill="#c0dd97"/>
+  <rect x="584" y="284" width="16" height="34" fill="#f09595"/><rect x="628" y="288" width="16" height="30" fill="#f09595"/>
+  <line x1="40" y1="318" x2="640" y2="318" stroke="#b4b2a9" stroke-width="0.5"/>
+  <text x="255" y="90" font-size="11" fill="#a32d2d">放量1.5~2倍突破=买点</text>
+  <line x1="428" y1="93" x2="494" y2="99" stroke="#888780" stroke-width="0.5" stroke-dasharray="3 3"/>
+  <text x="415" y="178" font-size="11" fill="#0f6e56">缩量回踩不破=加仓</text>
+  <line x1="512" y1="174" x2="544" y2="136" stroke="#888780" stroke-width="0.5" stroke-dasharray="3 3"/>
+</svg>
+<figcaption>买点②：放量突破平台上沿并收盘站稳；随后缩量回踩不破触发位即加仓点；收盘跌回平台内则突破失效</figcaption>
+</figure>
+
+<figure class="fig">
+<svg viewBox="0 0 680 330" width="100%" role="img" xmlns="http://www.w3.org/2000/svg">
+  <title>示例3：黄昏之星卖点</title>
+  <desc>天量长阳后出现黄昏之星减仓，放量跌破20日线且反抽不回清仓</desc>
+  <text x="40" y="24" font-size="13" font-weight="500" fill="#a32d2d">示例3 · 高位卖点：黄昏之星减仓 → 放量破位反抽不回清仓</text>
+  <line x1="50" y1="185" x2="640" y2="185" stroke="#888780" stroke-width="1" stroke-dasharray="5 4"/>
+  <text x="54" y="179" font-size="10" fill="#888780">20日线</text>
+  <line x1="64" y1="201" x2="64" y2="230" stroke="#a32d2d" stroke-width="1.5"/><rect x="56" y="205" width="16" height="20" fill="#e24b4a"/>
+  <line x1="108" y1="181" x2="108" y2="211" stroke="#a32d2d" stroke-width="1.5"/><rect x="100" y="185" width="16" height="22" fill="#e24b4a"/>
+  <line x1="152" y1="161" x2="152" y2="191" stroke="#a32d2d" stroke-width="1.5"/><rect x="144" y="165" width="16" height="22" fill="#e24b4a"/>
+  <line x1="196" y1="141" x2="196" y2="171" stroke="#a32d2d" stroke-width="1.5"/><rect x="188" y="145" width="16" height="22" fill="#e24b4a"/>
+  <line x1="240" y1="118" x2="240" y2="151" stroke="#a32d2d" stroke-width="1.5"/><rect x="232" y="122" width="16" height="25" fill="#e24b4a"/>
+  <line x1="284" y1="84" x2="284" y2="128" stroke="#a32d2d" stroke-width="1.5"/><rect x="276" y="88" width="16" height="36" fill="#e24b4a"/>
+  <line x1="328" y1="78" x2="328" y2="98" stroke="#639922" stroke-width="1.5"/><rect x="320" y="84" width="16" height="8" fill="#639922"/>
+  <line x1="372" y1="86" x2="372" y2="134" stroke="#639922" stroke-width="1.5"/><rect x="364" y="90" width="16" height="40" fill="#639922"/>
+  <line x1="416" y1="128" x2="416" y2="160" stroke="#639922" stroke-width="1.5"/><rect x="408" y="132" width="16" height="23" fill="#639922"/>
+  <line x1="460" y1="134" x2="460" y2="156" stroke="#a32d2d" stroke-width="1.5"/><rect x="452" y="138" width="16" height="12" fill="#e24b4a"/>
+  <line x1="504" y1="136" x2="504" y2="166" stroke="#639922" stroke-width="1.5"/><rect x="496" y="140" width="16" height="22" fill="#639922"/>
+  <line x1="548" y1="154" x2="548" y2="196" stroke="#639922" stroke-width="1.5"/><rect x="540" y="158" width="16" height="32" fill="#639922"/>
+  <line x1="592" y1="182" x2="592" y2="210" stroke="#639922" stroke-width="1.5"/><rect x="584" y="186" width="16" height="19" fill="#639922"/>
+  <line x1="636" y1="196" x2="636" y2="224" stroke="#639922" stroke-width="1.5"/><rect x="628" y="200" width="16" height="18" fill="#639922"/>
+  <rect x="56" y="298" width="16" height="20" fill="#f09595"/><rect x="100" y="292" width="16" height="26" fill="#f09595"/>
+  <rect x="144" y="288" width="16" height="30" fill="#f09595"/><rect x="188" y="284" width="16" height="34" fill="#f09595"/>
+  <rect x="232" y="278" width="16" height="40" fill="#f09595"/><rect x="276" y="266" width="16" height="52" fill="#e24b4a"/>
+  <rect x="320" y="294" width="16" height="24" fill="#c0dd97"/><rect x="364" y="272" width="16" height="46" fill="#c0dd97"/>
+  <rect x="408" y="288" width="16" height="30" fill="#c0dd97"/><rect x="452" y="300" width="16" height="18" fill="#f09595"/>
+  <rect x="496" y="296" width="16" height="22" fill="#c0dd97"/><rect x="540" y="274" width="16" height="44" fill="#c0dd97"/>
+  <rect x="584" y="282" width="16" height="36" fill="#c0dd97"/><rect x="628" y="286" width="16" height="32" fill="#c0dd97"/>
+  <line x1="40" y1="318" x2="640" y2="318" stroke="#b4b2a9" stroke-width="0.5"/>
+  <text x="130" y="60" font-size="11" fill="#a32d2d">① 天量长阳后现黄昏之星 = 先减仓</text>
+  <line x1="318" y1="63" x2="326" y2="76" stroke="#888780" stroke-width="0.5" stroke-dasharray="3 3"/>
+  <text x="270" y="258" font-size="11" fill="#791f1f">② 放量跌破20日线且反抽不过 = 清仓</text>
+  <line x1="468" y1="255" x2="542" y2="200" stroke="#888780" stroke-width="0.5" stroke-dasharray="3 3"/>
+</svg>
+<figcaption>卖点①：天量长阳冲顶 → 高位小星 → 大阴插入实体（黄昏之星）先减仓；随后放量破位、反抽不回即清仓</figcaption>
+</figure>
+
+<figure class="fig">
+<svg viewBox="0 0 680 330" width="100%" role="img" xmlns="http://www.w3.org/2000/svg">
+  <title>示例4：反面教材出货形态</title>
+  <desc>高位巨量长上影预警，阴线吞没确认出货，随后缩量阴跌不抄底</desc>
+  <text x="40" y="24" font-size="13" font-weight="500" fill="#a32d2d">示例4 · 反面教材：别把出货当强势（高位长上影 + 吞没 + 缩量阴跌）</text>
+  <line x1="64" y1="202" x2="64" y2="228" stroke="#a32d2d" stroke-width="1.5"/><rect x="56" y="206" width="16" height="18" fill="#e24b4a"/>
+  <line x1="108" y1="182" x2="108" y2="212" stroke="#a32d2d" stroke-width="1.5"/><rect x="100" y="186" width="16" height="22" fill="#e24b4a"/>
+  <line x1="152" y1="160" x2="152" y2="192" stroke="#a32d2d" stroke-width="1.5"/><rect x="144" y="164" width="16" height="24" fill="#e24b4a"/>
+  <line x1="196" y1="136" x2="196" y2="170" stroke="#a32d2d" stroke-width="1.5"/><rect x="188" y="140" width="16" height="26" fill="#e24b4a"/>
+  <line x1="240" y1="108" x2="240" y2="146" stroke="#a32d2d" stroke-width="1.5"/><rect x="232" y="112" width="16" height="30" fill="#e24b4a"/>
+  <line x1="284" y1="72" x2="284" y2="118" stroke="#a32d2d" stroke-width="1.5"/><rect x="276" y="96" width="16" height="18" fill="#e24b4a"/>
+  <line x1="328" y1="96" x2="328" y2="146" stroke="#639922" stroke-width="1.5"/><rect x="320" y="100" width="16" height="40" fill="#639922"/>
+  <line x1="372" y1="134" x2="372" y2="162" stroke="#639922" stroke-width="1.5"/><rect x="364" y="138" width="16" height="20" fill="#639922"/>
+  <line x1="416" y1="152" x2="416" y2="170" stroke="#639922" stroke-width="1.5"/><rect x="408" y="156" width="16" height="10" fill="#639922"/>
+  <line x1="460" y1="160" x2="460" y2="180" stroke="#639922" stroke-width="1.5"/><rect x="452" y="164" width="16" height="12" fill="#639922"/>
+  <line x1="504" y1="170" x2="504" y2="192" stroke="#639922" stroke-width="1.5"/><rect x="496" y="174" width="16" height="12" fill="#639922"/>
+  <line x1="548" y1="180" x2="548" y2="204" stroke="#639922" stroke-width="1.5"/><rect x="540" y="184" width="16" height="14" fill="#639922"/>
+  <line x1="592" y1="192" x2="592" y2="216" stroke="#639922" stroke-width="1.5"/><rect x="584" y="196" width="16" height="14" fill="#639922"/>
+  <line x1="636" y1="204" x2="636" y2="228" stroke="#639922" stroke-width="1.5"/><rect x="628" y="208" width="16" height="14" fill="#639922"/>
+  <rect x="56" y="296" width="16" height="22" fill="#f09595"/><rect x="100" y="290" width="16" height="28" fill="#f09595"/>
+  <rect x="144" y="288" width="16" height="30" fill="#f09595"/><rect x="188" y="282" width="16" height="36" fill="#f09595"/>
+  <rect x="232" y="274" width="16" height="44" fill="#f09595"/><rect x="276" y="260" width="16" height="58" fill="#e24b4a"/>
+  <rect x="320" y="268" width="16" height="50" fill="#c0dd97"/><rect x="364" y="286" width="16" height="32" fill="#c0dd97"/>
+  <rect x="408" y="308" width="16" height="10" fill="#c0dd97"/><rect x="452" y="310" width="16" height="8" fill="#c0dd97"/>
+  <rect x="496" y="311" width="16" height="7" fill="#c0dd97"/><rect x="540" y="309" width="16" height="9" fill="#c0dd97"/>
+  <rect x="584" y="312" width="16" height="6" fill="#c0dd97"/><rect x="628" y="311" width="16" height="7" fill="#c0dd97"/>
+  <line x1="40" y1="318" x2="640" y2="318" stroke="#b4b2a9" stroke-width="0.5"/>
+  <text x="60" y="62" font-size="11" fill="#791f1f">① 高位巨量长上影=出货预警，不是强势</text>
+  <line x1="286" y1="66" x2="284" y2="70" stroke="#888780" stroke-width="0.5" stroke-dasharray="3 3"/>
+  <text x="425" y="98" font-size="11" fill="#791f1f">② 阴线吞没=出货确认</text>
+  <line x1="420" y1="101" x2="340" y2="118" stroke="#888780" stroke-width="0.5" stroke-dasharray="3 3"/>
+  <text x="390" y="262" font-size="11" fill="#3b6d11">③ 缩量阴跌=买盘消失，不抄底</text>
+  <line x1="452" y1="258" x2="548" y2="202" stroke="#888780" stroke-width="0.5" stroke-dasharray="3 3"/>
+</svg>
+<figcaption>反面教材：高位巨量长上影（冲高被抛压打回）→ 次日阴线吞没确认出货 → 之后缩量阴跌是买盘消失，全程不抄底不补仓</figcaption>
+</figure>
+
+<!-- ============ 六、防守清单 ============ -->
+<h2 id="s6">六、防守清单（每天开盘前后各过一遍）</h2>
+<div class="card" data-page-node-id="hKd9f395CZkdKC2zAR8gWd">
+<ul class="check" data-page-node-id="uJHdpblDgHjItbXTA3H4w6">
+  <li data-page-node-id="pBL9VmHatO840FuxTIVtWw">竞价只信 9:20–9:25 段，9:15 的异动一律打折；开盘 15–30 分钟内不急于操作</li>
+  <li data-page-node-id="hzIUW5LhMpLxJbjQQdD2Z3">开盘 30 分钟内不追放量冲高——等回落确认是诱多出货还是真突破</li>
+  <li data-page-node-id="T9KsGByIFyuWJeeTVpA18q">急砸拉起的票，看反弹能否过前高、重心是否上移</li>
+  <li data-page-node-id="m7LXuXo4rb5wsUHOtqHMXf">放量滞涨后出现缩量阴跌，按出货处理，不赌缩量见底</li>
+  <li data-page-node-id="uFL9TllljqAw5jnvEZQurg">尾盘偷袭拉升的票，次日高开是卖点参考而非买点</li>
+  <li data-page-node-id="haFVi95Z0qiWJfxFVNnhjX">高位十字星/长上影/乌云盖顶出现，先收紧止损或减仓，等确认</li>
+  <li data-page-node-id="hzY2o0CFrvLz8NQrGrRYPN">梅开二度整理期，出现放量跌破平台下沿即认定逻辑作废</li>
+  <li data-page-node-id="XqlsppL0tbQSucTN78rMtB">任何单一信号不下结论：量价、形态、位置、市场环境四者共振才行动</li>
+</ul>
+</div>
+
+<footer data-page-node-id="7YeN1M9EBvE61r4MO99oa8">
+  数据与形态示意均为教学用途的简化图形，不代表任何具体标的走势。<br data-page-node-id="Q3jfVH5h8E1plaFprmql6M">
+  <b data-page-node-id="as4lawKnpUm6MylaEKHry8">免责声明</b>：以上内容基于公开资料和量化分析，仅供参考，不构成投资建议。市场有风险，投资需谨慎。任何投资决策应结合个人风险承受能力、资金状况和投资目标独立判断，必要时咨询持牌专业机构。过往表现不预示未来收益。
+</footer>
+
+</div>
+</body>
+</html>

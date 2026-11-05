@@ -1,0 +1,60 @@
+# ============================================
+# A股做T工作台 · Git 忽略规则
+# 原则：源码与台账档案入库，每日跑批的可重跑生成物不入库
+# ============================================
+
+# ---------- 选股引擎：中间产物与快照 ----------
+# out/ 里每天一个 snapshot-<日期>.json 约 1MB，日 K/分时缓存也在这里，
+# 入库会让仓库每月涨 20MB 以上
+选股引擎/out/
+
+# ledger/ 是台账档案，不是可重跑的中间产物：
+#   picks-<日期>.json / close-<日期>.json / auction-<日期>.json 一旦丢就永远补不回来，
+#   returns.js 的 T+N 回算全靠这些历史文件。所以整目录入库（约 1.6M，每月增 8M）。
+# 只有明显是临时试跑的文件才排除。
+选股引擎/ledger/recommendations_all.json
+选股引擎/ledger/*.tmp
+
+# ---------- 每日自动生成的报告与看板 ----------
+# 这些每次跑批都会重写，提交只会产生大量无意义 diff
+选股引擎/今日候选_*.html
+选股引擎/挂单计划_明日.html
+选股引擎/稳健清单_底仓候选.html
+选股引擎/选股工作台.html
+选股引擎/对照实验_双开关.html
+选股引擎/时段分析_次日冲高.html
+
+# data/ 是契约目录：latest.json 与 latest.js 由 publish.js 生成，
+# 但页面 file:// 打开时要读 latest.js，属于运行必需，这里保留入库；
+# 如需彻底不入库，取消下面两行注释并把页面改成运行时 fetch
+# data/latest.json
+# data/latest.js
+
+# ---------- 备份与暂存 ----------
+_backup/
+_staging_*.html
+_backup_*.html
+
+# ---------- 临时调试文件（历次排查踩坑留下的） ----------
+_t*.html
+_probe*.sh
+_probe_out/
+_mk_test.js
+_cdir/
+*.tmp
+*.log
+
+# ---------- Agent 运行时数据 ----------
+# 会话记忆、自动化执行记录等本机状态，不进版本库
+.workbuddy/
+
+# ---------- 系统与编辑器 ----------
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# ---------- 依赖 ----------
+node_modules/
+package-lock.json
