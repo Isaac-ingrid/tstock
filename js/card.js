@@ -5,7 +5,7 @@
 import { f2, f3, pct, money, money$, money2, fmtIn, todayStr, toast, toastOk, toastWarn, toastErr, copyPlain, soundChime, GRID, STOP, FLY, FEE, VAL_WIN, TIER_LABEL, AUTO_FIELDS } from './utils.js';
 import { pool, savePool, LOG, saveLog, tierOf, CUR, setCur, TIER, setTier, paintTierBar, stampData } from './state.js';
 import { calc, computeTA, rsCalc, drawRS, loadStock, loadChart, loadDD, loadResearch, checkPriceAlerts } from './api.js';
-import { drawChart, kbarHTML, chartLegendHTML, chartStat, PERIOD_LABEL, _hover, setHover } from './chart.js';
+import { drawChart, kbarHTML, chartLegendHTML, chartStat, PERIOD_LABEL, _hover, setHover, chartMeta } from './chart.js';
 import { renderTopbar, applyCur, renderPoolTabs, openStockReasonModal } from './nav.js';
 import { animCardsStagger, animPricePulse } from './anim.js';
 
@@ -1175,14 +1175,33 @@ export function render(poolData){
   box.querySelectorAll('details.chart-fold').forEach(d=>{
     const kc = d.querySelector('canvas[data-ki]');
     const ci = kc ? +kc.dataset.ki : -1;
-    d.addEventListener('toggle', ()=>{
+    d.addEventListener('toggle', async ()=>{
       if (ci >= 0 && pool[ci]) pool[ci]._fo = d.open ? 1 : 0;
       if (!d.open) return;
-      d.querySelectorAll('canvas[data-ki]').forEach(cv=>{ const st = pool[+cv.dataset.ki]; if (st) drawChart(cv, st); });
-      d.querySelectorAll('canvas[data-rs]').forEach(cv=>{
-        const st = pool[+cv.dataset.rs]; if (!st) return;
-        const rs = rsCalc(st); if (rs) drawRS(cv, rs);
-      });
+      const st = (ci >= 0 && pool[ci]) ? pool[ci] : null;
+      if (st){
+        const p = st.p || 'day';
+        if (!st._k || !st._k[p] || (st._k[p].kind === 'bar' && (!st._k[p].ks || !st._k[p].ks.length))){
+          try { await loadChart(st, true); } catch(_) {}
+        }
+      }
+      const updateCanvas = ()=>{
+        d.querySelectorAll('canvas[data-ki]').forEach(cv=>{
+          const s = pool[+cv.dataset.ki];
+          if (s) drawChart(cv, s);
+        });
+        d.querySelectorAll('canvas[data-rs]').forEach(cv=>{
+          const s = pool[+cv.dataset.rs];
+          if (s){
+            const rs = rsCalc(s);
+            if (rs) drawRS(cv, rs);
+          }
+        });
+        const metaEl = document.getElementById(`kmeta-${ci}`);
+        if (metaEl && st) metaEl.innerHTML = chartMeta(st);
+      };
+      updateCanvas();
+      requestAnimationFrame(updateCanvas);
     });
   });
 

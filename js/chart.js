@@ -65,13 +65,24 @@ function chipText(ctx, txt, x, y, col, bg){
   return tw + 7;
 }
 
+export function chartEntry(kind, obj){
+  const e = Object.assign({ kind, at: Date.now() }, obj);
+  if (kind === 'bar' && e.ks && e.ks.length) e.ind = chartInd(e.ks);
+  return e;
+}
+
 export function drawChart(cv, s){
   const p = s.p || 'day';
-  const entry = (s._k || {})[p];
+  s._k = s._k || {};
+  let entry = s._k[p];
+  if ((!entry || (entry.kind === 'bar' && (!entry.ks || !entry.ks.length))) && p === 'day' && s._ks && s._ks.length) {
+    s._k['day'] = chartEntry('bar', { ks: s._ks });
+    entry = s._k['day'];
+  }
   const ov = s.ov || (s.ov = {});
   const subKind = s.sub || 'macd';
 
-  const W = Math.max(320, cv.clientWidth || 640);
+  const W = Math.max(320, cv.clientWidth || cv.parentElement?.clientWidth || 640);
   const PL = 8, PR = 54, PT = 34, PB = 20;      // PT 留出两行信息条的高度（图例已移到画布外的 HTML 里）
   const hMain = 216, hVol = 56, subH = 86, gap = 9;
   const H = PT + hMain + gap + hVol + gap + subH + PB;
@@ -503,12 +514,17 @@ export function kbarHTML(i, s){
     + `<span class="rd" id="kmeta-${i}">${chartMeta(s)}</span>`
     + `</div>`;
 }
-function chartMeta(s){
+export function chartMeta(s){
   const p = s.p || 'day';
-  const e = (s._k || {})[p];
+  s._k = s._k || {};
+  let e = s._k[p];
+  if ((!e || (e.kind === 'bar' && (!e.ks || !e.ks.length))) && p === 'day' && s._ks && s._ks.length) {
+    s._k['day'] = chartEntry('bar', { ks: s._ks });
+    e = s._k['day'];
+  }
   if (!e) return '待取数';
   const n = e.kind === 'line' ? ((e.min && e.min.pts.length) || 0) : ((e.ks && e.ks.length) || 0);
-  return PERIOD_LABEL[p] + ' · ' + n + (e.kind === 'line' ? ' 分钟' : ' 根') + ' · ' + new Date(e.at).toLocaleTimeString('zh-CN',{hour12:false});
+  return (PERIOD_LABEL[p] || p) + ' · ' + n + (e.kind === 'line' ? ' 分钟' : ' 根') + ' · ' + new Date(e.at).toLocaleTimeString('zh-CN',{hour12:false});
 }
 /* 画布下方的颜色图例。放在 HTML 而不是画在 canvas 上：文字可选中、不会被裁切、
    也腾出了画布顶部的空间给"悬停信息条"（两行：OHLC+量 / 各指标取值）。 */

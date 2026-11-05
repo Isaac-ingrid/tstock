@@ -4,7 +4,7 @@
 
 import { f2, f3, pct, money, money$, fmtIn, fvol, GRID, STOP, FLY, toast, toastOk, toastWarn, toastErr, soundChime, AUTO_FIELDS } from './utils.js';
 import { ALERT_CENTER, saveAlerts, stampData, pool, SNAP } from './state.js';
-import { chartInd } from './chart.js';
+import { chartInd, chartEntry, chartMeta } from './chart.js';
 
 /* ===================== 数据层：全腾讯源（行情 / 检索 / 日K） =====================
    选源原则：实测本机到东财域名严重不稳（searchapi 首包 11s+，push2his 直接连不上），
@@ -269,11 +269,6 @@ export function calcDD(recs){
 
 /* 图表数据装载：按当前周期取数并缓存。日K 直接复用 loadStock 已维护的 s._ks。 */
 const CK_TTL = 45000;
-function chartEntry(kind, obj){
-  const e = Object.assign({ kind, at: Date.now() }, obj);
-  if (kind === 'bar' && e.ks && e.ks.length) e.ind = chartInd(e.ks);
-  return e;
-}
 export async function loadChart(s, force){
   const p = s.p || 'day';
   s._k = s._k || {};
@@ -283,6 +278,9 @@ export async function loadChart(s, force){
   if (p === 'rt'){
     s._k[p] = chartEntry('line', { min: await fetchMinute(s.tcode) });
   } else if (p === 'day'){
+    if (!s._ks || !s._ks.length){
+      try { s._ks = await fetchKline(s.tcode); } catch(_) { s._ks = []; }
+    }
     s._k[p] = chartEntry('bar', { ks: s._ks || [] });
   } else if (p === 'week' || p === 'month'){
     s._k[p] = chartEntry('bar', { ks: await fetchKlineBig(s.tcode, p, p === 'month' ? 80 : 140) });
@@ -993,6 +991,8 @@ export async function loadStock(s){
       }
       // 非交易日：K线末根本就是最近交易日，原样使用，不补不改
       s._ks = kl;                                         // 完整 K 线，供绘图与指标计算
+      s._k = s._k || {};
+      s._k['day'] = chartEntry('bar', { ks: s._ks });
       const m5 = meanN(closes,5), m10 = meanN(closes,10), m20 = meanN(closes,20), m60 = meanN(closes,60);
       /* 写回前必须四舍五入到 2 位：均线是若干个浮点收盘价的平均，
          原样落盘会得到 22.997999999999998 这种 17 位尾巴，再通过
