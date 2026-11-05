@@ -6,7 +6,7 @@
 import { f2, f3, pct, money, money2, todayStr, toast, toastOk, toastWarn, toastErr, copyPlain, soundChime, warmAudio } from './utils.js';
 import { pool, savePool, LOG, saveLog, SNAP, saveSnap, TAIL_ACTIVES, saveTailActive, CUR, setCur, TIER, setTier, stampData } from './state.js';
 import { fetchQuotes, loadStock, loadChart, loadResearch, loadDD, loadMarket, setupTimer, addByQuery, selfTest, calc, checkPriceAlerts, checkMarketAlerts } from './api.js';
-import { drawChart, kbarHTML, chartLegendHTML, chartStat } from './chart.js';
+import { drawChart, kbarHTML, chartLegendHTML, chartStat, registerChartLoader } from './chart.js';
 import { render, posCalc, execLiveSell, execLiveBuy, updateLtbPreview, openQuickTModal, closeQuickTModal, execQuickT, setQtDir, updateQtPreview } from './card.js';
 import { renderTailBuySection, execTailBuy, execTailExit, getTailBuyCandidates } from './tail.js';
 import { renderAccount, renderMarket, renderPerfTable, renderEquity, takeSnapshot, clearSnap, setRedTab } from './account.js';
@@ -240,6 +240,9 @@ window.refreshMarketEnv = async () => {
 /* ===================== 应用初始化 ===================== */
 function initApp() {
   console.log('[T-Stock] A股做T执行台 ESM 模块化引擎启动...');
+
+  // 注册全局图表自愈取数装载器
+  registerChartLoader(loadChart);
 
   // 初始化导航与选项卡
   initTabs();

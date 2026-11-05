@@ -252,39 +252,45 @@
 </section>
 
 <!-- 选股池（引擎产出）+ 自选股 -->
-<section>
-  <h2>二、选股池与自选股</h2>
+<section id="secSelection">
+  <details class="fold" open id="secSelectionFold">
+    <summary style="font-size:15px;font-weight:700;cursor:pointer;padding:8px 12px;background:var(--surface);border-radius:8px;display:flex;align-items:center;justify-content:space-between">
+      <span>二、选股池与自选股</span>
+      <span style="font-size:11.5px;font-weight:400;color:var(--mute)">（点击可折叠/展开，便于全屏专注单只做T）</span>
+    </summary>
+    <div class="fold-bd" style="padding-top:12px">
+      <!-- 选股池：由 选股引擎/ 每交易日收盘后生成，经 data/latest.js 交付。
+           此处只做展示与"并入自选池"，所有价位口径仍由下方决策引擎统一计算。 -->
+      <div id="selBox" class="sel-box">
+        <div class="sel-empty">正在读取选股结果…（若一直停在这里，说明 data/latest.js 缺失，需先运行 <code>node 选股引擎/publish.js</code>）</div>
+      </div>
 
-  <!-- 选股池：由 选股引擎/ 每交易日收盘后生成，经 data/latest.js 交付。
-       此处只做展示与"并入自选池"，所有价位口径仍由下方决策引擎统一计算。 -->
-  <div id="selBox" class="sel-box">
-    <div class="sel-empty">正在读取选股结果…（若一直停在这里，说明 data/latest.js 缺失，需先运行 <code>node 选股引擎/publish.js</code>）</div>
-  </div>
+      <div class="sel-sep">手动添加 / 刷新行情</div>
 
-  <div class="sel-sep">手动添加 / 刷新行情</div>
-
-  <div class="db-row">
-    <input id="dbInput" placeholder="输入 A股 代码或名称 —— 605128 / 上海沿浦 / shyp（拼音首字母也行）" autocomplete="off">
-    <button class="primary" id="dbAdd">＋ 添加</button>
-    <button id="dbRefresh">⟳ 刷新全部行情</button>
-    <button id="dbTest">🩺 网络自检</button>
-    <label class="db-sw"><input type="checkbox" id="dbAuto" checked> 交易时段每分钟自动刷新</label>
-  </div>
-  <div id="dbCands" class="db-cands"></div>
-  <div id="dbStatus" class="db-status">正在初始化…</div>
-  <details class="fold" style="margin-top:12px">
-  <summary>? 图表能力 —— 每只股票卡片内置的图表能力（点击展开）</summary>
-  <div class="fold-bd">
-  <div class="k-note" style="line-height:1.8">
-    <b>每只股票卡片内置的图表能力</b>（全部实时取数、Canvas 手绘，鼠标悬停即可读出该根的 OHLC 与全部指标值）：<br>
-    · <b>周期</b>：分时 / 1分 / 5分 / 15分 / 30分 / 60分 / 日K / 周K / 月K —— 点工具条上的周期按钮即切，<b>指标会跟着换成该周期口径</b>（周K上的 MA5 就是 5 周线）。<br>
-    · <b>主图叠加</b>：MA5 / MA10 / MA20 / MA60（五日线、二十日线都在内）、BOLL(20,2) 布林通道、20日箱体上下沿、持仓成本线、支撑压力位。<br>
-    · <b>副图</b>：成交量柱 + VMA5 量均线（常显）；MACD(12,26,9) 与 RSI(6/12/24) 可切换。分时模式下副图自动换成「每分钟放量倍数」。<br>
-    · <b>实时数据条</b>：换手率、量比、BOLL 三轨、RSI6、布林带宽、支撑位 / 压力位、主力净额与大单净量。<br>
-    · <b>支撑位 / 压力位</b>：由八类来源自动归并 —— 20/60日箱体上下沿、布林上中下轨、MA5/10/20/60、20/60日极值、持仓成本；相邻 0.6% 合并成一档，并按来源权重标注「强 / 中 / 弱」。<br>
-    · <b>大单资金</b>：点「💰 大单资金」拉取当日<b>全部逐笔成交</b>，在本地按单笔金额分档（特大单 ≥100万 / 大单 20–100万 / 中单 4–20万 / 小单 &lt;4万）统计「主动买 − 主动卖」的净额与净量，口径透明、可逐笔核对。
-  </div>
-  </div>
+      <div class="db-row">
+        <input id="dbInput" placeholder="输入 A股 代码或名称 —— 605128 / 上海沿浦 / shyp（拼音首字母也行）" autocomplete="off">
+        <button class="primary" id="dbAdd">＋ 添加</button>
+        <button id="dbRefresh">⟳ 刷新全部行情</button>
+        <button id="dbTest">🩺 网络自检</button>
+        <label class="db-sw"><input type="checkbox" id="dbAuto" checked> 交易时段每分钟自动刷新</label>
+      </div>
+      <div id="dbCands" class="db-cands"></div>
+      <div id="dbStatus" class="db-status">正在初始化…</div>
+      <details class="fold" style="margin-top:12px">
+        <summary>📊 图表能力 —— 每只股票卡片内置的图表能力（点击展开）</summary>
+        <div class="fold-bd">
+          <div class="k-note" style="line-height:1.8">
+            <b>每只股票卡片内置的图表能力</b>（全部实时取数、Canvas 手绘，鼠标悬停即可读出该根的 OHLC 与全部指标值）：<br>
+            · <b>周期</b>：分时 / 1分 / 5分 / 15分 / 30分 / 60分 / 日K / 周K / 月K —— 点工具条上的周期按钮即切，<b>指标会跟着换成该周期口径</b>（周K上的 MA5 就是 5 周线）。<br>
+            · <b>主图叠加</b>：MA5 / MA10 / MA20 / MA60（五日线、二十日线都在内）、BOLL(20,2) 布林通道、20日箱体上下沿、持仓成本线、支撑压力位。<br>
+            · <b>副图</b>：成交量柱 + VMA5 量均线（常显）；MACD(12,26,9) 与 RSI(6/12/24) 可切换。分时模式下副图自动换成「每分钟放量倍数」。<br>
+            · <b>实时数据条</b>：换手率、量比、BOLL 三轨、RSI6、布林带宽、支撑位 / 压力位、主力净额与大单净量。<br>
+            · <b>支撑位 / 压力位</b>：由八类来源自动归并 —— 20/60日箱体上下沿、布林上中下轨、MA5/10/20/60、20/60日极值、持仓成本；相邻 0.6% 合并成一档，并按来源权重标注「强 / 中 / 弱」。<br>
+            · <b>大单资金</b>：点「💰 大单资金」拉取当日<b>全部逐笔成交</b>，在本地按单笔金额分档（特大单 ≥100万 / 大单 20–100万 / 中单 4–20万 / 小单 &lt;4万）统计「主动买 − 主动卖」的净额与净量，口径透明、可逐笔核对。
+          </div>
+        </div>
+      </details>
+    </div>
   </details>
 </section>
 

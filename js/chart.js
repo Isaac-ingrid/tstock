@@ -65,6 +65,11 @@ function chipText(ctx, txt, x, y, col, bg){
   return tw + 7;
 }
 
+let _chartDataLoader = null;
+export function registerChartLoader(fn){
+  _chartDataLoader = fn;
+}
+
 export function chartEntry(kind, obj){
   const e = Object.assign({ kind, at: Date.now() }, obj);
   if (kind === 'bar' && e.ks && e.ks.length) e.ind = chartInd(e.ks);
@@ -107,6 +112,18 @@ export function drawChart(cv, s){
     cv._geo = null;
     ctx.fillStyle = CH.mute; ctx.textAlign = 'center';
     ctx.fillText('正在取数…（切换周期首次约 0.3~1 秒）', W/2, H/2);
+    if (_chartDataLoader && !s._chartLoading) {
+      s._chartLoading = true;
+      _chartDataLoader(s, true).then(() => {
+        s._chartLoading = false;
+        drawChart(cv, s);
+        const ci = cv.dataset.ki;
+        const metaEl = ci != null ? document.getElementById(`kmeta-${ci}`) : null;
+        if (metaEl) metaEl.innerHTML = chartMeta(s);
+      }).catch(() => {
+        s._chartLoading = false;
+      });
+    }
     return;
   }
   if (entry.kind === 'line'){ drawRt(cv, s, entry.min, ctx, {W,H,PL,PR,y0,y1,v0,v1,s0,s1,innerW}); return; }

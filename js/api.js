@@ -272,6 +272,9 @@ const CK_TTL = 45000;
 export async function loadChart(s, force){
   const p = s.p || 'day';
   s._k = s._k || {};
+  if (!s.tcode && s.code) {
+    s.tcode = tcodeFromCode(s.code);
+  }
   const c = s._k[p], now = Date.now();
   const ttl = p === 'rt' ? 20000 : CK_TTL;
   if (!force && c && now - c.at < ttl) return c;

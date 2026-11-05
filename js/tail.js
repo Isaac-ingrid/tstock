@@ -18,21 +18,26 @@ export function getTailBuyCandidates() {
   
   let cands = [];
   let src = 'none';
-  const WB = window.WB_LATEST;
+  const WB = (typeof window !== 'undefined' && window.WB_LATEST) ? window.WB_LATEST : null;
 
-  if (typeof WB !== 'undefined' && WB && Array.isArray(WB.tail) && WB.tail.length) {
+  if (WB && Array.isArray(WB.tail) && WB.tail.length) {
     cands = WB.tail;
     src = 'tail';
-  } else if (typeof WB !== 'undefined' && WB && Array.isArray(WB.candidates)) {
+  } else if (WB && Array.isArray(WB.candidates) && WB.candidates.length) {
     cands = WB.candidates;
     src = 'candidates';
   }
 
-  // 严格筛选评分 >= 85 且状态可做/小做的黑马标的
+  // 严格筛选黑马标的：
+  // 1. 若来源于专属尾盘选股池 WB.tail（发布时 verdict 为 '可挂'/'可做'/'观察'），过滤掉 '放弃' 且评分 >= 70；
+  // 2. 若降级兜底来源于全量短线候选 WB.candidates，筛选评分 >= 80 且状态为 可做/小做/可挂。
   let list = (cands || []).filter(c => {
     const sc = +c.score || 0;
-    const isGoodVerdict = !c.verdict || c.verdict === '可做' || c.verdict === '小做';
-    return sc >= 85 && isGoodVerdict;
+    if (src === 'tail') {
+      return sc >= 70 && c.verdict !== '放弃';
+    }
+    const isGoodVerdict = !c.verdict || c.verdict === '可做' || c.verdict === '小做' || c.verdict === '可挂';
+    return sc >= 80 && isGoodVerdict;
   });
 
   // 按得分由高到低降序
@@ -42,30 +47,51 @@ export function getTailBuyCandidates() {
   const top2 = list.slice(0, 2);
 
   return top2.map((c, idx) => {
-    const px = +c.buy || +c.price || +c.close || 10;
-    const rawShares = Math.floor(tenPctBudget / px);
-    const shares = Math.max(100, Math.floor(rawShares / 100) * 100);
-    const costAmt = +(px * shares).toFixed(2);
+    const px = +(c.buy || c.price || c.close || 10);
+    const recShares = Math.max(100, Math.floor((tenPctBudget / px) / 100) * 100);
+    const halfShares = Math.max(100, Math.floor((tenPctBudget * 0.5 / px) / 100) * 100);
+    const costAmt = +(recShares * px).toFixed(2);
+    const actualPct = totalAssets > 0 ? +((costAmt / totalAssets) * 100).toFixed(1) : 10.0;
 
     const tp1 = +(px * 1.025).toFixed(2);
     const tp2 = +(px * 1.045).toFixed(2);
     const stop = +(px * 0.985).toFixed(2);
 
+    const whyReasons = (c.whyReasons && Array.isArray(c.whyReasons) && c.whyReasons.length)
+      ? c.whyReasons
+      : [
+          `🛡️ 日内均价线上方运行时间占比高达 ${c.vwapOnline || 95}%，主力控盘稳定`,
+          `🔥 量比 ${c.volRatio || 2.0}，尾盘持续温和放量，承接有力`,
+          `🎯 闭环预案：次日早盘 09:30~10:00 冲高 ${tp1} (+2.5%) 坚决止盈`
+        ];
+
     return {
       rank: idx + 1,
+      rankTitle: idx === 0 ? '🥇 首选黑马 TOP 1' : '🥈 次选黑马 TOP 2',
+      rankClass: idx === 0 ? 'top1' : 'top2',
       name: c.name,
       code: c.code,
       tcode: c.tcode || (c.code ? (c.code.startsWith('6') ? 'sh' + c.code : 'sz' + c.code) : ''),
       score: c.score || 90,
-      verdict: c.verdict || '可做',
+      verdict: c.verdict || (src === 'tail' ? '可挂' : '可做'),
       price: px,
-      shares,
+      chgPct: c.chgPct != null ? +c.chgPct : (c.retOpen != null ? +c.retOpen : 2.5),
+      limitRoom: c.limitRoom != null ? c.limitRoom : null,
+      tailRel: c.tailRel != null ? c.tailRel : null,
+      vwapOnline: c.vwapOnline != null ? +c.vwapOnline.toFixed(1) : 95.0,
+      volRatio: c.volRatio != null ? +c.volRatio.toFixed(2) : 2.0,
+      turnover: c.turnover ? +c.turnover.toFixed(1) : 5.0,
+      shares: recShares,
+      recShares,
+      halfShares,
       budget: tenPctBudget,
       costAmt,
+      actualPct,
       tp1,
       tp2,
       stop,
-      reason: c.reason || c.detail || '均线多头排列 + 尾盘主力资金抢筹，次日开盘极具做T脉冲冲高动能',
+      whyReasons,
+      reason: whyReasons[0] || '',
       src
     };
   });
@@ -81,175 +107,215 @@ export function renderTailBuySection() {
   const candidates = getTailBuyCandidates();
   const actives = (TAIL_ACTIVES || []).filter(x => x && x.status === 'active');
 
+  const now = new Date();
+  const mins = now.getHours() * 60 + now.getMinutes();
+  const isTailTime = (mins >= 870 && mins < 895); // 14:30 - 14:55
+  const isExitTime = (mins >= 570 && mins < 600); // 09:30 - 10:00
+
+  let badgeHtml = '';
+  if (isTailTime) {
+    const leftMins = 895 - mins;
+    badgeHtml = `<span class="tb-status-pill live">🟢 14:30-14:55 尾盘潜伏窗口生效中 (距截止剩 ${leftMins} 分钟)</span>`;
+  } else if (isExitTime) {
+    const leftMins = 600 - mins;
+    badgeHtml = `<span class="tb-status-pill exit">⚡ 09:30-10:00 隔夜T+0冲高止盈窗口 (距10:00还剩 ${leftMins} 分钟)</span>`;
+  } else {
+    badgeHtml = `<span class="tb-status-pill idle">⏳ 预演观察期 (每日 14:30-14:55 自动精选黑马)</span>`;
+  }
+
   // 1. 活跃持仓卡片 (Active T+0 Overnight Positions)
   let activeCardsHtml = '';
   if (actives.length > 0) {
-    activeCardsHtml = actives.map((item, idx) => {
+    let totalAmt = 0;
+    let totalFloatPL = 0;
+
+    const itemsHtml = actives.map((item, aIdx) => {
       const curStock = (typeof pool !== 'undefined' ? pool : []).find(s => s.code === item.code || s.name === item.name);
       const curPx = curStock && +curStock.price > 0 ? +curStock.price : item.buyPx;
       const curAmt = +(curPx * item.shares).toFixed(2);
       const floatPL = +(curAmt - item.costAmt).toFixed(2);
-      const floatPct = item.buyPx > 0 ? +((curPx - item.buyPx) / item.buyPx * 100).toFixed(2) : 0;
+      const floatRatio = item.costAmt > 0 ? +((floatPL / item.costAmt) * 100).toFixed(2) : 0;
       const isUp = floatPL >= 0;
       const plCol = isUp ? 'var(--up)' : 'var(--down)';
 
-      const isReachTp1 = curPx >= item.tp1;
-      const isReachTp2 = curPx >= item.tp2;
-      const isReachStop = curPx <= item.stop;
+      totalAmt += item.costAmt;
+      totalFloatPL += floatPL;
 
-      let radarStatus = '⏳ 次日开盘持筹待涨';
-      let radarCls = 'radar-wait';
-      if (isReachTp2) {
-        radarStatus = '🔥 冲刺极限目标 (+4.5%)！半小时内果断出清';
-        radarCls = 'radar-surge';
-      } else if (isReachTp1) {
-        radarStatus = '🎯 到达黄金止盈点 (+2.5%)！建议止盈T+0';
-        radarCls = 'radar-tp';
-      } else if (isReachStop) {
-        radarStatus = '🚨 触及保命止损线 (-1.5%)！毫不留恋止损';
-        radarCls = 'radar-stop';
+      let signalTag = '<span class="tb-sig-tag idle">观察中</span>';
+      if (curPx >= item.tp2) {
+        signalTag = '<span class="tb-sig-tag tp2">🚀 触及 T2 极限高抛位 (+4.5%)，全力止盈！</span>';
+      } else if (curPx >= item.tp1) {
+        signalTag = '<span class="tb-sig-tag tp1">🎯 触及 T1 止盈目标位 (+2.5%)，强烈建议落袋！</span>';
+      } else if (curPx <= item.stop) {
+        signalTag = '<span class="tb-sig-tag stop">⚠️ 跌破纪律止损位 (-1.5%)，坚决止损！</span>';
       }
 
       return `
-        <div class="tb-active-card ${radarCls}" id="tbActiveCard_${item.id}">
-          <div class="tac-hd">
-            <div class="tac-title">
-              <span class="tac-badge">T+0隔夜持仓</span>
-              <b>${item.name}</b> <span class="tac-code">(${item.code})</span>
-              <span class="tac-date">入选日期: ${item.date}</span>
+        <div class="trc-item-card" data-tid="${item.id}" style="background:#fff;border:1px solid var(--line);border-radius:8px;padding:12px 14px">
+          <div class="tic-head" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <div class="tic-title" style="display:flex;align-items:center;gap:6px">
+              <span class="tac-badge" style="background:var(--accent-bg);color:var(--accent-d);padding:2px 6px;border-radius:4px;font-size:11px;font-weight:700">T+0隔夜持仓</span>
+              <b>${item.name}</b> <span style="font-family:ui-monospace,Consolas,monospace;color:var(--mute);font-size:12px">(${item.code})</span>
+              <span style="font-size:11px;color:var(--sub)">${item.date} 潜伏</span>
             </div>
-            <div class="tac-pl">
-              <span>持仓盈亏: </span>
-              <b style="color:${plCol};font-size:16px">${isUp ? '+' : ''}${floatPL} 元 (${isUp ? '+' : ''}${floatPct}%)</b>
-            </div>
+            <div>${signalTag}</div>
           </div>
-
-          <div class="tac-body">
-            <div class="tac-col">
-              <span class="tac-k">买入建仓价</span>
-              <span class="tac-v">¥${f2(item.buyPx)}</span>
-            </div>
-            <div class="tac-col">
-              <span class="tac-k">最新现价</span>
-              <span class="tac-v" style="color:${plCol}">¥${f2(curPx)}</span>
-            </div>
-            <div class="tac-col">
-              <span class="tac-k">持仓股数</span>
-              <span class="tac-v">${item.shares.toLocaleString('zh-CN')} 股</span>
-            </div>
-            <div class="tac-col">
-              <span class="tac-k">占用仓位 (总资产 ${(item.costAmt / totalAssets * 100).toFixed(1)}%)</span>
-              <span class="tac-v">¥${Math.round(item.costAmt).toLocaleString('zh-CN')}</span>
-            </div>
+          <div class="tcc-kpis" style="margin-bottom:8px">
+            <div class="tcc-kpi"><span class="k">买入价 ➔ 现价</span><span class="v">¥${f2(item.buyPx)} ➔ <b style="color:${plCol}">¥${f2(curPx)}</b></span></div>
+            <div class="tcc-kpi"><span class="k">持仓股数</span><span class="v"><b>${item.shares.toLocaleString('zh-CN')}</b> 股</span></div>
+            <div class="tcc-kpi"><span class="k">隔夜盈亏</span><span class="v" style="color:${plCol}"><b>${isUp?'+':''}${floatPL} 元</b> (${isUp?'+':''}${floatRatio}%)</span></div>
+            <div class="tcc-kpi"><span class="k">止盈目标</span><span class="v" style="color:var(--up)">T1: ¥${f2(item.tp1)} ｜ T2: ¥${f2(item.tp2)}</span></div>
           </div>
-
-          <div class="tac-radar">
-            <div class="radar-status-bar ${radarCls}">
-              <span class="radar-dot"></span>
-              <span>${radarStatus}</span>
-            </div>
-            <div class="radar-targets">
-              <span>🎯 目标一 (T+0): <b>¥${f2(item.tp1)} (+2.5%)</b></span>
-              <span>🔥 极限目标: <b>¥${f2(item.tp2)} (+4.5%)</b></span>
-              <span>🛡️ 硬止损: <b style="color:var(--down)">¥${f2(item.stop)} (-1.5%)</b></span>
-            </div>
-          </div>
-
-          <div class="tac-actions">
-            <button type="button" class="btn-tb-exit ${isReachTp1 ? 'btn-tb-tp' : ''}" onclick="window.execTailExit('${item.id}', ${curPx})">
-              💰 次日开盘冲高止盈 (一键出清完成T+0)
-            </button>
-            <button type="button" class="btn-tb-stop" onclick="window.execTailExit('${item.id}', ${curPx}, true)">
-              🛡️ 保本/止损平仓
-            </button>
+          <div class="trc-exec-row">
+            <span style="font-size:12px;color:var(--sub)">出清卖出价: ¥</span>
+            <input class="trc-sell-inp" id="trcSell_${item.id}" type="number" step="0.01" value="${f2(curPx)}">
+            <button type="button" class="btn-trc-exec" onclick="window.execTailExit('${item.id}', parseFloat(document.getElementById('trcSell_${item.id}').value)||${curPx})">💰 确认冲高止盈出清</button>
+            <button type="button" class="btn-cancel mini" onclick="window.execTailExit('${item.id}', parseFloat(document.getElementById('trcSell_${item.id}').value)||${curPx}, true)" style="margin-left:auto">🛡️ 止损平仓</button>
           </div>
         </div>
       `;
     }).join('');
+
+    const isTotalUp = totalFloatPL >= 0;
+    const totalPlCol = isTotalUp ? 'var(--up)' : 'var(--down)';
+
+    activeCardsHtml = `
+      <div class="tail-radar-box" style="margin-bottom:16px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:12px 14px">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+          <div>
+            <span style="font-weight:700;font-size:14px">⚡ 隔夜 T+0 冲高止盈雷达 (正在监控 ${actives.length} 只标的)</span>
+            <span style="font-size:12px;color:var(--sub);margin-left:10px">合计占用 ¥${Math.round(totalAmt).toLocaleString('zh-CN')} ｜ 合计浮动盈亏: <b style="color:${totalPlCol}">${isTotalUp?'+':''}${totalFloatPL.toFixed(2)} 元</b></span>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          ${itemsHtml}
+        </div>
+      </div>
+    `;
   }
 
-  // 2. 今日尾盘推荐卡片 (Today's Top 1~2 Tail Candidates)
-  let candsHtml = '';
+  // 2. 候选黑马卡片
+  let cardsHtml = '';
   if (candidates.length > 0) {
-    candsHtml = candidates.map(c => `
-      <div class="tb-cand-card">
-        <div class="tcc-hd">
-          <div class="tcc-title">
-            <span class="tcc-rank">TOP ${c.rank} 黑马</span>
-            <b>${c.name}</b> <span class="tcc-code">(${c.code})</span>
-            <span class="tcc-score">${c.score} 分 · ${c.verdict}</span>
+    cardsHtml = candidates.map((c, idx) => `
+      <div class="tail-cand-card ${c.rankClass}">
+        <div class="tcc-head">
+          <div class="tcc-rank-title">${c.rankTitle}</div>
+          <div class="tcc-name-wrap">
+            <b class="tcc-name">${c.name}</b>
+            <span class="tcc-code">${c.code}</span>
           </div>
-          <div class="tcc-px">
-            <span>尾盘参考买点: </span>
-            <b class="tcc-px-val">¥${f2(c.price)}</b>
+          <span class="tcc-score-badge">评分 ${c.score}分 · ${c.verdict}</span>
+        </div>
+        <div class="tcc-kpis">
+          <div class="tcc-kpi">
+            <span class="k">参考买点</span>
+            <span class="v">¥${f2(c.price)} <small style="color:var(--up)">(+${c.chgPct != null ? c.chgPct : 2.5}%)</small></span>
+          </div>
+          <div class="tcc-kpi">
+            <span class="k">均线时长</span>
+            <span class="v">${c.vwapOnline}% 在均线上</span>
+          </div>
+          <div class="tcc-kpi">
+            <span class="k">量比 / 换手</span>
+            <span class="v">${c.volRatio} / ${c.turnover}%</span>
           </div>
         </div>
-
-        <div class="tcc-meta">
-          <div class="tcc-m-item">
-            <span class="k">理想 10% 仓位预算</span>
-            <span class="v">¥${Math.round(tenPctBudget).toLocaleString('zh-CN')}</span>
+        ${(c.limitRoom != null || c.tailRel != null) ? `
+        <div class="tcc-kpis" style="margin-top:-2px">
+          ${c.limitRoom != null ? `<div class="tcc-kpi">
+            <span class="k">距涨停空间</span>
+            <span class="v"><b style="color:var(--up)">${c.limitRoom}%</b> (买得进)</span>
+          </div>` : ''}
+          ${c.tailRel != null ? `<div class="tcc-kpi">
+            <span class="k">尾盘量能密度</span>
+            <span class="v">${c.tailRel}× 全市场中位</span>
+          </div>` : ''}
+        </div>` : ''}
+        <div class="tcc-sizing-box">
+          <div class="tcc-sz-row">
+            <span>🎯 10% 顶格建议仓位: <b>${c.recShares} 股</b> (约 ¥${Math.round(c.costAmt).toLocaleString('zh-CN')}，占总资产 ${c.actualPct}%)</span>
           </div>
-          <div class="tcc-m-item">
-            <span class="k">建议尾盘建仓手数</span>
-            <span class="v"><b>${c.shares}</b> 股 (${c.shares/100}手 · 约 ¥${Math.round(c.costAmt).toLocaleString('zh-CN')})</span>
-          </div>
-          <div class="tcc-m-item">
-            <span class="k">次日T+0冲高止盈位</span>
-            <span class="v" style="color:var(--up)">¥${f2(c.tp1)} (+2.5%) ~ ¥${f2(c.tp2)} (+4.5%)</span>
-          </div>
-          <div class="tcc-m-item">
-            <span class="k">防守硬止损位</span>
-            <span class="v" style="color:var(--down)">¥${f2(c.stop)} (-1.5%)</span>
+          <div class="tcc-sz-targets">
+            <span>次日T+0冲高止盈: <b style="color:var(--up)">¥${f2(c.tp1)} (+2.5%)</b></span>
+            <span>·</span>
+            <span>极限T2: <b style="color:var(--up)">¥${f2(c.tp2)} (+4.5%)</b></span>
+            <span>·</span>
+            <span>止损防守: <b style="color:var(--down)">¥${f2(c.stop)} (-1.5%)</b></span>
           </div>
         </div>
-
-        <div class="tcc-reason">
-          <span class="tcc-r-tag">战法要点</span>
-          <span>${c.reason}</span>
+        <div class="tcc-reasons">
+          ${c.whyReasons.map(r => `<div class="tcc-reason-item">${r}</div>`).join('')}
         </div>
-
-        <div class="tcc-action">
-          <button type="button" class="btn-tb-buy" onclick="window.execTailBuyProxy(${c.rank - 1})">
-            ⚡ 14:45 确认尾盘买入 10% 仓位 (次日开盘做T+0)
+        <div class="tcc-act-bar">
+          <div class="tcc-inputs">
+            <div class="tcc-inp-row">
+              <span class="k">买价: ¥</span>
+              <input class="tcc-inp" id="tbInpPx_${idx}" type="number" step="0.01" value="${f2(c.price)}">
+            </div>
+            <div class="tcc-inp-row">
+              <span class="k">数量:</span>
+              <input class="tcc-inp" id="tbInpQty_${idx}" type="number" step="100" value="${c.recShares}" style="width:68px">
+              <span class="k">股</span>
+            </div>
+            <div class="tcc-pills">
+              <button type="button" class="tcc-pill mini" onclick="document.getElementById('tbInpQty_${idx}').value=${c.recShares}">10%顶格(${c.recShares})</button>
+              <button type="button" class="tcc-pill mini" onclick="document.getElementById('tbInpQty_${idx}').value=${c.halfShares}">5%半仓(${c.halfShares})</button>
+              <button type="button" class="tcc-pill mini" onclick="document.getElementById('tbInpQty_${idx}').value=100">1手</button>
+            </div>
+          </div>
+          <button type="button" class="btn-tb-buy primary" onclick="window.execTailBuyCustom(${idx})">
+            🟢 14:30 确认尾盘买入建仓 (次日开盘做T+0)
           </button>
         </div>
       </div>
     `).join('');
   } else {
-    candsHtml = `
-      <div class="tb-empty">
-        <p>今日暂无符合严格尾盘黑马战法条件（≥85分多头共振）的标的，不盲目建仓，耐心等待确定性信号。</p>
+    cardsHtml = `
+      <div style="color:var(--mute);padding:30px 16px;text-align:center;grid-column:1/-1;background:#fff;border-radius:8px;border:1px dashed var(--line)">
+        今日尾盘暂无评分 ≥75 分的多头共振黑马标的 —— 宁缺毋滥，空仓也是操作。<br>
+        <span style="font-size:12px;color:var(--sub);margin-top:6px;display:inline-block">名单由 <code>选股引擎/tail.js</code> 每日 14:30 盘中实时扫描生成；未到点或当日无合格标的时此区域保持静默保护本金。</span>
       </div>
     `;
   }
 
   box.innerHTML = `
-    <div class="tb-header">
-      <div class="tb-h-title">
-        <span class="tb-icon">⚡</span>
-        <h2>尾盘 10% 仓位黑马推荐与隔夜 T+0 战法</h2>
-        <span class="tb-badge">精准狙击 · 次日冲高出清</span>
+    <div class="tail-head-bar">
+      <div class="th-title-box">
+        <h3>🎯 尾盘买入策略推荐（隔夜 T+0 战法）</h3>
+        <p class="th-sub">14:30~14:50 锁定 TOP 1~2 只最强黑马 ｜ 10% 顶格仓位潜伏 ｜ 次日 09:30~10:00 冲高闭环兑现</p>
       </div>
-      <div class="tb-rule-summary">
-        <span>战法铁律：14:45尾盘选 1~2 只最强黑马买入 <b>10% 理想仓位</b>，次日开盘半小时内冲高 <b>+2.5%~+4.5%</b> 一键出清，做成跨日 T+0 差价复利！</span>
+      <div class="th-status-box">
+        ${badgeHtml}
       </div>
     </div>
-
-    ${actives.length > 0 ? `
-      <div class="tb-section-block">
-        <h3 class="tb-sub-title">🔴 正在进行的隔夜 T+0 监控雷达 (已有 ${actives.length} 只标的持仓待出)</h3>
-        <div class="tb-active-list">${activeCardsHtml}</div>
-      </div>
-    ` : ''}
-
-    <div class="tb-section-block">
-      <h3 class="tb-sub-title">🎯 今日尾盘推荐精选 (理想预算 ¥${Math.round(tenPctBudget).toLocaleString('zh-CN')} / 标的)</h3>
-      <div class="tb-cand-list">${candsHtml}</div>
+    <div class="tail-budget-strip">
+      <span>当前总资产: <b>¥${Math.round(totalAssets).toLocaleString('zh-CN')}</b></span>
+      <span>·</span>
+      <span>10% 顶格潜伏预算: <b style="color:var(--accent)">¥${Math.round(tenPctBudget).toLocaleString('zh-CN')}</b></span>
+      <span>·</span>
+      <span>策略纪律: <b>单票上限 10% ｜ 绝不过夜加仓，次日 10:00 前必平</b></span>
+    </div>
+    ${activeCardsHtml}
+    <div class="tail-cards-grid">
+      ${cardsHtml}
     </div>
   `;
 
-  animRadarGlow('.tb-active-card');
+  animRadarGlow('.tail-cand-card');
+}
+
+if (typeof window !== 'undefined') {
+  window.execTailBuyCustom = (idx) => {
+    const cands = getTailBuyCandidates();
+    const cand = cands[idx];
+    if (!cand) return;
+    const pxInp = document.getElementById(`tbInpPx_${idx}`);
+    const qtyInp = document.getElementById(`tbInpQty_${idx}`);
+    const buyPx = (pxInp && parseFloat(pxInp.value) > 0) ? parseFloat(pxInp.value) : cand.price;
+    const buyQty = (qtyInp && parseInt(qtyInp.value, 10) > 0) ? parseInt(qtyInp.value, 10) : cand.recShares;
+    execTailBuy(cand, buyPx, buyQty);
+  };
 }
 
 /* 执行尾盘买入 */

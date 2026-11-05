@@ -6,6 +6,7 @@ import { f2, pct, soundChime, TIER_LABEL } from './utils.js';
 import { pool, tierOf, CUR, setCur, STAMP, TAIL_ACTIVES, LOG } from './state.js';
 import { calc } from './api.js';
 import { animTabTransition } from './anim.js';
+import { getTailBuyCandidates } from './tail.js';
 
 /* 5大导航选项卡定义 */
 export const TABS = [
@@ -106,8 +107,19 @@ export function updateTabBadges() {
   const bTail = document.getElementById('ntBadgeTail');
   if (bTail) {
     const activeTailCount = (TAIL_ACTIVES || []).filter(x => x && x.status === 'active').length;
-    bTail.textContent = activeTailCount > 0 ? activeTailCount : '';
-    bTail.style.display = activeTailCount > 0 ? 'inline-flex' : 'none';
+    if (activeTailCount > 0) {
+      bTail.textContent = activeTailCount;
+      bTail.style.display = 'inline-flex';
+    } else {
+      const cands = typeof getTailBuyCandidates === 'function' ? getTailBuyCandidates() : [];
+      if (cands.length > 0) {
+        bTail.textContent = cands.length;
+        bTail.style.display = 'inline-flex';
+      } else {
+        bTail.textContent = '';
+        bTail.style.display = 'none';
+      }
+    }
   }
 
   const bLedger = document.getElementById('ntBadgeLedger');

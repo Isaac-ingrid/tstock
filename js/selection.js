@@ -145,6 +145,8 @@ function chipHtml(r, have) {
   `;
 }
 
+let _onlyRed = true;
+
 /* 核心渲染方法：渲染选股池（收盘生成）+ 自选股入口 */
 export function renderSelectionPool() {
   const box = document.getElementById('selBox');
@@ -170,13 +172,17 @@ export function renderSelectionPool() {
   const have = getInPoolSet();
   const inCnt = short.concat(steady).filter(r => have.has(sixOf(r.code))).length;
 
+  // 严格要求：短线候选默认只显示红的（可做），除非没有红的可选了才回退显示全量
+  const redShort = short.filter(r => r.verdict === '可做');
+  const displayShort = (_onlyRed && redShort.length > 0) ? redShort : short;
+
   const dateStr = D.tradeDate || (D.generatedAt ? D.generatedAt.slice(0, 10) : '今日');
   const genTimeStr = D.generatedAt ? new Date(D.generatedAt).toLocaleTimeString('zh-CN', { hour12: false }) : '';
 
   box.innerHTML = `
     <div class="sel-top">
       <span class="sel-env ${lvl}">${lvlText}</span>
-      <span>短线候选 <b>${short.length}</b> 只（可做 ${c.canDo || short.filter(x=>x.verdict==='可做').length} / 小做 ${c.smallDo || short.filter(x=>x.verdict==='小做').length} / 观察 ${c.watch || short.filter(x=>x.verdict==='观察').length}）</span>
+      <span>短线候选 <b>${displayShort.length}</b> 只${_onlyRed && redShort.length ? `（已锁定精选 ${displayShort.length} 只红标可做）` : `（可做 ${c.canDo || redShort.length} / 小做 ${c.smallDo || short.filter(x=>x.verdict==='小做').length} / 观察 ${c.watch || short.filter(x=>x.verdict==='观察').length}）`}</span>
       <span>·</span>
       <span>稳健底仓 <b>${steady.length}</b> 只</span>
       <span>·</span>
@@ -185,15 +191,22 @@ export function renderSelectionPool() {
       ${inCnt ? `<span class="sel-in">已在自选池 ${inCnt} 只</span>` : ''}
     </div>
     <div class="sel-grp">
-      <div class="sel-gt"><b>短线做T候选</b>${env.text ? `<span>${env.text}</span>` : '<span>评分 ≥70 · 严格过滤ST、小市值与流动性陷阱</span>'}</div>
-      <div class="sel-chips">${short.length ? short.map(r => chipHtml(r, have)).join('') : '<span class="sel-empty">今日无短线候选</span>'}</div>
+      <div class="sel-gt" style="display:flex;align-items:center;flex-wrap:wrap;gap:8px">
+        <b>短线做T候选</b>
+        <span>${displayShort.length === redShort.length && redShort.length ? `已精选 ${displayShort.length} 只红标强势做T候选` : (env.text ? env.text : '评分 ≥70 · 严格过滤ST与陷阱')}</span>
+        <span class="sel-filter-bar" style="margin-left:auto;display:inline-flex;align-items:center;gap:5px">
+          <button type="button" class="sel-ft-btn ${_onlyRed && redShort.length ? 'active' : ''}" id="btnFilterRed" title="仅显示红标（可做）候选">🔴 仅红标 (${redShort.length})</button>
+          <button type="button" class="sel-ft-btn ${(!_onlyRed || !redShort.length) ? 'active' : ''}" id="btnFilterAll" title="查看包含小做/观察在内的全部候选">全部 (${short.length})</button>
+        </span>
+      </div>
+      <div class="sel-chips">${displayShort.length ? displayShort.map(r => chipHtml(r, have)).join('') : '<span class="sel-empty">今日无短线候选</span>'}</div>
     </div>
     <div class="sel-grp">
       <div class="sel-gt"><b>稳健底仓候选</b><span>高股息 / 低估值蓝筹，仅适合回踩倒T增厚，不追正T追高</span></div>
       <div class="sel-chips">${steady.length ? steady.map(r => chipHtml(r, have)).join('') : '<span class="sel-empty">本周稳健底仓暂无变动</span>'}</div>
     </div>
     <div class="sel-acts">
-      <button id="selAddShort" class="btn-sel-act">＋ 全部加入短线（${short.length}）</button>
+      <button id="selAddShort" class="btn-sel-act">＋ 全部加入短线（${displayShort.length}）</button>
       <button id="selAddSteady" class="btn-sel-act">＋ 全部加入稳健（${steady.length}）</button>
       ${inCnt ? '<button id="selSync" class="btn-sel-act">⟳ 重新同步状态</button>' : ''}
       <a href="javascript:void(0)" id="btnJumpPerf" style="font-size:12px;font-weight:600;color:var(--accent);text-decoration:none;display:inline-flex;align-items:center;gap:4px;padding:5px 12px;border-radius:6px;background:var(--accent-bg);border:1px solid var(--accent-b);margin-left:auto">
@@ -208,6 +221,19 @@ export function renderSelectionPool() {
 
   // 绑定事件：Chip 点击打开入选理由弹窗并提供一键加入
   box.onclick = (e) => {
+    const btnRed = e.target.closest('#btnFilterRed');
+    if (btnRed) {
+      _onlyRed = true;
+      renderSelectionPool();
+      return;
+    }
+    const btnAll = e.target.closest('#btnFilterAll');
+    if (btnAll) {
+      _onlyRed = false;
+      renderSelectionPool();
+      return;
+    }
+
     const chip = e.target.closest('.sel-chip[data-code]');
     if (!chip) return;
     const code = chip.dataset.code;
@@ -225,7 +251,7 @@ export function renderSelectionPool() {
   // 批量加入按钮绑定
   const btnAddShort = document.getElementById('selAddShort');
   if (btnAddShort) {
-    btnAddShort.onclick = () => mergeSelectionToPool(short, '短线');
+    btnAddShort.onclick = () => mergeSelectionToPool(displayShort, '短线');
   }
 
   const btnAddSteady = document.getElementById('selAddSteady');

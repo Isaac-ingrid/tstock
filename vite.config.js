@@ -1,7 +1,9 @@
 import { defineConfig } from 'vite';
+import react from "@vitejs/plugin-react";
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { plugin } from 'postcss';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,6 +35,7 @@ export default defineConfig({
           console.log('[Vite] 已将 data/ 目录复制到 dist/data/');
         }
       }
-    }
+    },
+    react(),
   ]
 });
