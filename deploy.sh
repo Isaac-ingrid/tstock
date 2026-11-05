@@ -67,6 +67,12 @@ add "data/latest.js"
 add "data/latest.json"
 
 if [ "$DATA_ONLY" -eq 0 ]; then
+  # 优先执行 Vite 生产环境构建
+  if command -v npm >/dev/null 2>&1 && [ -f "package.json" ]; then
+    say "执行 Vite 生产环境构建..."
+    npm run build 2>/dev/null || say "Vite 构建跳过，继续部署静态资源"
+  fi
+
   # 静态资源
   add "index.html"
   add "做T执行台.html"
@@ -79,6 +85,7 @@ if [ "$DATA_ONLY" -eq 0 ]; then
   for f in css/*.css; do [ -f "$f" ] && FILES+=("$f"); done
   for f in js/*.js; do [ -f "$f" ] && FILES+=("$f"); done
   for f in js/vendor/*.js; do [ -f "$f" ] && FILES+=("$f"); done
+  for f in dist/assets/*; do [ -f "$f" ] && FILES+=("$f"); done
 
   # 引擎产出的报告（文件名带日期的用 glob，今日候选只传最新一份）
   LATEST_CAND=$(ls -1 选股引擎/今日候选_*.html 2>/dev/null | sort | tail -1)

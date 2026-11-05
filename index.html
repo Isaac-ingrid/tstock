@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="UtAxhALARdvyo7OAxfDPQA">
 <title>做T执行台 · 七格箱体 + 七底三仓</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23d32f2f'/><text x='16' y='24' font-size='21' font-weight='700' text-anchor='middle' fill='%23ffffff' font-family='sans-serif'>T</text></svg>">
-<link rel="stylesheet" href="css/style.css">
-<link rel="stylesheet" href="css/nav.css">
-<link rel="stylesheet" href="css/anim.css">
+<link rel="stylesheet" href="/css/style.css">
+<link rel="stylesheet" href="/css/nav.css">
+<link rel="stylesheet" href="/css/anim.css">
 </head>
 <body data-page-node-id="SJRFfJmSxa80xuojKC1VMs">
 <div class="wrap" data-page-node-id="0XLrWYQHUeaFRoHjLstNV7">
@@ -522,23 +522,8 @@
 </div>
 
 <!-- 选股引擎统一数据契约 -->
-<script src="data/latest.js"></script>
-<!-- Anime.js 动效库本地兜底 (支持本地 file:// 双击与离线运行) -->
-<script src="js/vendor/anime.min.js"></script>
-<!-- 
-  双模智能路由：
-  1. 本地双击 file:/// 访问时：自动加载已打包的 js/bundle.js，彻底免除 Chrome 对 ES 模块的 CORS 拦截！
-  2. 线上或本地服务器 http:///https:// 访问时：原生加载 ES Modules (js/main.js)，支持原生按需加载与开发调试！
--->
-<script>
-  if (location.protocol === 'file:') {
-    document.write('<script src="js/bundle.js"><\/script>');
-  }
-</script>
-<script type="module">
-  if (location.protocol !== 'file:') {
-    import('./js/main.js');
-  }
-</script>
+<script src="/data/latest.js"></script>
+<!-- 做T执行台现代化核心引擎 (Vite ESM 入口) -->
+<script type="module" src="/js/main.js"></script>
 </body>
 </html>
