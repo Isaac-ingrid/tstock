@@ -4,7 +4,7 @@ import ConsoleSection from '../components/ConsoleSection.jsx';
 
 /**
  * 做T决策台页面 (Trade Page)
- * 聚合「二、选股池与自选股」及「三、决策引擎（自动算买卖点·单股聚焦/全部切换）」
+ * 聚合「一、选股池与自选股」及「二、决策引擎（自动算买卖点·单股聚焦/全部切换）」
  */
 export default function TradePage({
   pool,

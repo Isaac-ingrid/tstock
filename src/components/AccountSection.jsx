@@ -26,7 +26,7 @@ export default function AccountSection({
   return (
     <div id="accSec" style={{ marginTop: '20px' }}>
       <section>
-        <h2>四、账户总览与资金管理</h2>
+        <h2>三、账户总览与资金管理</h2>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '16px' }}>
           <div className="card" style={{ padding: '14px', background: 'var(--surface2)' }}>
             <div style={{ fontSize: '12px', color: 'var(--sub)' }}>账户总资产</div>

@@ -54,7 +54,7 @@ export default function ConsoleSection({
   return (
     <section id="secPlan">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
-        <h2 style={{ margin: 0 }}>三、决策引擎（自动算买卖点）</h2>
+        <h2 style={{ margin: 0 }}>二、决策引擎（自动算买卖点）</h2>
         <div style={{ fontSize: '12px', color: 'var(--sub)' }}>
           当前股池：<b>{pool.length}</b> 只股票 · 点击上方股票标签即可单卡聚焦切换
         </div>

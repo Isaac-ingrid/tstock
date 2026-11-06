@@ -3,7 +3,7 @@ import React from 'react';
 export default function RulesSection() {
   return (
     <section id="secRule">
-      <h2>五、执行纪律</h2>
+      <h2>四、执行纪律</h2>
       <div className="rules-grid">
         <div>
           <h4 style={{ fontSize: '13.5px', marginBottom: '8px' }}>八条保命铁律</h4>
@@ -33,7 +33,7 @@ export default function RulesSection() {
         </div>
       </div>
 
-      <h2 style={{ marginTop: '22px' }}>六、时间窗口</h2>
+      <h2 style={{ marginTop: '22px' }}>五、时间窗口</h2>
       <div className="tw">
         <div className="b">
           <h4>09:30–10:00　情绪博弈期</h4>

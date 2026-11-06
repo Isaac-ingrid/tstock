@@ -24,7 +24,7 @@ export default function SelectionSection({
       <section id="secSelection">
         <details className="fold" open id="secSelectionFold">
           <summary style={{ fontSize: '15px', fontWeight: 700, cursor: 'pointer', padding: '8px 12px', background: 'var(--surface)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span>二、选股池与自选股</span>
+            <span>一、选股池与自选股</span>
           </summary>
           <div className="fold-bd" style={{ paddingTop: '12px' }}>
             <div className="sel-empty">正在读取选股契约数据 data/latest.js...</div>
@@ -93,7 +93,7 @@ export default function SelectionSection({
     <section id="secSelection">
       <details className="fold" open id="secSelectionFold">
         <summary style={{ fontSize: '15px', fontWeight: 700, cursor: 'pointer', padding: '8px 12px', background: 'var(--surface)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span>二、选股池与自选股</span>
+          <span>一、选股池与自选股</span>
           <span style={{ fontSize: '11.5px', fontWeight: 400, color: 'var(--mute)' }}>（点击可折叠/展开，便于全屏专注单只做T）</span>
         </summary>
         <div className="fold-bd" style={{ paddingTop: '12px' }}>
