@@ -13,7 +13,34 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true,
-    open: true
+    open: true,
+    proxy: {
+      '/api/gtimg-web': {
+        target: 'https://web.ifzq.gtimg.cn',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/gtimg-web/, '')
+      },
+      '/api/gtimg-ifzq': {
+        target: 'https://ifzq.gtimg.cn',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/gtimg-ifzq/, '')
+      },
+      '/api/gtimg-qt': {
+        target: 'https://qt.gtimg.cn',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/gtimg-qt/, '')
+      },
+      '/api/proxy-qq': {
+        target: 'https://proxy.finance.qq.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/proxy-qq/, '')
+      },
+      '/api/em-dcw': {
+        target: 'https://datacenter-web.eastmoney.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/em-dcw/, '')
+      }
+    }
   },
   build: {
     outDir: 'dist',

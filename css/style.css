@@ -74,8 +74,8 @@
      --tb-h 由 renderPoolTabs() 按吸顶栏实际高度写入（它会随宽度换行而变）。
      窄屏不吸顶：手机上切换条会折成两三行，吸住会吃掉太多屏幕。 */
   @media(min-width:821px){
-    .pool-tabs{position:sticky;top:var(--tb-h,52px);z-index:55;background:var(--card);
-               padding:6px 0 5px;margin:-6px 0 6px}
+    .pool-tabs{position:relative;background:transparent;
+               padding:4px 0 6px;margin:0 0 10px}
   }
   .pool-tab{display:inline-flex;align-items:center;gap:7px;min-height:38px;padding:7px 13px;
             border:1px solid var(--line);border-radius:10px;background:#fff;cursor:pointer;

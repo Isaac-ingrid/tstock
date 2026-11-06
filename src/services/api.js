@@ -12,13 +12,46 @@ import { chartInd, chartEntry, chartMeta } from './chart.js';
    故统一到腾讯单一家，彻底去掉东财依赖，降低链路数量。 */
 const T_Q = 'https://qt.gtimg.cn/q=';                                  // 实时行情（fetch，CORS *）
 const T_S = 'https://proxy.finance.qq.com/ifzqgtimg/appstock/smartbox/search/get';  // 检索（JSON，CORS *）
-const T_K = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get';          // 前复权日K（fetch，CORS *）
+const T_K = 'https://web.ifzq.gtimg.cn/appstock/app/fqkline/get';      // 前复权日K（web 节点支持 CORS *）
 
-/* 带超时的 fetch —— 慢接口要能主动放弃，不能挂死界面 */
+/* 开发环境代理映射：本地开发时走 Vite 代理防止浏览器的跨域拦截与 WAF 干扰；线上静态构建自动回落直连 */
+function resolveUrl(url) {
+  if (typeof window !== 'undefined' && import.meta.env && import.meta.env.DEV) {
+    if (url.startsWith('https://web.ifzq.gtimg.cn/')) {
+      return url.replace('https://web.ifzq.gtimg.cn/', '/api/gtimg-web/');
+    }
+    if (url.startsWith('https://ifzq.gtimg.cn/')) {
+      return url.replace('https://ifzq.gtimg.cn/', '/api/gtimg-ifzq/');
+    }
+    if (url.startsWith('https://qt.gtimg.cn/')) {
+      return url.replace('https://qt.gtimg.cn/', '/api/gtimg-qt/');
+    }
+    if (url.startsWith('https://proxy.finance.qq.com/')) {
+      return url.replace('https://proxy.finance.qq.com/', '/api/proxy-qq/');
+    }
+    if (url.startsWith('https://datacenter-web.eastmoney.com/')) {
+      return url.replace('https://datacenter-web.eastmoney.com/', '/api/em-dcw/');
+    }
+  }
+  return url;
+}
+
+/* 带超时的 fetch —— 慢接口要能主动放弃，不能挂死界面；支持开发代理与直连自动降级 */
 export function fetchT(url, ms){
+  const targetUrl = resolveUrl(url);
   const ctl = new AbortController();
   const t = setTimeout(()=> ctl.abort(), ms || 8000);
-  return fetch(url, { cache:'no-store', signal: ctl.signal }).finally(()=> clearTimeout(t));
+  return fetch(targetUrl, { cache:'no-store', signal: ctl.signal })
+    .catch(err => {
+      // 若代理层请求失败，尝试直连原 URL 兜底
+      if (targetUrl !== url) {
+        const ctl2 = new AbortController();
+        const t2 = setTimeout(()=> ctl2.abort(), ms || 8000);
+        return fetch(url, { cache:'no-store', signal: ctl2.signal }).finally(()=> clearTimeout(t2));
+      }
+      throw err;
+    })
+    .finally(()=> clearTimeout(t));
 }
 
 /* —— 本地代码解析：0 网络请求，纯规则。输入代码这条路完全不依赖检索接口 —— */
