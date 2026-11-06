@@ -74,6 +74,37 @@ export default function App() {
   const [overnightBannerOpen, setOvernightBannerOpen] = useState(false);
   const [toasts, setToasts] = useState([]);
 
+  /* 当前选中的聚焦做T股票代码 */
+  const [activeStockCode, setActiveStockCode] = useState(() => (pool[0]?.code || ''));
+
+  // 保证 activeStockCode 在 pool 变更时始终有效
+  useEffect(() => {
+    if (pool && pool.length > 0) {
+      const code6 = String(activeStockCode).padStart(6, '0');
+      if (!pool.some(s => String(s.code).padStart(6, '0') === code6)) {
+        setActiveStockCode(String(pool[0].code).padStart(6, '0'));
+      }
+    }
+  }, [pool, activeStockCode]);
+
+  /* 点击已选股票胶囊或卡片直达跳转：自动切路由 + 平滑滚动 + 脉冲聚焦动效 */
+  const handleSelectStock = useCallback((code) => {
+    const code6 = String(code).padStart(6, '0');
+    setActiveStockCode(code6);
+    if (activeTab !== 'tabConsole') {
+      navigate('/trade');
+    }
+    setTimeout(() => {
+      const cardEl = document.getElementById(`stockCard_${code6}`) || document.getElementById('secPlan');
+      if (cardEl) {
+        cardEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        cardEl.classList.remove('card-highlight-pulse');
+        void cardEl.offsetWidth; // 触发 reflow 重置动画
+        cardEl.classList.add('card-highlight-pulse');
+      }
+    }, 120);
+  }, [activeTab, navigate]);
+
   const lastSuccessStamp = useRef(Date.now());
   const importInputRef = useRef(null);
 
@@ -508,6 +539,8 @@ export default function App() {
         activeTab={activeTab}
         onTabChange={handleTabChange}
         pool={pool}
+        activeStockCode={activeStockCode}
+        onSelectStock={handleSelectStock}
         tailCount={tailCount}
         ledgerCount={tradeLogs.length}
         totalAssets={totalAssets}
@@ -546,6 +579,8 @@ export default function App() {
         {(activeTab === 'tabConsole' || activeTab === 'tabAll') && (
           <TradePage
             pool={pool}
+            activeStockCode={activeStockCode}
+            onSelectStock={handleSelectStock}
             wbLatest={typeof window !== 'undefined' ? window.WB_LATEST : null}
             dbStatus={dbStatus}
             onAddStock={handleAddStockByQuery}
@@ -648,6 +683,7 @@ export default function App() {
         modalData={reasonModal}
         onClose={() => setReasonModal({ open: false, stock: null, inPool: false })}
         onAdd={(st) => handleBatchAdd([st], st.pool === 'steady' ? '稳健' : '短线')}
+        onJumpCard={(st) => handleSelectStock(st.code)}
       />
 
       <TradingClockModal

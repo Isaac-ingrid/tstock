@@ -122,7 +122,13 @@ export default function StockCard({
   const dHi = pxNow ? ((pHi - pxNow) / pxNow) * 100 : null;
 
   return (
-    <div className={`card m-${mbd[0]} ${isCur ? 'is-cur' : ''}`} id={`stockCard_${index}`} data-tier={stock.tier || 'short'}>
+    <div
+      className={`card m-${mbd[0]} ${isCur ? 'is-cur' : ''}`}
+      id={`stockCard_${stock.code}`}
+      data-card-code={stock.code}
+      data-card-index={index}
+      data-tier={stock.tier || 'short'}
+    >
       {/* 头部信息 */}
       <div className="card-hd">
         <span className="nm">{stock.name}</span>

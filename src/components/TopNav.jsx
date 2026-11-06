@@ -6,6 +6,8 @@ export default function TopNav({
   activeTab,
   onTabChange,
   pool,
+  activeStockCode,
+  onSelectStock,
   tailCount,
   ledgerCount,
   totalAssets,
@@ -91,22 +93,41 @@ export default function TopNav({
         </span>
       </div>
 
-      {/* 滚动轮播价格卡（选股池行情简报） */}
+      {/* 已选做T股票快捷胶囊列表（可点击直接切换并平滑跳转至对应决策卡片） */}
       {pool && pool.length > 0 && (
-        <div className="tb-ticker-wrap" title="当前做T股池实时报价速览">
-          <div className="tb-ticker-track">
-            {pool.map(s => {
-              const chg = s.prevClose ? (((s.price || s.prevClose) - s.prevClose) / s.prevClose) * 100 : 0;
-              const cls = chg > 0 ? 'up' : chg < 0 ? 'down' : '';
-              return (
-                <div key={s.code} className="tb-ticker-item">
-                  <span className="nm">{s.name}</span>
-                  <span className="px">{f2(s.price || s.prevClose)}</span>
-                  <span className={`chg ${cls}`}>{chg >= 0 ? '+' : ''}{chg.toFixed(2)}%</span>
-                </div>
-              );
-            })}
-          </div>
+        <div className="tb-pool-chips" title="我的已选做T股票 · 点击直接切换并跳转到对应决策卡片">
+          <span className="tb-pool-title">已选:</span>
+          {pool.map(s => {
+            const code6 = String(s.code).padStart(6, '0');
+            const isCur = String(activeStockCode) === code6;
+            const pc = +s.prevClose || 0;
+            const px = +s.price || pc;
+            const chg = pc ? ((px - pc) / pc) * 100 : 0;
+            const chgCls = chg > 0 ? 'up' : chg < 0 ? 'down' : '';
+            const isShort = (s.tier === 'short' || s.poolTag === '短线');
+
+            return (
+              <button
+                key={code6}
+                type="button"
+                className={`tb-stock-chip ${isCur ? 'active' : ''}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (onSelectStock) onSelectStock(code6);
+                }}
+                title={`点击直接跳转查看【${s.name}】(${code6}) 做T决策卡片\n现价: ¥${f2(px)}  涨跌: ${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%`}
+              >
+                <span className={`tb-chip-tag ${isShort ? 'short' : 'long'}`}>
+                  {isShort ? '短' : '稳'}
+                </span>
+                <span className="tb-chip-name">{s.name}</span>
+                <span className={`tb-chip-px ${chgCls}`}>{f2(px)}</span>
+                <span className={`tb-chip-chg ${chgCls}`}>
+                  {chg >= 0 ? '+' : ''}{chg.toFixed(2)}%
+                </span>
+              </button>
+            );
+          })}
         </div>
       )}
 

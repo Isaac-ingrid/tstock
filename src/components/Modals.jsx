@@ -136,7 +136,7 @@ export function QuickTModal({ modalData, onClose, onConfirm }) {
 }
 
 /* 2. 入选理由与利空排查弹窗 */
-export function StockReasonModal({ modalData, onClose, onAdd }) {
+export function StockReasonModal({ modalData, onClose, onAdd, onJumpCard }) {
   if (!modalData || !modalData.open) return null;
   const { stock, inPool } = modalData;
   if (!stock) return null;
@@ -183,6 +183,18 @@ export function StockReasonModal({ modalData, onClose, onAdd }) {
         </div>
         <div className="modal-ft" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', padding: '10px 14px', borderTop: '1px solid var(--line)' }}>
           <button className="btn-cancel" onClick={onClose} style={{ padding: '6px 14px', borderRadius: '6px', border: '1px solid var(--line)', background: '#fff', cursor: 'pointer' }}>关闭</button>
+          {inPool && onJumpCard ? (
+            <button
+              className="primary"
+              onClick={() => {
+                onJumpCard(stock);
+                onClose();
+              }}
+              style={{ padding: '6px 16px', borderRadius: '6px', background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 700, cursor: 'pointer' }}
+            >
+              👉 直达该股做T决策卡片
+            </button>
+          ) : null}
           {!inPool && onAdd ? (
             <button className="primary" onClick={() => { onAdd(stock); onClose(); }} style={{ padding: '6px 16px', borderRadius: '6px', background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 700, cursor: 'pointer' }}>
               ＋ 一键并入自选池

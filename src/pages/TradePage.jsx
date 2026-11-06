@@ -8,6 +8,8 @@ import ConsoleSection from '../components/ConsoleSection.jsx';
  */
 export default function TradePage({
   pool,
+  activeStockCode: externalActiveCode,
+  onSelectStock: externalSelectStock,
   wbLatest,
   dbStatus,
   onAddStock,
@@ -25,11 +27,13 @@ export default function TradePage({
   onRefreshSingle,
   onCopySinglePlan
 }) {
-  const [activeStockCode, setActiveStockCode] = useState(() => (pool[0]?.code || ''));
+  const [internalActiveCode, setInternalActiveCode] = useState(() => (pool[0]?.code || ''));
+  const activeStockCode = externalActiveCode !== undefined ? externalActiveCode : internalActiveCode;
+  const handleSelectStock = externalSelectStock || setInternalActiveCode;
 
   const handleReasonClick = (st, have) => {
     if (have && st.code) {
-      setActiveStockCode(String(st.code).padStart(6, '0'));
+      handleSelectStock(String(st.code).padStart(6, '0'));
     }
     if (onOpenReason) {
       onOpenReason(st, have);
@@ -57,7 +61,7 @@ export default function TradePage({
       <ConsoleSection
         pool={pool}
         activeStockCode={activeStockCode}
-        onSelectStock={setActiveStockCode}
+        onSelectStock={handleSelectStock}
         onUpdateStock={onUpdateStock}
         onRemoveStock={onRemoveStock}
         onAddBlank={onAddBlank}
