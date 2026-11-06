@@ -61,7 +61,7 @@ export default function ConsoleSection({
       </div>
 
       {/* 顶部操作工具栏 */}
-      <div className="actions">
+      <div className="actions" style={{ marginBottom: '10px' }}>
         <button className="primary" onClick={() => onRefresh(false)}>重新计算</button>
         <button onClick={onAddBlank}>＋ 手动新增空白行</button>
         <button onClick={onSaveLocal}>保存参数到本机</button>
@@ -92,13 +92,9 @@ export default function ConsoleSection({
         </span>
       </div>
 
-      <p className="hint">
-        说明：输入框全部可改。昨收 / 开 / 高 / 低 / 现价 / 分时均线 / 量比 每日盘前或盘中更新；MA5 / MA10 / MA20 用于判定日线趋势方向（决定今天允许不允许做T）。
-      </p>
-
       {/* 顶部股票切换条（列出所有股票，点击卡片切换） */}
       {filteredPool.length > 0 && (
-        <div className="pool-tabs" id="poolTabs">
+        <div className="pool-tabs" id="poolTabs" style={{ margin: '0 0 10px', position: 'relative', top: 'auto' }}>
           <span className="pt-lab">切换股票：</span>
           <div className="pt-scroll">
             {filteredPool.map(s => {
@@ -142,6 +138,11 @@ export default function ConsoleSection({
           </div>
         </div>
       )}
+
+      {/* 说明提示条（完整展示，不被任何浮动层遮挡） */}
+      <p className="hint" style={{ margin: '4px 0 12px', lineHeight: 1.6, fontSize: '12px', color: 'var(--mute)' }}>
+        说明：输入框全部可改。<b>昨收 / 开 / 高 / 低 / 现价 / 分时均线 / 量比</b> 每日盘前或盘中更新；<b>MA5 / MA10 / MA20</b> 用于判定日线趋势方向（决定今天允许不允许做T）。
+      </p>
 
       {/* 单股聚焦模式下的快速切换辅助栏 */}
       {viewMode === 'single' && currentStock && filteredPool.length > 1 && (
@@ -207,6 +208,7 @@ export default function ConsoleSection({
                 key={s.code}
                 stock={s}
                 index={pool.indexOf(s)}
+                isCur={true}
                 onUpdateStock={onUpdateStock}
                 onRemoveStock={onRemoveStock}
                 onOpenQuickT={onOpenQuickT}
@@ -221,6 +223,7 @@ export default function ConsoleSection({
                 key={currentStock.code}
                 stock={currentStock}
                 index={pool.indexOf(currentStock)}
+                isCur={true}
                 onUpdateStock={onUpdateStock}
                 onRemoveStock={onRemoveStock}
                 onOpenQuickT={onOpenQuickT}
