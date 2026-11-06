@@ -1,0 +1,6 @@
+{
+  "name": "tstock-engine",
+  "private": true,
+  "type": "commonjs",
+  "description": "选股引擎脚本为 CommonJS，此处显式声明以隔离根目录 Vite 项目的 type=module"
+}

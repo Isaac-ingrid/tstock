@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import StockCard, { MODE_BADGE } from './StockCard.jsx';
 import { calc } from '../services/api.js';
 import { f2 } from '../services/utils.js';
+import { getAuctionTier } from '../services/auction.js';
 
 export default function ConsoleSection({
   pool,
@@ -102,10 +103,14 @@ export default function ConsoleSection({
               const isShort = (s.tier === 'short' || s.poolTag === '短线');
               const pc = +s.prevClose || 0;
               const px = +s.price || pc;
+              const open = +s.open || 0;
               const chg = pc ? ((px - pc) / pc) * 100 : 0;
               const chgCls = chg > 0 ? 'up' : chg < 0 ? 'down' : '';
               const c = calc(s);
               const mbd = MODE_BADGE[c.mode] || MODE_BADGE.WAIT;
+
+              const openGap = (open > 0 && pc > 0) ? ((open - pc) / pc) * 100 : null;
+              const aucTier = openGap != null ? getAuctionTier(openGap) : null;
 
               return (
                 <div
@@ -116,12 +121,28 @@ export default function ConsoleSection({
                     handleSelectCode(s.code);
                     setViewMode('single');
                   }}
-                  title={`点击查看 ${s.name} (${s.code}) 决策卡片\n现价: ${f2(px)}  涨跌: ${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%\n信号: ${mbd[1]}`}
+                  title={`点击查看 ${s.name} (${s.code}) 决策卡片\n现价: ${f2(px)}  涨跌: ${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%\n${openGap != null ? `09:25 开盘跳空: ${openGap >= 0 ? '+' : ''}${openGap.toFixed(2)}% (${aucTier?.tag})\n` : ''}信号: ${mbd[1]}`}
                 >
                   <span className={`tt ${isShort ? 't-short' : 't-long'}`}>{isShort ? '短' : '稳'}</span>
                   <span className="tn">{s.name}</span>
                   <span className={`pz ${chgCls}`}>{f2(px)}</span>
                   <span className={`pc ${chgCls}`}>{chg >= 0 ? '+' : ''}{chg.toFixed(2)}%</span>
+                  {aucTier && (
+                    <span
+                      className="tag"
+                      style={{
+                        fontSize: '10px',
+                        padding: '1px 4px',
+                        background: aucTier.bg,
+                        color: aucTier.color,
+                        borderColor: aucTier.color,
+                        fontWeight: 700,
+                        borderRadius: '3px'
+                      }}
+                    >
+                      竞价{openGap >= 0 ? '+' : ''}{openGap.toFixed(1)}%
+                    </span>
+                  )}
                   <span className={`mg ${mbd[0]}`}>{mbd[1]}</span>
                 </div>
               );
