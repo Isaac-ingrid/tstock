@@ -1,0 +1,38 @@
+# ============================================================
+# Systemd 服务配置文件模板：tstock-timer.service
+# ============================================================
+# 部署说明：
+# 1. 替换下方的 User, WorkingDirectory, ExecStart 中的路径和用户名
+# 2. 复制到系统目录:
+#    sudo cp timing_task/tstock-timer.service /etc/systemd/system/tstock-timer.service
+# 3. 重载守护进程配置:
+#    sudo systemctl daemon-reload
+# 4. 开启开机自启并启动:
+#    sudo systemctl enable tstock-timer
+#    sudo systemctl start tstock-timer
+# 5. 查看运行状态与日志:
+#    sudo systemctl status tstock-timer
+#    sudo journalctl -u tstock-timer -f
+# ============================================================
+
+[Unit]
+Description=A-Share Trading Platform Master Scheduler Daemon
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/data/tstock
+Environment=NODE_ENV=production
+# 清理代理环境变量，防止行情接口被代理阻断
+Environment=http_proxy=
+Environment=https_proxy=
+Environment=all_proxy=
+ExecStart=/usr/bin/node /data/tstock/timing_task/scheduler.js
+Restart=always
+RestartSec=10
+StandardOutput=append:/data/tstock/timing_task/logs/systemd.log
+StandardError=append:/data/tstock/timing_task/logs/systemd.log
+
+[Install]
+WantedBy=multi-user.target

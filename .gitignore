@@ -58,3 +58,11 @@ desktop.ini
 # ---------- 依赖 ----------
 node_modules/
 dist/
+.next/
+out/
+public/data/
+backend/.venv/
+.env.local
+backend/.env
+timing_task/logs/
+timing_task/scheduler.pid

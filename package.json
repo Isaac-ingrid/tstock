@@ -6,17 +6,20 @@
     "doc": "docs"
   },
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "devDependencies": {
-    "@vitejs/plugin-react": "^6.2.1",
-    "vite": "^8.3.6"
+    "dev": "node scripts/prepare-static.mjs && next dev --hostname 0.0.0.0",
+    "build": "node scripts/prepare-static.mjs && next build",
+    "test": "npm run build",
+    "backend": ".\\backend\\.venv\\Scripts\\python.exe -m uvicorn backend.app:app --host 127.0.0.1 --port 18765 --reload",
+    "task:auction": "node timing_task/tasks/task_auction.js",
+    "task:tail": "node timing_task/tasks/task_tail.js",
+    "task:daily": "node timing_task/tasks/task_daily.js",
+    "timer:start": "node timing_task/start.js",
+    "timer:stop": "node timing_task/stop.js",
+    "timer:status": "node timing_task/status.js"
   },
   "dependencies": {
     "animejs": "^4.5.0",
+    "next": "^16.4.5",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   }
