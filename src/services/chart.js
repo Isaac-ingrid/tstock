@@ -3,7 +3,7 @@
    ============================================================ */
 
 import { f2, f3, pct, money, fvol } from './utils.js';
-import { maArr, bollArr, rsiArr, macdArr } from './api.js';
+import { maArr, bollArr, rsiArr, macdArr, m5Slot } from './api.js';
 import { pool } from './state.js';
 
 /* ===================== 图表引擎（Canvas 手绘，零依赖 · 多周期） =====================
@@ -459,7 +459,8 @@ function drawRt(cv, s, min, ctx, L){
     if (!_vslots) return avgV;
     if (expCache[t] != null) return expCache[t];
     const mm = (+t.slice(0,2))*60 + (+t.slice(2,4));
-    const bv = _vslots[m5Slot(mm)];
+    const slotKey = typeof m5Slot === 'function' ? m5Slot(mm) : null;
+    const bv = (slotKey && _vslots) ? _vslots[slotKey] : 0;
     return (expCache[t] = (bv > 0 ? bv/5 : avgV));      // 5 分钟均量摊到每分钟
   };
   const ratioOf = p => { const e = expOf(p.t); return e > 0 ? p.vol/e : 0; };

@@ -375,11 +375,11 @@ function sessionProgress(){
    基准一天建一次落 localStorage（派生数据，不进导出备份），当日各根每 2 分钟刷一次。 */
 const VM_LS = 't-system-volbase', VM_TTL = 120000, VM_MIN_BARS = 3;
 
-const pad4 = mins => { const h = Math.floor(mins/60), m = mins % 60;
+export const pad4 = mins => { const h = Math.floor(mins/60), m = mins % 60;
   return (h<10?'0':'')+h + (m<10?'0':'')+m; };
 /* 分钟数 → 所属 5 分钟槽标签。腾讯 m5 的标签是区间末端（0935 / 1130 / 1305 / 1500），
    午休后第一根是 1305（13:00 那分钟归它），所以下午必须强制从 +5 起算。 */
-function m5Slot(mins){
+export function m5Slot(mins){
   if (mins <= 575) return '0935';
   if (mins <= 690) return pad4(570 + Math.ceil((mins - 570)/5)*5);
   return pad4(780 + Math.max(1, Math.ceil((mins - 780)/5))*5);

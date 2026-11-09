@@ -17,7 +17,11 @@ export default function ChartCanvas({ stock, poolIndex, onUpdateStock }) {
 
   const renderCanvas = useCallback(() => {
     if (canvasRef.current) {
-      drawChart(canvasRef.current, stock);
+      try {
+        drawChart(canvasRef.current, stock);
+      } catch (err) {
+        console.warn('Canvas render error suppressed:', err);
+      }
     }
   }, [stock]);
 
