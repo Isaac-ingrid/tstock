@@ -37,6 +37,39 @@ export default function TopNav({
 
   return (
     <div className="topbar" id="topbar">
+      {/* 品牌 Logo 与标题 */}
+      <div
+        className="tb-brand"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '7px',
+          marginRight: '8px',
+          cursor: 'pointer',
+          padding: '2px 6px',
+          borderRadius: '6px',
+          userSelect: 'none'
+        }}
+        onClick={() => onTabChange('/trade')}
+        title="做T执行台 · 首页"
+      >
+        <img
+          src="/favicon.svg"
+          alt="T-Stock"
+          style={{ width: '22px', height: '22px', borderRadius: '6px', filter: 'drop-shadow(0 2px 6px rgba(56, 189, 248, 0.4))' }}
+        />
+        <span style={{
+          fontWeight: 800,
+          fontSize: '14px',
+          letterSpacing: '-0.2px',
+          background: 'linear-gradient(135deg, #0284c7 0%, #059669 100%)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent'
+        }}>
+          T-Stock
+        </span>
+      </div>
+
       <div className="tb-nav" id="topNav">
         {NAV_ROUTES.map(item => {
           const badge = getBadge(item.badgeKey);
