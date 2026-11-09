@@ -30,14 +30,46 @@ async function getJson(url, retry = 3) {
   throw err;
 }
 
-async function kline(code) {
+// 主源：腾讯日K（qfq，字段最规范；但会被 WAF 间歇拦截，返回 501 非 JSON）
+async function klineTx(code) {
   try {
-    const j = await getJson(`https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=${code},day,,,160,qfq`);
+    const j = await getJson(`https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=${code},day,,,160,qfq`, 1);
     const d = j?.data?.[code];
     const arr = d?.qfqday || d?.day;
     if (!Array.isArray(arr) || !arr.length) return null;
     return arr.map((r) => ({ date: r[0], open: +r[1], close: +r[2] }));
   } catch { return null; }
+}
+
+// 备源：东财 push2his（qfq）。腾讯 501 时兜底，否则整份 CSV 会被写成只剩当日
+function emSecid(code) {
+  const m = /^(sh|sz)(\d{6})$/.exec(code);
+  if (!m) return null;
+  return (m[1] === 'sh' ? '1.' : '0.') + m[2];
+}
+async function klineEm(code) {
+  const sid = emSecid(code);
+  if (!sid) return null;
+  try {
+    const j = await getJson(`https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=${sid}` +
+      `&fields1=f1,f2,f3&fields2=f51,f52,f53&klt=101&fqt=1&end=20500101&lmt=160`, 2);
+    const arr = j?.data?.klines;
+    if (!Array.isArray(arr) || !arr.length) return null;
+    return arr.map((s) => {
+      const p = s.split(',');
+      return { date: p[0], open: +p[1], close: +p[2] };
+    });
+  } catch { return null; }
+}
+
+let txDown = 0;          // 连续腾讯失败计数，超过阈值直接跳过主源，省掉整轮 501 空转
+async function kline(code) {
+  if (txDown < 5) {
+    const a = await klineTx(code);
+    if (a) { txDown = 0; return a; }
+    txDown++;
+  }
+  return klineEm(code);
 }
 
 (async function main() {

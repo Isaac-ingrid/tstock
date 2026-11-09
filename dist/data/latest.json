@@ -1,5513 +1,168 @@
 {
  "_app": "dot-system",
  "_v": 1,
- "generatedAt": "2026-11-05T08:02:25.866Z",
- "tradeDate": "2026-11-05",
- "baseDate": "2026-11-05",
+ "generatedAt": "2026-11-06T07:22:29.067Z",
+ "tradeDate": "2026-11-06",
+ "baseDate": "2026-11-06",
  "env": {
-  "level": "WARN",
-  "text": "上证跌破 MA20/MA60 但小盘尚可 → 仓位减半",
-  "canNewLongT": true,
-  "posFactor": 0.5,
+  "level": "BAD",
+  "text": "上证与中证1000 同时跌破 MA20/MA60 → 系统性下行，禁止新开正T",
+  "canNewLongT": false,
+  "posFactor": 0,
   "indices": [
    {
     "name": "上证指数",
     "role": "大盘",
-    "close": 3689.91,
-    "ma20": 3701.53,
-    "ma60": 3845.54,
-    "vsMa20": -0.31
+    "close": 3649.18,
+    "ma20": 3693.3,
+    "ma60": 3841.35,
+    "vsMa20": -1.19
    },
    {
     "name": "中证1000",
     "role": "小盘（候选所属风格）",
-    "close": 6650.14,
-    "ma20": 6645.66,
-    "ma60": 7286.74,
-    "vsMa20": 0.07
+    "close": 6505.35,
+    "ma20": 6613.13,
+    "ma60": 7269.65,
+    "vsMa20": -1.63
    }
   ]
  },
  "funnel": {
-  "① 全市场": 5219,
-  "② 非 ST": 5026,
+  "① 全市场": 5220,
+  "② 非 ST": 5027,
   "③ 剔除创业板/北交所": 3655,
-  "④ 市值 30–200 亿": 2346,
-  "⑤ 涨幅 3–5%": 425,
-  "⑥ 量比 > 1": 295,
-  "⑦ 换手 5–10%": 45
+  "④ 市值 30–200 亿": 2332,
+  "⑤ 涨幅 3–5%": 29,
+  "⑥ 量比 > 1": 25,
+  "⑦ 换手 5–10%": 9
  },
  "counts": {
-  "totalMarket": 5219,
-  "strictPass": 45,
-  "reviewed": 92,
-  "canDo": 17,
-  "smallDo": 30,
-  "watch": 45,
+  "totalMarket": 5220,
+  "strictPass": 9,
+  "reviewed": 0,
+  "canDo": 0,
+  "smallDo": 0,
+  "watch": 0,
   "steady": 12,
-  "executable": 47
+  "executable": 0
  },
- "candidates": [
-  {
-   "code": "600605",
-   "tcode": "sh600605",
-   "name": "汇通能源",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 100,
-   "verdict": "可做",
-   "price": 28.58,
-   "amp": 11.25,
-   "volRatio": 2.2,
-   "vwapOnline": 100,
-   "turnover": 6.11,
-   "buy": 28.4,
-   "buyLo": 28.26,
-   "buyHi": 28.54,
-   "sell1": 28.68,
-   "sell2": 28.97,
-   "stop": 27.97,
-   "allowT": "正T",
-   "posPct": 15,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "warn",
-     "t": "振幅 11.3%（8.4格）超 6 格"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 2.20 放量"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 100.0%，重心坚挺",
-    "🔥 量价配合：开盘量比 2.20，放量突破且换手充分（6.1%）",
-    "🎯 明确做T预案：建议买点 28.4，目标止盈 28.68 / 28.97，严守止损 27.97"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [
-     {
-      "level": "info",
-      "type": "高估值溢价",
-      "desc": "PE市盈率约 178.89 倍，估值偏高，只适合快进快出做T，不宜长期死守"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.52,
-   "totalReturnWithT": 1.45
-  },
-  {
-   "code": "002174",
-   "tcode": "sz002174",
-   "name": "游族网络",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 92,
-   "verdict": "可做",
-   "price": 11.62,
-   "amp": 7.57,
-   "volRatio": 1.1,
-   "vwapOnline": 99.6,
-   "turnover": 5.03,
-   "buy": 11.55,
-   "buyLo": 11.49,
-   "buyHi": 11.61,
-   "sell1": 11.66,
-   "sell2": 11.78,
-   "stop": 11.37,
-   "allowT": "正T",
-   "posPct": 15,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 7.6%（5.7格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.10 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 99.6%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.10，放量突破且换手充分（5.0%）",
-    "🎯 明确做T预案：建议买点 11.55，目标止盈 11.66 / 11.78，严守止损 11.37"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.5,
-   "totalReturnWithT": 1.39
-  },
-  {
-   "code": "000151",
-   "tcode": "sz000151",
-   "name": "中成股份",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 92,
-   "verdict": "可做",
-   "price": 9.97,
-   "amp": 13.05,
-   "volRatio": 3.04,
-   "vwapOnline": 100,
-   "turnover": 11.92,
-   "buy": 9.91,
-   "buyLo": 9.86,
-   "buyHi": 9.96,
-   "sell1": 10.01,
-   "sell2": 10.11,
-   "stop": 9.76,
-   "allowT": "正T",
-   "posPct": 15,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "warn",
-     "t": "振幅 13.1%（9.8格）超 6 格"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 3.04 放量"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 100.0%，重心坚挺",
-    "🔥 量价配合：开盘量比 3.04，放量突破且换手充分（11.9%）",
-    "🎯 明确做T预案：建议买点 9.91，目标止盈 10.01 / 10.11，严守止损 9.76"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "高波动风险",
-      "desc": "日内振幅高达 13.05%，多空分歧剧烈，挂单需防单边大跳水"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.5,
-   "totalReturnWithT": 1.44
-  },
-  {
-   "code": "000608",
-   "tcode": "sz000608",
-   "name": "阳光股份",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 89,
-   "verdict": "可做",
-   "price": 6.02,
-   "amp": 6.77,
-   "volRatio": 1.27,
-   "vwapOnline": 95.9,
-   "turnover": 6.35,
-   "buy": 5.98,
-   "buyLo": 5.95,
-   "buyHi": 6.01,
-   "sell1": 6.04,
-   "sell2": 6.1,
-   "stop": 5.89,
-   "allowT": "正T",
-   "posPct": 15,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 6.8%（5.1格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.27 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 95.9%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.27，放量突破且换手充分（6.3%）",
-    "🎯 明确做T预案：建议买点 5.98，目标止盈 6.04 / 6.1，严守止损 5.89"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.56,
-   "totalReturnWithT": 1.5
-  },
-  {
-   "code": "603662",
-   "tcode": "sh603662",
-   "name": "柯力传感",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 89,
-   "verdict": "可做",
-   "price": 56.53,
-   "amp": 6.51,
-   "volRatio": 1.92,
-   "vwapOnline": 93.4,
-   "turnover": 7.96,
-   "buy": 56.17,
-   "buyLo": 55.89,
-   "buyHi": 56.45,
-   "sell1": 56.74,
-   "sell2": 57.3,
-   "stop": 55.33,
-   "allowT": "正T",
-   "posPct": 15,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 6.5%（4.9格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "ok",
-     "t": "多头排列"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.92 放量"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 93.4%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.92，放量突破且换手充分（8.0%）",
-    "🎯 明确做T预案：建议买点 56.17，目标止盈 56.74 / 57.3，严守止损 55.33"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.53,
-   "totalReturnWithT": -1.02
-  },
-  {
-   "code": "603767",
-   "tcode": "sh603767",
-   "name": "中马传动",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 88,
-   "verdict": "可做",
-   "price": 16.28,
-   "amp": 10.95,
-   "volRatio": 1.47,
-   "vwapOnline": 92.1,
-   "turnover": 8.09,
-   "buy": 16.18,
-   "buyLo": 16.1,
-   "buyHi": 16.26,
-   "sell1": 16.34,
-   "sell2": 16.5,
-   "stop": 15.93,
-   "allowT": "正T",
-   "posPct": 15,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "warn",
-     "t": "振幅 11.0%（8.2格）超 6 格"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.47 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 92.1%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.47，放量突破且换手充分（8.1%）",
-    "🎯 明确做T预案：建议买点 16.18，目标止盈 16.34 / 16.5，严守止损 15.93"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.51,
-   "totalReturnWithT": 1.44
-  },
-  {
-   "code": "688530",
-   "tcode": "sh688530",
-   "name": "欧莱新材",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 85,
-   "verdict": "可做",
-   "price": 46.36,
-   "amp": 15.18,
-   "volRatio": 1.75,
-   "vwapOnline": 100,
-   "turnover": 17.49,
-   "buy": 46.07,
-   "buyLo": 45.84,
-   "buyHi": 46.3,
-   "sell1": 46.53,
-   "sell2": 46.99,
-   "stop": 45.38,
-   "allowT": "正T",
-   "posPct": 15,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "warn",
-     "t": "振幅 15.2%（11.4格）超 6 格"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.75 放量"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 100.0%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.75，放量突破且换手充分（17.5%）",
-    "🎯 明确做T预案：建议买点 46.07，目标止盈 46.53 / 46.99，严守止损 45.38"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "高波动风险",
-      "desc": "日内振幅高达 15.18%，多空分歧剧烈，挂单需防单边大跳水"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.52,
-   "totalReturnWithT": 1.46
-  },
-  {
-   "code": "603283",
-   "tcode": "sh603283",
-   "name": "赛腾股份",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 84,
-   "verdict": "可做",
-   "price": 37.29,
-   "amp": 9.15,
-   "volRatio": 1.45,
-   "vwapOnline": 85.1,
-   "turnover": 6.63,
-   "buy": 37.06,
-   "buyLo": 36.87,
-   "buyHi": 37.25,
-   "sell1": 37.43,
-   "sell2": 37.8,
-   "stop": 36.5,
-   "allowT": "正T",
-   "posPct": 15,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "warn",
-     "t": "振幅 9.1%（6.9格）超 6 格"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.45 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 85.1%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.45，放量突破且换手充分（6.6%）",
-    "🎯 明确做T预案：建议买点 37.06，目标止盈 37.43 / 37.8，严守止损 36.5"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.51,
-   "totalReturnWithT": 1.45
-  },
-  {
-   "code": "603773",
-   "tcode": "sh603773",
-   "name": "沃格光电",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 84,
-   "verdict": "可做",
-   "price": 59.27,
-   "amp": 9.17,
-   "volRatio": 1.35,
-   "vwapOnline": 86,
-   "turnover": 8.22,
-   "buy": 58.9,
-   "buyLo": 58.61,
-   "buyHi": 59.19,
-   "sell1": 59.49,
-   "sell2": 60.07,
-   "stop": 58.01,
-   "allowT": "正T",
-   "posPct": 15,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "warn",
-     "t": "振幅 9.2%（6.9格）超 6 格"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.35 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 86.0%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.35，放量突破且换手充分（8.2%）",
-    "🎯 明确做T预案：建议买点 58.9，目标止盈 59.49 / 60.07，严守止损 58.01"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.52,
-   "totalReturnWithT": 1.46
-  },
-  {
-   "code": "002510",
-   "tcode": "sz002510",
-   "name": "天汽模",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 84,
-   "verdict": "可做",
-   "price": 6.28,
-   "amp": 6.63,
-   "volRatio": 1.34,
-   "vwapOnline": 94.2,
-   "turnover": 5.91,
-   "buy": 6.24,
-   "buyLo": 6.21,
-   "buyHi": 6.27,
-   "sell1": 6.3,
-   "sell2": 6.37,
-   "stop": 6.15,
-   "allowT": "正T",
-   "posPct": 15,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 6.6%（5.0格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "ok",
-     "t": "多头排列"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.34 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 94.2%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.34，放量突破且换手充分（5.9%）",
-    "🎯 明确做T预案：建议买点 6.24，目标止盈 6.3 / 6.37，严守止损 6.15"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [
-     {
-      "level": "info",
-      "type": "高估值溢价",
-      "desc": "PE市盈率约 316.65 倍，估值偏高，只适合快进快出做T，不宜长期死守"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.53,
-   "totalReturnWithT": 1.43
-  },
-  {
-   "code": "603009",
-   "tcode": "sh603009",
-   "name": "北特科技",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 84,
-   "verdict": "可做",
-   "price": 52.13,
-   "amp": 9.96,
-   "volRatio": 1.58,
-   "vwapOnline": 93.8,
-   "turnover": 4.47,
-   "buy": 51.8,
-   "buyLo": 51.54,
-   "buyHi": 52.06,
-   "sell1": 52.32,
-   "sell2": 52.84,
-   "stop": 51.02,
-   "allowT": "正T",
-   "posPct": 15,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "warn",
-     "t": "振幅 10.0%（7.5格）超 6 格"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.58 放量"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 93.8%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.58，放量突破且换手充分（4.5%）",
-    "🎯 明确做T预案：建议买点 51.8，目标止盈 52.32 / 52.84，严守止损 51.02"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.53,
-   "totalReturnWithT": 1.47
-  },
-  {
-   "code": "600267",
-   "tcode": "sh600267",
-   "name": "海正药业",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 84,
-   "verdict": "可做",
-   "price": 13.83,
-   "amp": 5,
-   "volRatio": 1.04,
-   "vwapOnline": 99.2,
-   "turnover": 3.48,
-   "buy": 13.74,
-   "buyLo": 13.67,
-   "buyHi": 13.81,
-   "sell1": 13.88,
-   "sell2": 14.02,
-   "stop": 13.54,
-   "allowT": "正T",
-   "posPct": 15,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 5.0%（3.8格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.04 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 99.2%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.04，放量突破且换手充分（3.5%）",
-    "🎯 明确做T预案：建议买点 13.74，目标止盈 13.88 / 14.02，严守止损 13.54"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.55,
-   "totalReturnWithT": -0.97
-  },
-  {
-   "code": "688517",
-   "tcode": "sh688517",
-   "name": "金冠电气",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 82,
-   "verdict": "可做",
-   "price": 22.18,
-   "amp": 12.77,
-   "volRatio": 1.64,
-   "vwapOnline": 100,
-   "turnover": 13.62,
-   "buy": 22.04,
-   "buyLo": 21.93,
-   "buyHi": 22.15,
-   "sell1": 22.26,
-   "sell2": 22.48,
-   "stop": 21.71,
-   "allowT": "正T",
-   "posPct": 15,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "warn",
-     "t": "振幅 12.8%（9.6格）超 6 格"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.64 放量"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 100.0%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.64，放量突破且换手充分（13.6%）",
-    "🎯 明确做T预案：建议买点 22.04，目标止盈 22.26 / 22.48，严守止损 21.71"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "高波动风险",
-      "desc": "日内振幅高达 12.77%，多空分歧剧烈，挂单需防单边大跳水"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.53,
-   "totalReturnWithT": 1.46
-  },
-  {
-   "code": "000676",
-   "tcode": "sz000676",
-   "name": "智度股份",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 81,
-   "verdict": "可做",
-   "price": 7.04,
-   "amp": 5.49,
-   "volRatio": 1.1,
-   "vwapOnline": 77.3,
-   "turnover": 8.65,
-   "buy": 7,
-   "buyLo": 6.96,
-   "buyHi": 7.03,
-   "sell1": 7.07,
-   "sell2": 7.14,
-   "stop": 6.89,
-   "allowT": "正T",
-   "posPct": 15,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 5.5%（4.1格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.10 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 77.3%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.10，放量突破且换手充分（8.7%）",
-    "🎯 明确做T预案：建议买点 7，目标止盈 7.07 / 7.14，严守止损 6.89"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.46,
-   "totalReturnWithT": 1.4
-  },
-  {
-   "code": "000681",
-   "tcode": "sz000681",
-   "name": "视觉中国",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 81,
-   "verdict": "可做",
-   "price": 16.67,
-   "amp": 5.57,
-   "volRatio": 1.28,
-   "vwapOnline": 83.9,
-   "turnover": 6.01,
-   "buy": 16.56,
-   "buyLo": 16.48,
-   "buyHi": 16.64,
-   "sell1": 16.73,
-   "sell2": 16.9,
-   "stop": 16.32,
-   "allowT": "正T",
-   "posPct": 15,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 5.6%（4.2格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.28 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 83.9%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.28，放量突破且换手充分（6.0%）",
-    "🎯 明确做T预案：建议买点 16.56，目标止盈 16.73 / 16.9，严守止损 16.32"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.55,
-   "totalReturnWithT": 1.52
-  },
-  {
-   "code": "002439",
-   "tcode": "sz002439",
-   "name": "启明星辰",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 81,
-   "verdict": "可做",
-   "price": 14.62,
-   "amp": 4.46,
-   "volRatio": 1.05,
-   "vwapOnline": 92.1,
-   "turnover": 6.02,
-   "buy": 14.53,
-   "buyLo": 14.46,
-   "buyHi": 14.6,
-   "sell1": 14.67,
-   "sell2": 14.82,
-   "stop": 14.31,
-   "allowT": "正T",
-   "posPct": 15,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 4.5%（3.3格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.05 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 92.1%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.05，放量突破且换手充分（6.0%）",
-    "🎯 明确做T预案：建议买点 14.53，目标止盈 14.67 / 14.82，严守止损 14.31"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.51,
-   "totalReturnWithT": -1.06
-  },
-  {
-   "code": "605378",
-   "tcode": "sh605378",
-   "name": "野马电池",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 81,
-   "verdict": "可做",
-   "price": 14.73,
-   "amp": 8,
-   "volRatio": 2.35,
-   "vwapOnline": 91.7,
-   "turnover": 5.84,
-   "buy": 14.64,
-   "buyLo": 14.57,
-   "buyHi": 14.71,
-   "sell1": 14.78,
-   "sell2": 14.93,
-   "stop": 14.42,
-   "allowT": "正T",
-   "posPct": 15,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "warn",
-     "t": "振幅 8.0%（6.0格）超 6 格"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 2.35 放量"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 91.7%，重心坚挺",
-    "🔥 量价配合：开盘量比 2.35，放量突破且换手充分（5.8%）",
-    "🎯 明确做T预案：建议买点 14.64，目标止盈 14.78 / 14.93，严守止损 14.42"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.5,
-   "totalReturnWithT": 1.4
-  },
-  {
-   "code": "002912",
-   "tcode": "sz002912",
-   "name": "中新赛克",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 79,
-   "verdict": "小做",
-   "price": 24.94,
-   "amp": 8.39,
-   "volRatio": 1.18,
-   "vwapOnline": 98.8,
-   "turnover": 8.16,
-   "buy": 24.78,
-   "buyLo": 24.66,
-   "buyHi": 24.9,
-   "sell1": 25.03,
-   "sell2": 25.28,
-   "stop": 24.41,
-   "allowT": "正T",
-   "posPct": 8,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "warn",
-     "t": "振幅 8.4%（6.3格）超 6 格"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.18 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 98.8%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.18，放量突破且换手充分（8.2%）",
-    "🎯 明确做T预案：建议买点 24.78，目标止盈 25.03 / 25.28，严守止损 24.41"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.54,
-   "totalReturnWithT": 1.48
-  },
-  {
-   "code": "601595",
-   "tcode": "sh601595",
-   "name": "上海电影",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 79,
-   "verdict": "小做",
-   "price": 32.51,
-   "amp": 10.13,
-   "volRatio": 1.26,
-   "vwapOnline": 91.3,
-   "turnover": 4.92,
-   "buy": 32.31,
-   "buyLo": 32.15,
-   "buyHi": 32.47,
-   "sell1": 32.63,
-   "sell2": 32.95,
-   "stop": 31.82,
-   "allowT": "正T",
-   "posPct": 8,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "warn",
-     "t": "振幅 10.1%（7.6格）超 6 格"
-    },
-    "trend": {
-     "c": "ok",
-     "t": "多头排列"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.26 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 91.3%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.26，放量突破且换手充分（4.9%）",
-    "🎯 明确做T预案：建议买点 32.31，目标止盈 32.63 / 32.95，严守止损 31.82"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.51,
-   "totalReturnWithT": 1.44
-  },
-  {
-   "code": "002467",
-   "tcode": "sz002467",
-   "name": "二六三",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 79,
-   "verdict": "小做",
-   "price": 4.66,
-   "amp": 4.68,
-   "volRatio": 1.24,
-   "vwapOnline": 87.6,
-   "turnover": 3.53,
-   "buy": 4.63,
-   "buyLo": 4.61,
-   "buyHi": 4.65,
-   "sell1": 4.68,
-   "sell2": 4.72,
-   "stop": 4.56,
-   "allowT": "正T",
-   "posPct": 8,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 4.7%（3.5格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.24 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 87.6%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.24，放量突破且换手充分（3.5%）",
-    "🎯 明确做T预案：建议买点 4.63，目标止盈 4.68 / 4.72，严守止损 4.56"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.54,
-   "totalReturnWithT": -1.03
-  },
-  {
-   "code": "002674",
-   "tcode": "sz002674",
-   "name": "兴业科技",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 79,
-   "verdict": "小做",
-   "price": 18.88,
-   "amp": 6.11,
-   "volRatio": 1.07,
-   "vwapOnline": 87.6,
-   "turnover": 3.92,
-   "buy": 18.76,
-   "buyLo": 18.67,
-   "buyHi": 18.85,
-   "sell1": 18.95,
-   "sell2": 19.14,
-   "stop": 18.48,
-   "allowT": "正T",
-   "posPct": 8,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 6.1%（4.6格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.07 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 87.6%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.07，放量突破且换手充分（3.9%）",
-    "🎯 明确做T预案：建议买点 18.76，目标止盈 18.95 / 19.14，严守止损 18.48"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.53,
-   "totalReturnWithT": 1.48
-  },
-  {
-   "code": "688512",
-   "tcode": "sh688512",
-   "name": "慧智微-U",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 78,
-   "verdict": "小做",
-   "price": 11.72,
-   "amp": 10.77,
-   "volRatio": 1.36,
-   "vwapOnline": 100,
-   "turnover": 6.75,
-   "buy": 11.65,
-   "buyLo": 11.59,
-   "buyHi": 11.71,
-   "sell1": 11.76,
-   "sell2": 11.88,
-   "stop": 11.47,
-   "allowT": "正T",
-   "posPct": 8,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "warn",
-     "t": "振幅 10.8%（8.1格）超 6 格"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.36 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 100.0%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.36，放量突破且换手充分（6.8%）",
-    "🎯 明确做T预案：建议买点 11.65，目标止盈 11.76 / 11.88，严守止损 11.47"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.49,
-   "totalReturnWithT": 1.38
-  },
-  {
-   "code": "002971",
-   "tcode": "sz002971",
-   "name": "和远气体",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 77,
-   "verdict": "小做",
-   "price": 35.47,
-   "amp": 6.55,
-   "volRatio": 1.65,
-   "vwapOnline": 76.9,
-   "turnover": 7.76,
-   "buy": 35.25,
-   "buyLo": 35.07,
-   "buyHi": 35.43,
-   "sell1": 35.6,
-   "sell2": 35.95,
-   "stop": 34.72,
-   "allowT": "正T",
-   "posPct": 8,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 6.5%（4.9格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.65 放量"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 76.9%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.65，放量突破且换手充分（7.8%）",
-    "🎯 明确做T预案：建议买点 35.25，目标止盈 35.6 / 35.95，严守止损 34.72"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [
-     {
-      "level": "info",
-      "type": "高估值溢价",
-      "desc": "PE市盈率约 168.16 倍，估值偏高，只适合快进快出做T，不宜长期死守"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.51,
-   "totalReturnWithT": 1.45
-  },
-  {
-   "code": "600478",
-   "tcode": "sh600478",
-   "name": "科力远",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 76,
-   "verdict": "小做",
-   "price": 3.6,
-   "amp": 12.02,
-   "volRatio": 2.89,
-   "vwapOnline": 100,
-   "turnover": 8.3,
-   "buy": 3.58,
-   "buyLo": 3.56,
-   "buyHi": 3.6,
-   "sell1": 3.61,
-   "sell2": 3.65,
-   "stop": 3.52,
-   "allowT": "正T",
-   "posPct": 8,
-   "action": "只做倒T",
-   "gates": {
-    "amp": {
-     "c": "warn",
-     "t": "振幅 12.0%（9.0格）超 6 格"
-    },
-    "trend": {
-     "c": "bad",
-     "t": "空头排列，只允许倒T"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 2.89 放量"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 100.0%，重心坚挺",
-    "🔥 量价配合：开盘量比 2.89，放量突破且换手充分（8.3%）",
-    "🎯 明确做T预案：建议买点 3.58，目标止盈 3.61 / 3.65，严守止损 3.52"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "高波动风险",
-      "desc": "日内振幅高达 12.02%，多空分歧剧烈，挂单需防单边大跳水"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.45,
-   "totalReturnWithT": 1.23
-  },
-  {
-   "code": "600633",
-   "tcode": "sh600633",
-   "name": "浙数文化",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 76,
-   "verdict": "小做",
-   "price": 11.35,
-   "amp": 5.89,
-   "volRatio": 1.47,
-   "vwapOnline": 81.4,
-   "turnover": 3.99,
-   "buy": 11.28,
-   "buyLo": 11.22,
-   "buyHi": 11.34,
-   "sell1": 11.39,
-   "sell2": 11.5,
-   "stop": 11.11,
-   "allowT": "正T",
-   "posPct": 8,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 5.9%（4.4格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "ok",
-     "t": "多头排列"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.47 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 81.4%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.47，放量突破且换手充分（4.0%）",
-    "🎯 明确做T预案：建议买点 11.28，目标止盈 11.39 / 11.5，严守止损 11.11"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.51,
-   "totalReturnWithT": 1.43
-  },
-  {
-   "code": "600556",
-   "tcode": "sh600556",
-   "name": "天下秀",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 76,
-   "verdict": "小做",
-   "price": 4.99,
-   "amp": 4.39,
-   "volRatio": 1.06,
-   "vwapOnline": 69.4,
-   "turnover": 4.35,
-   "buy": 4.96,
-   "buyLo": 4.94,
-   "buyHi": 4.98,
-   "sell1": 5.01,
-   "sell2": 5.06,
-   "stop": 4.88,
-   "allowT": "正T",
-   "posPct": 8,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 4.4%（3.3格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.06 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 69.4%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.06，放量突破且换手充分（4.3%）",
-    "🎯 明确做T预案：建议买点 4.96，目标止盈 5.01 / 5.06，严守止损 4.88"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.49,
-   "totalReturnWithT": -1.18
-  },
-  {
-   "code": "002878",
-   "tcode": "sz002878",
-   "name": "元隆雅图",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 76,
-   "verdict": "小做",
-   "price": 14.45,
-   "amp": 4.16,
-   "volRatio": 1.06,
-   "vwapOnline": 90.9,
-   "turnover": 11.28,
-   "buy": 14.36,
-   "buyLo": 14.29,
-   "buyHi": 14.43,
-   "sell1": 14.5,
-   "sell2": 14.65,
-   "stop": 14.14,
-   "allowT": "正T",
-   "posPct": 8,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 4.2%（3.1格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.06 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 90.9%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.06，放量突破且换手充分（11.3%）",
-    "🎯 明确做T预案：建议买点 14.36，目标止盈 14.5 / 14.65，严守止损 14.14"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.52,
-   "totalReturnWithT": -1.08
-  },
-  {
-   "code": "601900",
-   "tcode": "sh601900",
-   "name": "南方传媒",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 76,
-   "verdict": "小做",
-   "price": 15.97,
-   "amp": 5.12,
-   "volRatio": 1.11,
-   "vwapOnline": 75.2,
-   "turnover": 3.26,
-   "buy": 15.87,
-   "buyLo": 15.79,
-   "buyHi": 15.95,
-   "sell1": 16.03,
-   "sell2": 16.19,
-   "stop": 15.63,
-   "allowT": "正T",
-   "posPct": 8,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 5.1%（3.8格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "ok",
-     "t": "多头排列"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.11 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 75.2%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.11，放量突破且换手充分（3.3%）",
-    "🎯 明确做T预案：建议买点 15.87，目标止盈 16.03 / 16.19，严守止损 15.63"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.52,
-   "totalReturnWithT": -1.05
-  },
-  {
-   "code": "002975",
-   "tcode": "sz002975",
-   "name": "博杰股份",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 76,
-   "verdict": "小做",
-   "price": 80.56,
-   "amp": 11.12,
-   "volRatio": 1.12,
-   "vwapOnline": 90.5,
-   "turnover": 10.59,
-   "buy": 80.05,
-   "buyLo": 79.65,
-   "buyHi": 80.45,
-   "sell1": 80.85,
-   "sell2": 81.65,
-   "stop": 78.85,
-   "allowT": "正T",
-   "posPct": 8,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "warn",
-     "t": "振幅 11.1%（8.3格）超 6 格"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.12 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 90.5%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.12，放量突破且换手充分（10.6%）",
-    "🎯 明确做T预案：建议买点 80.05，目标止盈 80.85 / 81.65，严守止损 78.85"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.53,
-   "totalReturnWithT": 1.47
-  },
-  {
-   "code": "603725",
-   "tcode": "sh603725",
-   "name": "天安新材",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 74,
-   "verdict": "小做",
-   "price": 10.77,
-   "amp": 9.01,
-   "volRatio": 1.07,
-   "vwapOnline": 100,
-   "turnover": 3.66,
-   "buy": 10.7,
-   "buyLo": 10.65,
-   "buyHi": 10.75,
-   "sell1": 10.81,
-   "sell2": 10.92,
-   "stop": 10.54,
-   "allowT": "正T",
-   "posPct": 8,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "warn",
-     "t": "振幅 9.0%（6.8格）超 6 格"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.07 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 100.0%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.07，放量突破且换手充分（3.7%）",
-    "🎯 明确做T预案：建议买点 10.7，目标止盈 10.81 / 10.92，严守止损 10.54"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.54,
-   "totalReturnWithT": 1.51
-  },
-  {
-   "code": "603466",
-   "tcode": "sh603466",
-   "name": "风语筑",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 73,
-   "verdict": "小做",
-   "price": 14.04,
-   "amp": 7.15,
-   "volRatio": 1.12,
-   "vwapOnline": 91.7,
-   "turnover": 17.02,
-   "buy": 13.95,
-   "buyLo": 13.88,
-   "buyHi": 14.02,
-   "sell1": 14.09,
-   "sell2": 14.23,
-   "stop": 13.74,
-   "allowT": "正T",
-   "posPct": 8,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 7.1%（5.4格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.12 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 91.7%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.12，放量突破且换手充分（17.0%）",
-    "🎯 明确做T预案：建议买点 13.95，目标止盈 14.09 / 14.23，严守止损 13.74"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.54,
-   "totalReturnWithT": 1.48
-  },
-  {
-   "code": "603065",
-   "tcode": "sh603065",
-   "name": "宿迁联盛",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 73,
-   "verdict": "小做",
-   "price": 13.43,
-   "amp": 7.61,
-   "volRatio": 1.42,
-   "vwapOnline": 100,
-   "turnover": 4.02,
-   "buy": 13.35,
-   "buyLo": 13.28,
-   "buyHi": 13.42,
-   "sell1": 13.48,
-   "sell2": 13.61,
-   "stop": 13.15,
-   "allowT": "正T",
-   "posPct": 8,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 7.6%（5.7格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.42 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 100.0%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.42，放量突破且换手充分（4.0%）",
-    "🎯 明确做T预案：建议买点 13.35，目标止盈 13.48 / 13.61，严守止损 13.15"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.49,
-   "totalReturnWithT": 1.4
-  },
-  {
-   "code": "603719",
-   "tcode": "sh603719",
-   "name": "良品铺子",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 73,
-   "verdict": "小做",
-   "price": 10.04,
-   "amp": 8.1,
-   "volRatio": 1.29,
-   "vwapOnline": 66.1,
-   "turnover": 4.92,
-   "buy": 9.98,
-   "buyLo": 9.93,
-   "buyHi": 10.03,
-   "sell1": 10.08,
-   "sell2": 10.18,
-   "stop": 9.83,
-   "allowT": "正T",
-   "posPct": 8,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "warn",
-     "t": "振幅 8.1%（6.1格）超 6 格"
-    },
-    "trend": {
-     "c": "ok",
-     "t": "多头排列"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.29 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 66.1%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.29，放量突破且换手充分（4.9%）",
-    "🎯 明确做T预案：建议买点 9.98，目标止盈 10.08 / 10.18，严守止损 9.83"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.49,
-   "totalReturnWithT": 1.43
-  },
-  {
-   "code": "600693",
-   "tcode": "sh600693",
-   "name": "东百集团",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 73,
-   "verdict": "小做",
-   "price": 9.05,
-   "amp": 6.42,
-   "volRatio": 1.14,
-   "vwapOnline": 99.2,
-   "turnover": 11.5,
-   "buy": 8.99,
-   "buyLo": 8.95,
-   "buyHi": 9.03,
-   "sell1": 9.08,
-   "sell2": 9.17,
-   "stop": 8.86,
-   "allowT": "正T",
-   "posPct": 8,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 6.4%（4.8格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.14 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 99.2%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.14，放量突破且换手充分（11.5%）",
-    "🎯 明确做T预案：建议买点 8.99，目标止盈 9.08 / 9.17，严守止损 8.86"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.56,
-   "totalReturnWithT": 1.5
-  },
-  {
-   "code": "002292",
-   "tcode": "sz002292",
-   "name": "奥飞娱乐",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 73,
-   "verdict": "小做",
-   "price": 9.68,
-   "amp": 6.53,
-   "volRatio": 1.46,
-   "vwapOnline": 93.4,
-   "turnover": 14.2,
-   "buy": 9.62,
-   "buyLo": 9.57,
-   "buyHi": 9.67,
-   "sell1": 9.72,
-   "sell2": 9.81,
-   "stop": 9.47,
-   "allowT": "正T",
-   "posPct": 8,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 6.5%（4.9格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.46 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 93.4%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.46，放量突破且换手充分（14.2%）",
-    "🎯 明确做T预案：建议买点 9.62，目标止盈 9.72 / 9.81，严守止损 9.47"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.51,
-   "totalReturnWithT": 1.49
-  },
-  {
-   "code": "603407",
-   "tcode": "sh603407",
-   "name": "长裕集团",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 73,
-   "verdict": "小做",
-   "price": 44.44,
-   "amp": 5.17,
-   "volRatio": 1.2,
-   "vwapOnline": 72.3,
-   "turnover": 10.89,
-   "buy": 44.16,
-   "buyLo": 43.94,
-   "buyHi": 44.38,
-   "sell1": 44.6,
-   "sell2": 45.04,
-   "stop": 43.5,
-   "allowT": "正T",
-   "posPct": 8,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 5.2%（3.9格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.20 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 72.3%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.20，放量突破且换手充分（10.9%）",
-    "🎯 明确做T预案：建议买点 44.16，目标止盈 44.6 / 45.04，严守止损 43.5"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "流通市值偏小",
-      "desc": "流通市值仅 15.96 亿，容易受游资大单砸盘闪崩"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示"
-    ]
-   },
-   "retOpen": 0.52,
-   "totalReturnWithT": 1.46
-  },
-  {
-   "code": "603138",
-   "tcode": "sh603138",
-   "name": "海量数据",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 73,
-   "verdict": "小做",
-   "price": 15.62,
-   "amp": 5.29,
-   "volRatio": 1.07,
-   "vwapOnline": 75.6,
-   "turnover": 10.78,
-   "buy": 15.52,
-   "buyLo": 15.44,
-   "buyHi": 15.6,
-   "sell1": 15.68,
-   "sell2": 15.83,
-   "stop": 15.29,
-   "allowT": "正T",
-   "posPct": 8,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 5.3%（4.0格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.07 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 75.6%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.07，放量突破且换手充分（10.8%）",
-    "🎯 明确做T预案：建议买点 15.52，目标止盈 15.68 / 15.83，严守止损 15.29"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.53,
-   "totalReturnWithT": 1.51
-  },
-  {
-   "code": "603319",
-   "tcode": "sh603319",
-   "name": "美湖股份",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 73,
-   "verdict": "小做",
-   "price": 23.02,
-   "amp": 6.11,
-   "volRatio": 1.12,
-   "vwapOnline": 97.1,
-   "turnover": 4.72,
-   "buy": 22.87,
-   "buyLo": 22.76,
-   "buyHi": 22.98,
-   "sell1": 23.1,
-   "sell2": 23.33,
-   "stop": 22.53,
-   "allowT": "正T",
-   "posPct": 8,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 6.1%（4.6格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.12 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 97.1%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.12，放量突破且换手充分（4.7%）",
-    "🎯 明确做T预案：建议买点 22.87，目标止盈 23.1 / 23.33，严守止损 22.53"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [
-     {
-      "level": "info",
-      "type": "高估值溢价",
-      "desc": "PE市盈率约 163.94 倍，估值偏高，只适合快进快出做T，不宜长期死守"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.55,
-   "totalReturnWithT": -1
-  },
-  {
-   "code": "603171",
-   "tcode": "sh603171",
-   "name": "税友股份",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 73,
-   "verdict": "小做",
-   "price": 48.21,
-   "amp": 5.09,
-   "volRatio": 1.32,
-   "vwapOnline": 77.7,
-   "turnover": 3.13,
-   "buy": 47.91,
-   "buyLo": 47.67,
-   "buyHi": 48.15,
-   "sell1": 48.39,
-   "sell2": 48.86,
-   "stop": 47.19,
-   "allowT": "正T",
-   "posPct": 8,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 5.1%（3.8格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.32 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 77.7%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.32，放量突破且换手充分（3.1%）",
-    "🎯 明确做T预案：建议买点 47.91，目标止盈 48.39 / 48.86，严守止损 47.19"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.52,
-   "totalReturnWithT": 1.46
-  },
-  {
-   "code": "000096",
-   "tcode": "sz000096",
-   "name": "广聚能源",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 72,
-   "verdict": "小做",
-   "price": 8.72,
-   "amp": 13.48,
-   "volRatio": 5.16,
-   "vwapOnline": 2.1,
-   "turnover": 8.8,
-   "buy": 8.67,
-   "buyLo": 8.63,
-   "buyHi": 8.71,
-   "sell1": 8.75,
-   "sell2": 8.84,
-   "stop": 8.54,
-   "allowT": "正T",
-   "posPct": 8,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "warn",
-     "t": "振幅 13.5%（10.1格）超 6 格"
-    },
-    "trend": {
-     "c": "ok",
-     "t": "多头排列"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 5.16 放量"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 2.1%，重心坚挺",
-    "🔥 量价配合：开盘量比 5.16，放量突破且换手充分（8.8%）",
-    "🎯 明确做T预案：建议买点 8.67，目标止盈 8.75 / 8.84，严守止损 8.54"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "高波动风险",
-      "desc": "日内振幅高达 13.48%，多空分歧剧烈，挂单需防单边大跳水"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.47,
-   "totalReturnWithT": 1.33
-  },
-  {
-   "code": "688596",
-   "tcode": "sh688596",
-   "name": "正帆科技",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 72,
-   "verdict": "小做",
-   "price": 53.5,
-   "amp": 17.93,
-   "volRatio": 1.51,
-   "vwapOnline": 100,
-   "turnover": 13.25,
-   "buy": 53.16,
-   "buyLo": 52.89,
-   "buyHi": 53.43,
-   "sell1": 53.69,
-   "sell2": 54.23,
-   "stop": 52.37,
-   "allowT": "正T",
-   "posPct": 8,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "warn",
-     "t": "振幅 17.9%（13.4格）超 6 格"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.51 放量"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 100.0%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.51，放量突破且换手充分（13.3%）",
-    "🎯 明确做T预案：建议买点 53.16，目标止盈 53.69 / 54.23，严守止损 52.37"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "高波动风险",
-      "desc": "日内振幅高达 17.93%，多空分歧剧烈，挂单需防单边大跳水"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.53,
-   "totalReturnWithT": 1.47
-  },
-  {
-   "code": "603258",
-   "tcode": "sh603258",
-   "name": "电魂网络",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 71,
-   "verdict": "小做",
-   "price": 16.85,
-   "amp": 12.38,
-   "volRatio": 1.97,
-   "vwapOnline": 68.2,
-   "turnover": 16.6,
-   "buy": 16.74,
-   "buyLo": 16.66,
-   "buyHi": 16.82,
-   "sell1": 16.91,
-   "sell2": 17.08,
-   "stop": 16.49,
-   "allowT": "正T",
-   "posPct": 8,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "warn",
-     "t": "振幅 12.4%（9.3格）超 6 格"
-    },
-    "trend": {
-     "c": "ok",
-     "t": "多头排列"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.97 放量"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 68.2%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.97，放量突破且换手充分（16.6%）",
-    "🎯 明确做T预案：建议买点 16.74，目标止盈 16.91 / 17.08，严守止损 16.49"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     },
-     {
-      "level": "warn",
-      "type": "高波动风险",
-      "desc": "日内振幅高达 12.38%，多空分歧剧烈，挂单需防单边大跳水"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.55,
-   "totalReturnWithT": 1.5
-  },
-  {
-   "code": "600371",
-   "tcode": "sh600371",
-   "name": "万向德农",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 71,
-   "verdict": "小做",
-   "price": 11.26,
-   "amp": 10.88,
-   "volRatio": 2.84,
-   "vwapOnline": 69.8,
-   "turnover": 27.67,
-   "buy": 11.19,
-   "buyLo": 11.13,
-   "buyHi": 11.25,
-   "sell1": 11.3,
-   "sell2": 11.41,
-   "stop": 11.02,
-   "allowT": "正T",
-   "posPct": 8,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "warn",
-     "t": "振幅 10.9%（8.2格）超 6 格"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 2.84 放量"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 69.8%，重心坚挺",
-    "🔥 量价配合：开盘量比 2.84，放量突破且换手充分（27.7%）",
-    "🎯 明确做T预案：建议买点 11.19，目标止盈 11.3 / 11.41，严守止损 11.02"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.52,
-   "totalReturnWithT": 1.44
-  },
-  {
-   "code": "002990",
-   "tcode": "sz002990",
-   "name": "盛视科技",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 70,
-   "verdict": "小做",
-   "price": 34.61,
-   "amp": 7.42,
-   "volRatio": 1.02,
-   "vwapOnline": 90.1,
-   "turnover": 9.97,
-   "buy": 34.39,
-   "buyLo": 34.22,
-   "buyHi": 34.56,
-   "sell1": 34.74,
-   "sell2": 35.08,
-   "stop": 33.88,
-   "allowT": "正T",
-   "posPct": 8,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 7.4%（5.6格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.02 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 90.1%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.02，放量突破且换手充分（10.0%）",
-    "🎯 明确做T预案：建议买点 34.39，目标止盈 34.74 / 35.08，严守止损 33.88"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.53,
-   "totalReturnWithT": 1.49
-  },
-  {
-   "code": "603690",
-   "tcode": "sh603690",
-   "name": "至纯科技",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 70,
-   "verdict": "小做",
-   "price": 19.23,
-   "amp": 6.38,
-   "volRatio": 1.22,
-   "vwapOnline": 95,
-   "turnover": 6.18,
-   "buy": 19.11,
-   "buyLo": 19.01,
-   "buyHi": 19.21,
-   "sell1": 19.3,
-   "sell2": 19.49,
-   "stop": 18.82,
-   "allowT": "正T",
-   "posPct": 8,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 6.4%（4.8格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.22 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 95.0%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.22，放量突破且换手充分（6.2%）",
-    "🎯 明确做T预案：建议买点 19.11，目标止盈 19.3 / 19.49，严守止损 18.82"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.52,
-   "totalReturnWithT": 1.45
-  },
-  {
-   "code": "688152",
-   "tcode": "sh688152",
-   "name": "麒麟信安",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 70,
-   "verdict": "小做",
-   "price": 32.08,
-   "amp": 7.26,
-   "volRatio": 1.15,
-   "vwapOnline": 100,
-   "turnover": 4.98,
-   "buy": 31.88,
-   "buyLo": 31.72,
-   "buyHi": 32.04,
-   "sell1": 32.2,
-   "sell2": 32.52,
-   "stop": 31.4,
-   "allowT": "正T",
-   "posPct": 8,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 7.3%（5.4格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.15 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 100.0%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.15，放量突破且换手充分（5.0%）",
-    "🎯 明确做T预案：建议买点 31.88，目标止盈 32.2 / 32.52，严守止损 31.4"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.52,
-   "totalReturnWithT": 1.46
-  },
-  {
-   "code": "601086",
-   "tcode": "sh601086",
-   "name": "国芳集团",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 70,
-   "verdict": "小做",
-   "price": 14.02,
-   "amp": 9.16,
-   "volRatio": 1.04,
-   "vwapOnline": 61.2,
-   "turnover": 15.57,
-   "buy": 13.93,
-   "buyLo": 13.86,
-   "buyHi": 14,
-   "sell1": 14.07,
-   "sell2": 14.21,
-   "stop": 13.72,
-   "allowT": "正T",
-   "posPct": 8,
-   "action": "按计划挂单",
-   "gates": {
-    "amp": {
-     "c": "warn",
-     "t": "振幅 9.2%（6.9格）超 6 格"
-    },
-    "trend": {
-     "c": "ok",
-     "t": "多头排列"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.04 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 61.2%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.04，放量突破且换手充分（15.6%）",
-    "🎯 明确做T预案：建议买点 13.93，目标止盈 14.07 / 14.21，严守止损 13.72"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.54,
-   "totalReturnWithT": 1.48
-  },
-  {
-   "code": "002741",
-   "tcode": "sz002741",
-   "name": "光华科技",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 69,
-   "verdict": "观察",
-   "price": 20.38,
-   "amp": 11.87,
-   "volRatio": 1.25,
-   "vwapOnline": 86,
-   "turnover": 11.28,
-   "buy": 20.25,
-   "buyLo": 20.15,
-   "buyHi": 20.35,
-   "sell1": 20.45,
-   "sell2": 20.66,
-   "stop": 19.95,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "warn",
-     "t": "振幅 11.9%（8.9格）超 6 格"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.25 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 86.0%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.25，放量突破且换手充分（11.3%）",
-    "🎯 明确做T预案：建议买点 20.25，目标止盈 20.45 / 20.66，严守止损 19.95"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.53,
-   "totalReturnWithT": 1.46
-  },
-  {
-   "code": "002291",
-   "tcode": "sz002291",
-   "name": "遥望科技",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 69,
-   "verdict": "观察",
-   "price": 5.76,
-   "amp": 5.26,
-   "volRatio": 0.94,
-   "vwapOnline": 80.6,
-   "turnover": 6.34,
-   "buy": 5.72,
-   "buyLo": 5.69,
-   "buyHi": 5.75,
-   "sell1": 5.78,
-   "sell2": 5.84,
-   "stop": 5.64,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 5.3%（3.9格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "wait",
-     "t": "量比 0.94 缩量"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 80.6%，重心坚挺",
-    "🔥 量价配合：开盘量比 0.94，放量突破且换手充分（6.3%）",
-    "🎯 明确做T预案：建议买点 5.72，目标止盈 5.78 / 5.84，严守止损 5.64"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.59,
-   "totalReturnWithT": -0.87
-  },
-  {
-   "code": "603991",
-   "tcode": "sh603991",
-   "name": "领先股份",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 68,
-   "verdict": "观察",
-   "price": 120.99,
-   "amp": 8.39,
-   "volRatio": 1.66,
-   "vwapOnline": 80.2,
-   "turnover": 5.09,
-   "buy": 120.23,
-   "buyLo": 119.63,
-   "buyHi": 120.83,
-   "sell1": 121.43,
-   "sell2": 122.63,
-   "stop": 118.42,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "warn",
-     "t": "振幅 8.4%（6.3格）超 6 格"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.66 放量"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 80.2%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.66，放量突破且换手充分（5.1%）",
-    "🎯 明确做T预案：建议买点 120.23，目标止盈 121.43 / 122.63，严守止损 118.42"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.52,
-   "totalReturnWithT": 1.46
-  },
-  {
-   "code": "002181",
-   "tcode": "sz002181",
-   "name": "粤 传 媒",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 68,
-   "verdict": "观察",
-   "price": 11.06,
-   "amp": 5.49,
-   "volRatio": 1.16,
-   "vwapOnline": 78.5,
-   "turnover": 11.47,
-   "buy": 10.99,
-   "buyLo": 10.94,
-   "buyHi": 11.04,
-   "sell1": 11.1,
-   "sell2": 11.21,
-   "stop": 10.83,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 5.5%（4.1格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "ok",
-     "t": "多头排列"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.16 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 78.5%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.16，放量突破且换手充分（11.5%）",
-    "🎯 明确做T预案：建议买点 10.99，目标止盈 11.1 / 11.21，严守止损 10.83"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.53,
-   "totalReturnWithT": 1.47
-  },
-  {
-   "code": "603980",
-   "tcode": "sh603980",
-   "name": "吉华集团",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 67,
-   "verdict": "观察",
-   "price": 7.78,
-   "amp": 8.04,
-   "volRatio": 1.02,
-   "vwapOnline": 61.2,
-   "turnover": 5.4,
-   "buy": 7.73,
-   "buyLo": 7.69,
-   "buyHi": 7.77,
-   "sell1": 7.81,
-   "sell2": 7.89,
-   "stop": 7.62,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "warn",
-     "t": "振幅 8.0%（6.0格）超 6 格"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.02 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 61.2%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.02，放量突破且换手充分（5.4%）",
-    "🎯 明确做T预案：建议买点 7.73，目标止盈 7.81 / 7.89，严守止损 7.62"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.54,
-   "totalReturnWithT": 1.51
-  },
-  {
-   "code": "002733",
-   "tcode": "sz002733",
-   "name": "雄韬股份",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 67,
-   "verdict": "观察",
-   "price": 16.2,
-   "amp": 8.15,
-   "volRatio": 1.77,
-   "vwapOnline": 51.2,
-   "turnover": 7.87,
-   "buy": 16.1,
-   "buyLo": 16.02,
-   "buyHi": 16.18,
-   "sell1": 16.26,
-   "sell2": 16.42,
-   "stop": 15.86,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "warn",
-     "t": "振幅 8.2%（6.1格）超 6 格"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.77 放量"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 51.2%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.77，放量突破且换手充分（7.9%）",
-    "🎯 明确做T预案：建议买点 16.1，目标止盈 16.26 / 16.42，严守止损 15.86"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.51,
-   "totalReturnWithT": 1.44
-  },
-  {
-   "code": "000037",
-   "tcode": "sz000037",
-   "name": "深南电A",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 67,
-   "verdict": "观察",
-   "price": 8.68,
-   "amp": 7.31,
-   "volRatio": 1.36,
-   "vwapOnline": 84.3,
-   "turnover": 7.2,
-   "buy": 8.63,
-   "buyLo": 8.59,
-   "buyHi": 8.67,
-   "sell1": 8.71,
-   "sell2": 8.8,
-   "stop": 8.5,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 7.3%（5.5格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.36 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 84.3%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.36，放量突破且换手充分（7.2%）",
-    "🎯 明确做T预案：建议买点 8.63，目标止盈 8.71 / 8.8，严守止损 8.5"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.47,
-   "totalReturnWithT": 1.34
-  },
-  {
-   "code": "000560",
-   "tcode": "sz000560",
-   "name": "我爱我家",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 67,
-   "verdict": "观察",
-   "price": 3.04,
-   "amp": 5.12,
-   "volRatio": 1.13,
-   "vwapOnline": 72.3,
-   "turnover": 10,
-   "buy": 3.02,
-   "buyLo": 3,
-   "buyHi": 3.04,
-   "sell1": 3.05,
-   "sell2": 3.08,
-   "stop": 2.98,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 5.1%（3.8格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.13 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 72.3%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.13，放量突破且换手充分（10.0%）",
-    "🎯 明确做T预案：建议买点 3.02，目标止盈 3.05 / 3.08，严守止损 2.98"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.55,
-   "totalReturnWithT": 1.49
-  },
-  {
-   "code": "002882",
-   "tcode": "sz002882",
-   "name": "金龙羽",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 67,
-   "verdict": "观察",
-   "price": 21.71,
-   "amp": 9.06,
-   "volRatio": 1.5,
-   "vwapOnline": 40.5,
-   "turnover": 6.72,
-   "buy": 21.57,
-   "buyLo": 21.46,
-   "buyHi": 21.68,
-   "sell1": 21.79,
-   "sell2": 22,
-   "stop": 21.25,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "warn",
-     "t": "振幅 9.1%（6.8格）超 6 格"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.50 放量"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 40.5%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.50，放量突破且换手充分（6.7%）",
-    "🎯 明确做T预案：建议买点 21.57，目标止盈 21.79 / 22，严守止损 21.25"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [
-     {
-      "level": "info",
-      "type": "高估值溢价",
-      "desc": "PE市盈率约 174.9 倍，估值偏高，只适合快进快出做T，不宜长期死守"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.54,
-   "totalReturnWithT": 1.5
-  },
-  {
-   "code": "603230",
-   "tcode": "sh603230",
-   "name": "内蒙新华",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 67,
-   "verdict": "观察",
-   "price": 10.81,
-   "amp": 5.58,
-   "volRatio": 1.13,
-   "vwapOnline": 95.5,
-   "turnover": 5,
-   "buy": 10.74,
-   "buyLo": 10.69,
-   "buyHi": 10.79,
-   "sell1": 10.85,
-   "sell2": 10.96,
-   "stop": 10.58,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 5.6%（4.2格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.13 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 95.5%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.13，放量突破且换手充分（5.0%）",
-    "🎯 明确做T预案：建议买点 10.74，目标止盈 10.85 / 10.96，严守止损 10.58"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.54,
-   "totalReturnWithT": -1.01
-  },
-  {
-   "code": "600722",
-   "tcode": "sh600722",
-   "name": "金牛化工",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 67,
-   "verdict": "观察",
-   "price": 11.78,
-   "amp": 6.15,
-   "volRatio": 1.07,
-   "vwapOnline": 75.6,
-   "turnover": 5.41,
-   "buy": 11.71,
-   "buyLo": 11.65,
-   "buyHi": 11.77,
-   "sell1": 11.82,
-   "sell2": 11.94,
-   "stop": 11.53,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 6.2%（4.6格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.07 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 75.6%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.07，放量突破且换手充分（5.4%）",
-    "🎯 明确做T预案：建议买点 11.71，目标止盈 11.82 / 11.94，严守止损 11.53"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.49,
-   "totalReturnWithT": 1.37
-  },
-  {
-   "code": "605111",
-   "tcode": "sh605111",
-   "name": "新洁能",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 67,
-   "verdict": "观察",
-   "price": 40.96,
-   "amp": 5.56,
-   "volRatio": 2.42,
-   "vwapOnline": 54.1,
-   "turnover": 11.35,
-   "buy": 40.7,
-   "buyLo": 40.5,
-   "buyHi": 40.9,
-   "sell1": 41.11,
-   "sell2": 41.52,
-   "stop": 40.09,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 5.6%（4.2格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 2.42 放量"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 54.1%，重心坚挺",
-    "🔥 量价配合：开盘量比 2.42，放量突破且换手充分（11.3%）",
-    "🎯 明确做T预案：建议买点 40.7，目标止盈 41.11 / 41.52，严守止损 40.09"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.53,
-   "totalReturnWithT": 1.48
-  },
-  {
-   "code": "002940",
-   "tcode": "sz002940",
-   "name": "昂利康",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 67,
-   "verdict": "观察",
-   "price": 26.88,
-   "amp": 8.46,
-   "volRatio": 1.04,
-   "vwapOnline": 43.4,
-   "turnover": 8.49,
-   "buy": 26.71,
-   "buyLo": 26.58,
-   "buyHi": 26.84,
-   "sell1": 26.98,
-   "sell2": 27.24,
-   "stop": 26.31,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "warn",
-     "t": "振幅 8.5%（6.3格）超 6 格"
-    },
-    "trend": {
-     "c": "ok",
-     "t": "多头排列"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.04 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 43.4%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.04，放量突破且换手充分（8.5%）",
-    "🎯 明确做T预案：建议买点 26.71，目标止盈 26.98 / 27.24，严守止损 26.31"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.53,
-   "totalReturnWithT": 1.48
-  },
-  {
-   "code": "603955",
-   "tcode": "sh603955",
-   "name": "大千生态",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 67,
-   "verdict": "观察",
-   "price": 30.35,
-   "amp": 9.65,
-   "volRatio": 1.95,
-   "vwapOnline": 16.1,
-   "turnover": 12.69,
-   "buy": 30.16,
-   "buyLo": 30.01,
-   "buyHi": 30.31,
-   "sell1": 30.46,
-   "sell2": 30.76,
-   "stop": 29.71,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "warn",
-     "t": "振幅 9.7%（7.2格）超 6 格"
-    },
-    "trend": {
-     "c": "ok",
-     "t": "多头排列"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.95 放量"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 16.1%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.95，放量突破且换手充分（12.7%）",
-    "🎯 明确做T预案：建议买点 30.16，目标止盈 30.46 / 30.76，严守止损 29.71"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.52,
-   "totalReturnWithT": 1.45
-  },
-  {
-   "code": "603636",
-   "tcode": "sh603636",
-   "name": "南威软件",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 67,
-   "verdict": "观察",
-   "price": 8.74,
-   "amp": 6.33,
-   "volRatio": 0.99,
-   "vwapOnline": 95.9,
-   "turnover": 10.08,
-   "buy": 8.68,
-   "buyLo": 8.64,
-   "buyHi": 8.72,
-   "sell1": 8.77,
-   "sell2": 8.86,
-   "stop": 8.55,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 6.3%（4.7格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "wait",
-     "t": "量比 0.99 缩量"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 95.9%，重心坚挺",
-    "🔥 量价配合：开盘量比 0.99，放量突破且换手充分（10.1%）",
-    "🎯 明确做T预案：建议买点 8.68，目标止盈 8.77 / 8.86，严守止损 8.55"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.58,
-   "totalReturnWithT": 1.56
-  },
-  {
-   "code": "688806",
-   "tcode": "sh688806",
-   "name": "泰诺麦博-U",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 67,
-   "verdict": "观察",
-   "price": 24.06,
-   "amp": 7.5,
-   "volRatio": 1.2,
-   "vwapOnline": 100,
-   "turnover": 14.79,
-   "buy": 23.91,
-   "buyLo": 23.79,
-   "buyHi": 24.03,
-   "sell1": 24.15,
-   "sell2": 24.39,
-   "stop": 23.55,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 7.5%（5.6格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.20 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 100.0%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.20，放量突破且换手充分（14.8%）",
-    "🎯 明确做T预案：建议买点 23.91，目标止盈 24.15 / 24.39，严守止损 23.55"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     },
-     {
-      "level": "warn",
-      "type": "流通市值偏小",
-      "desc": "流通市值仅 12.28 亿，容易受游资大单砸盘闪崩"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示"
-    ]
-   },
-   "retOpen": 0.52,
-   "totalReturnWithT": 1.46
-  },
-  {
-   "code": "603739",
-   "tcode": "sh603739",
-   "name": "蔚蓝生物",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 67,
-   "verdict": "观察",
-   "price": 12.24,
-   "amp": 7.59,
-   "volRatio": 2.63,
-   "vwapOnline": 74.4,
-   "turnover": 4.1,
-   "buy": 12.16,
-   "buyLo": 12.1,
-   "buyHi": 12.22,
-   "sell1": 12.28,
-   "sell2": 12.41,
-   "stop": 11.98,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 7.6%（5.7格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 2.63 放量"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 74.4%，重心坚挺",
-    "🔥 量价配合：开盘量比 2.63，放量突破且换手充分（4.1%）",
-    "🎯 明确做T预案：建议买点 12.16，目标止盈 12.28 / 12.41，严守止损 11.98"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.55,
-   "totalReturnWithT": 1.47
-  },
-  {
-   "code": "605366",
-   "tcode": "sh605366",
-   "name": "宏柏新材",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 66,
-   "verdict": "观察",
-   "price": 7.2,
-   "amp": 9.82,
-   "volRatio": 1.07,
-   "vwapOnline": 81.8,
-   "turnover": 3.98,
-   "buy": 7.15,
-   "buyLo": 7.11,
-   "buyHi": 7.19,
-   "sell1": 7.23,
-   "sell2": 7.3,
-   "stop": 7.05,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "warn",
-     "t": "振幅 9.8%（7.4格）超 6 格"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.07 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 81.8%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.07，放量突破且换手充分（4.0%）",
-    "🎯 明确做T预案：建议买点 7.15，目标止盈 7.23 / 7.3，严守止损 7.05"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.59,
-   "totalReturnWithT": 1.65
-  },
-  {
-   "code": "000892",
-   "tcode": "sz000892",
-   "name": "欢瑞世纪",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 66,
-   "verdict": "观察",
-   "price": 4.89,
-   "amp": 7.08,
-   "volRatio": 1.17,
-   "vwapOnline": 85.1,
-   "turnover": 21.46,
-   "buy": 4.86,
-   "buyLo": 4.84,
-   "buyHi": 4.88,
-   "sell1": 4.91,
-   "sell2": 4.96,
-   "stop": 4.79,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 7.1%（5.3格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.17 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 85.1%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.17，放量突破且换手充分（21.5%）",
-    "🎯 明确做T预案：建议买点 4.86，目标止盈 4.91 / 4.96，严守止损 4.79"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.51,
-   "totalReturnWithT": 1.48
-  },
-  {
-   "code": "003032",
-   "tcode": "sz003032",
-   "name": "传智教育",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 66,
-   "verdict": "观察",
-   "price": 9.69,
-   "amp": 6.84,
-   "volRatio": 1.05,
-   "vwapOnline": 93,
-   "turnover": 23.64,
-   "buy": 9.63,
-   "buyLo": 9.58,
-   "buyHi": 9.68,
-   "sell1": 9.73,
-   "sell2": 9.82,
-   "stop": 9.48,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 6.8%（5.1格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "ok",
-     "t": "多头排列"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.05 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 93.0%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.05，放量突破且换手充分（23.6%）",
-    "🎯 明确做T预案：建议买点 9.63，目标止盈 9.73 / 9.82，严守止损 9.48"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.51,
-   "totalReturnWithT": 1.49
-  },
-  {
-   "code": "688071",
-   "tcode": "sh688071",
-   "name": "华依科技",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 66,
-   "verdict": "观察",
-   "price": 49.77,
-   "amp": 14.43,
-   "volRatio": 0.93,
-   "vwapOnline": 100,
-   "turnover": 15.88,
-   "buy": 49.46,
-   "buyLo": 49.21,
-   "buyHi": 49.71,
-   "sell1": 49.95,
-   "sell2": 50.45,
-   "stop": 48.71,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "warn",
-     "t": "振幅 14.4%（10.8格）超 6 格"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "wait",
-     "t": "量比 0.93 缩量"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 100.0%，重心坚挺",
-    "🔥 量价配合：开盘量比 0.93，放量突破且换手充分（15.9%）",
-    "🎯 明确做T预案：建议买点 49.46，目标止盈 49.95 / 50.45，严守止损 48.71"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     },
-     {
-      "level": "warn",
-      "type": "高波动风险",
-      "desc": "日内振幅高达 14.43%，多空分歧剧烈，挂单需防单边大跳水"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.52,
-   "totalReturnWithT": 1.45
-  },
-  {
-   "code": "000716",
-   "tcode": "sz000716",
-   "name": "黑芝麻",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 66,
-   "verdict": "观察",
-   "price": 5.26,
-   "amp": 3.92,
-   "volRatio": 0.96,
-   "vwapOnline": 67.4,
-   "turnover": 9.73,
-   "buy": 5.23,
-   "buyLo": 5.2,
-   "buyHi": 5.26,
-   "sell1": 5.28,
-   "sell2": 5.33,
-   "stop": 5.15,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "放弃（振幅不足）",
-   "gates": {
-    "amp": {
-     "c": "wait",
-     "t": "振幅 3.9%（2.9格）不足 3 格"
-    },
-    "trend": {
-     "c": "ok",
-     "t": "多头排列"
-    },
-    "vol": {
-     "c": "wait",
-     "t": "量比 0.96 缩量"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 67.4%，重心坚挺",
-    "🔥 量价配合：开盘量比 0.96，放量突破且换手充分（9.7%）",
-    "🎯 明确做T预案：建议买点 5.23，目标止盈 5.28 / 5.33，严守止损 5.15"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [
-     {
-      "level": "info",
-      "type": "高估值溢价",
-      "desc": "PE市盈率约 297.22 倍，估值偏高，只适合快进快出做T，不宜长期死守"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.46,
-   "totalReturnWithT": 1.36
-  },
-  {
-   "code": "002277",
-   "tcode": "sz002277",
-   "name": "友阿股份",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 65,
-   "verdict": "观察",
-   "price": 5.77,
-   "amp": 7.68,
-   "volRatio": 0.95,
-   "vwapOnline": 99.6,
-   "turnover": 3.68,
-   "buy": 5.73,
-   "buyLo": 5.7,
-   "buyHi": 5.76,
-   "sell1": 5.79,
-   "sell2": 5.85,
-   "stop": 5.65,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 7.7%（5.8格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "ok",
-     "t": "多头排列"
-    },
-    "vol": {
-     "c": "wait",
-     "t": "量比 0.95 缩量"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 99.6%，重心坚挺",
-    "🔥 量价配合：开盘量比 0.95，放量突破且换手充分（3.7%）",
-    "🎯 明确做T预案：建议买点 5.73，目标止盈 5.79 / 5.85，严守止损 5.65"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.59,
-   "totalReturnWithT": 1.58
-  },
-  {
-   "code": "003026",
-   "tcode": "sz003026",
-   "name": "中晶科技",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 65,
-   "verdict": "观察",
-   "price": 26.63,
-   "amp": 8.21,
-   "volRatio": 1.03,
-   "vwapOnline": 97.5,
-   "turnover": 11.3,
-   "buy": 26.46,
-   "buyLo": 26.33,
-   "buyHi": 26.59,
-   "sell1": 26.73,
-   "sell2": 26.99,
-   "stop": 26.07,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "warn",
-     "t": "振幅 8.2%（6.2格）超 6 格"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.03 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 97.5%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.03，放量突破且换手充分（11.3%）",
-    "🎯 明确做T预案：建议买点 26.46，目标止盈 26.73 / 26.99，严守止损 26.07"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.53,
-   "totalReturnWithT": 1.49
-  },
-  {
-   "code": "003019",
-   "tcode": "sz003019",
-   "name": "宸展光电",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 65,
-   "verdict": "观察",
-   "price": 26.23,
-   "amp": 6.66,
-   "volRatio": 1.05,
-   "vwapOnline": 69,
-   "turnover": 3.89,
-   "buy": 26.06,
-   "buyLo": 25.93,
-   "buyHi": 26.19,
-   "sell1": 26.33,
-   "sell2": 26.59,
-   "stop": 25.67,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 6.7%（5.0格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "ok",
-     "t": "多头排列"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.05 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 69.0%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.05，放量突破且换手充分（3.9%）",
-    "🎯 明确做T预案：建议买点 26.06，目标止盈 26.33 / 26.59，严守止损 25.67"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.54,
-   "totalReturnWithT": 1.52
-  },
-  {
-   "code": "603048",
-   "tcode": "sh603048",
-   "name": "浙江黎明",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 65,
-   "verdict": "观察",
-   "price": 22.54,
-   "amp": 7.96,
-   "volRatio": 1.69,
-   "vwapOnline": 46.3,
-   "turnover": 3.55,
-   "buy": 22.4,
-   "buyLo": 22.29,
-   "buyHi": 22.51,
-   "sell1": 22.62,
-   "sell2": 22.85,
-   "stop": 22.06,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 8.0%（6.0格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.69 放量"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 46.3%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.69，放量突破且换手充分（3.5%）",
-    "🎯 明确做T预案：建议买点 22.4，目标止盈 22.62 / 22.85，严守止损 22.06"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [
-     {
-      "level": "info",
-      "type": "高估值溢价",
-      "desc": "PE市盈率约 164.17 倍，估值偏高，只适合快进快出做T，不宜长期死守"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.52,
-   "totalReturnWithT": 1.44
-  },
-  {
-   "code": "600152",
-   "tcode": "sh600152",
-   "name": "维科技术",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 64,
-   "verdict": "观察",
-   "price": 6.79,
-   "amp": 5.82,
-   "volRatio": 1.36,
-   "vwapOnline": 74,
-   "turnover": 5.43,
-   "buy": 6.75,
-   "buyLo": 6.72,
-   "buyHi": 6.78,
-   "sell1": 6.81,
-   "sell2": 6.88,
-   "stop": 6.65,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 5.8%（4.4格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.36 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 74.0%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.36，放量突破且换手充分（5.4%）",
-    "🎯 明确做T预案：建议买点 6.75，目标止盈 6.81 / 6.88，严守止损 6.65"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.48,
-   "totalReturnWithT": 1.31
-  },
-  {
-   "code": "002866",
-   "tcode": "sz002866",
-   "name": "传艺科技",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 64,
-   "verdict": "观察",
-   "price": 13.57,
-   "amp": 6.72,
-   "volRatio": 1.09,
-   "vwapOnline": 73.6,
-   "turnover": 8.61,
-   "buy": 13.48,
-   "buyLo": 13.41,
-   "buyHi": 13.55,
-   "sell1": 13.62,
-   "sell2": 13.75,
-   "stop": 13.28,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 6.7%（5.0格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.09 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 73.6%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.09，放量突破且换手充分（8.6%）",
-    "🎯 明确做T预案：建议买点 13.48，目标止盈 13.62 / 13.75，严守止损 13.28"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.56,
-   "totalReturnWithT": 1.54
-  },
-  {
-   "code": "603108",
-   "tcode": "sh603108",
-   "name": "润达医疗",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 64,
-   "verdict": "观察",
-   "price": 10.29,
-   "amp": 6.19,
-   "volRatio": 0.99,
-   "vwapOnline": 60.7,
-   "turnover": 4.53,
-   "buy": 10.23,
-   "buyLo": 10.18,
-   "buyHi": 10.28,
-   "sell1": 10.33,
-   "sell2": 10.43,
-   "stop": 10.07,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 6.2%（4.6格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "wait",
-     "t": "量比 0.99 缩量"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 60.7%，重心坚挺",
-    "🔥 量价配合：开盘量比 0.99，放量突破且换手充分（4.5%）",
-    "🎯 明确做T预案：建议买点 10.23，目标止盈 10.33 / 10.43，严守止损 10.07"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.48,
-   "totalReturnWithT": 1.39
-  },
-  {
-   "code": "600088",
-   "tcode": "sh600088",
-   "name": "中视传媒",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 64,
-   "verdict": "观察",
-   "price": 13.27,
-   "amp": 2.87,
-   "volRatio": 1.16,
-   "vwapOnline": 58.7,
-   "turnover": 3.63,
-   "buy": 13.19,
-   "buyLo": 13.12,
-   "buyHi": 13.26,
-   "sell1": 13.32,
-   "sell2": 13.45,
-   "stop": 12.99,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "放弃（振幅不足）",
-   "gates": {
-    "amp": {
-     "c": "wait",
-     "t": "振幅 2.9%（2.2格）不足 3 格"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.16 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 58.7%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.16，放量突破且换手充分（3.6%）",
-    "🎯 明确做T预案：建议买点 13.19，目标止盈 13.32 / 13.45，严守止损 12.99"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.5,
-   "totalReturnWithT": -1.08
-  },
-  {
-   "code": "600785",
-   "tcode": "sh600785",
-   "name": "新华百货",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 63,
-   "verdict": "观察",
-   "price": 12.2,
-   "amp": 8.06,
-   "volRatio": 1.12,
-   "vwapOnline": 52.5,
-   "turnover": 13.8,
-   "buy": 12.12,
-   "buyLo": 12.06,
-   "buyHi": 12.18,
-   "sell1": 12.24,
-   "sell2": 12.37,
-   "stop": 11.94,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "warn",
-     "t": "振幅 8.1%（6.0格）超 6 格"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.12 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 52.5%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.12，放量突破且换手充分（13.8%）",
-    "🎯 明确做T预案：建议买点 12.12，目标止盈 12.24 / 12.37，严守止损 11.94"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.55,
-   "totalReturnWithT": 1.48
-  },
-  {
-   "code": "600506",
-   "tcode": "sh600506",
-   "name": "统一股份",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 63,
-   "verdict": "观察",
-   "price": 19,
-   "amp": 4.57,
-   "volRatio": 1.05,
-   "vwapOnline": 24.4,
-   "turnover": 16.85,
-   "buy": 18.88,
-   "buyLo": 18.79,
-   "buyHi": 18.97,
-   "sell1": 19.07,
-   "sell2": 19.26,
-   "stop": 18.6,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 4.6%（3.4格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "ok",
-     "t": "多头排列"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.05 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 24.4%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.05，放量突破且换手充分（16.9%）",
-    "🎯 明确做T预案：建议买点 18.88，目标止盈 19.07 / 19.26，严守止损 18.6"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [
-     {
-      "level": "info",
-      "type": "高估值溢价",
-      "desc": "PE市盈率约 167.27 倍，估值偏高，只适合快进快出做T，不宜长期死守"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.53,
-   "totalReturnWithT": 1.47
-  },
-  {
-   "code": "000607",
-   "tcode": "sz000607",
-   "name": "华媒控股",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 63,
-   "verdict": "观察",
-   "price": 3.9,
-   "amp": 5.93,
-   "volRatio": 1.03,
-   "vwapOnline": 79.8,
-   "turnover": 4.39,
-   "buy": 3.88,
-   "buyLo": 3.86,
-   "buyHi": 3.9,
-   "sell1": 3.91,
-   "sell2": 3.95,
-   "stop": 3.82,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 5.9%（4.4格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.03 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 79.8%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.03，放量突破且换手充分（4.4%）",
-    "🎯 明确做T预案：建议买点 3.88，目标止盈 3.91 / 3.95，严守止损 3.82"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.41,
-   "totalReturnWithT": 1.12
-  },
-  {
-   "code": "002846",
-   "tcode": "sz002846",
-   "name": "英联股份",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 63,
-   "verdict": "观察",
-   "price": 9.9,
-   "amp": 5.79,
-   "volRatio": 1.5,
-   "vwapOnline": 74.8,
-   "turnover": 3.94,
-   "buy": 9.84,
-   "buyLo": 9.79,
-   "buyHi": 9.89,
-   "sell1": 9.94,
-   "sell2": 10.03,
-   "stop": 9.69,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 5.8%（4.3格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.50 放量"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 74.8%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.50，放量突破且换手充分（3.9%）",
-    "🎯 明确做T预案：建议买点 9.84，目标止盈 9.94 / 10.03，严守止损 9.69"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.5,
-   "totalReturnWithT": 1.46
-  },
-  {
-   "code": "600207",
-   "tcode": "sh600207",
-   "name": "安彩高科",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 63,
-   "verdict": "观察",
-   "price": 4.44,
-   "amp": 7.23,
-   "volRatio": 2.38,
-   "vwapOnline": 37.2,
-   "turnover": 4.09,
-   "buy": 4.41,
-   "buyLo": 4.39,
-   "buyHi": 4.43,
-   "sell1": 4.46,
-   "sell2": 4.5,
-   "stop": 4.35,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 7.2%（5.4格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 2.38 放量"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 37.2%，重心坚挺",
-    "🔥 量价配合：开盘量比 2.38，放量突破且换手充分（4.1%）",
-    "🎯 明确做T预案：建议买点 4.41，目标止盈 4.46 / 4.5，严守止损 4.35"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.57,
-   "totalReturnWithT": 1.64
-  },
-  {
-   "code": "603322",
-   "tcode": "sh603322",
-   "name": "超讯科技",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 62,
-   "verdict": "观察",
-   "price": 23.2,
-   "amp": 5.96,
-   "volRatio": 1.11,
-   "vwapOnline": 89.7,
-   "turnover": 3.09,
-   "buy": 23.05,
-   "buyLo": 22.93,
-   "buyHi": 23.17,
-   "sell1": 23.28,
-   "sell2": 23.51,
-   "stop": 22.71,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 6.0%（4.5格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.11 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 89.7%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.11，放量突破且换手充分（3.1%）",
-    "🎯 明确做T预案：建议买点 23.05，目标止盈 23.28 / 23.51，严守止损 22.71"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.54,
-   "totalReturnWithT": 1.48
-  },
-  {
-   "code": "001268",
-   "tcode": "sz001268",
-   "name": "联合精密",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 62,
-   "verdict": "观察",
-   "price": 20.45,
-   "amp": 11.68,
-   "volRatio": 1.16,
-   "vwapOnline": 88.4,
-   "turnover": 3.1,
-   "buy": 20.32,
-   "buyLo": 20.22,
-   "buyHi": 20.42,
-   "sell1": 20.52,
-   "sell2": 20.73,
-   "stop": 20.02,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "warn",
-     "t": "振幅 11.7%（8.8格）超 6 格"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.16 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 88.4%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.16，放量突破且换手充分（3.1%）",
-    "🎯 明确做T预案：建议买点 20.32，目标止盈 20.52 / 20.73，严守止损 20.02"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     },
-     {
-      "level": "warn",
-      "type": "流通市值偏小",
-      "desc": "流通市值仅 19.29 亿，容易受游资大单砸盘闪崩"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示"
-    ]
-   },
-   "retOpen": 0.53,
-   "totalReturnWithT": 1.45
-  },
-  {
-   "code": "002285",
-   "tcode": "sz002285",
-   "name": "世联行",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 62,
-   "verdict": "观察",
-   "price": 2.43,
-   "amp": 5.58,
-   "volRatio": 1.16,
-   "vwapOnline": 96.7,
-   "turnover": 3.84,
-   "buy": 2.41,
-   "buyLo": 2.4,
-   "buyHi": 2.42,
-   "sell1": 2.44,
-   "sell2": 2.46,
-   "stop": 2.38,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 5.6%（4.2格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.16 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 96.7%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.16，放量突破且换手充分（3.8%）",
-    "🎯 明确做T预案：建议买点 2.41，目标止盈 2.44 / 2.46，严守止损 2.38"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.72,
-   "totalReturnWithT": 1.9
-  },
-  {
-   "code": "002471",
-   "tcode": "sz002471",
-   "name": "中超控股",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 62,
-   "verdict": "观察",
-   "price": 4.81,
-   "amp": 4.53,
-   "volRatio": 1,
-   "vwapOnline": 75.6,
-   "turnover": 4.4,
-   "buy": 4.78,
-   "buyLo": 4.76,
-   "buyHi": 4.8,
-   "sell1": 4.83,
-   "sell2": 4.88,
-   "stop": 4.71,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 4.5%（3.4格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.00 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 75.6%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.00，放量突破且换手充分（4.4%）",
-    "🎯 明确做T预案：建议买点 4.78，目标止盈 4.83 / 4.88，严守止损 4.71"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.52,
-   "totalReturnWithT": 1.5
-  },
-  {
-   "code": "001206",
-   "tcode": "sz001206",
-   "name": "依依股份",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 62,
-   "verdict": "观察",
-   "price": 16.63,
-   "amp": 4.8,
-   "volRatio": 1.14,
-   "vwapOnline": 97.5,
-   "turnover": 3.47,
-   "buy": 16.53,
-   "buyLo": 16.45,
-   "buyHi": 16.61,
-   "sell1": 16.69,
-   "sell2": 16.86,
-   "stop": 16.28,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 4.8%（3.6格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.14 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 97.5%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.14，放量突破且换手充分（3.5%）",
-    "🎯 明确做T预案：建议买点 16.53，目标止盈 16.69 / 16.86，严守止损 16.28"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "流通市值偏小",
-      "desc": "流通市值仅 17.77 亿，容易受游资大单砸盘闪崩"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示"
-    ]
-   },
-   "retOpen": 0.49,
-   "totalReturnWithT": -1.08
-  },
-  {
-   "code": "603353",
-   "tcode": "sh603353",
-   "name": "和顺石油",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 62,
-   "verdict": "观察",
-   "price": 27.92,
-   "amp": 10.16,
-   "volRatio": 1.27,
-   "vwapOnline": 89.7,
-   "turnover": 3.64,
-   "buy": 27.74,
-   "buyLo": 27.6,
-   "buyHi": 27.88,
-   "sell1": 28.02,
-   "sell2": 28.3,
-   "stop": 27.33,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "warn",
-     "t": "振幅 10.2%（7.6格）超 6 格"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.27 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 89.7%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.27，放量突破且换手充分（3.6%）",
-    "🎯 明确做T预案：建议买点 27.74，目标止盈 28.02 / 28.3，严守止损 27.33"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.54,
-   "totalReturnWithT": 1.49
-  },
-  {
-   "code": "000980",
-   "tcode": "sz000980",
-   "name": "众泰汽车",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 62,
-   "verdict": "观察",
-   "price": 1.68,
-   "amp": 4.29,
-   "volRatio": 1.16,
-   "vwapOnline": 60.3,
-   "turnover": 3.45,
-   "buy": 1.67,
-   "buyLo": 1.66,
-   "buyHi": 1.68,
-   "sell1": 1.69,
-   "sell2": 1.7,
-   "stop": 1.64,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 4.3%（3.2格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.16 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 60.3%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.16，放量突破且换手充分（3.5%）",
-    "🎯 明确做T预案：建议买点 1.67，目标止盈 1.69 / 1.7，严守止损 1.64"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.49,
-   "totalReturnWithT": -1.37
-  },
-  {
-   "code": "603278",
-   "tcode": "sh603278",
-   "name": "大业股份",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 61,
-   "verdict": "观察",
-   "price": 15.08,
-   "amp": 6.54,
-   "volRatio": 0.94,
-   "vwapOnline": 90.1,
-   "turnover": 23.87,
-   "buy": 14.98,
-   "buyLo": 14.91,
-   "buyHi": 15.05,
-   "sell1": 15.13,
-   "sell2": 15.28,
-   "stop": 14.76,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 6.5%（4.9格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "wait",
-     "t": "量比 0.94 缩量"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 90.1%，重心坚挺",
-    "🔥 量价配合：开盘量比 0.94，放量突破且换手充分（23.9%）",
-    "🎯 明确做T预案：建议买点 14.98，目标止盈 15.13 / 15.28，严守止损 14.76"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.56,
-   "totalReturnWithT": 1.5
-  },
-  {
-   "code": "603887",
-   "tcode": "sh603887",
-   "name": "城地香江",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 61,
-   "verdict": "观察",
-   "price": 7.87,
-   "amp": 5.13,
-   "volRatio": 0.93,
-   "vwapOnline": 69.4,
-   "turnover": 4.33,
-   "buy": 7.82,
-   "buyLo": 7.78,
-   "buyHi": 7.86,
-   "sell1": 7.9,
-   "sell2": 7.98,
-   "stop": 7.7,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 5.1%（3.8格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "wait",
-     "t": "量比 0.93 缩量"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 69.4%，重心坚挺",
-    "🔥 量价配合：开盘量比 0.93，放量突破且换手充分（4.3%）",
-    "🎯 明确做T预案：建议买点 7.82，目标止盈 7.9 / 7.98，严守止损 7.7"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.53,
-   "totalReturnWithT": 1.49
-  },
-  {
-   "code": "603668",
-   "tcode": "sh603668",
-   "name": "天马科技",
-   "pool": "short",
-   "poolLabel": "短线做T",
-   "score": 60,
-   "verdict": "观察",
-   "price": 6.78,
-   "amp": 5.89,
-   "volRatio": 1.06,
-   "vwapOnline": 100,
-   "turnover": 3.8,
-   "buy": 6.74,
-   "buyLo": 6.71,
-   "buyHi": 6.77,
-   "sell1": 6.8,
-   "sell2": 6.87,
-   "stop": 6.64,
-   "allowT": "正T",
-   "posPct": 0,
-   "action": "观察，不挂单",
-   "gates": {
-    "amp": {
-     "c": "ok",
-     "t": "振幅 5.9%（4.4格）在 3–6 格区间"
-    },
-    "trend": {
-     "c": "wait",
-     "t": "震荡"
-    },
-    "vol": {
-     "c": "ok",
-     "t": "量比 1.06 中性"
-    }
-   },
-   "reviewDate": null,
-   "whyReasons": [
-    "🛡️ 主力控盘：日内均价线上方运行时间占比高达 100.0%，重心坚挺",
-    "🔥 量价配合：开盘量比 1.06，放量突破且换手充分（3.8%）",
-    "🎯 明确做T预案：建议买点 6.74，目标止盈 6.8 / 6.87，严守止损 6.64"
-   ],
-   "riskCheck": {
-    "status": "warn",
-    "statusText": "⚠️ 存在中度警示项",
-    "risks": [
-     {
-      "level": "warn",
-      "type": "业绩亏损",
-      "desc": "动态PE为负（最新扣非净利润亏损），做T需提防暴雷"
-     }
-    ],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "流通市值适中，无极端流动性陷阱"
-    ]
-   },
-   "retOpen": 0.48,
-   "totalReturnWithT": -1.06
-  }
- ],
+ "candidates": [],
  "tail": [
   {
    "rank": 1,
-   "code": "600478",
-   "tcode": "sh600478",
-   "name": "科力远",
+   "code": "600038",
+   "tcode": "sh600038",
+   "name": "中直股份",
    "pool": "tail",
    "poolLabel": "尾盘黑马",
-   "price": 3.6,
-   "chgPct": 5.57,
-   "volRatio": 2.89,
-   "turnover": 8.3,
-   "totalCap": 61,
-   "score": 87,
+   "price": 28.79,
+   "chgPct": 6,
+   "volRatio": 3.65,
+   "turnover": 3.6,
+   "totalCap": 236,
+   "score": 82,
    "verdict": "可挂",
    "parts": {
     "chg": 20,
-    "pos": 20,
+    "pos": 16,
     "vwap": 15,
-    "tail": 6,
+    "tail": 9,
     "vol": 15,
-    "turn": 10,
-    "limitUp": 1
+    "turn": 7,
+    "limitUp": 0
    },
-   "high": 3.64,
-   "low": 3.23,
-   "prevClose": 3.41,
-   "vwap": 3.52,
-   "vwapOnline": 100,
-   "closeStrength": 99.2,
-   "tailIntensity": 0.55,
-   "tailRel": 0.95,
-   "tailVolShare": 13.8,
-   "limitRoom": 4.19,
-   "limitUpDate": "2026-10-09",
-   "retOpen": 5.57,
+   "high": 29.33,
+   "low": 26.7,
+   "prevClose": 27.16,
+   "vwap": 28.46,
+   "vwapOnline": 98.3,
+   "closeStrength": 98.9,
+   "tailIntensity": 0.62,
+   "tailRel": 1,
+   "tailVolShare": 14.3,
+   "limitRoom": 3.77,
+   "limitUpDate": null,
+   "retOpen": 6,
    "whyReasons": [
-    "📈 现价 3.60，日内 +5.57%，距涨停还有 4.19% 空间（未封板，买得进）",
-    "🛡️ 分时均价线上方运行 100%，现价站在当日最高价 99.2% 的位置",
-    "🔥 14:00 后量能密度 0.55×，为当日全市场中位的 0.95 倍（尾盘成交占全天 13.8%）",
-    "⚡ 涨停基因：2026-10-09 曾涨停，此后回落 33.14%，未破涨停日低点"
+    "📈 现价 28.79，日内 +6.00%，距涨停还有 3.77% 空间（未封板，买得进）",
+    "🛡️ 分时均价线上方运行 98.3%，现价站在当日最高价 98.9% 的位置",
+    "🔥 14:00 后量能密度 0.62×，为当日全市场中位的 1 倍（尾盘成交占全天 14.3%）",
+    "⚡ 无 30 日涨停记录，纯尾盘强度入选，仓位按半仓执行"
    ],
-   "buy": 3.6,
-   "buyLo": 3.59,
-   "buyHi": 3.61,
-   "sell1": 3.69,
-   "sell2": 3.76,
-   "stop": 3.55,
+   "buy": 28.79,
+   "buyLo": 28.7,
+   "buyHi": 28.88,
+   "sell1": 29.51,
+   "sell2": 30.09,
+   "stop": 28.36,
    "allowT": "尾盘潜伏",
    "posPct": 10
   },
   {
    "rank": 2,
-   "code": "301301",
-   "tcode": "sz301301",
-   "name": "川宁生物",
+   "code": "300528",
+   "tcode": "sz300528",
+   "name": "幸福蓝海",
    "pool": "tail",
    "poolLabel": "尾盘黑马",
-   "price": 8.38,
-   "chgPct": 5.01,
-   "volRatio": 2.55,
-   "turnover": 5.62,
-   "totalCap": 187.1,
-   "score": 87,
+   "price": 14.67,
+   "chgPct": 5.77,
+   "volRatio": 1.81,
+   "turnover": 8.26,
+   "totalCap": 54.7,
+   "score": 81,
    "verdict": "可挂",
    "parts": {
     "chg": 20,
-    "pos": 20,
+    "pos": 16,
     "vwap": 9,
-    "tail": 13,
-    "vol": 15,
+    "tail": 15,
+    "vol": 11,
     "turn": 10,
     "limitUp": 0
    },
-   "high": 8.42,
-   "low": 7.83,
-   "prevClose": 7.98,
-   "vwap": 8.2,
-   "vwapOnline": 85.1,
-   "closeStrength": 99.5,
-   "tailIntensity": 0.88,
-   "tailRel": 1.52,
-   "tailVolShare": 22.2,
-   "limitRoom": 14.27,
+   "high": 14.93,
+   "low": 13.49,
+   "prevClose": 13.87,
+   "vwap": 14.31,
+   "vwapOnline": 88.6,
+   "closeStrength": 98.5,
+   "tailIntensity": 1.24,
+   "tailRel": 2,
+   "tailVolShare": 28.9,
+   "limitRoom": 13.46,
    "limitUpDate": null,
-   "retOpen": 5.01,
+   "retOpen": 5.77,
    "whyReasons": [
-    "📈 现价 8.38，日内 +5.01%，距涨停还有 14.27% 空间（未封板，买得进）",
-    "🛡️ 分时均价线上方运行 85.1%，现价站在当日最高价 99.5% 的位置",
-    "🔥 14:00 后量能密度 0.88×，为当日全市场中位的 1.52 倍（尾盘成交占全天 22.2%）",
+    "📈 现价 14.67，日内 +5.77%，距涨停还有 13.46% 空间（未封板，买得进）",
+    "🛡️ 分时均价线上方运行 88.6%，现价站在当日最高价 98.5% 的位置",
+    "🔥 14:00 后量能密度 1.24×，为当日全市场中位的 2 倍（尾盘成交占全天 28.9%）",
     "⚡ 无 30 日涨停记录，纯尾盘强度入选，仓位按半仓执行"
    ],
-   "buy": 8.38,
-   "buyLo": 8.35,
-   "buyHi": 8.41,
-   "sell1": 8.59,
-   "sell2": 8.76,
-   "stop": 8.25,
+   "buy": 14.67,
+   "buyLo": 14.63,
+   "buyHi": 14.71,
+   "sell1": 15.04,
+   "sell2": 15.33,
+   "stop": 14.45,
    "allowT": "尾盘潜伏",
    "posPct": 10
   }
  ],
  "tailMeta": {
-  "date": "2026-11-05",
-  "scanTime": "16:01",
+  "date": "2026-11-06",
+  "scanTime": "14:53",
   "env": {
    "level": "WARN",
    "text": "上证跌破 MA20/MA60 但小盘尚可 → 仓位减半",
    "posFactor": 0.5
   },
   "stats": {
-   "totalMarket": 5219,
-   "prefilter": 248,
-   "reviewed": 70,
-   "passed": 27
+   "totalMarket": 5218,
+   "prefilter": 21,
+   "reviewed": 21,
+   "passed": 11
   }
  },
  "steady": [
@@ -5521,12 +176,12 @@
    "div": 7.65,
    "roe": 21,
    "mv": 640,
-   "price": 29.12,
-   "amp20": 3.01,
+   "price": 31.1,
+   "amp20": 3.21,
    "trend": "多头",
-   "chg20": 12,
+   "chg20": 15,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -5563,12 +218,12 @@
    "div": 5.97,
    "roe": 19.7,
    "mv": 335,
-   "price": 42.7,
-   "amp20": 2.31,
+   "price": 45.36,
+   "amp20": 2.4,
    "trend": "多头",
-   "chg20": 8.8,
+   "chg20": 10,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -5605,12 +260,12 @@
    "div": 4.61,
    "roe": 29.9,
    "mv": 751,
-   "price": 5.26,
-   "amp20": 3.28,
+   "price": 5.55,
+   "amp20": 3.55,
    "trend": "多头",
-   "chg20": 12.9,
+   "chg20": 13,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -5638,315 +293,21 @@
    "totalReturnWithT": 6.49
   },
   {
-   "code": "000895",
-   "tcode": "sz000895",
-   "name": "双汇发展",
-   "pool": "steady",
-   "poolLabel": "稳健底仓",
-   "score": 88,
-   "div": 5.48,
-   "roe": 16.8,
-   "mv": 835,
-   "price": 24.42,
-   "amp20": 1.8,
-   "trend": "多头",
-   "chg20": 5.3,
-   "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
-   "missing": [
-    "现金流/净利",
-    "营收CAGR",
-    "负债率",
-    "PB分位"
-   ],
-   "whyReasons": [
-    "💰 股息率 5.48%（分红现金流充沛，提供高确定性安全垫）",
-    "📈 ROE 16.8%（净资产盈利质量优异，穿越牛熊蓝筹）",
-    "🏢 总市值 835 亿（大体量行业龙头，抗游资恶性操纵）",
-    "🎯 20日均振幅 1.80%（处于 1.5%~5.5% 黄金做T温床，太妖拿不住，太死做不动）",
-    "📊 趋势形态：多头排列（中长期均线依托支撑）"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "高盈利防御：ROE 16.83%，低估值护城河",
-     "成熟大市值蓝筹，全流通无大额解禁冲击"
-    ]
-   },
-   "retOpen": -0.44,
-   "totalReturnWithT": -0.44
-  },
-  {
-   "code": "002128",
-   "tcode": "sz002128",
-   "name": "电投能源",
-   "pool": "steady",
-   "poolLabel": "稳健底仓",
-   "score": 88,
-   "div": 4.66,
-   "roe": 15.3,
-   "mv": 880,
-   "price": 28.47,
-   "amp20": 3.39,
-   "trend": "多头",
-   "chg20": 2.3,
-   "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
-   "missing": [
-    "现金流/净利",
-    "营收CAGR",
-    "负债率",
-    "PB分位"
-   ],
-   "whyReasons": [
-    "💰 股息率 4.66%（分红现金流充沛，提供高确定性安全垫）",
-    "📈 ROE 15.3%（净资产盈利质量优异，穿越牛熊蓝筹）",
-    "🏢 总市值 880 亿（大体量行业龙头，抗游资恶性操纵）",
-    "🎯 20日均振幅 3.39%（处于 1.5%~5.5% 黄金做T温床，太妖拿不住，太死做不动）",
-    "📊 趋势形态：多头排列（中长期均线依托支撑）"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "高盈利防御：ROE 15.33%，低估值护城河",
-     "成熟大市值蓝筹，全流通无大额解禁冲击"
-    ]
-   },
-   "retOpen": -3.41,
-   "totalReturnWithT": -3.41
-  },
-  {
-   "code": "601225",
-   "tcode": "sh601225",
-   "name": "陕西煤业",
-   "pool": "steady",
-   "poolLabel": "稳健底仓",
-   "score": 88,
-   "div": 4.45,
-   "roe": 16.7,
-   "mv": 2666,
-   "price": 28.08,
-   "amp20": 3.23,
-   "trend": "多头",
-   "chg20": 9,
-   "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
-   "missing": [
-    "现金流/净利",
-    "营收CAGR",
-    "负债率",
-    "PB分位"
-   ],
-   "whyReasons": [
-    "💰 股息率 4.45%（分红现金流充沛，提供高确定性安全垫）",
-    "📈 ROE 16.7%（净资产盈利质量优异，穿越牛熊蓝筹）",
-    "🏢 总市值 2666 亿（大体量行业龙头，抗游资恶性操纵）",
-    "🎯 20日均振幅 3.23%（处于 1.5%~5.5% 黄金做T温床，太妖拿不住，太死做不动）",
-    "📊 趋势形态：多头排列（中长期均线依托支撑）"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "高盈利防御：ROE 16.7%，低估值护城河",
-     "成熟大市值蓝筹，全流通无大额解禁冲击"
-    ]
-   },
-   "retOpen": -9.23,
-   "totalReturnWithT": -9.23
-  },
-  {
-   "code": "603766",
-   "tcode": "sh603766",
-   "name": "隆鑫通用",
-   "pool": "steady",
-   "poolLabel": "稳健底仓",
-   "score": 88,
-   "div": 4.35,
-   "roe": 15.9,
-   "mv": 311,
-   "price": 14.98,
-   "amp20": 3.73,
-   "trend": "多头",
-   "chg20": 3,
-   "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
-   "missing": [
-    "现金流/净利",
-    "营收CAGR",
-    "负债率",
-    "PB分位"
-   ],
-   "whyReasons": [
-    "💰 股息率 4.35%（分红现金流充沛，提供高确定性安全垫）",
-    "📈 ROE 15.9%（净资产盈利质量优异，穿越牛熊蓝筹）",
-    "🏢 总市值 311 亿（大体量行业龙头，抗游资恶性操纵）",
-    "🎯 20日均振幅 3.73%（处于 1.5%~5.5% 黄金做T温床，太妖拿不住，太死做不动）",
-    "📊 趋势形态：多头排列（中长期均线依托支撑）"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "高盈利防御：ROE 15.91%，低估值护城河",
-     "成熟大市值蓝筹，全流通无大额解禁冲击"
-    ]
-   },
-   "retOpen": 8.17,
-   "totalReturnWithT": 10.02
-  },
-  {
-   "code": "600809",
-   "tcode": "sh600809",
-   "name": "山西汾酒",
-   "pool": "steady",
-   "poolLabel": "稳健底仓",
-   "score": 88,
-   "div": 3.82,
-   "roe": 20.3,
-   "mv": 1430,
-   "price": 126.27,
-   "amp20": 3.97,
-   "trend": "多头",
-   "chg20": 13.6,
-   "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
-   "missing": [
-    "现金流/净利",
-    "营收CAGR",
-    "负债率",
-    "PB分位"
-   ],
-   "whyReasons": [
-    "💰 股息率 3.82%（分红现金流充沛，提供高确定性安全垫）",
-    "📈 ROE 20.3%（净资产盈利质量优异，穿越牛熊蓝筹）",
-    "🏢 总市值 1430 亿（大体量行业龙头，抗游资恶性操纵）",
-    "🎯 20日均振幅 3.97%（处于 1.5%~5.5% 黄金做T温床，太妖拿不住，太死做不动）",
-    "📊 趋势形态：多头排列（中长期均线依托支撑）"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "高盈利防御：ROE 20.26%，低估值护城河",
-     "成熟大市值蓝筹，全流通无大额解禁冲击"
-    ]
-   },
-   "retOpen": 3.1,
-   "totalReturnWithT": 4.95
-  },
-  {
-   "code": "601838",
-   "tcode": "sh601838",
-   "name": "成都银行",
-   "pool": "steady",
-   "poolLabel": "稳健底仓",
-   "score": 82,
-   "div": 5.71,
-   "roe": 10.5,
-   "mv": 843,
-   "price": 19.94,
-   "amp20": 2.5,
-   "trend": "多头",
-   "chg20": 4.7,
-   "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
-   "missing": [
-    "现金流/净利",
-    "营收CAGR",
-    "负债率",
-    "PB分位"
-   ],
-   "whyReasons": [
-    "💰 股息率 5.71%（分红现金流充沛，提供高确定性安全垫）",
-    "📈 ROE 10.5%（净资产盈利质量优异，穿越牛熊蓝筹）",
-    "🏢 总市值 843 亿（大体量行业龙头，抗游资恶性操纵）",
-    "🎯 20日均振幅 2.50%（处于 1.5%~5.5% 黄金做T温床，太妖拿不住，太死做不动）",
-    "📊 趋势形态：多头排列（中长期均线依托支撑）"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "高盈利防御：ROE 10.48%，低估值护城河",
-     "成熟大市值蓝筹，全流通无大额解禁冲击"
-    ]
-   },
-   "retOpen": -0.51,
-   "totalReturnWithT": -0.51
-  },
-  {
-   "code": "600926",
-   "tcode": "sh600926",
-   "name": "杭州银行",
-   "pool": "steady",
-   "poolLabel": "稳健底仓",
-   "score": 82,
-   "div": 4.32,
-   "roe": 12.1,
-   "mv": 1239,
-   "price": 17.13,
-   "amp20": 2.09,
-   "trend": "多头",
-   "chg20": 2.1,
-   "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
-   "missing": [
-    "现金流/净利",
-    "营收CAGR",
-    "负债率",
-    "PB分位"
-   ],
-   "whyReasons": [
-    "💰 股息率 4.32%（分红现金流充沛，提供高确定性安全垫）",
-    "📈 ROE 12.1%（净资产盈利质量优异，穿越牛熊蓝筹）",
-    "🏢 总市值 1239 亿（大体量行业龙头，抗游资恶性操纵）",
-    "🎯 20日均振幅 2.09%（处于 1.5%~5.5% 黄金做T温床，太妖拿不住，太死做不动）",
-    "📊 趋势形态：多头排列（中长期均线依托支撑）"
-   ],
-   "riskCheck": {
-    "status": "safe",
-    "statusText": "🟢 未见重大恶性利空",
-    "risks": [],
-    "highlights": [
-     "非ST标的，无退市警示",
-     "高盈利防御：ROE 12.12%，低估值护城河",
-     "成熟大市值蓝筹，全流通无大额解禁冲击"
-    ]
-   },
-   "retOpen": -1.34,
-   "totalReturnWithT": -1.34
-  },
-  {
    "code": "300628",
    "tcode": "sz300628",
    "name": "亿联网络",
    "pool": "steady",
    "poolLabel": "稳健底仓",
-   "score": 80,
+   "score": 92,
    "div": 5.05,
    "roe": 23.4,
    "mv": 475,
-   "price": 36.88,
-   "amp20": 3.1,
-   "trend": "偏弱",
-   "chg20": -10,
+   "price": 39.59,
+   "amp20": 3.43,
+   "trend": "整理",
+   "chg20": -1,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -5974,21 +335,21 @@
    "totalReturnWithT": 7.87
   },
   {
-   "code": "600901",
-   "tcode": "sh600901",
-   "name": "江苏金租",
+   "code": "000423",
+   "tcode": "sz000423",
+   "name": "东阿阿胶",
    "pool": "steady",
    "poolLabel": "稳健底仓",
-   "score": 76,
-   "div": 4.9,
-   "roe": 10.4,
-   "mv": 438,
-   "price": 7.49,
-   "amp20": 2.42,
+   "score": 88,
+   "div": 5.51,
+   "roe": 12.7,
+   "mv": 303,
+   "price": 50.85,
+   "amp20": 2.61,
    "trend": "多头",
-   "chg20": 10.3,
+   "chg20": 8.9,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -5996,10 +357,50 @@
     "PB分位"
    ],
    "whyReasons": [
-    "💰 股息率 4.90%（分红现金流充沛，提供高确定性安全垫）",
-    "📈 ROE 10.4%（净资产盈利质量优异，穿越牛熊蓝筹）",
-    "🏢 总市值 438 亿（大体量行业龙头，抗游资恶性操纵）",
-    "🎯 20日均振幅 2.42%（处于 1.5%~5.5% 黄金做T温床，太妖拿不住，太死做不动）",
+    "💰 股息率 5.5%（高分红现金流护城河）",
+    "📈 ROE 12.7%（大市值蓝筹优质资产盈利）",
+    "🎯 20日均振幅 2.6%（黄金做T振幅，波动良性）"
+   ],
+   "riskCheck": {
+    "status": "safe",
+    "statusText": "🟢 未见重大恶性利空",
+    "risks": [],
+    "highlights": [
+     "非ST标的",
+     "全流通大市值蓝筹",
+     "经营现金流充沛"
+    ]
+   },
+   "retOpen": null,
+   "totalReturnWithT": null
+  },
+  {
+   "code": "000895",
+   "tcode": "sz000895",
+   "name": "双汇发展",
+   "pool": "steady",
+   "poolLabel": "稳健底仓",
+   "score": 88,
+   "div": 5.48,
+   "roe": 16.8,
+   "mv": 835,
+   "price": 24.52,
+   "amp20": 1.91,
+   "trend": "多头",
+   "chg20": 3.1,
+   "allowT": "底仓（仅倒T）",
+   "reviewDate": "2026-11-09",
+   "missing": [
+    "现金流/净利",
+    "营收CAGR",
+    "负债率",
+    "PB分位"
+   ],
+   "whyReasons": [
+    "💰 股息率 5.48%（分红现金流充沛，提供高确定性安全垫）",
+    "📈 ROE 16.8%（净资产盈利质量优异，穿越牛熊蓝筹）",
+    "🏢 总市值 835 亿（大体量行业龙头，抗游资恶性操纵）",
+    "🎯 20日均振幅 1.80%（处于 1.5%~5.5% 黄金做T温床，太妖拿不住，太死做不动）",
     "📊 趋势形态：多头排列（中长期均线依托支撑）"
    ],
    "riskCheck": {
@@ -6008,12 +409,258 @@
     "risks": [],
     "highlights": [
      "非ST标的，无退市警示",
-     "高盈利防御：ROE 10.38%，低估值护城河",
+     "高盈利防御：ROE 16.83%，低估值护城河",
      "成熟大市值蓝筹，全流通无大额解禁冲击"
     ]
    },
-   "retOpen": 0.82,
-   "totalReturnWithT": 0.82
+   "retOpen": -0.44,
+   "totalReturnWithT": -0.44
+  },
+  {
+   "code": "603766",
+   "tcode": "sh603766",
+   "name": "隆鑫通用",
+   "pool": "steady",
+   "poolLabel": "稳健底仓",
+   "score": 88,
+   "div": 4.35,
+   "roe": 15.9,
+   "mv": 311,
+   "price": 16.19,
+   "amp20": 4,
+   "trend": "多头",
+   "chg20": 15.4,
+   "allowT": "底仓（仅倒T）",
+   "reviewDate": "2026-11-09",
+   "missing": [
+    "现金流/净利",
+    "营收CAGR",
+    "负债率",
+    "PB分位"
+   ],
+   "whyReasons": [
+    "💰 股息率 4.35%（分红现金流充沛，提供高确定性安全垫）",
+    "📈 ROE 15.9%（净资产盈利质量优异，穿越牛熊蓝筹）",
+    "🏢 总市值 311 亿（大体量行业龙头，抗游资恶性操纵）",
+    "🎯 20日均振幅 3.73%（处于 1.5%~5.5% 黄金做T温床，太妖拿不住，太死做不动）",
+    "📊 趋势形态：多头排列（中长期均线依托支撑）"
+   ],
+   "riskCheck": {
+    "status": "safe",
+    "statusText": "🟢 未见重大恶性利空",
+    "risks": [],
+    "highlights": [
+     "非ST标的，无退市警示",
+     "高盈利防御：ROE 15.91%，低估值护城河",
+     "成熟大市值蓝筹，全流通无大额解禁冲击"
+    ]
+   },
+   "retOpen": 8.17,
+   "totalReturnWithT": 10.02
+  },
+  {
+   "code": "000651",
+   "tcode": "sz000651",
+   "name": "格力电器",
+   "pool": "steady",
+   "poolLabel": "稳健底仓",
+   "score": 82,
+   "div": 7.46,
+   "roe": 11.4,
+   "mv": 2105,
+   "price": 39.02,
+   "amp20": 2.26,
+   "trend": "多头",
+   "chg20": 0.5,
+   "allowT": "底仓（仅倒T）",
+   "reviewDate": "2026-11-09",
+   "missing": [
+    "现金流/净利",
+    "营收CAGR",
+    "负债率",
+    "PB分位"
+   ],
+   "whyReasons": [
+    "💰 股息率 7.5%（高分红现金流护城河）",
+    "📈 ROE 11.4%（大市值蓝筹优质资产盈利）",
+    "🎯 20日均振幅 2.3%（黄金做T振幅，波动良性）"
+   ],
+   "riskCheck": {
+    "status": "safe",
+    "statusText": "🟢 未见重大恶性利空",
+    "risks": [],
+    "highlights": [
+     "非ST标的",
+     "全流通大市值蓝筹",
+     "经营现金流充沛"
+    ]
+   },
+   "retOpen": null,
+   "totalReturnWithT": null
+  },
+  {
+   "code": "601838",
+   "tcode": "sh601838",
+   "name": "成都银行",
+   "pool": "steady",
+   "poolLabel": "稳健底仓",
+   "score": 82,
+   "div": 5.71,
+   "roe": 10.5,
+   "mv": 843,
+   "price": 20.18,
+   "amp20": 2.51,
+   "trend": "多头",
+   "chg20": 4.6,
+   "allowT": "底仓（仅倒T）",
+   "reviewDate": "2026-11-09",
+   "missing": [
+    "现金流/净利",
+    "营收CAGR",
+    "负债率",
+    "PB分位"
+   ],
+   "whyReasons": [
+    "💰 股息率 5.71%（分红现金流充沛，提供高确定性安全垫）",
+    "📈 ROE 10.5%（净资产盈利质量优异，穿越牛熊蓝筹）",
+    "🏢 总市值 843 亿（大体量行业龙头，抗游资恶性操纵）",
+    "🎯 20日均振幅 2.50%（处于 1.5%~5.5% 黄金做T温床，太妖拿不住，太死做不动）",
+    "📊 趋势形态：多头排列（中长期均线依托支撑）"
+   ],
+   "riskCheck": {
+    "status": "safe",
+    "statusText": "🟢 未见重大恶性利空",
+    "risks": [],
+    "highlights": [
+     "非ST标的，无退市警示",
+     "高盈利防御：ROE 10.48%，低估值护城河",
+     "成熟大市值蓝筹，全流通无大额解禁冲击"
+    ]
+   },
+   "retOpen": -0.51,
+   "totalReturnWithT": -0.51
+  },
+  {
+   "code": "600600",
+   "tcode": "sh600600",
+   "name": "青岛啤酒",
+   "pool": "steady",
+   "poolLabel": "稳健底仓",
+   "score": 82,
+   "div": 3.84,
+   "roe": 15.8,
+   "mv": 570,
+   "price": 53.34,
+   "amp20": 2.21,
+   "trend": "多头",
+   "chg20": 4.2,
+   "allowT": "底仓（仅倒T）",
+   "reviewDate": "2026-11-09",
+   "missing": [
+    "现金流/净利",
+    "营收CAGR",
+    "负债率",
+    "PB分位"
+   ],
+   "whyReasons": [
+    "💰 股息率 3.8%（高分红现金流护城河）",
+    "📈 ROE 15.8%（大市值蓝筹优质资产盈利）",
+    "🎯 20日均振幅 2.2%（黄金做T振幅，波动良性）"
+   ],
+   "riskCheck": {
+    "status": "safe",
+    "statusText": "🟢 未见重大恶性利空",
+    "risks": [],
+    "highlights": [
+     "非ST标的",
+     "全流通大市值蓝筹",
+     "经营现金流充沛"
+    ]
+   },
+   "retOpen": null,
+   "totalReturnWithT": null
+  },
+  {
+   "code": "600809",
+   "tcode": "sh600809",
+   "name": "山西汾酒",
+   "pool": "steady",
+   "poolLabel": "稳健底仓",
+   "score": 82,
+   "div": 3.82,
+   "roe": 20.3,
+   "mv": 1430,
+   "price": 132,
+   "amp20": 4.04,
+   "trend": "多头",
+   "chg20": 14.1,
+   "allowT": "底仓（仅倒T）",
+   "reviewDate": "2026-11-09",
+   "missing": [
+    "现金流/净利",
+    "营收CAGR",
+    "负债率",
+    "PB分位"
+   ],
+   "whyReasons": [
+    "💰 股息率 3.82%（分红现金流充沛，提供高确定性安全垫）",
+    "📈 ROE 20.3%（净资产盈利质量优异，穿越牛熊蓝筹）",
+    "🏢 总市值 1430 亿（大体量行业龙头，抗游资恶性操纵）",
+    "🎯 20日均振幅 3.97%（处于 1.5%~5.5% 黄金做T温床，太妖拿不住，太死做不动）",
+    "📊 趋势形态：多头排列（中长期均线依托支撑）"
+   ],
+   "riskCheck": {
+    "status": "safe",
+    "statusText": "🟢 未见重大恶性利空",
+    "risks": [],
+    "highlights": [
+     "非ST标的，无退市警示",
+     "高盈利防御：ROE 20.26%，低估值护城河",
+     "成熟大市值蓝筹，全流通无大额解禁冲击"
+    ]
+   },
+   "retOpen": 3.1,
+   "totalReturnWithT": 4.95
+  },
+  {
+   "code": "600660",
+   "tcode": "sh600660",
+   "name": "福耀玻璃",
+   "pool": "steady",
+   "poolLabel": "稳健底仓",
+   "score": 82,
+   "div": 3.24,
+   "roe": 15.7,
+   "mv": 1334,
+   "price": 55.92,
+   "amp20": 2.4,
+   "trend": "多头",
+   "chg20": 3.6,
+   "allowT": "底仓（仅倒T）",
+   "reviewDate": "2026-11-09",
+   "missing": [
+    "现金流/净利",
+    "营收CAGR",
+    "负债率",
+    "PB分位"
+   ],
+   "whyReasons": [
+    "💰 股息率 3.2%（高分红现金流护城河）",
+    "📈 ROE 15.7%（大市值蓝筹优质资产盈利）",
+    "🎯 20日均振幅 2.4%（黄金做T振幅，波动良性）"
+   ],
+   "riskCheck": {
+    "status": "safe",
+    "statusText": "🟢 未见重大恶性利空",
+    "risks": [],
+    "highlights": [
+     "非ST标的",
+     "全流通大市值蓝筹",
+     "经营现金流充沛"
+    ]
+   },
+   "retOpen": null,
+   "totalReturnWithT": null
   }
  ],
  "steadyAll": [
@@ -6027,12 +674,12 @@
    "div": 7.65,
    "roe": 21,
    "mv": 640,
-   "price": 29.12,
-   "amp20": 3.01,
+   "price": 31.1,
+   "amp20": 3.21,
    "trend": "多头",
-   "chg20": 12,
+   "chg20": 15,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -6065,16 +712,16 @@
    "name": "格力电器",
    "pool": "steady",
    "poolLabel": "稳健底仓",
-   "score": 62,
+   "score": 82,
    "div": 7.46,
    "roe": 11.4,
    "mv": 2105,
-   "price": 38.49,
-   "amp20": 2.06,
-   "trend": "偏弱",
-   "chg20": 0,
+   "price": 39.02,
+   "amp20": 2.26,
+   "trend": "多头",
+   "chg20": 0.5,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -6084,7 +731,7 @@
    "whyReasons": [
     "💰 股息率 7.5%（高分红现金流护城河）",
     "📈 ROE 11.4%（大市值蓝筹优质资产盈利）",
-    "🎯 20日均振幅 2.1%（黄金做T振幅，波动良性）"
+    "🎯 20日均振幅 2.3%（黄金做T振幅，波动良性）"
    ],
    "riskCheck": {
     "status": "safe",
@@ -6109,12 +756,12 @@
    "div": 5.97,
    "roe": 19.7,
    "mv": 335,
-   "price": 42.7,
-   "amp20": 2.31,
+   "price": 45.36,
+   "amp20": 2.4,
    "trend": "多头",
-   "chg20": 8.8,
+   "chg20": 10,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -6151,12 +798,12 @@
    "div": 5.71,
    "roe": 10.5,
    "mv": 843,
-   "price": 19.94,
-   "amp20": 2.5,
+   "price": 20.18,
+   "amp20": 2.51,
    "trend": "多头",
-   "chg20": 4.7,
+   "chg20": 4.6,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -6189,16 +836,16 @@
    "name": "东阿阿胶",
    "pool": "steady",
    "poolLabel": "稳健底仓",
-   "score": 68,
+   "score": 88,
    "div": 5.51,
    "roe": 12.7,
    "mv": 303,
-   "price": 47.93,
-   "amp20": 2.31,
-   "trend": "偏弱",
-   "chg20": 6.2,
+   "price": 50.85,
+   "amp20": 2.61,
+   "trend": "多头",
+   "chg20": 8.9,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -6208,7 +855,7 @@
    "whyReasons": [
     "💰 股息率 5.5%（高分红现金流护城河）",
     "📈 ROE 12.7%（大市值蓝筹优质资产盈利）",
-    "🎯 20日均振幅 2.3%（黄金做T振幅，波动良性）"
+    "🎯 20日均振幅 2.6%（黄金做T振幅，波动良性）"
    ],
    "riskCheck": {
     "status": "safe",
@@ -6233,12 +880,12 @@
    "div": 5.48,
    "roe": 16.8,
    "mv": 835,
-   "price": 24.42,
-   "amp20": 1.8,
+   "price": 24.52,
+   "amp20": 1.91,
    "trend": "多头",
-   "chg20": 5.3,
+   "chg20": 3.1,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -6275,12 +922,12 @@
    "div": 5.22,
    "roe": 12.8,
    "mv": 426,
-   "price": 32.71,
-   "amp20": 4.66,
+   "price": 32.07,
+   "amp20": 4.88,
    "trend": "偏弱",
-   "chg20": -25.5,
+   "chg20": -24.3,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -6290,7 +937,7 @@
    "whyReasons": [
     "💰 股息率 5.2%（高分红现金流护城河）",
     "📈 ROE 12.8%（大市值蓝筹优质资产盈利）",
-    "🎯 20日均振幅 4.7%（黄金做T振幅，波动良性）"
+    "🎯 20日均振幅 4.9%（黄金做T振幅，波动良性）"
    ],
    "riskCheck": {
     "status": "safe",
@@ -6311,16 +958,16 @@
    "name": "亿联网络",
    "pool": "steady",
    "poolLabel": "稳健底仓",
-   "score": 80,
+   "score": 92,
    "div": 5.05,
    "roe": 23.4,
    "mv": 475,
-   "price": 36.88,
-   "amp20": 3.1,
-   "trend": "偏弱",
-   "chg20": -10,
+   "price": 39.59,
+   "amp20": 3.43,
+   "trend": "整理",
+   "chg20": -1,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -6357,12 +1004,12 @@
    "div": 4.9,
    "roe": 10.4,
    "mv": 438,
-   "price": 7.49,
-   "amp20": 2.42,
+   "price": 7.71,
+   "amp20": 2.73,
    "trend": "多头",
-   "chg20": 10.3,
+   "chg20": 10.1,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -6395,16 +1042,16 @@
    "name": "电投能源",
    "pool": "steady",
    "poolLabel": "稳健底仓",
-   "score": 88,
+   "score": 68,
    "div": 4.66,
    "roe": 15.3,
    "mv": 880,
-   "price": 28.47,
-   "amp20": 3.39,
-   "trend": "多头",
-   "chg20": 2.3,
+   "price": 27.34,
+   "amp20": 3.26,
+   "trend": "偏弱",
+   "chg20": -5.1,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -6441,12 +1088,12 @@
    "div": 4.63,
    "roe": 10.1,
    "mv": 1528,
-   "price": 12.37,
-   "amp20": 2.57,
+   "price": 12.31,
+   "amp20": 2.68,
    "trend": "多头",
-   "chg20": 3.5,
+   "chg20": 3.4,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -6456,7 +1103,7 @@
    "whyReasons": [
     "💰 股息率 4.6%（高分红现金流护城河）",
     "📈 ROE 10.1%（大市值蓝筹优质资产盈利）",
-    "🎯 20日均振幅 2.6%（黄金做T振幅，波动良性）"
+    "🎯 20日均振幅 2.7%（黄金做T振幅，波动良性）"
    ],
    "riskCheck": {
     "status": "safe",
@@ -6481,12 +1128,12 @@
    "div": 4.61,
    "roe": 29.9,
    "mv": 751,
-   "price": 5.26,
-   "amp20": 3.28,
+   "price": 5.55,
+   "amp20": 3.55,
    "trend": "多头",
-   "chg20": 12.9,
+   "chg20": 13,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -6519,16 +1166,16 @@
    "name": "中远海特",
    "pool": "steady",
    "poolLabel": "稳健底仓",
-   "score": 74,
+   "score": 62,
    "div": 4.58,
    "roe": 14.8,
    "mv": 313,
-   "price": 11.47,
-   "amp20": 3.82,
-   "trend": "整理",
-   "chg20": 3.7,
+   "price": 10.68,
+   "amp20": 3.94,
+   "trend": "偏弱",
+   "chg20": -2.5,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -6538,7 +1185,7 @@
    "whyReasons": [
     "💰 股息率 4.6%（高分红现金流护城河）",
     "📈 ROE 14.8%（大市值蓝筹优质资产盈利）",
-    "🎯 20日均振幅 3.8%（黄金做T振幅，波动良性）"
+    "🎯 20日均振幅 3.9%（黄金做T振幅，波动良性）"
    ],
    "riskCheck": {
     "status": "safe",
@@ -6559,16 +1206,16 @@
    "name": "陕西煤业",
    "pool": "steady",
    "poolLabel": "稳健底仓",
-   "score": 88,
+   "score": 68,
    "div": 4.45,
    "roe": 16.7,
    "mv": 2666,
-   "price": 28.08,
-   "amp20": 3.23,
-   "trend": "多头",
-   "chg20": 9,
+   "price": 25.85,
+   "amp20": 3.36,
+   "trend": "偏弱",
+   "chg20": -3.9,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -6605,12 +1252,12 @@
    "div": 4.35,
    "roe": 15.9,
    "mv": 311,
-   "price": 14.98,
-   "amp20": 3.73,
+   "price": 16.19,
+   "amp20": 4,
    "trend": "多头",
-   "chg20": 3,
+   "chg20": 15.4,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -6643,16 +1290,16 @@
    "name": "杭州银行",
    "pool": "steady",
    "poolLabel": "稳健底仓",
-   "score": 82,
+   "score": 74,
    "div": 4.32,
    "roe": 12.1,
    "mv": 1239,
-   "price": 17.13,
-   "amp20": 2.09,
-   "trend": "多头",
-   "chg20": 2.1,
+   "price": 17.09,
+   "amp20": 2.2,
+   "trend": "整理",
+   "chg20": -0.3,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -6689,12 +1336,12 @@
    "div": 4.19,
    "roe": 14.4,
    "mv": 445,
-   "price": 24.72,
-   "amp20": 2.59,
+   "price": 26.22,
+   "amp20": 2.89,
    "trend": "偏弱",
-   "chg20": -10.3,
+   "chg20": -7.4,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -6704,7 +1351,7 @@
    "whyReasons": [
     "💰 股息率 4.2%（高分红现金流护城河）",
     "📈 ROE 14.4%（大市值蓝筹优质资产盈利）",
-    "🎯 20日均振幅 2.6%（黄金做T振幅，波动良性）"
+    "🎯 20日均振幅 2.9%（黄金做T振幅，波动良性）"
    ],
    "riskCheck": {
     "status": "safe",
@@ -6725,16 +1372,16 @@
    "name": "青岛银行",
    "pool": "steady",
    "poolLabel": "稳健底仓",
-   "score": 68,
+   "score": 76,
    "div": 4.02,
    "roe": 10.4,
    "mv": 321,
-   "price": 6.26,
-   "amp20": 2.72,
-   "trend": "整理",
-   "chg20": 3.6,
+   "price": 6.24,
+   "amp20": 2.95,
+   "trend": "多头",
+   "chg20": 1.6,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -6744,7 +1391,7 @@
    "whyReasons": [
     "💰 股息率 4.0%（高分红现金流护城河）",
     "📈 ROE 10.4%（大市值蓝筹优质资产盈利）",
-    "🎯 20日均振幅 2.7%（黄金做T振幅，波动良性）"
+    "🎯 20日均振幅 3.0%（黄金做T振幅，波动良性）"
    ],
    "riskCheck": {
     "status": "safe",
@@ -6769,12 +1416,12 @@
    "div": 3.97,
    "roe": 16.7,
    "mv": 782,
-   "price": 25.6,
-   "amp20": 2.64,
+   "price": 26.76,
+   "amp20": 2.7,
    "trend": "偏弱",
-   "chg20": -0.4,
+   "chg20": 0.7,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -6784,7 +1431,7 @@
    "whyReasons": [
     "💰 股息率 4.0%（高分红现金流护城河）",
     "📈 ROE 16.7%（大市值蓝筹优质资产盈利）",
-    "🎯 20日均振幅 2.6%（黄金做T振幅，波动良性）"
+    "🎯 20日均振幅 2.7%（黄金做T振幅，波动良性）"
    ],
    "riskCheck": {
     "status": "safe",
@@ -6809,12 +1456,12 @@
    "div": 3.85,
    "roe": 15,
    "mv": 3188,
-   "price": 34.55,
-   "amp20": 2.56,
+   "price": 35.25,
+   "amp20": 2.79,
    "trend": "多头",
-   "chg20": 5.9,
+   "chg20": 6.9,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -6824,7 +1471,7 @@
    "whyReasons": [
     "💰 股息率 3.9%（高分红现金流护城河）",
     "📈 ROE 15.0%（大市值蓝筹优质资产盈利）",
-    "🎯 20日均振幅 2.6%（黄金做T振幅，波动良性）"
+    "🎯 20日均振幅 2.8%（黄金做T振幅，波动良性）"
    ],
    "riskCheck": {
     "status": "safe",
@@ -6845,16 +1492,16 @@
    "name": "青岛啤酒",
    "pool": "steady",
    "poolLabel": "稳健底仓",
-   "score": 56,
+   "score": 82,
    "div": 3.84,
    "roe": 15.8,
    "mv": 570,
-   "price": 50.61,
-   "amp20": 1.84,
-   "trend": "偏弱",
-   "chg20": 1.4,
+   "price": 53.34,
+   "amp20": 2.21,
+   "trend": "多头",
+   "chg20": 4.2,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -6864,7 +1511,7 @@
    "whyReasons": [
     "💰 股息率 3.8%（高分红现金流护城河）",
     "📈 ROE 15.8%（大市值蓝筹优质资产盈利）",
-    "🎯 20日均振幅 1.8%（黄金做T振幅，波动良性）"
+    "🎯 20日均振幅 2.2%（黄金做T振幅，波动良性）"
    ],
    "riskCheck": {
     "status": "safe",
@@ -6885,16 +1532,16 @@
    "name": "山西汾酒",
    "pool": "steady",
    "poolLabel": "稳健底仓",
-   "score": 88,
+   "score": 82,
    "div": 3.82,
    "roe": 20.3,
    "mv": 1430,
-   "price": 126.27,
-   "amp20": 3.97,
+   "price": 132,
+   "amp20": 4.04,
    "trend": "多头",
-   "chg20": 13.6,
+   "chg20": 14.1,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -6931,12 +1578,12 @@
    "div": 3.57,
    "roe": 27.1,
    "mv": 1629,
-   "price": 22.31,
-   "amp20": 3.04,
+   "price": 21.24,
+   "amp20": 3.22,
    "trend": "偏弱",
-   "chg20": -0.1,
+   "chg20": -8.6,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -6946,7 +1593,7 @@
    "whyReasons": [
     "💰 股息率 3.6%（高分红现金流护城河）",
     "📈 ROE 27.1%（大市值蓝筹优质资产盈利）",
-    "🎯 20日均振幅 3.0%（黄金做T振幅，波动良性）"
+    "🎯 20日均振幅 3.2%（黄金做T振幅，波动良性）"
    ],
    "riskCheck": {
     "status": "safe",
@@ -6971,12 +1618,12 @@
    "div": 3.56,
    "roe": 26.3,
    "mv": 1388,
-   "price": 17.71,
-   "amp20": 5.26,
+   "price": 16.17,
+   "amp20": 5.37,
    "trend": "偏弱",
-   "chg20": -14.9,
+   "chg20": -26.3,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -6986,7 +1633,7 @@
    "whyReasons": [
     "💰 股息率 3.6%（高分红现金流护城河）",
     "📈 ROE 26.3%（大市值蓝筹优质资产盈利）",
-    "🎯 20日均振幅 5.3%（黄金做T振幅，波动良性）"
+    "🎯 20日均振幅 5.4%（黄金做T振幅，波动良性）"
    ],
    "riskCheck": {
     "status": "safe",
@@ -7011,12 +1658,12 @@
    "div": 3.4,
    "roe": 20.3,
    "mv": 550,
-   "price": 11.93,
-   "amp20": 3.29,
+   "price": 12.04,
+   "amp20": 3.09,
    "trend": "偏弱",
-   "chg20": -1.5,
+   "chg20": -2.4,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -7026,7 +1673,7 @@
    "whyReasons": [
     "💰 股息率 3.4%（高分红现金流护城河）",
     "📈 ROE 20.3%（大市值蓝筹优质资产盈利）",
-    "🎯 20日均振幅 3.3%（黄金做T振幅，波动良性）"
+    "🎯 20日均振幅 3.1%（黄金做T振幅，波动良性）"
    ],
    "riskCheck": {
     "status": "safe",
@@ -7051,12 +1698,12 @@
    "div": 3.25,
    "roe": 14.8,
    "mv": 961,
-   "price": 18.98,
-   "amp20": 4.95,
+   "price": 17.1,
+   "amp20": 5.02,
    "trend": "偏弱",
-   "chg20": -10.1,
+   "chg20": -26.3,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -7087,16 +1734,16 @@
    "name": "福耀玻璃",
    "pool": "steady",
    "poolLabel": "稳健底仓",
-   "score": 62,
+   "score": 82,
    "div": 3.24,
    "roe": 15.7,
    "mv": 1334,
-   "price": 53.49,
-   "amp20": 2.65,
-   "trend": "偏弱",
-   "chg20": 1.9,
+   "price": 55.92,
+   "amp20": 2.4,
+   "trend": "多头",
+   "chg20": 3.6,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -7106,7 +1753,7 @@
    "whyReasons": [
     "💰 股息率 3.2%（高分红现金流护城河）",
     "📈 ROE 15.7%（大市值蓝筹优质资产盈利）",
-    "🎯 20日均振幅 2.6%（黄金做T振幅，波动良性）"
+    "🎯 20日均振幅 2.4%（黄金做T振幅，波动良性）"
    ],
    "riskCheck": {
     "status": "safe",
@@ -7127,16 +1774,16 @@
    "name": "小商品城",
    "pool": "steady",
    "poolLabel": "稳健底仓",
-   "score": 56,
+   "score": 76,
    "div": 3.13,
    "roe": 14.1,
    "mv": 611,
-   "price": 11.4,
-   "amp20": 3.64,
-   "trend": "偏弱",
-   "chg20": 6.1,
+   "price": 12.3,
+   "amp20": 3.69,
+   "trend": "多头",
+   "chg20": 12.3,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -7146,7 +1793,7 @@
    "whyReasons": [
     "💰 股息率 3.1%（高分红现金流护城河）",
     "📈 ROE 14.1%（大市值蓝筹优质资产盈利）",
-    "🎯 20日均振幅 3.6%（黄金做T振幅，波动良性）"
+    "🎯 20日均振幅 3.7%（黄金做T振幅，波动良性）"
    ],
    "riskCheck": {
     "status": "safe",
@@ -7171,12 +1818,12 @@
    "div": 2.96,
    "roe": 34.6,
    "mv": 1075,
-   "price": 68.05,
-   "amp20": 3.07,
+   "price": 66.38,
+   "amp20": 3.45,
    "trend": "偏弱",
-   "chg20": -4.8,
+   "chg20": -9.6,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -7186,7 +1833,7 @@
    "whyReasons": [
     "💰 股息率 3.0%（高分红现金流护城河）",
     "📈 ROE 34.6%（大市值蓝筹优质资产盈利）",
-    "🎯 20日均振幅 3.1%（黄金做T振幅，波动良性）"
+    "🎯 20日均振幅 3.5%（黄金做T振幅，波动良性）"
    ],
    "riskCheck": {
     "status": "safe",
@@ -7211,12 +1858,12 @@
    "div": 2.91,
    "roe": 27.4,
    "mv": 580,
-   "price": 26.08,
-   "amp20": 2.96,
+   "price": 25.26,
+   "amp20": 2.69,
    "trend": "偏弱",
-   "chg20": 1.4,
+   "chg20": -7,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -7226,7 +1873,7 @@
    "whyReasons": [
     "💰 股息率 2.9%（高分红现金流护城河）",
     "📈 ROE 27.4%（大市值蓝筹优质资产盈利）",
-    "🎯 20日均振幅 3.0%（黄金做T振幅，波动良性）"
+    "🎯 20日均振幅 2.7%（黄金做T振幅，波动良性）"
    ],
    "riskCheck": {
     "status": "safe",
@@ -7251,12 +1898,12 @@
    "div": 2.83,
    "roe": 24.4,
    "mv": 864,
-   "price": 25.2,
-   "amp20": 3.05,
+   "price": 24.47,
+   "amp20": 2.97,
    "trend": "偏弱",
-   "chg20": -5.4,
+   "chg20": -11.9,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -7287,16 +1934,16 @@
    "name": "中国太保",
    "pool": "steady",
    "poolLabel": "稳健底仓",
-   "score": 44,
+   "score": 64,
    "div": 2.74,
    "roe": 11.4,
    "mv": 2739,
-   "price": 30.66,
-   "amp20": 2.96,
-   "trend": "偏弱",
-   "chg20": 0.7,
+   "price": 31.86,
+   "amp20": 2.97,
+   "trend": "多头",
+   "chg20": 3.7,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -7331,12 +1978,12 @@
    "div": 2.57,
    "roe": 14.8,
    "mv": 522,
-   "price": 15.72,
-   "amp20": 3.3,
+   "price": 16.65,
+   "amp20": 3.61,
    "trend": "偏弱",
-   "chg20": -20.2,
+   "chg20": -12.6,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -7346,7 +1993,7 @@
    "whyReasons": [
     "💰 股息率 2.6%（高分红现金流护城河）",
     "📈 ROE 14.8%（大市值蓝筹优质资产盈利）",
-    "🎯 20日均振幅 3.3%（黄金做T振幅，波动良性）"
+    "🎯 20日均振幅 3.6%（黄金做T振幅，波动良性）"
    ],
    "riskCheck": {
     "status": "safe",
@@ -7367,16 +2014,16 @@
    "name": "中策橡胶",
    "pool": "steady",
    "poolLabel": "稳健底仓",
-   "score": 38,
+   "score": 44,
    "div": 2.56,
    "roe": 11.3,
    "mv": 324,
-   "price": 37.18,
-   "amp20": 1.89,
+   "price": 39.59,
+   "amp20": 2.1,
    "trend": "偏弱",
-   "chg20": -16.5,
+   "chg20": -9.4,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -7386,7 +2033,7 @@
    "whyReasons": [
     "💰 股息率 2.6%（高分红现金流护城河）",
     "📈 ROE 11.3%（大市值蓝筹优质资产盈利）",
-    "🎯 20日均振幅 1.9%（黄金做T振幅，波动良性）"
+    "🎯 20日均振幅 2.1%（黄金做T振幅，波动良性）"
    ],
    "riskCheck": {
     "status": "safe",
@@ -7411,12 +2058,12 @@
    "div": 2.51,
    "roe": 22.4,
    "mv": 4453,
-   "price": 142.01,
-   "amp20": 5.11,
+   "price": 147,
+   "amp20": 5.34,
    "trend": "偏弱",
-   "chg20": -12.6,
+   "chg20": -6.8,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -7426,7 +2073,7 @@
    "whyReasons": [
     "💰 股息率 2.5%（高分红现金流护城河）",
     "📈 ROE 22.4%（大市值蓝筹优质资产盈利）",
-    "🎯 20日均振幅 5.1%（黄金做T振幅，波动良性）"
+    "🎯 20日均振幅 5.3%（黄金做T振幅，波动良性）"
    ],
    "riskCheck": {
     "status": "safe",
@@ -7451,12 +2098,12 @@
    "div": 2.44,
    "roe": 10.2,
    "mv": 3567,
-   "price": 24.3,
-   "amp20": 2.12,
+   "price": 25.72,
+   "amp20": 2.27,
    "trend": "偏弱",
-   "chg20": -7.6,
+   "chg20": -0.7,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -7466,7 +2113,7 @@
    "whyReasons": [
     "💰 股息率 2.4%（高分红现金流护城河）",
     "📈 ROE 10.2%（大市值蓝筹优质资产盈利）",
-    "🎯 20日均振幅 2.1%（黄金做T振幅，波动良性）"
+    "🎯 20日均振幅 2.3%（黄金做T振幅，波动良性）"
    ],
    "riskCheck": {
     "status": "safe",
@@ -7491,12 +2138,12 @@
    "div": 2.36,
    "roe": 18.4,
    "mv": 345,
-   "price": 6.88,
-   "amp20": 3.27,
+   "price": 6.86,
+   "amp20": 3.15,
    "trend": "偏弱",
-   "chg20": -12,
+   "chg20": -10.4,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -7506,7 +2153,7 @@
    "whyReasons": [
     "💰 股息率 2.4%（高分红现金流护城河）",
     "📈 ROE 18.4%（大市值蓝筹优质资产盈利）",
-    "🎯 20日均振幅 3.3%（黄金做T振幅，波动良性）"
+    "🎯 20日均振幅 3.1%（黄金做T振幅，波动良性）"
    ],
    "riskCheck": {
     "status": "safe",
@@ -7527,16 +2174,16 @@
    "name": "华东医药",
    "pool": "steady",
    "poolLabel": "稳健底仓",
-   "score": 44,
+   "score": 64,
    "div": 2.36,
    "roe": 10.8,
    "mv": 454,
-   "price": 26.62,
-   "amp20": 2.46,
-   "trend": "偏弱",
-   "chg20": 2.1,
+   "price": 27.72,
+   "amp20": 2.27,
+   "trend": "多头",
+   "chg20": 1.6,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -7546,7 +2193,7 @@
    "whyReasons": [
     "💰 股息率 2.4%（高分红现金流护城河）",
     "📈 ROE 10.8%（大市值蓝筹优质资产盈利）",
-    "🎯 20日均振幅 2.5%（黄金做T振幅，波动良性）"
+    "🎯 20日均振幅 2.3%（黄金做T振幅，波动良性）"
    ],
    "riskCheck": {
     "status": "safe",
@@ -7571,12 +2218,12 @@
    "div": 2.35,
    "roe": 11.5,
    "mv": 764,
-   "price": 47.25,
-   "amp20": 3.15,
+   "price": 49.35,
+   "amp20": 3.39,
    "trend": "多头",
-   "chg20": 15,
+   "chg20": 15.2,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -7586,7 +2233,7 @@
    "whyReasons": [
     "💰 股息率 2.3%（高分红现金流护城河）",
     "📈 ROE 11.5%（大市值蓝筹优质资产盈利）",
-    "🎯 20日均振幅 3.1%（黄金做T振幅，波动良性）"
+    "🎯 20日均振幅 3.4%（黄金做T振幅，波动良性）"
    ],
    "riskCheck": {
     "status": "safe",
@@ -7607,16 +2254,16 @@
    "name": "杭叉集团",
    "pool": "steady",
    "poolLabel": "稳健底仓",
-   "score": 50,
+   "score": 44,
    "div": 2.26,
    "roe": 14.8,
    "mv": 318,
-   "price": 23.75,
-   "amp20": 3.89,
+   "price": 23.98,
+   "amp20": 4.19,
    "trend": "偏弱",
-   "chg20": 4.5,
+   "chg20": 8.8,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -7626,7 +2273,7 @@
    "whyReasons": [
     "💰 股息率 2.3%（高分红现金流护城河）",
     "📈 ROE 14.8%（大市值蓝筹优质资产盈利）",
-    "🎯 20日均振幅 3.9%（黄金做T振幅，波动良性）"
+    "🎯 20日均振幅 4.2%（黄金做T振幅，波动良性）"
    ],
    "riskCheck": {
     "status": "safe",
@@ -7651,12 +2298,12 @@
    "div": 2.26,
    "roe": 10.2,
    "mv": 1995,
-   "price": 10.69,
-   "amp20": 2.4,
+   "price": 10.97,
+   "amp20": 2.68,
    "trend": "多头",
-   "chg20": 9.6,
+   "chg20": 8.5,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -7666,7 +2313,7 @@
    "whyReasons": [
     "💰 股息率 2.3%（高分红现金流护城河）",
     "📈 ROE 10.2%（大市值蓝筹优质资产盈利）",
-    "🎯 20日均振幅 2.4%（黄金做T振幅，波动良性）"
+    "🎯 20日均振幅 2.7%（黄金做T振幅，波动良性）"
    ],
    "riskCheck": {
     "status": "safe",
@@ -7687,16 +2334,16 @@
    "name": "宁德时代",
    "pool": "steady",
    "poolLabel": "稳健底仓",
-   "score": 56,
+   "score": 50,
    "div": 2.17,
    "roe": 17.6,
    "mv": 10733,
-   "price": 232.92,
-   "amp20": 3.9,
+   "price": 254.22,
+   "amp20": 4.56,
    "trend": "偏弱",
-   "chg20": -20.6,
+   "chg20": -14.6,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -7706,7 +2353,7 @@
    "whyReasons": [
     "💰 股息率 2.2%（高分红现金流护城河）",
     "📈 ROE 17.6%（大市值蓝筹优质资产盈利）",
-    "🎯 20日均振幅 3.9%（黄金做T振幅，波动良性）"
+    "🎯 20日均振幅 4.6%（黄金做T振幅，波动良性）"
    ],
    "riskCheck": {
     "status": "safe",
@@ -7731,12 +2378,12 @@
    "div": 2.13,
    "roe": 14.9,
    "mv": 474,
-   "price": 61.87,
-   "amp20": 4.96,
+   "price": 60.42,
+   "amp20": 5.44,
    "trend": "多头",
-   "chg20": 29.6,
+   "chg20": 19.6,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -7746,7 +2393,7 @@
    "whyReasons": [
     "💰 股息率 2.1%（高分红现金流护城河）",
     "📈 ROE 14.9%（大市值蓝筹优质资产盈利）",
-    "🎯 20日均振幅 5.0%（黄金做T振幅，波动良性）"
+    "🎯 20日均振幅 5.4%（黄金做T振幅，波动良性）"
    ],
    "riskCheck": {
     "status": "safe",
@@ -7767,16 +2414,16 @@
    "name": "中国巨石",
    "pool": "steady",
    "poolLabel": "稳健底仓",
-   "score": 50,
+   "score": 42,
    "div": 2.11,
    "roe": 16.1,
    "mv": 1174,
-   "price": 27.68,
-   "amp20": 5.49,
+   "price": 27.45,
+   "amp20": 5.86,
    "trend": "偏弱",
-   "chg20": -35.2,
+   "chg20": -28.2,
    "allowT": "底仓（仅倒T）",
-   "reviewDate": "2026-11-06",
+   "reviewDate": "2026-11-09",
    "missing": [
     "现金流/净利",
     "营收CAGR",
@@ -7786,7 +2433,7 @@
    "whyReasons": [
     "💰 股息率 2.1%（高分红现金流护城河）",
     "📈 ROE 16.1%（大市值蓝筹优质资产盈利）",
-    "🎯 20日均振幅 5.5%（黄金做T振幅，波动良性）"
+    "🎯 20日均振幅 5.9%（黄金做T振幅，波动良性）"
    ],
    "riskCheck": {
     "status": "safe",
@@ -7850,8 +2497,8 @@
   }
  ],
  "ledger": {
-  "days": 6,
-  "records": 549
+  "days": 7,
+  "records": 807
  },
  "perf": {
   "updatedAt": "2026-11-05T07:12:58.476Z",
@@ -29531,10 +24178,10 @@
   }
  ],
  "sources": {
-  "plan": "plan-2026-11-05.json",
-  "candidates": "2026-11-05.json",
+  "plan": "plan-2026-11-06.json",
+  "candidates": "2026-11-06.json",
   "steady": "steady.json",
   "timing": "timing.json",
-  "tail": "tail-2026-11-05.json"
+  "tail": "tail-2026-11-06.json"
  }
 }

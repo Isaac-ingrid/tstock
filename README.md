@@ -1,21 +1,40 @@
 # A股做T工作台
 
-选股 → 做T执行 → 台账回算的本地工具链，外加一个部署在云服务器上的只读看板。
+选股 → 做T执行 → 台账回算的工具链。前端使用 Next.js 静态导出，股票行情由独立 FastAPI 后端统一获取。
 
 ## 目录
 
 ```
-index.html                    今日作战台（只读 data/latest.js）
-做T执行台.html                 盘中执行台（账户与台账存 localStorage）
-K线形态与盘口行为实战手册.html
-今日作战简报.html
+app/                          Next.js App Router 入口
+src/                          React 交易工作台源码
+backend/app.py                独立股票数据后端（FastAPI）
 data/latest.json              统一数据契约（纯 JSON，给脚本读）
 data/latest.js                window.WB_LATEST = {...}（给页面读）
 选股引擎/                      Node 脚本与流水线
 docs/                         方法论、口径与部署配置
-deploy.sh                     本地 → 云服务器 的文件同步
-_backup/                      历次整页快照
+deploy.sh                     静态前端与数据文件部署
+out/                          npm run build 生成的静态站点
 ```
+
+## 本地开发
+
+```bash
+# 首次安装后端依赖
+cd backend
+uv venv --python 3.12
+uv pip install -r requirements.txt
+cd ..
+
+# 后端（项目根目录执行）
+npm run backend
+
+# 前端（另一个终端，项目根目录执行）
+cp .env.example .env.local
+npm install
+npm run dev
+```
+
+前端账户、持仓和台账仍保存在浏览器 `localStorage`；股票检索、行情、K线、分时、逐笔和估值请求统一经过后端。
 
 ## 本地跑批
 
@@ -35,7 +54,7 @@ node publish.js
 
 ## 更新线上站点
 
-站点是纯静态托管（nginx），服务器只负责展示，不做计算。
+前端是 Next.js `output: 'export'` 生成的纯静态站点，nginx 同时将 `/stock-api/` 反向代理到独立 FastAPI 服务。
 
 ```
 bash deploy.sh              # 全量同步
@@ -72,12 +91,12 @@ DEPLOY_USER=ubuntu bash deploy.sh
 
 ## 服务器侧
 
-`docs/deploy_nginx.conf` 是一份可直接替换的站点配置，处理了三件事：
+`docs/deploy_nginx.conf` 是一份可直接替换的站点配置，主要处理这些事情：
 
-1. `location ~ /\. { deny all; }` —— 挡住 `.git`。实测当前
-   `http://115.29.164.8/.git/config` 可被公开下载，GitHub 仓库地址是泄露的。
-2. `gzip on` —— `latest.js` 584KB 压到约 60KB。
-3. `data/` 与 `*.html` 走 `no-cache` —— 避免浏览器缓存导致看到昨天的选股。
+1. `location ~ /\. { deny all; }` —— 挡住 `.git` 与 `.env`。
+2. `/stock-api/` —— 反向代理到 `127.0.0.1:8000` 的 FastAPI 服务。
+3. `gzip on` —— 压缩数据契约与前端资源。
+4. `data/` 与 `*.html` 走 `no-cache`，`/_next/static/` 使用哈希长缓存。
 
 应用：
 

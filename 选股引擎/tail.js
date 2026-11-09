@@ -50,7 +50,20 @@ const CFG = {
      拿它当闸门会把整市场一天全部筛空（实测 28 只里淘汰 19 只）。 */
   scoreMin: 70,              // 低于此分不进推送名单，宁缺毋滥
   prefilterN: 70,            // 进分时复核的数量上限（控速，防限流）
+  /* 排除板块（2026-11-09 用户口径）：不要创业板。
+     创业板 300/301/302 开头，20% 涨跌幅，隔夜 T+0 回撤弹性过大，故整类剔除。
+     可用 --exclude=创业板,科创板 追加，或 --exclude=none 关闭排除。 */
+  excludeBoards: ['创业板'],
 };
+
+/* --exclude=创业板,科创板 覆盖默认排除项；--exclude=none 关闭排除 */
+const EXCLUDE = (() => {
+  const a = ARG.find((s) => s.startsWith('--exclude='));
+  if (!a) return CFG.excludeBoards;
+  const v = a.slice('--exclude='.length).trim();
+  if (!v || v.toLowerCase() === 'none') return [];
+  return v.split(',').map((s) => s.trim()).filter(Boolean);
+})();
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 
@@ -223,6 +236,7 @@ function scoreTail(c, vw, kl, medianTI) {
   const pre = all.filter((s) => {
     if (/ST/i.test(s.name)) return false;
     if (/^(bj)/.test(s.code)) return false;                        // 北交所 30% 涨跌幅，隔夜风险不成比例
+    if (EXCLUDE.includes(boardOf(s.code))) return false;           // 用户口径：排除创业板等
     if (s.totalCap < CFG.capMin || s.totalCap > CFG.capMax) return false;
     if (s.chgPct < CFG.chgMin || s.chgPct > CFG.chgMax) return false;
     if (!(s.volRatio >= CFG.volRatioMin)) return false;
@@ -234,6 +248,7 @@ function scoreTail(c, vw, kl, medianTI) {
     return true;
   });
   console.log(`② 快照预筛：${pre.length} 只` +
+    (EXCLUDE.length ? `（已排除 ${EXCLUDE.join('、')}）` : '') +
     (pre.length ? `（${pre.slice(0, 6).map((s) => s.name).join('、')}${pre.length > 6 ? '…' : ''}）` : ''));
 
   if (!pre.length) {
@@ -359,6 +374,7 @@ function scoreTail(c, vw, kl, medianTI) {
     generatedAt: new Date().toISOString(),
     note: '尾盘黑马（隔夜 T+0）盘中实时精选。14:30 生成，次日 09:30–10:00 冲高闭环。不写 ledger，不参与收益回算。',
     cfg: CFG,
+    excludeBoards: EXCLUDE,
     env,
     stats: {
       totalMarket: all.length,

@@ -59,40 +59,38 @@ fail() {
 # 原因：选股引擎/out 有 8.5MB 快照、_backup 有历次整页快照，
 # 一旦用 scp -r 就会把它们全推上去，既慢又把服务器当垃圾场。
 FILES=()
+SOURCE_ROOT="$ROOT"
 
-add() { [ -f "$1" ] && FILES+=("$1"); }
+add() { [ -f "$SOURCE_ROOT/$1" ] && FILES+=("$1"); }
 
-# 数据契约：两个页面都靠它，必须有
-add "data/latest.js"
-add "data/latest.json"
+if [ "$DATA_ONLY" -eq 1 ]; then
+  # 日常数据更新不需要重建前端。
+  add "data/latest.js"
+  add "data/latest.json"
+else
+  command -v npm >/dev/null 2>&1 || fail "未找到 npm，无法构建 Next.js 静态站点"
+  say "执行 Next.js 静态导出构建..."
+  npm run build || fail "Next.js 构建失败，已停止部署"
+  [ -f "out/index.html" ] || fail "构建完成但 out/index.html 不存在"
 
-if [ "$DATA_ONLY" -eq 0 ]; then
-  # 优先执行 Vite 生产环境构建
-  if command -v npm >/dev/null 2>&1 && [ -f "package.json" ]; then
-    say "执行 Vite 生产环境构建..."
-    npm run build 2>/dev/null || say "Vite 构建跳过，继续部署静态资源"
-  fi
+  # Next.js output: export 的产物全部位于 out/，部署时去掉 out/ 前缀放到站点根目录。
+  SOURCE_ROOT="$ROOT/out"
 
-  # 静态资源
-  add "index.html"
-  add "做T执行台.html"
-  add "style.css"
-  add "script.js"
-  add "今日作战简报.html"
-  add "K线形态与盘口行为实战手册.html"
+  # 保留引擎生成的独立报告入口。
+  copy_extra() {
+    [ -f "$ROOT/$1" ] || return 0
+    mkdir -p "$SOURCE_ROOT/$(dirname "$1")"
+    cp "$ROOT/$1" "$SOURCE_ROOT/$1"
+  }
+  copy_extra "今日作战简报.html"
+  copy_extra "K线形态与盘口行为实战手册.html"
+  LATEST_CAND=$(ls -1 "$ROOT"/选股引擎/今日候选_*.html 2>/dev/null | sort | tail -1)
+  [ -n "${LATEST_CAND:-}" ] && copy_extra "${LATEST_CAND#$ROOT/}"
+  copy_extra "选股引擎/挂单计划_明日.html"
+  copy_extra "选股引擎/选股工作台.html"
+  copy_extra "选股引擎/稳健清单_底仓候选.html"
 
-  # 模块化资产（CSS 与 ES Modules）
-  for f in css/*.css; do [ -f "$f" ] && FILES+=("$f"); done
-  for f in js/*.js; do [ -f "$f" ] && FILES+=("$f"); done
-  for f in js/vendor/*.js; do [ -f "$f" ] && FILES+=("$f"); done
-  for f in dist/assets/*; do [ -f "$f" ] && FILES+=("$f"); done
-
-  # 引擎产出的报告（文件名带日期的用 glob，今日候选只传最新一份）
-  LATEST_CAND=$(ls -1 选股引擎/今日候选_*.html 2>/dev/null | sort | tail -1)
-  [ -n "${LATEST_CAND:-}" ] && add "$LATEST_CAND"
-  add "选股引擎/挂单计划_明日.html"
-  add "选股引擎/选股工作台.html"
-  add "选股引擎/稳健清单_底仓候选.html"
+  while IFS= read -r f; do FILES+=("$f"); done < <(find "$SOURCE_ROOT" -type f -printf '%P\n' | sort)
 fi
 
 [ ${#FILES[@]} -eq 0 ] && fail "没有找到任何待传文件，检查是否在项目根目录执行"
@@ -109,7 +107,7 @@ say "  交易日 ${TRADE_DATE}   契约生成于 ${GEN_AT:-未知}"
 say "  待传 ${#FILES[@]} 个文件"
 say "============================================================"
 for f in "${FILES[@]}"; do
-  printf '  %-50s %8s\n' "$f" "$(du -h "$f" | cut -f1)"
+  printf '  %-50s %8s\n' "$f" "$(du -h "$SOURCE_ROOT/$f" | cut -f1)"
 done
 
 # ---------- 3. 连通性与远端目录确认（dry-run 跳过） ----------
@@ -173,7 +171,7 @@ say ""
 say "传输中（单连接打包发送）…"
 START_TS=$(date +%s)
 
-if tar cf - "${TARBALL_LIST[@]}" 2>/dev/null \
+if tar -C "$SOURCE_ROOT" -cf - "${TARBALL_LIST[@]}" 2>/dev/null \
     | ssh "${SSH_OPTS[@]}" "$USER_NAME@$HOST" "cd $(printf '%s' "$REMOTE_DIR" | sed "s/'/'\\\\''/g; s/^/'/; s/$/'/") && tar xf -" 2>/dev/null; then
   say "  ✓ 打包传输完成"
 else
@@ -194,7 +192,7 @@ if [ -z "$REMOTE_SIZES" ]; then
   say "  （远端未能返回文件清单，跳过逐项比对）"
 else
   for f in "${FILES[@]}"; do
-    LB=$(wc -c < "$f" | tr -d ' ')
+    LB=$(wc -c < "$SOURCE_ROOT/$f" | tr -d ' ')
     RB=$(printf '%s\n' "$REMOTE_SIZES" | awk -v p="./$f" '$2==p {print $1; exit}')
     if [ "$LB" != "$RB" ]; then
       MISMATCH+=("$f(本地${LB}/远端${RB:-缺失})")

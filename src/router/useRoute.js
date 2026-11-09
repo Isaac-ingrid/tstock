@@ -12,7 +12,8 @@ NAV_ROUTES.forEach(item => {
 
 // 解析当前的 URL Hash
 function parseHash(hashStr) {
-  const raw = (hashStr || window.location.hash || '').replace(/^#\/?/, '/');
+  const currentHash = typeof window !== 'undefined' ? window.location.hash : '#/trade';
+  const raw = (hashStr || currentHash || '').replace(/^#\/?/, '/');
   const [pathPart, queryPart] = raw.split('?');
   const path = pathPart ? (pathPart.startsWith('/') ? pathPart : '/' + pathPart) : '/trade';
 
