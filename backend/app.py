@@ -45,6 +45,9 @@ def _validate_upstream(url: str) -> str:
         raise HTTPException(status_code=400, detail="不允许的股票数据源")
     if parsed.username or parsed.password or parsed.port not in (None, 443):
         raise HTTPException(status_code=400, detail="上游地址格式不合法")
+    # 自动将容易触发腾讯云 WAF 501 拦截的 web.ifzq.gtimg.cn 重定向至免拦截数据节点 ifzq.gtimg.cn
+    if parsed.hostname == "web.ifzq.gtimg.cn":
+        url = url.replace("https://web.ifzq.gtimg.cn/", "https://ifzq.gtimg.cn/")
     return url
 
 
