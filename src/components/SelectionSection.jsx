@@ -28,7 +28,8 @@ export default function SelectionSection({
   const short = D ? (D.candidates || []) : [];
   const steady = D ? (D.steady || []) : [];
   const redShort = short.filter(r => r.verdict === '可做');
-  const displayShort = onlyRed ? redShort : short;
+  // 当今日无「可做」(如大盘弱势门禁拦截)时，自动展示精选候选（小做/观察），避免整块区域空置
+  const displayShort = (onlyRed && redShort.length > 0) ? redShort : short;
 
   const dateStr = D ? (D.tradeDate || (D.generatedAt ? D.generatedAt.slice(0, 10) : '今日')) : '今日';
   const genTimeStr = D && D.generatedAt ? new Date(D.generatedAt).toLocaleTimeString('zh-CN', { hour12: false }) : '';
@@ -228,7 +229,7 @@ export default function SelectionSection({
                   style={{ cursor: 'pointer' }}
                 />
                 <span style={{ fontWeight: onlyRed ? 700 : 400, color: onlyRed ? 'var(--up)' : 'var(--sub)' }}>
-                  仅显示可做(红标)
+                  仅显示可做(红标) {redShort.length > 0 ? `(${redShort.length})` : '(今日0只)'}
                 </span>
               </label>
             </div>

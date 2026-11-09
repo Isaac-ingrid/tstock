@@ -266,15 +266,22 @@ const payload = {
   },
 };
 
-/* ---------- 落盘 ---------- */
-fs.mkdirSync(DATA, { recursive: true });
-fs.writeFileSync(path.join(DATA, 'latest.json'), JSON.stringify(payload, null, 1), 'utf8');
-fs.writeFileSync(
-  path.join(DATA, 'latest.js'),
-  '/* 由 选股引擎/publish.js 自动生成，请勿手改 */\nwindow.WB_LATEST = ' +
-    JSON.stringify(payload) + ';\n',
-  'utf8'
-);
+/* ---------- 落盘（同时写入 data 与 public/data，确保 Next.js 实时同步） ---------- */
+const DIRS = [DATA, path.join(__dirname, '..', 'public', 'data')];
+for (const dir of DIRS) {
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'latest.json'), JSON.stringify(payload, null, 1), 'utf8');
+    fs.writeFileSync(
+      path.join(dir, 'latest.js'),
+      '/* 由 选股引擎/publish.js 自动生成，请勿手改 */\nwindow.WB_LATEST = ' +
+        JSON.stringify(payload) + ';\n',
+      'utf8'
+    );
+  } catch (err) {
+    console.warn("[publish] 写入 " + dir + " 失败:", err.message);
+  }
+}
 
 console.log(`\n【契约发布】${payload.tradeDate}`);
 console.log(`  环境 ${env.level}｜可新开正T ${env.canNewLongT ? '是' : '否'}｜仓位系数 ${env.posFactor}`);

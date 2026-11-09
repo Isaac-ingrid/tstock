@@ -5,11 +5,12 @@ import { getTailBuyCandidates } from '../services/tail.js';
 export default function TailSection({
   totalAssets,
   actives,
+  wbLatest,
   onExecTailBuy,
   onExecTailExit
 }) {
   const tenPctBudget = totalAssets * 0.10;
-  const candidates = getTailBuyCandidates();
+  const candidates = getTailBuyCandidates(wbLatest);
 
   const [inputPrices, setInputPrices] = useState({});
   const [inputQtys, setInputQtys] = useState({});

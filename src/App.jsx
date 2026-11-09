@@ -155,24 +155,27 @@ export default function App() {
   }, [snapshots]);
 
   /* 读取选股引擎统一数据契约。使用 JSON fetch，避免外部 script 与 React 水合时序竞争。 */
-  useEffect(() => {
-    let active = true;
-    fetch('/data/latest.json?ts=' + Date.now(), { cache: 'no-store' })
-      .then(r => {
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        return r.json();
-      })
-      .then(data => {
-        if (!active) return;
-        window.WB_LATEST = data;
-        setWbLatest(data);
-      })
-      .catch(error => {
-        console.error('[T-Stock] 选股契约读取失败', error);
-        if (active) setDbStatus('选股契约读取失败：' + error.message);
-      });
-    return () => { active = false; };
+  const fetchContract = useCallback(async () => {
+    try {
+      const r = await fetch('/data/latest.json?ts=' + Date.now(), { cache: 'no-store' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const data = await r.json();
+      window.WB_LATEST = data;
+      setWbLatest(data);
+      return data;
+    } catch (error) {
+      console.error('[T-Stock] 选股契约读取失败', error);
+      setDbStatus('选股契约读取失败：' + error.message);
+      return null;
+    }
   }, []);
+
+  useEffect(() => {
+    fetchContract();
+    // 盘中每 30 秒轮询更新最新契约
+    const timer = setInterval(fetchContract, 30000);
+    return () => clearInterval(timer);
+  }, [fetchContract]);
 
   /* 注册全局图表自愈装载器与 Toast 分发器 */
   useEffect(() => {
@@ -229,6 +232,7 @@ export default function App() {
 
   /* 行情全量刷新 */
   const handleRefresh = useCallback(async (silent = false) => {
+    fetchContract();
     if (!pool || !pool.length) {
       setDbStatus('自选池是空的 —— 在上方输入 6 位代码或股票名称加入池。');
       return;
@@ -673,7 +677,7 @@ export default function App() {
     navigate(target);
   };
 
-  const tailCount = tailActives.length > 0 ? tailActives.length : getTailBuyCandidates().length;
+  const tailCount = tailActives.length > 0 ? tailActives.length : getTailBuyCandidates(wbLatest).length;
 
   return (
     <div className="wrap">
@@ -759,6 +763,7 @@ export default function App() {
           <TailPage
             totalAssets={totalAssets}
             actives={tailActives}
+            wbLatest={wbLatest}
             onExecTailBuy={handleExecTailBuy}
             onExecTailExit={handleExecTailExit}
           />

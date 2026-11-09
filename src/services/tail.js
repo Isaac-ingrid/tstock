@@ -12,13 +12,13 @@ export function getAccountTotalAssetsForTail() {
 }
 
 /* 获取尾盘推荐候选标的（选 1~2 只最强黑马） */
-export function getTailBuyCandidates() {
+export function getTailBuyCandidates(customWb) {
   const totalAssets = getAccountTotalAssetsForTail();
   const tenPctBudget = totalAssets * 0.10;
   
   let cands = [];
   let src = 'none';
-  const WB = (typeof window !== 'undefined' && window.WB_LATEST) ? window.WB_LATEST : null;
+  const WB = customWb || ((typeof window !== 'undefined' && window.WB_LATEST) ? window.WB_LATEST : null);
 
   if (WB && Array.isArray(WB.tail) && WB.tail.length) {
     cands = WB.tail;
