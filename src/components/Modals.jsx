@@ -5,8 +5,12 @@ import { calc } from '../services/api.js';
 /* 1. 快捷记T弹窗 */
 export function QuickTModal({ modalData, onClose, onConfirm }) {
   if (!modalData || !modalData.open) return null;
+  return <QuickTModalInner modalData={modalData} onClose={onClose} onConfirm={onConfirm} />;
+}
 
-  const { stock, defaultDir, defaultPx, defaultQty } = modalData;
+function QuickTModalInner({ modalData, onClose, onConfirm }) {
+  const stock = modalData.stock || {};
+  const { defaultDir, defaultPx, defaultQty } = modalData;
   const [dir, setDir] = useState(defaultDir || '正T');
   const [buyPx, setBuyPx] = useState(defaultDir === '正T' ? (defaultPx || stock.price) : (stock.price * 0.98).toFixed(2));
   const [sellPx, setSellPx] = useState(defaultDir === '正T' ? (stock.price * 1.02).toFixed(2) : (defaultPx || stock.price));
@@ -349,7 +353,20 @@ export function OvernightBanner({ visible, onClose }) {
 /* 6. 盘中到价与买卖提醒中心弹窗 */
 export function AlertCenterModal({ open, onClose, pool, onJumpCard, notifyActive, onToggleNotify, alertEnabled = true, onToggleAlertEnabled }) {
   if (!open) return null;
+  return (
+    <AlertCenterModalInner
+      onClose={onClose}
+      pool={pool}
+      onJumpCard={onJumpCard}
+      notifyActive={notifyActive}
+      onToggleNotify={onToggleNotify}
+      alertEnabled={alertEnabled}
+      onToggleAlertEnabled={onToggleAlertEnabled}
+    />
+  );
+}
 
+function AlertCenterModalInner({ onClose, pool, onJumpCard, notifyActive, onToggleNotify, alertEnabled, onToggleAlertEnabled }) {
   const [alertList, setAlertList] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem('t-system-alerts') || '[]');

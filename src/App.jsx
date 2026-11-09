@@ -744,34 +744,42 @@ export default function App() {
       </footer>
 
       {/* ================= 3. 模态弹窗系统 ================= */}
-      <QuickTModal
-        modalData={quickTModal}
-        onClose={() => setQuickTModal({ open: false, stock: null })}
-        onConfirm={handleConfirmQuickT}
-      />
+      {quickTModal.open && (
+        <QuickTModal
+          modalData={quickTModal}
+          onClose={() => setQuickTModal({ open: false, stock: null })}
+          onConfirm={handleConfirmQuickT}
+        />
+      )}
 
-      <StockReasonModal
-        modalData={reasonModal}
-        onClose={() => setReasonModal({ open: false, stock: null, inPool: false })}
-        onAdd={(st) => handleBatchAdd([st], st.pool === 'steady' ? '稳健' : '短线')}
-        onJumpCard={(st) => handleSelectStock(st.code)}
-      />
+      {reasonModal.open && (
+        <StockReasonModal
+          modalData={reasonModal}
+          onClose={() => setReasonModal({ open: false, stock: null, inPool: false })}
+          onAdd={(st) => handleBatchAdd([st], st.pool === 'steady' ? '稳健' : '短线')}
+          onJumpCard={(st) => handleSelectStock(st.code)}
+        />
+      )}
 
-      <TradingClockModal
-        open={clockModalOpen}
-        onClose={() => setClockModalOpen(false)}
-      />
+      {clockModalOpen && (
+        <TradingClockModal
+          open={clockModalOpen}
+          onClose={() => setClockModalOpen(false)}
+        />
+      )}
 
-      <AlertCenterModal
-        open={alertModalOpen}
-        onClose={() => setAlertModalOpen(false)}
-        pool={pool}
-        onJumpCard={handleSelectStock}
-        notifyActive={notifyActive}
-        onToggleNotify={handleToggleNotify}
-        alertEnabled={alertEnabled}
-        onToggleAlertEnabled={handleToggleAlertEnabled}
-      />
+      {alertModalOpen && (
+        <AlertCenterModal
+          open={alertModalOpen}
+          onClose={() => setAlertModalOpen(false)}
+          pool={pool}
+          onJumpCard={handleSelectStock}
+          notifyActive={notifyActive}
+          onToggleNotify={handleToggleNotify}
+          alertEnabled={alertEnabled}
+          onToggleAlertEnabled={handleToggleAlertEnabled}
+        />
+      )}
 
       <ToastHost
         toasts={toasts}
