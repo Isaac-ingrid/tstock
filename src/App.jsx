@@ -168,12 +168,18 @@ export default function App() {
   /* 注册全局图表自愈装载器与 Toast 分发器 */
   useEffect(() => {
     registerChartLoader(loadChart);
+    window.render = (p) => {
+      if (p) setPool([...p]);
+    };
     setToastListener(t => {
       setToasts(prev => [...prev, t]);
       setTimeout(() => {
         setToasts(prev => prev.filter(x => x.id !== t.id));
       }, t.ms || 3600);
     });
+    return () => {
+      delete window.render;
+    };
   }, []);
 
   /* 计算资产与市值 */
@@ -326,8 +332,15 @@ export default function App() {
       await addByQuery(query);
       // addByQuery 内部直接更新了 state.pool，重新同步到组件
       const raw = localStorage.getItem('t-system-pool');
-      if (raw) setPool(JSON.parse(raw));
-      toastOk(`✓ 标的 ${query} 已成功加入自选！`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        setPool(parsed);
+        const lastCode = parsed[parsed.length - 1]?.code;
+        if (lastCode) {
+          handleSelectStock(lastCode);
+        }
+      }
+      toastOk(`✓ 标的 ${query} 已成功加入自选做T台！`);
     } catch (e) {
       toastErr('添加标的失败：' + e.message);
     }

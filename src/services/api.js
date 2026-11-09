@@ -14,43 +14,19 @@ const T_Q = 'https://qt.gtimg.cn/q=';                                  // 实时
 const T_S = 'https://proxy.finance.qq.com/ifzqgtimg/appstock/smartbox/search/get';  // 检索（JSON，CORS *）
 const T_K = 'https://web.ifzq.gtimg.cn/appstock/app/fqkline/get';      // 前复权日K（web 节点支持 CORS *）
 
-/* 开发环境代理映射：本地开发时走 Vite 代理防止浏览器的跨域拦截与 WAF 干扰；线上静态构建自动回落直连 */
+/* 所有股票数据统一经过独立后端。静态导出时该值会由 NEXT_PUBLIC_STOCK_API_BASE 写入；
+   未配置时默认请求同域 /stock-api，便于 nginx 反向代理到 FastAPI。 */
+const STOCK_API_BASE = (process.env.NEXT_PUBLIC_STOCK_API_BASE || '/stock-api').replace(/\/$/, '');
+
 function resolveUrl(url) {
-  if (typeof window !== 'undefined' && import.meta.env && import.meta.env.DEV) {
-    if (url.startsWith('https://web.ifzq.gtimg.cn/')) {
-      return url.replace('https://web.ifzq.gtimg.cn/', '/api/gtimg-web/');
-    }
-    if (url.startsWith('https://ifzq.gtimg.cn/')) {
-      return url.replace('https://ifzq.gtimg.cn/', '/api/gtimg-ifzq/');
-    }
-    if (url.startsWith('https://qt.gtimg.cn/')) {
-      return url.replace('https://qt.gtimg.cn/', '/api/gtimg-qt/');
-    }
-    if (url.startsWith('https://proxy.finance.qq.com/')) {
-      return url.replace('https://proxy.finance.qq.com/', '/api/proxy-qq/');
-    }
-    if (url.startsWith('https://datacenter-web.eastmoney.com/')) {
-      return url.replace('https://datacenter-web.eastmoney.com/', '/api/em-dcw/');
-    }
-  }
-  return url;
+  return STOCK_API_BASE + '/api/proxy?url=' + encodeURIComponent(url);
 }
 
-/* 带超时的 fetch —— 慢接口要能主动放弃，不能挂死界面；支持开发代理与直连自动降级 */
+/* 带超时的 fetch —— 浏览器只访问自有后端，不再直接依赖第三方 CORS 或 WAF 行为。 */
 export function fetchT(url, ms){
-  const targetUrl = resolveUrl(url);
   const ctl = new AbortController();
   const t = setTimeout(()=> ctl.abort(), ms || 8000);
-  return fetch(targetUrl, { cache:'no-store', signal: ctl.signal })
-    .catch(err => {
-      // 若代理层请求失败，尝试直连原 URL 兜底
-      if (targetUrl !== url) {
-        const ctl2 = new AbortController();
-        const t2 = setTimeout(()=> ctl2.abort(), ms || 8000);
-        return fetch(url, { cache:'no-store', signal: ctl2.signal }).finally(()=> clearTimeout(t2));
-      }
-      throw err;
-    })
+  return fetch(resolveUrl(url), { cache:'no-store', signal: ctl.signal })
     .finally(()=> clearTimeout(t));
 }
 
@@ -110,22 +86,9 @@ const nowStr = ()=> new Date().toLocaleTimeString('zh-CN',{hour12:false});
    字段下标已逐项核对（88 个字段挤在一行，取错一位不报错、只静默算错） */
 export async function fetchQuotes(codes){
   const url = T_Q + codes.join(',');
-  let txt = '';
-  try{
-    const r = await fetchT(url, 7000);
-    if (!r.ok) throw new Error('http ' + r.status);
-    txt = new TextDecoder('gbk').decode(await r.arrayBuffer());
-  }catch(_){
-    txt = await new Promise((res, rej)=>{           // 兜底：script 标签注入（fetch 被拒时仍可取到）
-      const s = document.createElement('script');
-      s.src = url; s.setAttribute('charset','gbk');
-      const timer = setTimeout(()=>{ cleanup(); rej(new Error('行情请求超时')); }, 9000);
-      function cleanup(){ clearTimeout(timer); if (s.parentNode) s.parentNode.removeChild(s); }
-      s.onload = ()=>{ cleanup(); res(codes.map(c=>'v_'+c+'="'+(window['v_'+c]||'')+'"').join('\n')); };
-      s.onerror = ()=>{ cleanup(); rej(new Error('行情接口不可达')); };
-      document.head.appendChild(s);
-    });
-  }
+  const r = await fetchT(url, 7000);
+  if (!r.ok) throw new Error('http ' + r.status);
+  const txt = new TextDecoder('gbk').decode(await r.arrayBuffer());
   const out = {};
   txt.split('\n').forEach(line=>{
     const m = line.match(/v_([a-z]{2}\d+)="([^"]*)"/);
@@ -220,43 +183,33 @@ export async function fetchMinute(tcode){
   return { date:(dd && dd.date) || '', prev, pts };
 }
 
-/* 逐笔明细：响应体是 `v_detail_data_<code>=[页号,"序号/时间/价/涨跌/手数/金额/方向|..."]`
-   形式的赋值语句，所以 script 注入可拿到（实测 text/html 也照样执行；fetch 会被 CORS 拦）。
-   并发陷阱：所有页都写同一个全局变量名，谁后到谁覆盖。
-   解法：先用 Object.defineProperty 在该变量名上挂一个 setter 劫持赋值，
-   数据到达的瞬间就按页号收走 —— 于是所有页可以并行拉，实测 21 页约 240ms。 */
-function ddCapture(tcode){
-  const key = 'v_detail_data_' + tcode;
-  const bag = {};
+/* 逐笔明细由独立后端代取，前端只解析腾讯返回的赋值文本，不再动态注入第三方脚本。 */
+async function ddPage(tcode, p){
   try{
-    Object.defineProperty(window, key, { configurable:true,
-      set(v){ if (v && v[1] !== undefined) bag[v[0]] = v[1]; },
-      get(){ return undefined; } });
-  }catch(_){}
-  return bag;
-}
-function ddPage(tcode, p){
-  return new Promise(res=>{
-    const s = document.createElement('script');
-    s.src = T_DD + '?appn=detail&action=data&c=' + tcode + '&p=' + p;
-    const timer = setTimeout(()=>{ done(false); }, 6000);
-    function done(ok){ clearTimeout(timer); if (s.parentNode) s.parentNode.removeChild(s); res(ok); }
-    s.onload  = ()=> done(true);
-    s.onerror = ()=> done(false);
-    document.head.appendChild(s);
-  });
+    const url = T_DD + '?appn=detail&action=data&c=' + tcode + '&p=' + p;
+    const r = await fetchT(url, 6000);
+    if (!r.ok) return null;
+    const txt = new TextDecoder('gbk').decode(await r.arrayBuffer());
+    const m = txt.match(/=\s*(\[[\s\S]*\])\s*;?\s*$/);
+    if (!m) return null;
+    const data = JSON.parse(m[1]);
+    return data && data[1] !== undefined ? { page:+data[0], rows:data[1] } : null;
+  }catch(_){
+    return null;
+  }
 }
 /* 拉全当天逐笔：分波并行（8 个一波），某一波一页都没回来就说明全天已取完，立即停。
    上限 60 页（≈4200 笔）是"防呆"用的：交投极活跃的票逐笔可能上万笔，
    再往上打请求会把界面拖慢，所以到顶就停，并在卡片上标注"样本覆盖率"。 */
 export async function fetchDetail(tcode, maxPage){
   maxPage = maxPage || 60;
-  const bag = ddCapture(tcode), W = 8;
+  const bag = {}, W = 8;
   for (let base = 0; base < maxPage; base += W){
     const ps = [];
     for (let p = base; p < Math.min(base + W, maxPage); p++) ps.push(ddPage(tcode, p));
-    await Promise.all(ps);
-    if (!Object.keys(bag).some(k => +k >= base)) break;     // 本波一页都没回来 → 全天已取完
+    const batch = await Promise.all(ps);
+    batch.forEach(item=>{ if (item) bag[item.page] = item.rows; });
+    if (!batch.some(Boolean)) break;                         // 本波一页都没回来 → 全天已取完
   }
   const pages = Object.keys(bag).map(Number).sort((a,b)=>a-b);
   const recs = [];
@@ -1214,7 +1167,9 @@ async function refreshAll(silent){
   });
   const results = await Promise.all([mktTask, ...stockTasks]);
   results.slice(1).forEach(x=>{ if (x) errs.push(x); });
-  render(pool); savePool();
+  if (typeof render === 'function') render(pool);
+  else if (typeof window !== 'undefined' && window.render) window.render(pool);
+  savePool();
   // 时效戳：只要有一只票取到了就推进。全军覆没则不动 —— 顶部会转黄，明示"你看到的是旧数据"。
   if (errs.length < pool.length) stampData();
   if (errs.length){ st.className='db-status err'; st.textContent='部分未更新 → ' + errs.join('；'); }
@@ -1273,36 +1228,44 @@ export async function selfTest(){
 export async function addByQuery(q){
   const st  = document.getElementById('dbStatus');
   const box = document.getElementById('dbCands');
-  box.innerHTML = '';
+  if (box) box.innerHTML = '';
 
   /* 快路径：纯 6 位代码 / sh605128 形式 —— 本地算 tcode，零网络检索 */
   const direct = tcodeFromInput(q);
   if (direct){
     const code = codeOf(direct);
     if (pool.some(s => s.code === code)){
-      st.className='db-status err'; st.textContent = code + ' 已经在自选池里了。'; return;
+      if (st) { st.className='db-status err'; st.textContent = code + ' 已经在自选池里了。'; }
+      return;
     }
-    st.className='db-status'; st.textContent = '按代码直接添加 ' + direct + ' …';
+    if (st) { st.className='db-status'; st.textContent = '按代码直接添加 ' + direct + ' …'; }
     await adoptCandidate({ name:'', code, tcode:direct });
     return;
   }
 
   /* 常规路径：名称 / 拼音首字母 / 部分代码 → 走检索 */
-  st.className='db-status'; st.textContent = '正在检索「' + q + '」…';
+  if (st) { st.className='db-status'; st.textContent = '正在检索「' + q + '」…'; }
   let list;
   try{ list = await searchTencent(q); }
   catch(e){
-    st.className='db-status err';
-    st.innerHTML = '检索接口连不上（' + e.message + '）。<br>不必等它 —— 直接输 <b>6 位代码</b>（如 605128）即可添加，<b>这条路径不走检索，一定可用</b>。';
+    if (st) {
+      st.className='db-status err';
+      st.innerHTML = '检索接口连不上（' + e.message + '）。<br>不必等它 —— 直接输 <b>6 位代码</b>（如 605128）即可添加，<b>这条路径不走检索，一定可用</b>。';
+    }
     return;
   }
-  if (!list.length){ st.className='db-status err'; st.textContent = '没找到匹配的 A 股「' + q + '」，可换名称、拼音首字母（如 shyp），或直接输 6 位代码。'; return; }
+  if (!list.length){
+    if (st) { st.className='db-status err'; st.textContent = '没找到匹配的 A 股「' + q + '」，可换名称、拼音首字母（如 shyp），或直接输 6 位代码。'; }
+    return;
+  }
   if (list.length > 1){
-    box.innerHTML = list.map((x,i)=>`<button data-cand="${i}">${x.name} ${x.code}${x.market?'·'+x.market:''}</button>`).join('');
-    box.querySelectorAll('button[data-cand]').forEach(b=>{
-      b.onclick = ()=> adoptCandidate(list[+b.dataset.cand]);
-    });
-    st.textContent = '找到 ' + list.length + ' 个结果，点一个加入自选：';
+    if (box) {
+      box.innerHTML = list.map((x,i)=>`<button data-cand="${i}">${x.name} ${x.code}${x.market?'·'+x.market:''}</button>`).join('');
+      box.querySelectorAll('button[data-cand]').forEach(b=>{
+        b.onclick = ()=> adoptCandidate(list[+b.dataset.cand]);
+      });
+    }
+    if (st) st.textContent = '找到 ' + list.length + ' 个结果，点一个加入自选：';
     return;
   }
   await adoptCandidate(list[0]);
@@ -1311,20 +1274,26 @@ export async function addByQuery(q){
 export async function adoptCandidate(c){
   const st = document.getElementById('dbStatus');
   if (pool.some(s => s.code === c.code)){
-    st.className='db-status err'; st.textContent = (c.name||c.code) + ' 已经在自选池里了。'; return;
+    if (st) { st.className='db-status err'; st.textContent = (c.name||c.code) + ' 已经在自选池里了。'; }
+    return;
   }
-  document.getElementById('dbCands').innerHTML = '';
+  const box = document.getElementById('dbCands');
+  if (box) box.innerHTML = '';
   pool.push({ name:c.name || c.code, code:c.code, tcode:c.tcode,
               prevClose:0, open:0, high:0, low:0, price:0, avg:0, vr:1,
               ma5:null, ma10:null, ma20:null, shares:0, cost:0, cap:0 });
   const s = pool[pool.length-1];
   try{
     await loadStock(s);
-    st.className='db-status';
-    st.innerHTML = '已加入 <b>'+s.name+' '+s.code+'</b>，行情已同步' + (s._maOk ? '（含均线）' : '（均线未同步，可点 ⟳ 重试）') + '。';
+    if (st) {
+      st.className='db-status';
+      st.innerHTML = '已加入 <b>'+s.name+' '+s.code+'</b>，行情已同步' + (s._maOk ? '（含均线）' : '（均线未同步，可点 ⟳ 重试）') + '。';
+    }
   }
-  catch(e){ st.className='db-status err'; st.textContent = '已加入 ' + s.code + '，但取数失败：' + e.message; }
-  render(pool); savePool();
+  catch(e){ if (st) { st.className='db-status err'; st.textContent = '已加入 ' + s.code + '，但取数失败：' + e.message; } }
+  if (typeof render === 'function') render(pool);
+  else if (typeof window !== 'undefined' && window.render) window.render(pool);
+  savePool();
 }
 
 /* 交易时段自动刷新 */
