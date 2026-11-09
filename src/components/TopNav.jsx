@@ -25,7 +25,8 @@ export default function TopNav({
   onImportClick,
   onRefresh,
   onToggleNotify,
-  notifyActive
+  notifyActive,
+  alertEnabled = true
 }) {
   const getBadge = (key) => {
     if (key === 'poolCount') return pool.length > 0 ? pool.length : null;
@@ -173,12 +174,13 @@ export default function TopNav({
           ⬆ 导入
         </button>
         <button
-          className={`tb-btn ${notifyActive ? 'tb-btn-active' : ''}`}
+          className={`tb-btn ${!alertEnabled ? 'tb-btn-muted' : notifyActive ? 'tb-btn-active' : ''}`}
           id="btnToggleNotify"
           onClick={onOpenAlertModal || onToggleNotify}
-          title="点击查看盘中到价与买卖提醒中心"
+          title={alertEnabled ? "点击查看盘中到价与买卖提醒中心（可切换上班免打扰模式）" : "【上班免打扰模式已开启】提示音、弹窗与标题已静音。点击打开设置"}
+          style={!alertEnabled ? { background: '#f5f5f5', color: '#8c8c8c', borderColor: '#d9d9d9' } : undefined}
         >
-          🔔 提醒
+          {alertEnabled ? '🔔 提醒' : '🔕 提醒已关'}
         </button>
         <button
           className="tb-btn tb-btn-refresh"

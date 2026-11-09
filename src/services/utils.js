@@ -118,6 +118,10 @@ export function warmAudio() {
   }
 }
 export function soundChime(freq = 660, dur = 0.18) {
+  try {
+    const raw = localStorage.getItem('t-alert-enabled');
+    if (raw !== null && JSON.parse(raw) === false) return; // 上班免打扰静音
+  } catch (_) {}
   if (!audioCtx) warmAudio();
   if (!audioCtx) return;
   try {

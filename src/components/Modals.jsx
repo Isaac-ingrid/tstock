@@ -347,7 +347,7 @@ export function OvernightBanner({ visible, onClose }) {
 }
 
 /* 6. 盘中到价与买卖提醒中心弹窗 */
-export function AlertCenterModal({ open, onClose, pool, onJumpCard, notifyActive, onToggleNotify }) {
+export function AlertCenterModal({ open, onClose, pool, onJumpCard, notifyActive, onToggleNotify, alertEnabled = true, onToggleAlertEnabled }) {
   if (!open) return null;
 
   const [alertList, setAlertList] = useState(() => {
@@ -406,6 +406,56 @@ export function AlertCenterModal({ open, onClose, pool, onJumpCard, notifyActive
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-bd" style={{ fontSize: '13px', lineHeight: 1.6 }}>
+          {/* 1. 上班免打扰模式与提醒主开关（一键静音、止震、关闭桌面弹窗与标题闪烁） */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '12px 14px',
+            background: alertEnabled ? '#f0f5ff' : '#fff1f0',
+            border: alertEnabled ? '1px solid #adc6ff' : '1px solid #ffa39e',
+            borderRadius: '8px',
+            marginBottom: '14px',
+            gap: '12px'
+          }}>
+            <div style={{ flex: 1 }}>
+              <div style={{
+                fontWeight: 700,
+                color: alertEnabled ? '#1d39c4' : '#cf1322',
+                fontSize: '13.5px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}>
+                <span>{alertEnabled ? '🔔 实时买卖提醒：运行中' : '🔕 上班免打扰模式：已开启（全部提醒已关闭）'}</span>
+              </div>
+              <div style={{ fontSize: '11.5px', color: 'var(--sub)', marginTop: '3px', lineHeight: 1.5 }}>
+                {alertEnabled
+                  ? '触及买卖点时将触发声音蜂鸣、网页标签标题变动、桌面弹窗及预警气泡。'
+                  : '已全面静音所有蜂鸣、禁止网页标签页标题闪烁、屏蔽所有桌面弹窗与预警，适合在办公室安心工作。'}
+              </div>
+            </div>
+            {onToggleAlertEnabled && (
+              <button
+                type="button"
+                onClick={onToggleAlertEnabled}
+                style={{
+                  padding: '7px 15px',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  whiteSpace: 'nowrap',
+                  cursor: 'pointer',
+                  borderRadius: '6px',
+                  border: 'none',
+                  background: alertEnabled ? '#ff4d4f' : '#52c41a',
+                  color: '#fff',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                }}
+              >
+                {alertEnabled ? '🔕 立即关闭提醒（上班免打扰）' : '🔔 恢复开启提醒'}
+              </button>
+            )}
+          </div>
           {/* 桌面通知授权与开关横幅 */}
           <div style={{
             display: 'flex',

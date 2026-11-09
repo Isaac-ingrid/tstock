@@ -68,6 +68,14 @@ export default function App() {
   const [notifyActive, setNotifyActive] = useState(() => {
     return typeof Notification !== 'undefined' && Notification.permission === 'granted';
   });
+  const [alertEnabled, setAlertEnabled] = useState(() => {
+    try {
+      const raw = localStorage.getItem('t-alert-enabled');
+      return raw !== null ? JSON.parse(raw) : true;
+    } catch (_) {
+      return true;
+    }
+  });
   const [wbLatest, setWbLatest] = useState(() => {
     return typeof window !== 'undefined' ? (window.WB_LATEST || null) : null;
   });
@@ -564,6 +572,25 @@ export default function App() {
     });
   };
 
+  /* 切换上班免打扰 / 提醒总开关 */
+  const handleToggleAlertEnabled = () => {
+    setAlertEnabled(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('t-alert-enabled', JSON.stringify(next));
+        if (!next && typeof document !== 'undefined') {
+          document.title = '做T执行台 · 七格箱体 + 七底三仓';
+        }
+      } catch (_) {}
+      if (next) {
+        toastOk('🔔 已开启盘中买卖到价提醒');
+      } else {
+        toastWarn('🔕 已开启上班免打扰：提示音、桌面弹窗及网页标题变动已全部关闭');
+      }
+      return next;
+    });
+  };
+
   /* 切换页面路由 */
   const handleTabChange = (target) => {
     navigate(target);
@@ -599,6 +626,7 @@ export default function App() {
         onRefresh={() => handleRefresh(false)}
         onToggleNotify={handleToggleNotify}
         notifyActive={notifyActive}
+        alertEnabled={alertEnabled}
       />
 
       {/* 隐藏的导入文件 input */}
@@ -741,6 +769,8 @@ export default function App() {
         onJumpCard={handleSelectStock}
         notifyActive={notifyActive}
         onToggleNotify={handleToggleNotify}
+        alertEnabled={alertEnabled}
+        onToggleAlertEnabled={handleToggleAlertEnabled}
       />
 
       <ToastHost

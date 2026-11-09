@@ -1449,6 +1449,15 @@ export async function loadResearch(s, force){
 const NEAR_PCT = 0.004;
 const _hitSeen = {};
 export function checkPriceAlerts(){
+  try {
+    const raw = localStorage.getItem('t-alert-enabled');
+    if (raw !== null && JSON.parse(raw) === false) {
+      if (typeof document !== 'undefined' && document.title !== '做T执行台 · 七格箱体 + 七底三仓') {
+        document.title = '做T执行台 · 七格箱体 + 七底三仓';
+      }
+      return; // 上班免打扰模式：关闭声音、弹窗、气泡及标题闪烁
+    }
+  } catch (_) {}
   if (!Array.isArray(pool) || !pool.length) return;
   const hits = [];
   pool.forEach(s=>{
