@@ -1,5 +1,7 @@
 import React from 'react';
 import { f2, pct, money } from '../services/utils.js';
+import { calc } from '../services/api.js';
+import { MODE_BADGE } from './StockCard.jsx';
 import { NAV_ROUTES } from '../data/site.js';
 
 export default function TopNav({
@@ -105,6 +107,15 @@ export default function TopNav({
             const chg = pc ? ((px - pc) / pc) * 100 : 0;
             const chgCls = chg > 0 ? 'up' : chg < 0 ? 'down' : '';
             const isShort = (s.tier === 'short' || s.poolTag === '短线');
+            let mbd = MODE_BADGE.WAIT;
+            try {
+              const c = calc(s);
+              if (c && c.mode && MODE_BADGE[c.mode]) {
+                mbd = MODE_BADGE[c.mode];
+              }
+            } catch (e) {
+              mbd = MODE_BADGE.WAIT;
+            }
 
             return (
               <button
@@ -115,7 +126,7 @@ export default function TopNav({
                   e.preventDefault();
                   if (onSelectStock) onSelectStock(code6);
                 }}
-                title={`点击直接跳转查看【${s.name}】(${code6}) 做T决策卡片\n现价: ¥${f2(px)}  涨跌: ${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%`}
+                title={`点击直接跳转查看【${s.name}】(${code6}) 做T决策卡片\n现价: ¥${f2(px)}  涨跌: ${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%\n信号状态: ${mbd[1]}`}
               >
                 <span className={`tb-chip-tag ${isShort ? 'short' : 'long'}`}>
                   {isShort ? '短' : '稳'}
@@ -124,6 +135,9 @@ export default function TopNav({
                 <span className={`tb-chip-px ${chgCls}`}>{f2(px)}</span>
                 <span className={`tb-chip-chg ${chgCls}`}>
                   {chg >= 0 ? '+' : ''}{chg.toFixed(2)}%
+                </span>
+                <span className={`mg ${mbd[0]}`} style={{ fontSize: '10px', padding: '1px 5px', borderRadius: '4px', lineHeight: '14px', whiteSpace: 'nowrap' }}>
+                  {mbd[1]}
                 </span>
               </button>
             );

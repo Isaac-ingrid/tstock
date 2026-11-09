@@ -28,7 +28,7 @@ export default function SelectionSection({
   const short = D ? (D.candidates || []) : [];
   const steady = D ? (D.steady || []) : [];
   const redShort = short.filter(r => r.verdict === '可做');
-  const displayShort = (onlyRed && redShort.length > 0) ? redShort : short;
+  const displayShort = onlyRed ? redShort : short;
 
   const dateStr = D ? (D.tradeDate || (D.generatedAt ? D.generatedAt.slice(0, 10) : '今日')) : '今日';
   const genTimeStr = D && D.generatedAt ? new Date(D.generatedAt).toLocaleTimeString('zh-CN', { hour12: false }) : '';
@@ -144,7 +144,7 @@ export default function SelectionSection({
             <span>一、选股池与自选股</span>
           </summary>
           <div className="fold-bd" style={{ paddingTop: '12px' }}>
-            <div className="sel-empty">正在读取选股契约数据 data/latest.js...</div>
+            <div className="sel-empty">正在读取选股契约数据 data/latest.json...</div>
           </div>
         </details>
       </section>
@@ -241,9 +241,59 @@ export default function SelectionSection({
             <div className="sel-chips" id="selChipsShort">
               {displayShort.length > 0 ? (
                 displayShort.map(r => renderChip(r))
+              ) : onlyRed && short.length > 0 ? (
+                <div style={{
+                  padding: '12px 14px',
+                  background: 'var(--surface2)',
+                  border: '1px dashed var(--line)',
+                  borderRadius: '8px',
+                  fontSize: '12.5px',
+                  color: 'var(--sub)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  width: '100%'
+                }}>
+                  <span style={{ fontSize: '15px' }}>💡</span>
+                  <div>
+                    今日大盘弱势门禁生效，暂无 ≥80 分「红标可做」股票。
+                    系统已精选 <b>{short.length}</b> 只候选标的（含 {short.filter(x => x.verdict === '小做').length} 只「小做」与 {short.filter(x => x.verdict === '观察').length} 只「观察」）。
+                  </div>
+                  <button
+                    type="button"
+                    className="mini"
+                    style={{ marginLeft: 'auto', whiteSpace: 'nowrap' }}
+                    onClick={() => setOnlyRed(false)}
+                  >
+                    取消筛选，查看全部 ({short.length}只)
+                  </button>
+                </div>
               ) : (
-                <div style={{ color: 'var(--mute)', padding: '10px 0', fontSize: '12.5px' }}>
-                  暂无符合条件的短线候选股票
+                <div style={{
+                  padding: '12px 14px',
+                  background: env.level === 'BAD' ? '#fff1f0' : 'var(--surface2)',
+                  border: env.level === 'BAD' ? '1px solid #ffa39e' : '1px dashed var(--line)',
+                  borderRadius: '8px',
+                  fontSize: '12.5px',
+                  color: env.level === 'BAD' ? '#cf1322' : 'var(--mute)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  width: '100%'
+                }}>
+                  <span style={{ fontSize: '15px' }}>{env.level === 'BAD' ? '🛡️' : 'ℹ️'}</span>
+                  <div>
+                    {env.level === 'BAD' ? (
+                      <>
+                        <b>系统风控否决（BAD）：</b>{env.text || '上证与中证1000同时跌破均线，系统性下行，禁止新开正T。'}
+                        <span style={{ display: 'block', fontSize: '11.5px', color: '#820014', marginTop: '2px' }}>
+                          量化风控门禁已拦截所有激进做T开仓标的以保护本金。可切换关注稳健底仓或台账复盘。
+                        </span>
+                      </>
+                    ) : (
+                      '暂无符合条件的短线候选股票'
+                    )}
+                  </div>
                 </div>
               )}
             </div>
