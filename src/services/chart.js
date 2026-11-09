@@ -32,8 +32,14 @@ export const PERIODS = [
   ['day','日K'], ['week','周K'], ['month','月K']
 ];
 export const PERIOD_LABEL = {}; PERIODS.forEach(([k,v])=> PERIOD_LABEL[k]=v);
-export const P_MAIN = ['rt','day','week','month'];
-export const P_MORE = PERIODS.filter(([k])=> P_MAIN.indexOf(k) < 0);
+export const P_MAIN = [
+  ['rt', '分时'],
+  ['day', '日K'],
+  ['week', '周K'],
+  ['month', '月K']
+];
+export const P_MAIN_KEYS = ['rt', 'day', 'week', 'month'];
+export const P_MORE = PERIODS.filter(([k])=> P_MAIN_KEYS.indexOf(k) < 0);
 export const VIEWS = { rt:999, m1:240, m5:64, m15:64, m30:64, m60:64, day:60, week:60, month:40 };
 
 /* 图表用指标：同一套函数在任意周期上复用 —— 周期一换，指标就跟着换成该周期的口径 */
@@ -514,7 +520,7 @@ export function kbarHTML(i, s){
   const sub = s.sub || 'macd';
   const rt = p === 'rt';                    // 分时图没有蜡烛/均线概念，叠加与副图开关此时无意义，直接不显示
   return `<div class="kbar k-main">`
-    + `<span class="lbl">周期</span>` + PERIODS.filter(([k])=>P_MAIN.indexOf(k)>=0).map(([k,v])=>
+    + `<span class="lbl">周期</span>` + PERIODS.filter(([k])=>P_MAIN_KEYS.indexOf(k)>=0).map(([k,v])=>
         `<span class="chip pd${p===k?' on':''}" data-pd="${i}" data-v="${k}">${v}</span>`).join('')
     + `<details class="pd-more"><summary>更多 ▾</summary><div class="pd-pop">`
     + P_MORE.map(([k,v])=>`<span class="chip pd${p===k?' on':''}" data-pd="${i}" data-v="${k}">${v}</span>`).join('')

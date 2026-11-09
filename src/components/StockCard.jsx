@@ -3,6 +3,7 @@ import { f2, pct, money, money$, fmtIn, GRID, TIER_LABEL, AUTO_FIELDS, AUTO_FIEL
 import { calc, posCalc, computeTA, rsCalc, drawRS } from '../services/api.js';
 import { getAuctionTier } from '../services/auction.js';
 import ChartCanvas from './ChartCanvas.jsx';
+import TechAndResearchSection from './TechAndResearchSection.jsx';
 
 export const MODE_BADGE = {
   BUY: ['buy', '正T'],
@@ -540,6 +541,10 @@ export default function StockCard({
               stock={stock}
               poolIndex={index}
               onUpdateStock={onUpdateStock}
+            />
+            <TechAndResearchSection
+              stock={stock}
+              poolIndex={index}
             />
           </div>
         )}
