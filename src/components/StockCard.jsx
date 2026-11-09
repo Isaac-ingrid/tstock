@@ -197,6 +197,14 @@ export default function StockCard({
         </span>
 
         <button className="mini primary" onClick={() => onOpenQuickT(stock)}>⚡ 快捷记T</button>
+        <button
+          className="mini"
+          style={{ color: '#cf1322', borderColor: '#ffa39e', background: '#fff1f0', fontWeight: 700 }}
+          onClick={() => onOpenQuickT(stock, '直接卖出', f2(stock.price), stock.shares || 100)}
+          title="直接卖出当前持仓（减仓回笼资金或全部清仓出局）"
+        >
+          📤 卖出
+        </button>
         <button className="mini" onClick={() => onOpenReason(stock, true)}>🔍 逻辑与利空</button>
         <button className="mini" onClick={() => onRefreshSingle(stock)}>⟳ 取数</button>
         <button className="mini" onClick={() => onCopySinglePlan(stock)}>📋 计划</button>
@@ -363,6 +371,44 @@ export default function StockCard({
             >
               💾 保存持仓
             </button>
+
+            {hasHoldings && (
+              <>
+                <button
+                  type="button"
+                  className="mini"
+                  onClick={() => onOpenQuickT(stock, '直接卖出', f2(pxNow), stock.shares)}
+                  title={`直接卖出当前持仓：可按股数减仓，或全部清仓（总持仓 ${stock.shares} 股）`}
+                  style={{
+                    padding: '4px 10px',
+                    fontSize: '11.5px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    background: '#fff1f0',
+                    color: '#cf1322',
+                    borderColor: '#ffa39e'
+                  }}
+                >
+                  📤 直接卖出 / 减仓
+                </button>
+                <button
+                  type="button"
+                  className="mini"
+                  onClick={() => onOpenQuickT(stock, '直接卖出', f2(pxNow), stock.shares)}
+                  title={`一键清仓卖出全部 ${stock.shares} 股`}
+                  style={{
+                    padding: '4px 8px',
+                    fontSize: '11.5px',
+                    cursor: 'pointer',
+                    background: 'var(--surface2)',
+                    color: 'var(--sub)',
+                    borderColor: 'var(--line)'
+                  }}
+                >
+                  🗑️ 清仓
+                </button>
+              </>
+            )}
           </div>
         </div>
 

@@ -396,32 +396,44 @@ export default function App() {
   };
 
   /* 快捷记T提交 */
-  const handleConfirmQuickT = ({ stock, dir, buy, sell, qty, netDiff, newCost }) => {
+  const handleConfirmQuickT = ({ stock, dir, action, buy, sell, qty, netDiff, newCost, remainingShares }) => {
+    const isDirectSell = action === 'sell' || dir === '直接卖出' || dir === '清仓卖出';
+
     const newLog = {
       id: Date.now(),
       date: todayStr(),
       stock: `${stock.name} (${stock.code})`,
-      dir,
-      buy,
-      sell,
+      dir: isDirectSell ? dir : dir,
+      buy: buy || 0,
+      sell: sell || 0,
       qty,
-      gross: (sell - buy) * qty,
-      fee: (buy * qty + sell * qty) * 0.0011,
+      gross: (sell - (buy || 0)) * qty,
+      fee: isDirectSell ? (sell * qty) * 0.0011 : ((buy || 0) * qty + sell * qty) * 0.0011,
       net: netDiff,
       plan: '计划内',
       basis: '客观信号',
-      note: `快捷做T记入，净套利 ¥${netDiff.toFixed(2)}`
+      note: isDirectSell
+        ? `${dir} ${qty} 股（卖出价 ¥${sell.toFixed(2)}，成本 ¥${(buy || 0).toFixed(2)}），净落袋 ¥${netDiff >= 0 ? '+' : ''}${netDiff.toFixed(2)}`
+        : `快捷做T记入，净套利 ¥${netDiff.toFixed(2)}`
     };
 
     setTradeLogs(prev => [newLog, ...prev]);
 
-    // 更新持仓成本
-    if (stock.shares > 0 && newCost > 0) {
-      handleUpdateStock({ ...stock, cost: newCost });
+    if (isDirectSell) {
+      // 扣减持仓与清仓处理
+      const rem = remainingShares !== undefined ? remainingShares : Math.max(0, (stock.shares || 0) - qty);
+      const updatedCost = rem === 0 ? 0 : stock.cost;
+      handleUpdateStock({ ...stock, shares: rem, cost: updatedCost });
+      toastOk(`✓ 已成功记录卖出：${stock.name} 卖出 ${qty} 股，净盈亏 ${netDiff >= 0 ? '+' : ''}¥${netDiff.toFixed(2)}，剩余持仓 ${rem} 股！`);
+    } else {
+      // 冲减底仓成本，股数不变
+      if (stock.shares > 0 && newCost > 0) {
+        handleUpdateStock({ ...stock, cost: newCost });
+      }
+      toastOk(`✓ 做T记录已入账！净套利 ¥${netDiff.toFixed(2)}`);
     }
 
     setQuickTModal({ open: false, stock: null });
-    toastOk(`✓ 做T记录已入账！净套利 ¥${netDiff.toFixed(2)}`);
   };
 
   /* 尾盘潜伏建仓 */
@@ -665,7 +677,7 @@ export default function App() {
             onAddBlank={handleAddBlank}
             onSaveLocal={handleSaveLocal}
             onResetDefault={handleResetDefault}
-            onOpenQuickT={(stock, dir, px) => setQuickTModal({ open: true, stock, defaultDir: dir, defaultPx: px })}
+            onOpenQuickT={(stock, dir, px, qty) => setQuickTModal({ open: true, stock, defaultDir: dir, defaultPx: px, defaultQty: qty })}
             onRefreshSingle={async (stock) => {
               await loadStock(stock);
               await loadChart(stock, true);

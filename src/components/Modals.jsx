@@ -11,129 +11,383 @@ export function QuickTModal({ modalData, onClose, onConfirm }) {
 function QuickTModalInner({ modalData, onClose, onConfirm }) {
   const stock = modalData.stock || {};
   const { defaultDir, defaultPx, defaultQty } = modalData;
-  const [dir, setDir] = useState(defaultDir || '正T');
-  const [buyPx, setBuyPx] = useState(defaultDir === '正T' ? (defaultPx || stock.price) : (stock.price * 0.98).toFixed(2));
-  const [sellPx, setSellPx] = useState(defaultDir === '正T' ? (stock.price * 1.02).toFixed(2) : (defaultPx || stock.price));
-  const [qty, setQty] = useState(defaultQty || 100);
+  const isInitSell = defaultDir === '直接卖出' || defaultDir === '卖出';
+  const [dir, setDir] = useState(isInitSell ? '直接卖出' : (defaultDir || '正T'));
+
+  const totalHeld = stock.shares || 0;
+  const initCostPx = stock.cost ? String(stock.cost) : (stock.price ? String(stock.price) : '');
+  const initSellPx = defaultPx || stock.price || '';
+
+  const [buyPx, setBuyPx] = useState(
+    isInitSell
+      ? initCostPx
+      : defaultDir === '正T'
+        ? (defaultPx || stock.price)
+        : (stock.price * 0.98).toFixed(2)
+  );
+  const [sellPx, setSellPx] = useState(
+    isInitSell
+      ? initSellPx
+      : defaultDir === '正T'
+        ? (stock.price * 1.02).toFixed(2)
+        : (defaultPx || stock.price)
+  );
+  const [qty, setQty] = useState(defaultQty || (isInitSell && totalHeld > 0 ? totalHeld : 100));
+
+  let c = null;
+  try { c = calc(stock); } catch (_) {}
 
   const b = parseFloat(buyPx) || 0;
   const s = parseFloat(sellPx) || 0;
   const q = parseInt(qty, 10) || 0;
+
+  const isDirectSell = dir === '直接卖出' || dir === '卖出';
+
+  // 正T/倒T 套利计算
   const grossDiff = (s - b) * q;
-  const fee = (b * q + s * q) * 0.0011;
-  const netDiff = grossDiff - fee;
+  const feeT = (b * q + s * q) * 0.0011;
+  const netDiffT = grossDiff - feeT;
   const spreadPct = b > 0 ? ((s - b) / b) * 100 : 0;
-  const totalHeld = stock.shares || 0;
-  const newCost = totalHeld > 0 ? ((stock.cost * totalHeld - netDiff) / totalHeld) : 0;
-  const costDrop = stock.cost > 0 && newCost > 0 ? (stock.cost - newCost) : 0;
+  const newCostT = totalHeld > 0 ? ((stock.cost * totalHeld - netDiffT) / totalHeld) : 0;
+  const costDropT = stock.cost > 0 && newCostT > 0 ? (stock.cost - newCostT) : 0;
+
+  // 直接卖出 / 减仓 / 清仓计算
+  const sellAmt = s * q;
+  const feeSell = sellAmt * 0.0011;
+  const netCash = sellAmt - feeSell;
+  const costBasis = (b > 0 ? b : (+stock.cost || s)) * q;
+  const netProfitSell = netCash - costBasis;
+  const profitRateSell = costBasis > 0 ? (netProfitSell / costBasis) * 100 : 0;
+  const remainingShares = Math.max(0, totalHeld - q);
 
   const handleConfirm = () => {
-    if (b <= 0 || s <= 0 || q <= 0) {
-      alert('请输入正确的买卖价格与股数');
-      return;
+    if (isDirectSell) {
+      if (s <= 0 || q <= 0) {
+        alert('请输入正确的卖出价格与股数');
+        return;
+      }
+      if (totalHeld > 0 && q > totalHeld) {
+        if (!window.confirm(`卖出股数 (${q} 股) 大于当前持仓 (${totalHeld} 股)，确定要超额卖出吗？`)) {
+          return;
+        }
+      }
+      const isFullExit = totalHeld > 0 && q >= totalHeld;
+      onConfirm({
+        stock,
+        dir: isFullExit ? '清仓卖出' : '直接卖出',
+        action: 'sell',
+        buy: b || stock.cost || 0,
+        sell: s,
+        qty: q,
+        netDiff: netProfitSell,
+        remainingShares
+      });
+    } else {
+      if (b <= 0 || s <= 0 || q <= 0) {
+        alert('请输入正确的买卖价格与股数');
+        return;
+      }
+      onConfirm({
+        stock,
+        dir,
+        action: 't',
+        buy: b,
+        sell: s,
+        qty: q,
+        netDiff: netDiffT,
+        newCost: newCostT
+      });
     }
-    onConfirm({
-      stock,
-      dir,
-      buy: b,
-      sell: s,
-      qty: q,
-      netDiff,
-      newCost
-    });
   };
 
   return (
     <div className="modal-mask" onClick={onClose}>
-      <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '440px' }}>
+      <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '460px' }}>
         <div className="modal-hd">
-          <h3>⚡ 闪电记T · {stock.name} ({stock.code})</h3>
+          <h3>
+            {isDirectSell ? '📤 记录直接卖出 / 减仓' : '⚡ 闪电记T'} · {stock.name} ({stock.code})
+          </h3>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-bd">
-          <div className="modal-dir-tabs" style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
+          {/* 三向操作选项卡 */}
+          <div className="modal-dir-tabs" style={{ display: 'flex', gap: '6px', marginBottom: '14px' }}>
             <button
               type="button"
               className={`m-dir-btn ${dir === '正T' ? 'active' : ''}`}
               style={{
-                flex: 1, padding: '7px 0', borderRadius: '7px', fontWeight: 700,
+                flex: 1, padding: '7px 0', borderRadius: '7px', fontWeight: 700, fontSize: '12px',
                 border: '1px solid', borderColor: dir === '正T' ? 'var(--down)' : 'var(--line)',
                 background: dir === '正T' ? 'var(--down-bg)' : '#fff',
                 color: dir === '正T' ? 'var(--down)' : 'var(--sub)'
               }}
-              onClick={() => setDir('正T')}
+              onClick={() => {
+                setDir('正T');
+                setBuyPx(stock.price ? String(stock.price) : '');
+                setSellPx((stock.price * 1.02).toFixed(2));
+              }}
             >
-              🟢 正T（先买后卖 / 低吸高抛）
+              🟢 正T (先买后卖)
             </button>
             <button
               type="button"
               className={`m-dir-btn ${dir === '倒T' ? 'active' : ''}`}
               style={{
-                flex: 1, padding: '7px 0', borderRadius: '7px', fontWeight: 700,
+                flex: 1, padding: '7px 0', borderRadius: '7px', fontWeight: 700, fontSize: '12px',
                 border: '1px solid', borderColor: dir === '倒T' ? 'var(--up)' : 'var(--line)',
                 background: dir === '倒T' ? 'var(--up-bg)' : '#fff',
                 color: dir === '倒T' ? 'var(--up)' : 'var(--sub)'
               }}
-              onClick={() => setDir('倒T')}
+              onClick={() => {
+                setDir('倒T');
+                setSellPx(stock.price ? String(stock.price) : '');
+                setBuyPx((stock.price * 0.98).toFixed(2));
+              }}
             >
-              🔴 倒T（先卖后买 / 高抛低吸）
+              🔴 倒T (先卖后买)
+            </button>
+            <button
+              type="button"
+              className={`m-dir-btn ${isDirectSell ? 'active' : ''}`}
+              style={{
+                flex: 1.1, padding: '7px 0', borderRadius: '7px', fontWeight: 700, fontSize: '12px',
+                border: '1px solid', borderColor: isDirectSell ? '#cf1322' : 'var(--line)',
+                background: isDirectSell ? '#fff1f0' : '#fff',
+                color: isDirectSell ? '#cf1322' : 'var(--sub)'
+              }}
+              onClick={() => {
+                setDir('直接卖出');
+                if (totalHeld > 0) setQty(totalHeld);
+                if (stock.price) setSellPx(String(stock.price));
+                if (stock.cost) setBuyPx(String(stock.cost));
+              }}
+            >
+              📤 直接卖出 (减/清)
             </button>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
-            <div className="fld">
-              <label>买入成交价 (元)</label>
-              <input
-                type="number" step="0.01" value={buyPx}
-                onChange={e => setBuyPx(e.target.value)}
-                style={{ width: '100%', minHeight: '32px', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--line)' }}
-              />
-            </div>
-            <div className="fld">
-              <label>卖出成交价 (元)</label>
-              <input
-                type="number" step="0.01" value={sellPx}
-                onChange={e => setSellPx(e.target.value)}
-                style={{ width: '100%', minHeight: '32px', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--line)' }}
-              />
-            </div>
-          </div>
-
-          <div className="fld" style={{ marginBottom: '14px' }}>
-            <label style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span>成交股数</span>
-              <span style={{ color: 'var(--sub)' }}>建议T仓: {Math.max(100, Math.floor((totalHeld * 0.3) / 100) * 100)} 股</span>
-            </label>
-            <input
-              type="number" step="100" value={qty}
-              onChange={e => setQty(e.target.value)}
-              style={{ width: '100%', minHeight: '32px', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--line)' }}
-            />
-          </div>
-
-          <div className="quickt-preview" style={{ background: 'var(--surface2)', padding: '10px 12px', borderRadius: '8px', fontSize: '12.5px', lineHeight: 1.7 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span>单笔差价毛利:</span>
-              <b className={grossDiff >= 0 ? 'up' : 'down'}>{grossDiff >= 0 ? '+' : ''}{money(grossDiff)} 元 ({spreadPct >= 0 ? '+' : ''}{spreadPct.toFixed(2)}%)</b>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span>扣除规费与摩擦 (0.11%):</span>
-              <span style={{ color: 'var(--sub)' }}>−{fee.toFixed(2)} 元</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed var(--line)', paddingTop: '4px', marginTop: '4px' }}>
-              <b>本次净套利差额:</b>
-              <b className={netDiff >= 0 ? 'up' : 'down'} style={{ fontSize: '14px' }}>{netDiff >= 0 ? '+' : ''}{money(netDiff)} 元</b>
-            </div>
-            {totalHeld > 0 ? (
-              <div style={{ color: 'var(--accent)', marginTop: '4px' }}>
-                💡 摊薄后底仓成本：{stock.cost} → <b>{f2(newCost)}</b> 元 ({costDrop >= 0 ? `成本下降 ${costDrop.toFixed(2)} 元` : `成本上升 ${Math.abs(costDrop).toFixed(2)} 元`})
+          {isDirectSell ? (
+            /* ===== 直接卖出界面 ===== */
+            <div>
+              <div style={{
+                padding: '8px 12px', background: 'var(--surface2)', borderRadius: '7px',
+                fontSize: '12px', marginBottom: '12px', color: 'var(--sub)', lineHeight: 1.6
+              }}>
+                💼 当前持仓: <b>{totalHeld} 股</b> ｜ 成本: <b>¥{f2(stock.cost || 0)}</b> ｜ 市值: <b>¥{money(totalHeld * (+stock.price || 0))}</b>
+                <div style={{ fontSize: '11px', color: 'var(--mute)', marginTop: '2px' }}>
+                  确认卖出后将直接扣减持仓股数并计入台账。若全卖则自动完成清仓。
+                </div>
               </div>
-            ) : null}
-          </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                <div className="fld">
+                  <label style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>卖出成交价 (元)</span>
+                  </label>
+                  <input
+                    type="number" step="0.01" value={sellPx}
+                    onChange={e => setSellPx(e.target.value)}
+                    placeholder="卖出价"
+                    style={{ width: '100%', minHeight: '32px', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--line)' }}
+                  />
+                  <div style={{ display: 'flex', gap: '4px', marginTop: '4px', flexWrap: 'wrap' }}>
+                    {stock.price && (
+                      <button
+                        type="button"
+                        onClick={() => setSellPx(String(stock.price))}
+                        style={{ fontSize: '10.5px', padding: '1px 5px', borderRadius: '3px', border: '1px solid var(--line)', background: '#fff', cursor: 'pointer' }}
+                      >
+                        现价 {f2(stock.price)}
+                      </button>
+                    )}
+                    {+stock.cost > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setSellPx(String(stock.cost))}
+                        style={{ fontSize: '10.5px', padding: '1px 5px', borderRadius: '3px', border: '1px solid var(--line)', background: '#fff', cursor: 'pointer' }}
+                      >
+                        保本价 {f2(stock.cost)}
+                      </button>
+                    )}
+                    {c && c.tp1 && (
+                      <button
+                        type="button"
+                        onClick={() => setSellPx(f2(c.tp1))}
+                        style={{ fontSize: '10.5px', padding: '1px 5px', borderRadius: '3px', border: '1px solid var(--line)', background: '#fff', cursor: 'pointer' }}
+                      >
+                        T1 {f2(c.tp1)}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="fld">
+                  <label style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>买入成本价 (元)</span>
+                  </label>
+                  <input
+                    type="number" step="0.01" value={buyPx}
+                    onChange={e => setBuyPx(e.target.value)}
+                    placeholder="底仓成本"
+                    style={{ width: '100%', minHeight: '32px', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--line)' }}
+                  />
+                  <div style={{ fontSize: '11px', color: 'var(--mute)', marginTop: '4px' }}>
+                    作为盈亏核算基准
+                  </div>
+                </div>
+              </div>
+
+              <div className="fld" style={{ marginBottom: '14px' }}>
+                <label style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>卖出股数 (股)</span>
+                  <span style={{ color: 'var(--sub)' }}>持仓可卖: {totalHeld} 股</span>
+                </label>
+                <input
+                  type="number" step="100" value={qty}
+                  onChange={e => setQty(e.target.value)}
+                  style={{ width: '100%', minHeight: '32px', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--line)' }}
+                />
+                <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+                  {totalHeld > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setQty(totalHeld)}
+                      style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', border: '1px solid #ffa39e', background: '#fff1f0', color: '#cf1322', fontWeight: 700, cursor: 'pointer' }}
+                    >
+                      全部清仓 ({totalHeld}股)
+                    </button>
+                  )}
+                  {totalHeld >= 200 && (
+                    <button
+                      type="button"
+                      onClick={() => setQty(Math.floor(totalHeld / 200) * 100)}
+                      style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', border: '1px solid var(--line)', background: '#fff', cursor: 'pointer' }}
+                    >
+                      卖半仓 ({Math.floor(totalHeld / 200) * 100}股)
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setQty(100)}
+                    style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', border: '1px solid var(--line)', background: '#fff', cursor: 'pointer' }}
+                  >
+                    1手 (100股)
+                  </button>
+                  {c && c.t1Lots && c.t1Lots !== 100 && (
+                    <button
+                      type="button"
+                      onClick={() => setQty(c.t1Lots)}
+                      style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', border: '1px solid var(--line)', background: '#fff', cursor: 'pointer' }}
+                    >
+                      建议T仓 ({c.t1Lots}股)
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* 实时盈亏结算试算 */}
+              <div className="quickt-preview" style={{ background: 'var(--surface2)', padding: '10px 12px', borderRadius: '8px', fontSize: '12.5px', lineHeight: 1.7 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>卖出成交总额:</span>
+                  <b>¥{money(sellAmt)} 元</b>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>扣除规费与摩擦 (0.11%):</span>
+                  <span style={{ color: 'var(--sub)' }}>−{feeSell.toFixed(2)} 元</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>回笼可用现金:</span>
+                  <b style={{ color: 'var(--accent)' }}>¥{money(netCash)} 元</b>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed var(--line)', paddingTop: '4px', marginTop: '4px' }}>
+                  <b>本次实际落袋净盈亏:</b>
+                  <b className={netProfitSell >= 0 ? 'up' : 'down'} style={{ fontSize: '14.5px' }}>
+                    {netProfitSell >= 0 ? '+' : ''}{money(netProfitSell)} 元 ({profitRateSell >= 0 ? '+' : ''}{profitRateSell.toFixed(2)}%)
+                  </b>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '3px' }}>
+                  <span>卖出后剩余持仓:</span>
+                  <b style={{ color: remainingShares === 0 ? '#cf1322' : 'var(--text)' }}>
+                    {remainingShares === 0 ? '全部清仓（持仓归零）' : `${remainingShares} 股`}
+                  </b>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* ===== 正T / 倒T 界面 ===== */
+            <div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
+                <div className="fld">
+                  <label>买入成交价 (元)</label>
+                  <input
+                    type="number" step="0.01" value={buyPx}
+                    onChange={e => setBuyPx(e.target.value)}
+                    style={{ width: '100%', minHeight: '32px', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--line)' }}
+                  />
+                </div>
+                <div className="fld">
+                  <label>卖出成交价 (元)</label>
+                  <input
+                    type="number" step="0.01" value={sellPx}
+                    onChange={e => setSellPx(e.target.value)}
+                    style={{ width: '100%', minHeight: '32px', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--line)' }}
+                  />
+                </div>
+              </div>
+
+              <div className="fld" style={{ marginBottom: '14px' }}>
+                <label style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>成交股数</span>
+                  <span style={{ color: 'var(--sub)' }}>建议T仓: {Math.max(100, Math.floor((totalHeld * 0.3) / 100) * 100)} 股</span>
+                </label>
+                <input
+                  type="number" step="100" value={qty}
+                  onChange={e => setQty(e.target.value)}
+                  style={{ width: '100%', minHeight: '32px', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--line)' }}
+                />
+              </div>
+
+              <div className="quickt-preview" style={{ background: 'var(--surface2)', padding: '10px 12px', borderRadius: '8px', fontSize: '12.5px', lineHeight: 1.7 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>单笔差价毛利:</span>
+                  <b className={grossDiff >= 0 ? 'up' : 'down'}>{grossDiff >= 0 ? '+' : ''}{money(grossDiff)} 元 ({spreadPct >= 0 ? '+' : ''}{spreadPct.toFixed(2)}%)</b>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>扣除规费与摩擦 (0.11%):</span>
+                  <span style={{ color: 'var(--sub)' }}>−{feeT.toFixed(2)} 元</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed var(--line)', paddingTop: '4px', marginTop: '4px' }}>
+                  <b>本次净套利差额:</b>
+                  <b className={netDiffT >= 0 ? 'up' : 'down'} style={{ fontSize: '14px' }}>{netDiffT >= 0 ? '+' : ''}{money(netDiffT)} 元</b>
+                </div>
+                {totalHeld > 0 ? (
+                  <div style={{ color: 'var(--accent)', marginTop: '4px' }}>
+                    💡 摊薄后底仓成本：{stock.cost} → <b>{f2(newCostT)}</b> 元 ({costDropT >= 0 ? `成本下降 ${costDropT.toFixed(2)} 元` : `成本上升 ${Math.abs(costDropT).toFixed(2)} 元`})
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          )}
         </div>
         <div className="modal-ft" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', padding: '10px 14px', borderTop: '1px solid var(--line)' }}>
           <button className="btn-cancel" onClick={onClose} style={{ padding: '6px 14px', borderRadius: '6px', border: '1px solid var(--line)', background: '#fff', cursor: 'pointer' }}>取消</button>
-          <button className="primary" onClick={handleConfirm} style={{ padding: '6px 16px', borderRadius: '6px', background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 700, cursor: 'pointer' }}>确认记入台账</button>
+          <button
+            className="primary"
+            onClick={handleConfirm}
+            style={{
+              padding: '6px 18px',
+              borderRadius: '6px',
+              background: isDirectSell ? '#cf1322' : 'var(--accent)',
+              color: '#fff',
+              border: 'none',
+              fontWeight: 700,
+              cursor: 'pointer'
+            }}
+          >
+            {isDirectSell
+              ? (totalHeld > 0 && q >= totalHeld ? '🔴 确认全部清仓卖出' : '🔴 确认直接卖出')
+              : '确认记入台账'}
+          </button>
         </div>
       </div>
     </div>
