@@ -100,15 +100,23 @@ export default function LedgerSection({
                     <td>{lg.date}</td>
                     <td style={{ fontWeight: 600 }}>{lg.stock}</td>
                     <td>
-                      <span className={`pill ${lg.dir === '正T' || lg.dir === '尾盘买入' ? 'p-buy' : 'p-sell'}`}>
+                      <span className={`pill ${
+                        lg.dir === '正T' || lg.dir === '尾盘买入' || lg.dir === '买入建仓' || lg.dir === '买入加仓' || lg.dir === '直接买入'
+                          ? 'p-buy'
+                          : 'p-sell'
+                      }`}>
                         {lg.dir}
                       </span>
                     </td>
-                    <td className="num">{f2(lg.buy)}</td>
-                    <td className="num">{f2(lg.sell)}</td>
+                    <td className="num">{lg.buy > 0 ? f2(lg.buy) : '—'}</td>
+                    <td className="num">{lg.sell > 0 ? f2(lg.sell) : '—'}</td>
                     <td className="num">{lg.qty}</td>
                     <td className="num">
-                      <b className={lg.net >= 0 ? 'up' : 'down'}>{lg.net >= 0 ? '+' : ''}{money(lg.net)}</b>
+                      {lg.dir === '买入建仓' || lg.dir === '买入加仓' || lg.dir === '直接买入' ? (
+                        <span style={{ color: '#1677ff', fontSize: '11.5px', fontWeight: 600 }}>持仓增厚</span>
+                      ) : (
+                        <b className={lg.net >= 0 ? 'up' : 'down'}>{lg.net >= 0 ? '+' : ''}{money(lg.net)}</b>
+                      )}
                     </td>
                     <td>{lg.plan}</td>
                     <td>{lg.basis}</td>

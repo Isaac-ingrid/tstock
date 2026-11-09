@@ -395,9 +395,74 @@ export default function App() {
     }
   };
 
+  /* 买入建仓 / 买入加仓 / 底仓校准 */
+  const handleBuyStock = ({ stock, qty, buy, isCalibration = false, newCostOverride, newSharesOverride }) => {
+    if (!stock) return;
+
+    if (isCalibration) {
+      const sVal = parseInt(newSharesOverride, 10);
+      const cVal = parseFloat(newCostOverride);
+      const newShares = isNaN(sVal) || sVal < 0 ? 0 : sVal;
+      const newCost = isNaN(cVal) || cVal < 0 ? 0 : Math.round(cVal * 100) / 100;
+      handleUpdateStock({ ...stock, shares: newShares, cost: newCost });
+      toastOk(`✅ 已成功校准【${stock.name}】底仓：${newShares} 股，成本均价 ¥${f2(newCost)}`);
+      return;
+    }
+
+    const oldShares = stock.shares || 0;
+    const oldCost = stock.cost || 0;
+    const buyQty = Math.max(0, parseInt(qty, 10) || 0);
+    const buyPx = Math.max(0, parseFloat(buy) || 0);
+
+    if (buyQty <= 0 || buyPx <= 0) {
+      toastErr('请输入有效的买入股数与买入价格');
+      return;
+    }
+
+    const newShares = oldShares + buyQty;
+    const totalCapital = oldShares * oldCost + buyQty * buyPx;
+    const newCost = Math.round((totalCapital / newShares) * 100) / 100;
+    const isInitial = oldShares === 0;
+    const fee = Math.round(buyQty * buyPx * 0.0003 * 100) / 100; // 佣金万3
+
+    const newLog = {
+      id: Date.now(),
+      date: todayStr(),
+      stock: `${stock.name} (${stock.code})`,
+      dir: isInitial ? '买入建仓' : '买入加仓',
+      buy: buyPx,
+      sell: 0,
+      qty: buyQty,
+      gross: 0,
+      fee,
+      net: 0,
+      plan: '计划内',
+      basis: '客观买点',
+      note: isInitial
+        ? `首次建仓 ${buyQty} 股，成本价 ¥${buyPx.toFixed(2)}，动用资金 ¥${(buyQty * buyPx).toLocaleString()}`
+        : `买入加仓 ${buyQty} 股（价格 ¥${buyPx.toFixed(2)}），持仓由 ${oldShares} 增至 ${newShares} 股，均价变动为 ¥${newCost.toFixed(2)}`
+    };
+
+    setTradeLogs(prev => [newLog, ...prev]);
+    handleUpdateStock({ ...stock, shares: newShares, cost: newCost });
+
+    if (isInitial) {
+      toastOk(`🎯 【${stock.name}】建仓成功！买入 ${buyQty} 股，成本 ¥${f2(newCost)}`);
+    } else {
+      toastOk(`🚀 【${stock.name}】加仓成功！加仓 ${buyQty} 股，总持仓 ${newShares} 股，最新均价 ¥${f2(newCost)}`);
+    }
+  };
+
   /* 快捷记T提交 */
   const handleConfirmQuickT = ({ stock, dir, action, buy, sell, qty, netDiff, newCost, remainingShares }) => {
     const isDirectSell = action === 'sell' || dir === '直接卖出' || dir === '清仓卖出';
+    const isDirectBuy = action === 'buy' || dir === '直接买入' || dir === '买入建仓' || dir === '买入加仓';
+
+    if (isDirectBuy) {
+      handleBuyStock({ stock, qty, buy });
+      setQuickTModal({ open: false, stock: null });
+      return;
+    }
 
     const newLog = {
       id: Date.now(),
@@ -673,6 +738,7 @@ export default function App() {
             onSelfTest={selfTest}
             onJumpPerf={() => navigate('/perf')}
             onUpdateStock={handleUpdateStock}
+            onBuyStock={handleBuyStock}
             onRemoveStock={handleRemoveStock}
             onAddBlank={handleAddBlank}
             onSaveLocal={handleSaveLocal}

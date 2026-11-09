@@ -9,6 +9,7 @@ export default function ConsoleSection({
   activeStockCode,
   onSelectStock,
   onUpdateStock,
+  onBuyStock,
   onRemoveStock,
   onAddBlank,
   onSaveLocal,
@@ -231,6 +232,7 @@ export default function ConsoleSection({
                 index={pool.indexOf(s)}
                 isCur={true}
                 onUpdateStock={onUpdateStock}
+                onBuyStock={onBuyStock}
                 onRemoveStock={onRemoveStock}
                 onOpenQuickT={onOpenQuickT}
                 onOpenReason={onOpenReason}
@@ -246,6 +248,7 @@ export default function ConsoleSection({
                 index={pool.indexOf(currentStock)}
                 isCur={true}
                 onUpdateStock={onUpdateStock}
+                onBuyStock={onBuyStock}
                 onRemoveStock={onRemoveStock}
                 onOpenQuickT={onOpenQuickT}
                 onOpenReason={onOpenReason}
