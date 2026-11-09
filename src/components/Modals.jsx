@@ -142,6 +142,21 @@ export function StockReasonModal({ modalData, onClose, onAdd, onJumpCard }) {
   if (!stock) return null;
 
   return (
+    <StockReasonModalInner
+      stock={stock}
+      inPool={inPool}
+      onClose={onClose}
+      onAdd={onAdd}
+      onJumpCard={onJumpCard}
+    />
+  );
+}
+
+function StockReasonModalInner({ stock, inPool, onClose, onAdd, onJumpCard }) {
+  const [initShares, setInitShares] = useState(stock.shares ? String(stock.shares) : '');
+  const [initCost, setInitCost] = useState(stock.cost ? String(stock.cost) : (stock.price ? String(stock.price) : ''));
+
+  return (
     <div className="modal-mask" onClick={onClose}>
       <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '520px' }}>
         <div className="modal-hd">
@@ -180,6 +195,46 @@ export function StockReasonModal({ modalData, onClose, onAdd, onJumpCard }) {
               </div>
             </div>
           ) : null}
+
+          {!inPool && (
+            <div style={{ marginTop: '12px', padding: '10px 12px', background: 'var(--surface2)', borderRadius: '8px', border: '1px solid var(--line)' }}>
+              <div style={{ fontSize: '12px', fontWeight: 700, marginBottom: '6px', color: 'var(--text)' }}>
+                💼 预设做T底仓信息（选填，并入后可在卡片随时修改）：
+              </div>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ fontSize: '11.5px', color: 'var(--sub)' }}>持仓股数:</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="如 1000"
+                    value={initShares}
+                    onChange={e => setInitShares(e.target.value)}
+                    style={{ width: '85px', padding: '4px 6px', fontSize: '12px', borderRadius: '4px', border: '1px solid var(--line)', background: '#fff' }}
+                  />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ fontSize: '11.5px', color: 'var(--sub)' }}>成本单价:</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="如 30.50"
+                    value={initCost}
+                    onChange={e => setInitCost(e.target.value)}
+                    style={{ width: '85px', padding: '4px 6px', fontSize: '12px', borderRadius: '4px', border: '1px solid var(--line)', background: '#fff' }}
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="mini"
+                  onClick={() => setInitCost(stock.price ? String(stock.price) : '')}
+                  style={{ padding: '3px 8px', fontSize: '11px', cursor: 'pointer' }}
+                >
+                  ⚡ 填入现价
+                </button>
+              </div>
+            </div>
+          )}
         </div>
         <div className="modal-ft" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', padding: '10px 14px', borderTop: '1px solid var(--line)' }}>
           <button className="btn-cancel" onClick={onClose} style={{ padding: '6px 14px', borderRadius: '6px', border: '1px solid var(--line)', background: '#fff', cursor: 'pointer' }}>关闭</button>
@@ -196,7 +251,20 @@ export function StockReasonModal({ modalData, onClose, onAdd, onJumpCard }) {
             </button>
           ) : null}
           {!inPool && onAdd ? (
-            <button className="primary" onClick={() => { onAdd(stock); onClose(); }} style={{ padding: '6px 16px', borderRadius: '6px', background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 700, cursor: 'pointer' }}>
+            <button
+              className="primary"
+              onClick={() => {
+                const sNum = parseInt(initShares, 10) || 0;
+                const cNum = parseFloat(initCost) || 0;
+                onAdd({
+                  ...stock,
+                  shares: sNum,
+                  cost: cNum
+                });
+                onClose();
+              }}
+              style={{ padding: '6px 16px', borderRadius: '6px', background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 700, cursor: 'pointer' }}
+            >
               ＋ 一键并入自选池
             </button>
           ) : null}

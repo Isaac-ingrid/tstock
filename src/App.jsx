@@ -1,11 +1,13 @@
+'use client';
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Header from './components/Header.jsx';
 import TopNav from './components/TopNav.jsx';
-import TradePage from './pages/TradePage.jsx';
-import TailPage from './pages/TailPage.jsx';
-import AccountPage from './pages/AccountPage.jsx';
-import LedgerPage from './pages/LedgerPage.jsx';
-import RulesPage from './pages/RulesPage.jsx';
+import TradePage from './views/TradePage.jsx';
+import TailPage from './views/TailPage.jsx';
+import AccountPage from './views/AccountPage.jsx';
+import LedgerPage from './views/LedgerPage.jsx';
+import RulesPage from './views/RulesPage.jsx';
 import { QuickTModal, StockReasonModal, TradingClockModal, ToastHost, OvernightBanner } from './components/Modals.jsx';
 
 import { SITE_META, STORAGE_KEYS, DEFAULT_POOL } from './data/site.js';
@@ -65,6 +67,9 @@ export default function App() {
   const [dbStatus, setDbStatus] = useState('');
   const [notifyActive, setNotifyActive] = useState(() => {
     return typeof Notification !== 'undefined' && Notification.permission === 'granted';
+  });
+  const [wbLatest, setWbLatest] = useState(() => {
+    return typeof window !== 'undefined' ? (window.WB_LATEST || null) : null;
   });
 
   /* Modals 状态 */
@@ -139,6 +144,26 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.SNAPSHOTS, JSON.stringify(snapshots));
   }, [snapshots]);
+
+  /* 读取选股引擎统一数据契约。使用 JSON fetch，避免外部 script 与 React 水合时序竞争。 */
+  useEffect(() => {
+    let active = true;
+    fetch('/data/latest.json?ts=' + Date.now(), { cache: 'no-store' })
+      .then(r => {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(data => {
+        if (!active) return;
+        window.WB_LATEST = data;
+        setWbLatest(data);
+      })
+      .catch(error => {
+        console.error('[T-Stock] 选股契约读取失败', error);
+        if (active) setDbStatus('选股契约读取失败：' + error.message);
+      });
+    return () => { active = false; };
+  }, []);
 
   /* 注册全局图表自愈装载器与 Toast 分发器 */
   useEffect(() => {
@@ -343,6 +368,9 @@ export default function App() {
 
     setPool(prev => [...prev, ...newItems]);
     toastOk(`✓ 成功将 ${newItems.length} 只${poolTag}标的并入自选池！`);
+    if (newItems.length === 1) {
+      handleSelectStock(newItems[0].code);
+    }
   };
 
   /* 快捷记T提交 */
@@ -581,7 +609,7 @@ export default function App() {
             pool={pool}
             activeStockCode={activeStockCode}
             onSelectStock={handleSelectStock}
-            wbLatest={typeof window !== 'undefined' ? window.WB_LATEST : null}
+            wbLatest={wbLatest}
             dbStatus={dbStatus}
             onAddStock={handleAddStockByQuery}
             onBatchAdd={handleBatchAdd}

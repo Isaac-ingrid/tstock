@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { f2, pct, money, money$, fmtIn, GRID, TIER_LABEL, AUTO_FIELDS, AUTO_FIELD_LABELS } from '../services/utils.js';
+import React, { useState, useEffect } from 'react';
+import { f2, pct, money, money$, fmtIn, GRID, TIER_LABEL, AUTO_FIELDS, AUTO_FIELD_LABELS, toastOk } from '../services/utils.js';
 import { calc, posCalc, computeTA, rsCalc, drawRS } from '../services/api.js';
 import { getAuctionTier } from '../services/auction.js';
 import ChartCanvas from './ChartCanvas.jsx';
@@ -25,6 +25,15 @@ export default function StockCard({
   const [quoteFoldOpen, setQuoteFoldOpen] = useState(false);
   const [chartFoldOpen, setChartFoldOpen] = useState(!!stock._fo);
   const [manualValues, setManualValues] = useState(stock.manual || {});
+
+  // 底仓股数与成本字符串受控状态（支持小数点流畅输入，防止输入 . 时被转为浮点数而丢失）
+  const [sharesStr, setSharesStr] = useState(() => (stock.shares ? String(stock.shares) : ''));
+  const [costStr, setCostStr] = useState(() => (stock.cost ? String(stock.cost) : ''));
+
+  useEffect(() => {
+    setSharesStr(stock.shares ? String(stock.shares) : '');
+    setCostStr(stock.cost ? String(stock.cost) : '');
+  }, [stock.shares, stock.cost, stock.code]);
 
   const c = calc(stock);
   const cls = c.chg >= 0 ? 'up' : 'down';
@@ -59,13 +68,42 @@ export default function StockCard({
     onUpdateStock(clean);
   };
 
-  const handleHoldingsChange = (field, val) => {
-    const num = parseFloat(val) || 0;
-    onUpdateStock({ ...stock, [field]: num });
+  // 保存持仓与成本核心逻辑
+  const handleSaveHoldings = (sOverride, cOverride) => {
+    const sInput = sOverride !== undefined ? sOverride : sharesStr;
+    const cInput = cOverride !== undefined ? cOverride : costStr;
+    const sVal = parseInt(sInput, 10);
+    const cVal = parseFloat(cInput);
+    const newShares = isNaN(sVal) || sVal < 0 ? 0 : sVal;
+    const newCost = isNaN(cVal) || cVal < 0 ? 0 : Math.round(cVal * 100) / 100;
+
+    onUpdateStock({
+      ...stock,
+      shares: newShares,
+      cost: newCost
+    });
+    setSharesStr(newShares ? String(newShares) : '');
+    setCostStr(newCost ? String(newCost) : '');
+    toastOk(`✅ 已保存【${stock.name}】底仓：${newShares} 股，成本 ¥${f2(newCost)}`);
+  };
+
+  // 快捷一键填入现价为成本价
+  const handleFillCurrentPrice = () => {
+    const p = +stock.price || +stock.prevClose || 0;
+    if (p > 0) {
+      const pStr = f2(p);
+      setCostStr(pStr);
+      handleSaveHoldings(undefined, pStr);
+    }
   };
 
   // 12-tier Table rows
   const pxNow = +stock.price || 0;
+  const hasHoldings = (stock.shares || 0) > 0 && (stock.cost || 0) > 0;
+  const floatProfit = hasHoldings ? (pxNow - stock.cost) * stock.shares : 0;
+  const floatRate = hasHoldings ? ((pxNow - stock.cost) / stock.cost) * 100 : 0;
+  const curMarketVal = (stock.shares || 0) * pxNow;
+
   const rows = [
     [6, '禁止新开正T区', 'none'],
     [5, '强势区·只减', 'sell'],
@@ -142,6 +180,20 @@ export default function StockCard({
           {TIER_LABEL[stock.tier || 'short']}
         </span>
         <span className={`mg ${mbd[0]}`}>{mbd[1]}</span>
+        <span
+          className="snap-tag"
+          style={{
+            background: hasHoldings ? 'rgba(9,105,218,.08)' : 'var(--surface2)',
+            borderColor: hasHoldings ? 'rgba(9,105,218,.25)' : 'var(--line)',
+            color: hasHoldings ? 'var(--accent)' : 'var(--mute)',
+            fontWeight: 700,
+            fontSize: '11px',
+            lineHeight: '18px'
+          }}
+          title="底仓配置状态"
+        >
+          {hasHoldings ? `持仓 ${Number(stock.shares).toLocaleString()}股 · 成本 ¥${f2(stock.cost)}` : '未设底仓'}
+        </span>
 
         <button className="mini primary" onClick={() => onOpenQuickT(stock)}>⚡ 快捷记T</button>
         <button className="mini" onClick={() => onOpenReason(stock, true)}>🔍 逻辑与利空</button>
@@ -188,6 +240,131 @@ export default function StockCard({
 
       {/* 主体区 */}
       <div className="card-bd">
+        {/* 我的做T底仓与成本配置卡 */}
+        <div
+          className="card-holdings-setup"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '10px',
+            padding: '10px 14px',
+            background: hasHoldings ? 'var(--surface)' : '#fffbf0',
+            border: hasHoldings ? '1px solid var(--line2)' : '1px dashed var(--warn)',
+            borderRadius: '9px',
+            marginBottom: '12px'
+          }}
+        >
+          {/* 左侧：底仓与盈亏概况 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text)' }}>💼 底仓与成本配置:</span>
+              <span style={{ fontSize: '12.5px', color: 'var(--sub)' }}>
+                持仓 <b>{stock.shares ? Number(stock.shares).toLocaleString() : 0}</b> 股
+              </span>
+              <span style={{ color: 'var(--line2)' }}>|</span>
+              <span style={{ fontSize: '12.5px', color: 'var(--sub)' }}>
+                成本 <b>¥{stock.cost ? f2(stock.cost) : '0.00'}</b>
+              </span>
+              <span style={{ color: 'var(--line2)' }}>|</span>
+              <span style={{ fontSize: '12.5px', color: 'var(--sub)' }}>
+                市值 <b>¥{money(curMarketVal)}</b>
+              </span>
+            </div>
+
+            {hasHoldings && (
+              <span
+                style={{
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  padding: '2px 8px',
+                  borderRadius: '4px',
+                  background: floatProfit >= 0 ? 'var(--up-bg)' : 'var(--down-bg)',
+                  color: floatProfit >= 0 ? 'var(--up)' : 'var(--down)',
+                  border: '1px solid',
+                  borderColor: floatProfit >= 0 ? 'var(--up-b)' : 'var(--down-b)',
+                  fontFamily: 'ui-monospace,Consolas,monospace'
+                }}
+                title={`浮动盈亏 = (现价 ¥${f2(pxNow)} - 成本价 ¥${f2(stock.cost)}) × ${stock.shares} 股`}
+              >
+                浮动盈亏: {floatProfit >= 0 ? '+' : ''}¥{money(floatProfit)} ({floatRate >= 0 ? '+' : ''}{floatRate.toFixed(2)}%)
+              </span>
+            )}
+
+            {!hasHoldings && (
+              <span style={{ fontSize: '11.5px', color: 'var(--warn-d)', fontWeight: 600 }}>
+                ⚠️ 尚未录入底仓（录入持仓股数与成本后，系统将自动核算做T单笔份数与盈亏）
+              </span>
+            )}
+          </div>
+
+          {/* 右侧：输入与操作 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <label style={{ fontSize: '11.5px', color: 'var(--sub)' }}>股数</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder="例如 1000"
+                value={sharesStr}
+                onChange={e => setSharesStr(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleSaveHoldings(); }}
+                style={{
+                  width: '85px',
+                  padding: '4px 8px',
+                  fontSize: '12.5px',
+                  fontFamily: 'ui-monospace,Consolas,monospace',
+                  borderRadius: '5px',
+                  border: '1px solid var(--line2)',
+                  background: '#fff'
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <label style={{ fontSize: '11.5px', color: 'var(--sub)' }}>成本</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                placeholder="例如 30.50"
+                value={costStr}
+                onChange={e => setCostStr(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleSaveHoldings(); }}
+                style={{
+                  width: '85px',
+                  padding: '4px 8px',
+                  fontSize: '12.5px',
+                  fontFamily: 'ui-monospace,Consolas,monospace',
+                  borderRadius: '5px',
+                  border: '1px solid var(--line2)',
+                  background: '#fff'
+                }}
+              />
+            </div>
+
+            <button
+              type="button"
+              className="mini"
+              onClick={handleFillCurrentPrice}
+              title={`将当前实时现价 ¥${f2(pxNow)} 直接填入成本`}
+              style={{ padding: '4px 8px', fontSize: '11.5px', cursor: 'pointer' }}
+            >
+              ⚡ 填入现价
+            </button>
+
+            <button
+              type="button"
+              className="mini primary"
+              onClick={() => handleSaveHoldings()}
+              title="确定保存该股票的底仓股数与成本"
+              style={{ padding: '4px 12px', fontSize: '11.5px', fontWeight: 700, cursor: 'pointer' }}
+            >
+              💾 保存持仓
+            </button>
+          </div>
+        </div>
+
         {/* 判定条与买卖点指令 */}
         <div className={`verdict v-${mbd[0]}`}>
           <div className="dot"></div>
@@ -280,26 +457,50 @@ export default function StockCard({
 
         {/* 持仓就地录入条 */}
         <div className="pos-row" style={{ marginTop: '10px' }}>
-          <div>持仓股数: <b>{stock.shares || 0}</b> 股</div>
-          <div>成本价: <b>{f2(stock.cost)}</b> 元</div>
-          <div>占用资金: <b>{money(pos.curMkt)}</b> 元</div>
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <span style={{ fontSize: '11.5px', color: 'var(--sub)' }}>就地录入:</span>
+          <div>持仓股数: <b>{stock.shares ? Number(stock.shares).toLocaleString() : 0}</b> 股</div>
+          <div>成本价: <b>¥{f2(stock.cost)}</b> 元</div>
+          <div>占用资金: <b>¥{money(curMarketVal)}</b> 元</div>
+          {hasHoldings && (
+            <div style={{ color: floatProfit >= 0 ? 'var(--up)' : 'var(--down)', fontWeight: 700, fontSize: '12px' }}>
+              盈亏: {floatProfit >= 0 ? '+' : ''}¥{money(floatProfit)} ({floatRate >= 0 ? '+' : ''}{floatRate.toFixed(2)}%)
+            </div>
+          )}
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <span style={{ fontSize: '11.5px', color: 'var(--sub)' }}>快捷修改:</span>
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
               placeholder="股数"
-              value={stock.shares || ''}
-              onChange={e => handleHoldingsChange('shares', e.target.value)}
-              style={{ width: '75px', padding: '2px 6px', fontSize: '12px', borderRadius: '4px', border: '1px solid var(--line)' }}
+              value={sharesStr}
+              onChange={e => setSharesStr(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleSaveHoldings(); }}
+              style={{ width: '80px', padding: '3px 6px', fontSize: '12px', borderRadius: '4px', border: '1px solid var(--line)', background: '#fff' }}
             />
             <input
-              type="number"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
               placeholder="成本"
-              value={stock.cost || ''}
-              onChange={e => handleHoldingsChange('cost', e.target.value)}
-              style={{ width: '75px', padding: '2px 6px', fontSize: '12px', borderRadius: '4px', border: '1px solid var(--line)' }}
+              value={costStr}
+              onChange={e => setCostStr(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleSaveHoldings(); }}
+              style={{ width: '80px', padding: '3px 6px', fontSize: '12px', borderRadius: '4px', border: '1px solid var(--line)', background: '#fff' }}
             />
+            <button
+              type="button"
+              className="mini"
+              onClick={handleFillCurrentPrice}
+              style={{ padding: '3px 6px', fontSize: '11px', cursor: 'pointer' }}
+            >
+              现价
+            </button>
+            <button
+              type="button"
+              className="mini primary"
+              onClick={() => handleSaveHoldings()}
+              style={{ padding: '3px 8px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
+            >
+              保存
+            </button>
           </div>
         </div>
 
