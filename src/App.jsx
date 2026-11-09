@@ -8,7 +8,7 @@ import TailPage from './views/TailPage.jsx';
 import AccountPage from './views/AccountPage.jsx';
 import LedgerPage from './views/LedgerPage.jsx';
 import RulesPage from './views/RulesPage.jsx';
-import { QuickTModal, StockReasonModal, TradingClockModal, ToastHost, OvernightBanner } from './components/Modals.jsx';
+import { QuickTModal, StockReasonModal, TradingClockModal, ToastHost, OvernightBanner, AlertCenterModal } from './components/Modals.jsx';
 
 import { SITE_META, STORAGE_KEYS, DEFAULT_POOL } from './data/site.js';
 import useRoute from './router/useRoute.js';
@@ -76,6 +76,7 @@ export default function App() {
   const [quickTModal, setQuickTModal] = useState({ open: false, stock: null });
   const [reasonModal, setReasonModal] = useState({ open: false, stock: null, inPool: false });
   const [clockModalOpen, setClockModalOpen] = useState(false);
+  const [alertModalOpen, setAlertModalOpen] = useState(false);
   const [overnightBannerOpen, setOvernightBannerOpen] = useState(false);
   const [toasts, setToasts] = useState([]);
 
@@ -591,6 +592,7 @@ export default function App() {
         quoteStamp={quoteStamp}
         isStale={isStale}
         onOpenClock={() => setClockModalOpen(true)}
+        onOpenAlertModal={() => setAlertModalOpen(true)}
         onCopyPlan={handleCopyPlan}
         onExport={handleExport}
         onImportClick={() => importInputRef.current && importInputRef.current.click()}
@@ -730,6 +732,15 @@ export default function App() {
       <TradingClockModal
         open={clockModalOpen}
         onClose={() => setClockModalOpen(false)}
+      />
+
+      <AlertCenterModal
+        open={alertModalOpen}
+        onClose={() => setAlertModalOpen(false)}
+        pool={pool}
+        onJumpCard={handleSelectStock}
+        notifyActive={notifyActive}
+        onToggleNotify={handleToggleNotify}
       />
 
       <ToastHost

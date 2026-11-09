@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { f2, money, money2 } from '../services/utils.js';
+import { calc } from '../services/api.js';
 
 /* 1. 快捷记T弹窗 */
 export function QuickTModal({ modalData, onClose, onConfirm }) {
@@ -341,6 +342,198 @@ export function OvernightBanner({ visible, onClose }) {
     <div id="overnightAlertBanner" className="overnight-alert-banner">
       <div className="oab-txt">🚨 尾盘强制风控：检测到今日存在尚未平仓的正T买入！做T铁律：绝不过夜变加仓！请在 14:55 前果断挂卖平仓或止损！</div>
       <button className="oab-close" onClick={onClose}>×</button>
+    </div>
+  );
+}
+
+/* 6. 盘中到价与买卖提醒中心弹窗 */
+export function AlertCenterModal({ open, onClose, pool, onJumpCard, notifyActive, onToggleNotify }) {
+  if (!open) return null;
+
+  const [alertList, setAlertList] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('t-system-alerts') || '[]');
+    } catch (_) {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    const handleAlerts = (e) => {
+      if (e.detail) setAlertList(e.detail);
+    };
+    window.addEventListener('t-alert-triggered', handleAlerts);
+    return () => window.removeEventListener('t-alert-triggered', handleAlerts);
+  }, []);
+
+  const handleClearAlerts = () => {
+    localStorage.setItem('t-system-alerts', '[]');
+    setAlertList([]);
+  };
+
+  // 实时扫描自选池股票到买卖点的距离
+  const poolNearList = (pool || []).map(s => {
+    const p = +s.price || +s.prevClose || 0;
+    let c = null;
+    try { c = calc(s); } catch (_) {}
+    if (!c || !p) return null;
+
+    const targets = [
+      { label: '正T买点', lv: +c.inA, dir: 'buy' },
+      { label: '第二买点', lv: +c.inB, dir: 'buy' },
+      { label: '倒T卖点', lv: +c.outA, dir: 'sell' },
+      { label: '卖飞线', lv: +c.fly, dir: 'fly' }
+    ].filter(t => t.lv > 0);
+
+    const nearest = targets.map(t => {
+      const dev = (p - t.lv) / t.lv * 100;
+      return { ...t, dev, absDev: Math.abs(dev) };
+    }).sort((a, b) => a.absDev - b.absDev)[0];
+
+    return {
+      name: s.name,
+      code: s.code,
+      price: p,
+      nearest
+    };
+  }).filter(Boolean);
+
+  return (
+    <div className="modal-mask" onClick={onClose}>
+      <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '620px' }}>
+        <div className="modal-hd">
+          <h3>🔔 盘中买卖与到价提醒中心</h3>
+          <button className="modal-close" onClick={onClose}>×</button>
+        </div>
+        <div className="modal-bd" style={{ fontSize: '13px', lineHeight: 1.6 }}>
+          {/* 桌面通知授权与开关横幅 */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '10px 14px',
+            background: notifyActive ? '#f6ffed' : '#fffbe6',
+            border: notifyActive ? '1px solid #b7eb8f' : '1px solid #ffe58f',
+            borderRadius: '8px',
+            marginBottom: '14px'
+          }}>
+            <div>
+              <div style={{ fontWeight: 700, color: notifyActive ? '#389e0d' : '#d48806', fontSize: '13px' }}>
+                {notifyActive ? '🟢 桌面弹窗通知已开启' : '🟡 桌面弹窗通知未授权'}
+              </div>
+              <div style={{ fontSize: '11.5px', color: 'var(--sub)', marginTop: '2px' }}>
+                {notifyActive
+                  ? '触及买卖点时系统将自动弹出桌面窗口（即使切到微信或行情软件也能收到）。'
+                  : '建议开启桌面通知，当股票触及做T买点或卖点时系统第一时间弹窗提醒。'}
+              </div>
+            </div>
+            {!notifyActive && onToggleNotify && (
+              <button
+                type="button"
+                className="primary"
+                onClick={onToggleNotify}
+                style={{ padding: '5px 12px', fontSize: '12px', fontWeight: 700, whiteSpace: 'nowrap', cursor: 'pointer' }}
+              >
+                开启桌面通知
+              </button>
+            )}
+          </div>
+
+          {/* 自选池实时临界买卖点监测 */}
+          <div style={{ marginBottom: '16px' }}>
+            <h4 style={{ fontSize: '13px', marginBottom: '8px', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span>🎯 自选股近邻做T买卖点距现价一览</span>
+              <span style={{ fontSize: '11px', color: 'var(--mute)', fontWeight: 400 }}>（现价距买卖位偏差 ≤ 0.4% 时自动报警）</span>
+            </h4>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '8px' }}>
+              {poolNearList.map(item => {
+                const n = item.nearest;
+                if (!n) return null;
+                const isNear = n.absDev <= 0.4;
+                return (
+                  <div
+                    key={item.code}
+                    onClick={() => {
+                      if (onJumpCard) onJumpCard(item.code);
+                      onClose();
+                    }}
+                    style={{
+                      padding: '8px 12px',
+                      background: isNear ? '#fff1f0' : 'var(--surface)',
+                      border: isNear ? '1px solid #ffa39e' : '1px solid var(--line)',
+                      borderRadius: '7px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between'
+                    }}
+                    title="点击立即跳转查看该股做T决策卡片"
+                  >
+                    <div>
+                      <b style={{ color: 'var(--text)' }}>{item.name}</b> <span style={{ fontSize: '11.5px', color: 'var(--mute)' }}>{item.code}</span>
+                      <div style={{ fontSize: '11.5px', color: 'var(--sub)', marginTop: '2px' }}>
+                        现价 ¥{f2(item.price)} ➔ 目标【{n.label}】¥{f2(n.lv)}
+                      </div>
+                    </div>
+                    <span style={{
+                      fontWeight: 700,
+                      fontSize: '12px',
+                      color: isNear ? 'var(--up)' : 'var(--sub)',
+                      fontFamily: 'ui-monospace,Consolas,monospace'
+                    }}>
+                      {n.dev >= 0 ? '+' : ''}{n.dev.toFixed(2)}%
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 今日已触发提醒流水记录 */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <h4 style={{ fontSize: '13px', margin: 0, color: 'var(--text)' }}>
+                📋 今日买卖到价提醒历史流水 ({alertList.length}条)
+              </h4>
+              {alertList.length > 0 && (
+                <button
+                  type="button"
+                  className="mini"
+                  onClick={handleClearAlerts}
+                  style={{ fontSize: '11px', padding: '2px 8px', cursor: 'pointer' }}
+                >
+                  清空流水
+                </button>
+              )}
+            </div>
+
+            {alertList.length > 0 ? (
+              <div className="alert-list" style={{ maxHeight: '180px', overflowY: 'auto', border: '1px solid var(--line)', borderRadius: '8px', background: '#fff' }}>
+                {alertList.map(a => (
+                  <div key={a.id} className="alert-row">
+                    <span className="ah">{a.time}</span>
+                    <span className="ak k-price">{a.label}</span>
+                    <span className="ad">
+                      <b>{a.name}</b> 现价 ¥{f2(a.price)} 已触及【{a.label} ¥{f2(a.target)}】（偏差 {(a.dev * 100).toFixed(2)}%）
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ padding: '16px', textAlign: 'center', color: 'var(--mute)', background: 'var(--surface2)', borderRadius: '8px', fontSize: '12.5px' }}>
+                今天尚未触发到价提醒。<br />
+                系统会在盘中自动拉取腾讯实时行情（每分钟/30秒自动轮询）；<br />
+                当自选股现价触及正T买点、倒T卖点或止损位时，将第一时间在此处与桌面弹窗报警！
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="modal-ft" style={{ display: 'flex', justifyContent: 'flex-end', padding: '10px 14px', borderTop: '1px solid var(--line)' }}>
+          <button className="primary" onClick={onClose} style={{ padding: '6px 18px', borderRadius: '6px', background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 700, cursor: 'pointer' }}>
+            知道了
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

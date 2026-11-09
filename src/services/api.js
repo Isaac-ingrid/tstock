@@ -1468,7 +1468,31 @@ export function checkPriceAlerts(){
     : '做T执行台 · 七格箱体 + 七底三仓';
   hits.filter(h=>!_hitSeen[h.key]).forEach(h=>{
     _hitSeen[h.key] = 1;
-    toastWarn(h.name + ' ' + h.p.toFixed(2) + ' 已到「' + h.label + ' ' + h.lv.toFixed(2) + '」（差 ' + (h.dev*100).toFixed(2) + '%）');
+    const msg = h.name + ' ' + h.p.toFixed(2) + ' 已到「' + h.label + ' ' + h.lv.toFixed(2) + '」（差 ' + (h.dev*100).toFixed(2) + '%）';
+    toastWarn(msg);
+    try {
+      const hist = JSON.parse(localStorage.getItem('t-system-alerts') || '[]');
+      const newAlert = {
+        id: Date.now() + Math.random(),
+        time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
+        name: h.name,
+        code: h.key.split('|')[0],
+        label: h.label,
+        price: h.p,
+        target: h.lv,
+        dev: h.dev
+      };
+      const updated = [newAlert, ...hist].slice(0, 50);
+      localStorage.setItem('t-system-alerts', JSON.stringify(updated));
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('t-alert-triggered', { detail: updated }));
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          new Notification(`⚡ 做T到价提醒: ${h.name} 触及${h.label}`, {
+            body: `现价 ¥${h.p.toFixed(2)}，目标位 ¥${h.lv.toFixed(2)}，偏差 ${(h.dev*100).toFixed(2)}%`
+          });
+        }
+      }
+    } catch (_) {}
   });
   Object.keys(_hitSeen).forEach(k=>{ if (!hits.some(h=>h.key === k)) delete _hitSeen[k]; });
 }

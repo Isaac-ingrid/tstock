@@ -19,6 +19,7 @@ export default function TopNav({
   quoteStamp,
   isStale,
   onOpenClock,
+  onOpenAlertModal,
   onCopyPlan,
   onExport,
   onImportClick,
@@ -174,8 +175,8 @@ export default function TopNav({
         <button
           className={`tb-btn ${notifyActive ? 'tb-btn-active' : ''}`}
           id="btnToggleNotify"
-          onClick={onToggleNotify}
-          title="开启/关闭盘中冲高回落预警桌面通知"
+          onClick={onOpenAlertModal || onToggleNotify}
+          title="点击查看盘中到价与买卖提醒中心"
         >
           🔔 提醒
         </button>
