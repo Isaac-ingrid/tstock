@@ -12,7 +12,7 @@ import { chartInd, chartEntry, chartMeta } from './chart.js';
    故统一到腾讯单一家，彻底去掉东财依赖，降低链路数量。 */
 const T_Q = 'https://qt.gtimg.cn/q=';                                  // 实时行情（fetch，CORS *）
 const T_S = 'https://proxy.finance.qq.com/ifzqgtimg/appstock/smartbox/search/get';  // 检索（JSON，CORS *）
-const T_K = 'https://web.ifzq.gtimg.cn/appstock/app/fqkline/get';      // 前复权日K（web 节点支持 CORS *）
+const T_K = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get';          // 前复权日K（API 稳定节点，免 WAF 501 拦截）
 
 /* 所有股票数据统一经过独立后端。静态导出时该值会由 NEXT_PUBLIC_STOCK_API_BASE 写入；
    未配置时默认请求同域 /stock-api，便于 nginx 反向代理到 FastAPI。 */
@@ -22,12 +22,21 @@ function resolveUrl(url) {
   return STOCK_API_BASE + '/api/proxy?url=' + encodeURIComponent(url);
 }
 
-/* 带超时的 fetch —— 浏览器只访问自有后端，不再直接依赖第三方 CORS 或 WAF 行为。 */
-export function fetchT(url, ms){
+/* 带超时的 fetch —— 优先访问自有后端代理与缓存；若后端不可用或响应异常(如501/502)，无缝自动降级为直接请求腾讯官方源(支持 CORS *) */
+export async function fetchT(url, ms){
   const ctl = new AbortController();
   const t = setTimeout(()=> ctl.abort(), ms || 8000);
-  return fetch(resolveUrl(url), { cache:'no-store', signal: ctl.signal })
-    .finally(()=> clearTimeout(t));
+  try {
+    const res = await fetch(resolveUrl(url), { cache:'no-store', signal: ctl.signal });
+    if (res.ok) return res;
+    // 代理返回 501 / 502 / 504 等非 200 响应时，自动降级为直连腾讯行情源
+    return await fetch(url, { cache:'no-store', signal: ctl.signal });
+  } catch (_) {
+    // 代理不可达时同样自动直连
+    return await fetch(url, { cache:'no-store', signal: ctl.signal });
+  } finally {
+    clearTimeout(t);
+  }
 }
 
 /* —— 本地代码解析：0 网络请求，纯规则。输入代码这条路完全不依赖检索接口 —— */
@@ -123,7 +132,7 @@ export async function fetchKline(tcode){
 
 /* ===================== 多周期K线 / 分时 / 逐笔大单 ===================== */
 const T_MK  = 'https://ifzq.gtimg.cn/appstock/app/kline/mkline';          // 分钟K（CORS *）
-const T_MIN = 'https://web.ifzq.gtimg.cn/appstock/app/minute/query';      // 当日分时（CORS *）
+const T_MIN = 'https://ifzq.gtimg.cn/appstock/app/minute/query';          // 当日分时（API 稳定节点）
 const T_DD  = 'https://stock.gtimg.cn/data/index.php';                    // 逐笔明细（无 CORS，走 script 注入）
 
 const PERIODS = [
@@ -1209,7 +1218,7 @@ export async function selfTest(){
   await probe('月K　ifzq.gtimg.cn',       async ()=> (await fetchKlineBig('sh605128','month',20)).length);
   await probe('分钟K 15分',               async ()=> (await fetchKlineMin('sh605128','m15',20)).length);
   await probe('分钟K 5分（量能基准）',     async ()=> (await fetchKlineMin('sh605128','m5',482)).length);
-  await probe('分时　web.ifzq.gtimg.cn',  async ()=> (await fetchMinute('sh605128')).pts.length);
+  await probe('分时　ifzq.gtimg.cn',      async ()=> (await fetchMinute('sh605128')).pts.length);
   await probe('逐笔　stock.gtimg.cn',     async ()=> (await fetchDetail('sh605128', 8)).recs.length);
   await probe('指数　qt.gtimg.cn',        async ()=> (await fetchQuotes(['sh000001'])).sh000001 ? 1 : 0);
   await probe('指数日K ifzq',             async ()=> (await fetchKlineBig('sh000001','day',30)).length);

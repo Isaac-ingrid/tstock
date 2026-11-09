@@ -230,10 +230,14 @@ export default function App() {
     }
   }, [tradeLogs]);
 
+  const poolRef = useRef(pool);
+  poolRef.current = pool;
+
   /* 行情全量刷新 */
   const handleRefresh = useCallback(async (silent = false) => {
     fetchContract();
-    if (!pool || !pool.length) {
+    const currentPool = poolRef.current;
+    if (!currentPool || !currentPool.length) {
       setDbStatus('自选池是空的 —— 在上方输入 6 位代码或股票名称加入池。');
       return;
     }
@@ -241,7 +245,7 @@ export default function App() {
     if (!silent) setDbStatus('正在获取全市场实时行情与前复权K线…');
 
     const errs = [];
-    const stockTasks = pool.map(async s => {
+    const stockTasks = currentPool.map(async s => {
       try {
         await loadStock(s);
         await loadChart(s, true);
@@ -255,7 +259,7 @@ export default function App() {
     const results = await Promise.all(stockTasks);
     results.forEach(x => { if (x) errs.push(x); });
 
-    setPool([...pool]);
+    setPool([...currentPool]);
     lastSuccessStamp.current = Date.now();
     const d = new Date();
     const timeStr = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
@@ -270,19 +274,24 @@ export default function App() {
 
     if (!silent) toastOk('✓ 全市场实时行情与前复权K线已同步！');
     checkPriceAlerts();
-  }, [pool]);
+  }, [fetchContract]);
 
-  /* 定时任务与生命周期 */
+  const handleRefreshRef = useRef(handleRefresh);
+  handleRefreshRef.current = handleRefresh;
+  const updateClockRef = useRef(updateClock);
+  updateClockRef.current = updateClock;
+
+  /* 定时任务与生命周期：仅在组件挂载时初始化一次，避免无限重置定时器引发界面闪烁 */
   useEffect(() => {
-    updateClock();
-    const clockTimer = setInterval(updateClock, 1000);
+    updateClockRef.current();
+    const clockTimer = setInterval(() => updateClockRef.current(), 1000);
     const staleTimer = setInterval(() => {
       const diffMin = (Date.now() - lastSuccessStamp.current) / 60000;
       setIsStale(diffMin > 3);
     }, 5000);
 
-    // 首屏静默刷新
-    const initialTimer = setTimeout(() => handleRefresh(true), 300);
+    // 首屏静默刷新（仅在首次加载时触发一次）
+    const initialTimer = setTimeout(() => handleRefreshRef.current(true), 300);
 
     // 交易时间每分钟自动刷新
     const autoRefreshTimer = setInterval(() => {
@@ -290,7 +299,7 @@ export default function App() {
       const mins = now.getHours() * 60 + now.getMinutes();
       const wd = now.getDay();
       if (wd >= 1 && wd <= 5 && ((mins >= 570 && mins <= 690) || (mins >= 780 && mins <= 900))) {
-        handleRefresh(true);
+        handleRefreshRef.current(true);
       }
     }, 60000);
 
@@ -300,7 +309,7 @@ export default function App() {
       clearTimeout(initialTimer);
       clearInterval(autoRefreshTimer);
     };
-  }, [updateClock, handleRefresh]);
+  }, []);
 
   /* ================= 2. 用户操作交互 ================= */
   const handleUpdateStock = (updated) => {
