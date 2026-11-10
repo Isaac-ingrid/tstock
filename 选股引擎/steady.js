@@ -138,6 +138,8 @@ function atr(bars, n = 14) {
   }
 
   const date = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' });
-  fs.writeFileSync(path.join(OUT, 'steady.json'), JSON.stringify({ date, pool: pool.length, rows, fit: fit.length, top }, null, 1));
-  console.log(`\n→ ${path.join(OUT, 'steady.json')}`);
+  const payloadStr = JSON.stringify({ date, pool: pool.length, rows, fit: fit.length, top }, null, 1);
+  fs.writeFileSync(path.join(OUT, 'steady.json'), payloadStr);
+  fs.writeFileSync(path.join(OUT, `steady-${date}.json`), payloadStr);
+  console.log(`\n→ ${path.join(OUT, 'steady.json')} (已归档 steady-${date}.json)`);
 })();

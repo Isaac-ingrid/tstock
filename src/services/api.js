@@ -39,6 +39,88 @@ export async function fetchT(url, ms){
   }
 }
 
+/* 获取任意股票全景体检报告（行情 + 排雷公告 + 板块风口 + 公司主营 + 筹码结构 + 做T处方） */
+export async function fetchStockDiagnosis(code) {
+  const c6 = String(code).trim().padStart(6, '0');
+  const url = `${STOCK_API_BASE}/api/stock/diagnosis?code=${c6}`;
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 15000);
+  try {
+    const res = await fetch(url, { cache: 'no-store', signal: ctl.signal });
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.detail || `请求体检接口异常 (${res.status})`);
+    }
+    return await res.json();
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+/* 获取全市场连板天梯与打板股池（含强势多标签、玄学字根共振、双轨评分与抱团跟踪池） */
+export async function fetchLimitUpPool(date, mysticRoots = '') {
+  const qs = new URLSearchParams();
+  if (date) qs.set('date', date);
+  if (mysticRoots && String(mysticRoots).trim()) qs.set('mystic_roots', String(mysticRoots).trim());
+  const qStr = qs.toString();
+  const url = `${STOCK_API_BASE}/api/stock/limitup_pool${qStr ? `?${qStr}` : ''}`;
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 18000);
+  try {
+    const res = await fetch(url, { cache: 'no-store', signal: ctl.signal });
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.detail || `连板池接口异常 (${res.status})`);
+    }
+    return await res.json();
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+/* 手动操作自动抱团跟踪池（add / remove / restore / pin） */
+export async function postHerdAction({ action, code, name = '', hybk = '', price = 0, reason = '' }) {
+  const url = `${STOCK_API_BASE}/api/stock/herd_action`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, code: String(code).padStart(6, '0'), name, hybk, price: +price || 0, reason }),
+  });
+  if (!res.ok) {
+    const errJson = await res.json().catch(() => ({}));
+    throw new Error(errJson.detail || `抱团池操作异常 (${res.status})`);
+  }
+  return await res.json();
+}
+
+/* 获取四维策略战绩统计（稳健长线 / 短线双列 / 尾盘黑马 / 连板打板） */
+export async function fetchStrategyPerf(refresh = false) {
+  const url = `${STOCK_API_BASE}/api/stock/strategy_perf${refresh ? '?refresh=true' : ''}`;
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 25000);
+  try {
+    const res = await fetch(url, { cache: 'no-store', signal: ctl.signal });
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.detail || `战绩接口异常 (${res.status})`);
+    }
+    return await res.json();
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+/* 手动触发策略战绩当日建档快照 */
+export async function triggerStrategySnapshot() {
+  const url = `${STOCK_API_BASE}/api/stock/strategy_snapshot`;
+  const res = await fetch(url, { method: 'POST' });
+  if (!res.ok) {
+    const errJson = await res.json().catch(() => ({}));
+    throw new Error(errJson.detail || `策略建档异常 (${res.status})`);
+  }
+  return await res.json();
+}
+
 /* —— 本地代码解析：0 网络请求，纯规则。输入代码这条路完全不依赖检索接口 —— */
 export function tcodeFromCode(code){
   const c = String(code).trim();
@@ -109,9 +191,11 @@ export async function fetchQuotes(codes){
                   high:+f[33], low:+f[34], avg:+f[51], vr:+f[49],
                   ceiling:+f[47], floor:+f[48], amp:+f[43], time:f[30],
                   /* 下面几个字段下标同样是逐项核对过的：38 换手率% / 39 PE(TTM) / 44 流通市值亿
-                     / 46 市净率 / 72 流通股本(股) / 7 外盘 / 8 内盘 / 6 成交量手 / 37 成交额万 */
+                     / 46 市净率 / 72 流通股本(股) / 7 外盘 / 8 内盘 / 6 成交量手 / 37 成交额万 
+                     / 9 买一价 / 10 买一量(手) / 19 卖一价 / 20 卖一量(手) */
                   to:+f[38], pe:+f[39], mcap:+f[44], pb:+f[46], floatSh:+f[72],
-                  outer:+f[7], inner:+f[8], vol:+f[6], amt:+f[37] };
+                  outer:+f[7], inner:+f[8], vol:+f[6], amt:+f[37],
+                  b1_p:+f[9], b1_v:+f[10], a1_p:+f[19], a1_v:+f[20] };
   });
   return out;
 }
@@ -120,11 +204,30 @@ export async function fetchQuotes(codes){
    返回结构：data[tcode].qfqday = [[日期, 开, 收, 高, 低, 成交量(手)], ...]
    ⚠️ 字段顺序是「开/收/高/低/量」，不是常见的 OHLC —— 下标 1=开 2=收 3=高 4=低 5=量，
       末根为今日（含盘中实时值）。这个顺序取错不会报错、只会静默画反，必须按此解读。 */
+async function fetchJsonWithWafFallback(url, ms = 12000) {
+  const tryFetchJson = async (u) => {
+    const r = await fetchT(u, ms);
+    if (!r.ok) throw new Error('http ' + r.status);
+    const txt = await r.text();
+    if (!txt || !txt.trim().startsWith('{')) throw new Error('invalid json');
+    return JSON.parse(txt);
+  };
+  try {
+    return await tryFetchJson(url);
+  } catch (err) {
+    if (url.includes('https://ifzq.gtimg.cn/')) {
+      return await tryFetchJson(url.replace('https://ifzq.gtimg.cn/', 'https://web.ifzq.gtimg.cn/'));
+    }
+    if (url.includes('https://web.ifzq.gtimg.cn/')) {
+      return await tryFetchJson(url.replace('https://web.ifzq.gtimg.cn/', 'https://ifzq.gtimg.cn/'));
+    }
+    throw err;
+  }
+}
+
 const KLINE_N = 120;
 export async function fetchKline(tcode){
-  const r = await fetchT(T_K + '?param=' + tcode + ',day,,,' + KLINE_N + ',qfq', 12000);
-  if (!r.ok) throw new Error('http ' + r.status);
-  const d = await r.json();
+  const d = await fetchJsonWithWafFallback(T_K + '?param=' + tcode + ',day,,,' + KLINE_N + ',qfq', 12000);
   const node = (d && d.data && d.data[tcode]) || null;
   const ks = (node && (node.qfqday || node.day)) || [];
   return ks.map(a => ({ date:String(a[0]), open:+a[1], close:+a[2], high:+a[3], low:+a[4], vol:+a[5] }));
@@ -149,9 +252,7 @@ const VIEWS = { rt:999, m1:240, m5:64, m15:64, m30:64, m60:64, day:60, week:60, 
 /* 日 / 周 / 月 前复权K线（字段：日期,开,收,高,低,量手） */
 export async function fetchKlineBig(tcode, period, n){
   const key = period === 'day' ? 'qfqday' : period === 'week' ? 'qfqweek' : 'qfqmonth';
-  const r = await fetchT(T_K + '?param=' + tcode + ',' + period + ',,,' + (n||140) + ',qfq', 12000);
-  if (!r.ok) throw new Error('http ' + r.status);
-  const d = await r.json();
+  const d = await fetchJsonWithWafFallback(T_K + '?param=' + tcode + ',' + period + ',,,' + (n||140) + ',qfq', 12000);
   const node = (d && d.data && d.data[tcode]) || null;
   const ks = (node && (node[key] || node[period])) || [];
   return ks.map(a => ({ date:String(a[0]), open:+a[1], close:+a[2], high:+a[3], low:+a[4], vol:+a[5] }));
@@ -963,6 +1064,8 @@ export async function loadStock(s){
     price:px, avg:q.avg || px, vr:q.vr || 1,
     to:q.to || 0, pe:q.pe || 0, pb:q.pb || 0, mcap:q.mcap || 0, floatSh:q.floatSh || 0,
     vol:q.vol || 0, amt:q.amt || 0, outer:q.outer || 0, inner:q.inner || 0,
+    ceiling:q.ceiling || 0, floor:q.floor || 0,
+    b1_p:q.b1_p || 0, b1_v:q.b1_v || 0, a1_p:q.a1_p || 0, a1_v:q.a1_v || 0,
     _t: nowStr()
   };
   AUTO_FIELDS.forEach(k=>{ if (man[k]) delete upd[k]; });   // 代码/名称始终同步
@@ -1002,6 +1105,21 @@ export async function loadStock(s){
       if (m20 !== null && !man.ma20) s.ma20 = fx(m20);
       if (!man.ma20) s.ma60 = fx(m60);
       maOk = (m5 !== null && m10 !== null && m20 !== null);
+
+      // 提取昨日真实涨跌幅、昨日是否涨停(连板打板基因)、昨日是否炸板烂板(弱转强前置条件)
+      const hist = histOf(kl);
+      if (hist.length >= 2) {
+        const y1 = hist[hist.length - 1]; // 昨日
+        const y2 = hist[hist.length - 2]; // 前日
+        if (y2.close > 0) {
+          const yChg = ((y1.close - y2.close) / y2.close) * 100;
+          const is20 = String(s.code).startsWith('30') || String(s.code).startsWith('68');
+          const limitPct = is20 ? 19.5 : 9.5;
+          s.prevChg = +yChg.toFixed(2);
+          s.hadPrevLimitUp = yChg >= limitPct; // 昨日涨停 (连板接力打板候选)
+          s.hadPrevBroken = (y1.high >= y2.close * (1 + limitPct / 100) * 0.995) && (y1.close < y1.high * 0.985); // 昨日冲板被砸 (烂板/炸板分歧)
+        }
+      }
     }
   }catch(_){}
   s._maOk = maOk;
@@ -1119,6 +1237,51 @@ export function computeTA(s){
   if (r.r6 != null && r.r6 < 20) breaks.push({ lv:'提示', t:'RSI6 = ' + r.r6.toFixed(1) + ' 进入超卖', d:'超卖后反弹概率上升；但趋势向下时“超卖可以更超卖”，只宜小仓快进快出' });
   if (r.r6 != null && r.r6 > 85) breaks.push({ lv:'提示', t:'RSI6 = ' + r.r6.toFixed(1) + ' 进入超买', d:'短线情绪过热，优先兑现浮盈，不追高' });
 
+  // ---- 阴跌止跌十字星与主升爆发点判定 ----
+  let reversal = null;
+  let ignition = null;
+  if (ks.length >= 5) {
+    const kNow = ks[n-1], kPrev = ks[n-2], kPrev2 = ks[n-3];
+    const op = +kNow.open || price, cl = +kNow.close || price;
+    const hi = +kNow.high || price, lo = +kNow.low || price;
+    const body = Math.abs(cl - op), rng = Math.max(0.001, hi - lo);
+    const bodyRatio = body / rng;
+    const lowerShadow = (Math.min(op, cl) - lo) / rng;
+
+    // 前期是否有阴跌回撤（近 3~5 日高点持续下移或累计回撤 > 3.5%）
+    const prevHigh3 = Math.max(+kPrev.high, +kPrev2.high, ks[n-4] ? +ks[n-4].high : 0);
+    const declineDepth = prevHigh3 > 0 ? (price - prevHigh3) / prevHigh3 * 100 : 0;
+    const hadDecline = declineDepth < -3.5 || (kPrev.close < kPrev.open && kPrev2.close < kPrev2.open);
+
+    // 1) 止跌十字星 / 金针探底 / 极致地量
+    const isDoji = bodyRatio <= 0.25;
+    const isHammer = lowerShadow >= 0.50 && bodyRatio <= 0.35;
+    const isVolShrink = volRatio != null && volRatio <= 0.65;
+    if (hadDecline && (isDoji || isHammer || isVolShrink)) {
+      let t = '止跌十字星 · 地量蓄势';
+      if (isHammer) t = '金针探底 · 多头下影承接';
+      else if (isVolShrink && !isDoji) t = '地量枯竭 · 抛压耗尽';
+      reversal = {
+        type: isHammer ? 'hammer' : (isDoji ? 'doji' : 'shrink'),
+        tag: t,
+        desc: `前期阴跌回撤 ${Math.abs(declineDepth).toFixed(1)}% 后出现【${t}】，卖盘接近枯竭，多空达成微弱平衡，是探底企稳拐点前兆`,
+        support: lo
+      };
+    }
+
+    // 2) 主升爆发点（放量长阳突破 / 均线反包）
+    const isBigYang = kPrev.close > 0 ? (cl - kPrev.close) / kPrev.close * 100 >= 1.8 && cl > op : false;
+    const isHeavyVol = (volRatio != null && volRatio >= 1.4) || (+s.vr >= 1.4);
+    const reclaimMA = v5 != null && price > v5 && (v10 == null || price >= v10 * 0.995);
+    if (isBigYang && isHeavyVol && reclaimMA) {
+      ignition = {
+        tag: '🚀 放量爆发点 · 主升拐点',
+        desc: `放量长阳突破 5日/10日关键均线，成交量达 5日均量 ${(volRatio||+s.vr).toFixed(1)} 倍，主力抄底做多确立，转入主升做T进攻模式！`,
+        breakthroughPrice: cl
+      };
+    }
+  }
+
   // ---- 技术面评分（0~100，只做多空参考，不替代三闸门）----
   let sc = 50;
   if (arrange==='多头排列') sc += 15; else if (arrange==='空头排列') sc -= 18;
@@ -1139,7 +1302,8 @@ export function computeTA(s){
            rsiSeries:{ r6:rsi6, r12:rsi12, r24:rsi24 }, r,
            turnover:(+s.to || toCalc), toCalc, floatSh,
            levels: lv,
-           box20, box60, atrV, atrPct, volRatio, volProgress, volState, volShare, breaks, score:sc };
+           box20, box60, atrV, atrPct, volRatio, volProgress, volState, volShare, breaks, score:sc,
+           reversal, ignition };
 }
 
 /* 落盘：只存"人填的"和"选择的"，绘图用的 K 线 / 指标 / 分时 / 逐笔缓存一律不存
@@ -1418,6 +1582,54 @@ export function calc(s){
     detail = `个股层面本已满足正T条件（现价在分时均线下方且量比未放大），但指数已同时跌破 MA20 与 MA60，属系统性走弱而非情绪回踩。这种日子里"个股技术面看对了、却被大盘一刀砍下来"是高频事故，所以此信号不予执行。今天只保留倒T：反弹到 <b>${f2(outA)} ~ ${f2(outB)}</b> 无量滞涨时减T仓，回落到 <b>${f2(bkA)}</b> 缩量再接回；<b>空仓等指数收回 MA20 更稳</b>。`;
   }
 
+  // ---- 闸门5：技术破位硬熔断 vs 止跌十字星 & 主升爆发点 ----
+  /* 解决做T系统最容易害死人的盲区：
+     如果个股已跌破 20日箱底或 MA20 趋势走坏，但在单边阴跌中量比不大(vr<1.0)，
+     前序逻辑很容易误判为「缩量急跌是机会，建议正T低吸」，导致天天补仓深套！
+     因此在此设立硬熔断：严重破位一票否决正T；反之若出现「放量突破爆发点」则解除防守全面进攻。 */
+  const ta = s._ta || computeTA(s);
+  let brokenLock = false, breakDesc = '';
+  let reversalActive = false, reversalTag = '';
+  let ignitionActive = false, ignitionTag = '';
+
+  if (ta) {
+    // 1) 爆发点判定（放量反包突破具有最高优先级，解除一切空头警报）
+    if (ta.ignition) {
+      ignitionActive = true;
+      ignitionTag = ta.ignition.tag;
+      mode = 'BUY';
+      vcls = 'v-buy';
+      title = '🚀 放量爆发点确立 —— 主升反包，转入强攻正T！';
+      detail = `${ta.ignition.desc} 现价已放量冲过关键均线，主力抄底做多确立，解除一切空头防守锁，顺势执行正T进攻！`;
+    } 
+    // 2) 严重破位与技术点走坏（硬熔断拦截正T）
+    else {
+      const isSevereBreak = (ta.box20 && ta.box20.down) ||
+        (ta.v20 != null && +s.price < ta.v20 && ta.ma20Rising === false && ta.arrange === '空头排列') ||
+        (ta.breaks && ta.breaks.some(b => b.lv === '严重' && b.t.includes('跌破20日箱底')));
+
+      if (isSevereBreak) {
+        brokenLock = true;
+        breakDesc = (ta.breaks && ta.breaks.find(b => b.lv === '严重')?.t) || '跌破20日箱底或MA20生命线';
+        if (mode === 'BUY') {
+          mode = 'REV'; // 强制转为倒T
+          vcls = 'v-warn';
+          title = '⛔ 技术形态破位走坏 —— 触发防套锁，严禁正T低吸！';
+          detail = `现价已【${breakDesc}】，下方支撑彻底失效并转化为上方沉重阻力。在此单边阴跌途中严禁盲目接飞刀做正T！已锁定买入建议，仅允许反弹抽到 <b>${f2(outA)} ~ ${f2(outB)}</b> 时倒T减仓避险。`;
+        }
+      } 
+      // 3) 阴跌止跌十字星 / 金针探底 / 极致地量（未严重破位时提示拐点准备）
+      else if (ta.reversal) {
+        reversalActive = true;
+        reversalTag = ta.reversal.tag;
+        if (mode === 'BUY' || mode === 'WAIT') {
+          title = `👀 ${reversalTag} —— 空头抛压竭尽，准备试T`;
+          detail = `${ta.reversal.desc}。允许在止跌支撑 ¥${f2(ta.reversal.support)} 附近以极轻仓（10%）试探性做正T，跌破该低点严格执行止损。`;
+        }
+      }
+    }
+  }
+
   // ---- 仓位（七底三仓 · A股整百股/手实盘约束） ----
   const sh = Math.round(+s.shares||0);
   const base = Math.round(sh*0.7);
@@ -1435,7 +1647,241 @@ export function calc(s){
   return { pc, amp, grid, chg, vr, vsAvg, trend, bull, bear, heavy, light,
            gate1, g1cls, gate2, gate3, gate4, g4cls, mktLevel, mode, vcls, title, detail,
            inA, inB, tp1, tp2, slA, slB, outA, outB, bkA, bkB, fly,
-           gain1, gain2, sh, base, t, t1, tLots, t1Lots, cap, sellFlyTriggered };
+           gain1, gain2, sh, base, t, t1, tLots, t1Lots, cap, sellFlyTriggered,
+           brokenLock, breakDesc, reversalActive, reversalTag, ignitionActive, ignitionTag };
+}
+
+/**
+ * 【实验性 · 弱参考】ATR(14) 动态自适应做T网格模型
+ * 注意：仅作为个股波动率特征与网格弹性对照（弱参考），绝不替代系统默认 1.33% 七格主决策！
+ */
+export function computeExperimentalATRGrid(s){
+  const rawKs = s && s._ks;
+  const pc = +(s && s.prevClose) || 0;
+  if (!rawKs || rawKs.length < 16 || pc <= 0) return null;
+
+  // 仅取截至昨日的已完成交易日（避免盘中半截走势把 ATR 拉偏）
+  const ks = (rawKs[rawKs.length - 1]?.date === todayStr() || rawKs[rawKs.length - 1]?._live)
+    ? rawKs.slice(0, -1)
+    : rawKs;
+
+  if (ks.length < 15) return null;
+  const startIdx = Math.max(1, ks.length - 14);
+
+  let trSum = 0;
+  let intraAmpSum = 0;
+  let count = 0;
+
+  for (let i = startIdx; i < ks.length; i++){
+    const cur = ks[i];
+    const prev = ks[i - 1];
+    if (!cur || !prev || !(prev.close > 0)) continue;
+    const h = +cur.high || 0;
+    const l = +cur.low || 0;
+    const pcDay = +prev.close;
+
+    const tr = Math.max(h - l, Math.abs(h - pcDay), Math.abs(l - pcDay));
+    const intraAmp = ((h - l) / pcDay) * 100;
+    trSum += tr;
+    intraAmpSum += intraAmp;
+    count++;
+  }
+
+  if (count < 5) return null;
+
+  const atr14 = trSum / count;
+  const atrPct = (atr14 / pc) * 100;
+  const avgIntraAmp14 = intraAmpSum / count;
+
+  // 以近14日日内平均振幅的 ~34% 映射单格步长，并限制在 [0.80%, 2.60%]
+  const adaptiveGrid = Math.round(Math.max(0.80, Math.min(2.60, avgIntraAmp14 * 0.34)) * 100) / 100;
+
+  let volType = '⚖️ 标准均衡型';
+  let volColor = '#0284c7';
+  let volBg = '#f0f9ff';
+  let volDesc = `近14日日均振幅 ${avgIntraAmp14.toFixed(2)}%（ATR ${atrPct.toFixed(2)}%），股性与系统标准 1.33% 网格高度契合。`;
+
+  if (adaptiveGrid < 1.05){
+    volType = '🐢 低波窄幅型';
+    volColor = '#64748b';
+    volBg = '#f8fafc';
+    volDesc = `近14日日均振幅仅 ${avgIntraAmp14.toFixed(2)}%（ATR ${atrPct.toFixed(2)}%），标准 1.33% 网格偏宽易踏空；实验步长缩至 ${adaptiveGrid.toFixed(2)}%（需留意能否覆盖规费）。`;
+  } else if (adaptiveGrid > 1.60){
+    volType = '⚡ 高波活跃型';
+    volColor = '#d97706';
+    volBg = '#fffbeb';
+    volDesc = `近14日日均振幅达 ${avgIntraAmp14.toFixed(2)}%（ATR ${atrPct.toFixed(2)}%），股性弹性猛；标准 1.33% 格位偏密，实验步长放宽至 ${adaptiveGrid.toFixed(2)}% 拉开梯度。`;
+  }
+
+  const pxNow = +s.price || pc;
+  const chg = pc > 0 ? ((pxNow - pc) / pc) * 100 : 0;
+  const gNow = chg / adaptiveGrid;
+  const kUp1 = Math.floor(gNow) + 1;
+  const kUp2 = kUp1 + 1;
+  const kDn1 = Math.ceil(gNow) - 1;
+  const kDn2 = kDn1 - 1;
+  const L_atr = k => Math.round(pc * (1 + (k * adaptiveGrid) / 100) * 100) / 100;
+
+  return {
+    atr14: Math.round(atr14 * 100) / 100,
+    atrPct: Math.round(atrPct * 100) / 100,
+    avgIntraAmp14: Math.round(avgIntraAmp14 * 100) / 100,
+    adaptiveGrid,
+    standardGrid: Math.round(GRID * 100) / 100,
+    volType,
+    volColor,
+    volBg,
+    volDesc,
+    expIn1: L_atr(kDn1),
+    expIn2: L_atr(kDn2),
+    expOut1: L_atr(kUp1),
+    expOut2: L_atr(kUp2),
+    sampleDays: count,
+  };
+}
+
+/**
+ * 【实验性 · 弱参考】个股历史基因概率统计引擎（纯统计学回顾，不作强参考，绝不替代风控规则）
+ * 回溯近 120 日已完成交易日 K 线：计算有效振幅达标率、深水低吸反抽胜率、高开砸盘率、与今日同开盘历史胜率
+ */
+export function computeExperimentalStockDNA(s){
+  const rawKs = s && s._ks;
+  if (!rawKs || rawKs.length < 25) return null;
+
+  // 仅统计截至昨日的已完成日K
+  const ks = (rawKs[rawKs.length - 1]?.date === todayStr() || rawKs[rawKs.length - 1]?._live)
+    ? rawKs.slice(0, -1)
+    : rawKs;
+
+  if (ks.length < 20) return null;
+
+  const curOpen = +(s && s.open) || 0;
+  const curPrev = +(s && s.prevClose) || 0;
+  const curGap = (curOpen > 0 && curPrev > 0) ? ((curOpen - curPrev) / curPrev) * 100 : 0;
+  const curBucket = curGap >= 0.8 ? 'HIGH' : (curGap <= -0.8 ? 'LOW' : 'FLAT');
+  const curBucketLabel = curBucket === 'HIGH' ? '高开(≥+0.8%)' : (curBucket === 'LOW' ? '低开(≤-0.8%)' : '平开(-0.8%~+0.8%)');
+
+  let totalDays = 0;
+  let amp3Days = 0;
+  let amp4Days = 0;
+  let greenCloseDays = 0; // 收盘 >= 开盘 (真阳)
+
+  let dipTotal = 0;
+  let dipWin = 0;
+  let dipReboundSum = 0;
+
+  let gapUpTotal = 0;
+  let gapUpSmash = 0;
+
+  let matchTotal = 0;
+  let matchUpClose = 0;
+  let matchSurgeSum = 0;
+  let matchDipSum = 0;
+
+  for (let i = 1; i < ks.length; i++){
+    const prev = ks[i - 1];
+    const cur = ks[i];
+    if (!prev || !cur || !(prev.close > 0) || !(cur.open > 0) || !(cur.low > 0)) continue;
+
+    const pc = +prev.close, o = +cur.open, h = +cur.high, l = +cur.low, c = +cur.close;
+    totalDays++;
+
+    const amp = ((h - l) / pc) * 100;
+    const gap = ((o - pc) / pc) * 100;
+    const dipFromOpen = ((l - o) / o) * 100;
+    const dipFromPc = ((l - pc) / pc) * 100;
+    const surgeFromOpen = ((h - o) / o) * 100;
+    const reboundFromLow = ((c - l) / l) * 100;
+
+    if (amp >= 3.0) amp3Days++;
+    if (amp >= 4.0) amp4Days++;
+    if (c >= o) greenCloseDays++;
+
+    // 深水低吸样本：盘中较昨收或开盘下探 <= -1.8%
+    if (dipFromOpen <= -1.8 || dipFromPc <= -1.8){
+      dipTotal++;
+      dipReboundSum += reboundFromLow;
+      if (reboundFromLow >= 1.2) dipWin++;
+    }
+
+    // 高开砸盘基因：高开 >= +0.8% 后收盘低于开盘 (高开低走) 或上影回撤超过 2.5%
+    if (gap >= 0.8){
+      gapUpTotal++;
+      if (c < o) gapUpSmash++;
+    }
+
+    // 匹配今日开盘档位
+    const b = gap >= 0.8 ? 'HIGH' : (gap <= -0.8 ? 'LOW' : 'FLAT');
+    if (b === curBucket){
+      matchTotal++;
+      if (c > pc) matchUpClose++;
+      matchSurgeSum += surgeFromOpen;
+      matchDipSum += dipFromOpen;
+    }
+  }
+
+  if (totalDays < 15) return null;
+
+  const tFriendly3Pct = Math.round((amp3Days / totalDays) * 100);
+  const tFriendly4Pct = Math.round((amp4Days / totalDays) * 100);
+  const dipWinRate = dipTotal > 0 ? Math.round((dipWin / dipTotal) * 100) : 0;
+  const dipAvgRebound = dipTotal > 0 ? Math.round((dipReboundSum / dipTotal) * 100) / 100 : 0;
+  const gapUpSmashRate = gapUpTotal > 0 ? Math.round((gapUpSmash / gapUpTotal) * 100) : 0;
+  const matchUpRate = matchTotal > 0 ? Math.round((matchUpClose / matchTotal) * 100) : 50;
+  const matchAvgSurge = matchTotal > 0 ? Math.round((matchSurgeSum / matchTotal) * 100) / 100 : 0;
+  const matchAvgDip = matchTotal > 0 ? Math.round((matchDipSum / matchTotal) * 100) / 100 : 0;
+  const yangRate = Math.round((greenCloseDays / totalDays) * 100);
+
+  // 提炼实验性股性基因标签
+  let dnaTag = '⚖️ 均衡震荡基因';
+  let dnaColor = '#0284c7';
+  let dnaBg = '#f0f9ff';
+  let dnaDesc = `过去 ${totalDays} 个交易日波动与收阳率 (${yangRate}%) 较均衡，可按常规分时均线高抛低吸。`;
+
+  if (tFriendly3Pct < 35){
+    dnaTag = '🐢 窄幅织布基因';
+    dnaColor = '#64748b';
+    dnaBg = '#f8fafc';
+    dnaDesc = `过去 ${totalDays} 日中仅 ${tFriendly3Pct}% 的天数振幅 ≥3.0%，日内差价空间狭窄，非必要少做T以免被手续费磨损。`;
+  } else if (gapUpTotal >= 6 && gapUpSmashRate >= 62){
+    dnaTag = '🎭 高开砸盘(渣男)基因';
+    dnaColor = '#d97706';
+    dnaBg = '#fffbeb';
+    dnaDesc = `近半年高开共 ${gapUpTotal} 次，高达 ${gapUpSmashRate}% 走出高开低走/冲高回落！早盘切忌追高开，高开优先考虑做倒T落袋。`;
+  } else if (dipTotal >= 6 && dipWinRate >= 62){
+    dnaTag = '⚡ 深V反弹(抗跌)基因';
+    dnaColor = '#16a34a';
+    dnaBg = '#f0fdf4';
+    dnaDesc = `近半年深水下探共 ${dipTotal} 次，有 ${dipWinRate}% 的概率日内自低点反抽 ≥1.2%（平均反抽 +${dipAvgRebound.toFixed(2)}%），分时超跌承接基因较强。`;
+  } else if (dipTotal >= 6 && dipWinRate <= 35){
+    dnaTag = '🧊 单边阴跌基因(慎抄底)';
+    dnaColor = '#dc2626';
+    dnaBg = '#fef2f2';
+    dnaDesc = `近半年深水下探共 ${dipTotal} 次，反抽 ≥1.2% 胜率仅 ${dipWinRate}%，习惯一跌到底很少收V，盘中急跌勿轻易接飞刀。`;
+  }
+
+  return {
+    sampleDays: totalDays,
+    tFriendly3Pct,
+    tFriendly4Pct,
+    dipTotal,
+    dipWin,
+    dipWinRate,
+    dipAvgRebound,
+    gapUpTotal,
+    gapUpSmash,
+    gapUpSmashRate,
+    curBucketLabel,
+    matchTotal,
+    matchUpRate,
+    matchAvgSurge,
+    matchAvgDip,
+    yangRate,
+    dnaTag,
+    dnaColor,
+    dnaBg,
+    dnaDesc,
+  };
 }
 
 

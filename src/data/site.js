@@ -25,12 +25,29 @@ export const NAV_ROUTES = [
     desc: '选股池与个股做T决策台'
   },
   {
+    path: '/board',
+    tab: 'tabBoard',
+    label: '🔥 连板打板',
+    icon: '🔥',
+    badgeKey: 'boardCount',
+    highlight: true,
+    desc: '连板天梯、游资热度、题材风口、打板量化评级与风险防炸'
+  },
+  {
     path: '/tail',
     tab: 'tabTail',
     label: '⚡ 尾盘黑马',
     icon: '⚡',
     badgeKey: 'tailCount',
     desc: '尾盘 14:30~15:00 突击 T+0 机会'
+  },
+  {
+    path: '/diagnosis',
+    tab: 'tabDiagnosis',
+    label: '🩺 全景诊断',
+    icon: '🩺',
+    badgeKey: null,
+    desc: '任意股票排雷、实时公告、板块风口与做T解套处方'
   },
   {
     path: '/account',

@@ -2,7 +2,7 @@
    A股做T执行台 · Canvas 多周期手绘图表引擎 (chart.js)
    ============================================================ */
 
-import { f2, f3, pct, money, fvol } from './utils.js';
+import { f2, f3, pct, money, fvol, calcTBreakeven } from './utils.js';
 import { maArr, bollArr, rsiArr, macdArr, m5Slot } from './api.js';
 import { pool } from './state.js';
 
@@ -26,6 +26,144 @@ export const _hover = {};                       // 每张图的悬停索引
 export function setHover(id, idx) { _hover[id] = idx; }
 export const OV_DEF = { ma:'均线', boll:'BOLL', box:'箱体', cost:'成本', sr:'支撑压力' };
 export const SUB_DEF = { macd:'MACD', rsi:'RSI' };
+export const OV_RT_DEF = { cost: '持仓成本', be: '做T保本', signal: '做T信号', radar: '防出货雷达' };
+
+/**
+ * 主力出货风险雷达（分时量化诊断）
+ * 捕捉：1. 均线破位反压；2. 脉冲诱多（钓鱼波）；3. 高位放量滞涨；4. 均线上方健康承接
+ */
+export function analyzeIntradayDistribution(pts, prev, stock) {
+  if (!pts || pts.length < 5) {
+    return {
+      status: 'normal',
+      level: 'normal',
+      title: '🟡 分时数据累计中',
+      badge: '🟡 数据积累中',
+      color: '#64748b',
+      bg: '#f8fafc',
+      border: '#cbd5e1',
+      desc: '分时分钟数据较少，正在持续累计盘口形态…',
+      bias: 0
+    };
+  }
+
+  const last = pts[pts.length - 1];
+  const pxNow = last.price;
+  const avgNow = last.avg;
+  const bias = avgNow > 0 ? ((pxNow - avgNow) / avgNow) * 100 : 0;
+
+  // 1. 均线破位反压 (VWAP Breakdown & Resistance)
+  const recentLen = Math.min(pts.length, 20);
+  const recentPts = pts.slice(-recentLen);
+  const belowCount = recentPts.filter(p => p.price < p.avg).length;
+  const belowRatio = belowCount / recentLen;
+
+  let hasFailedRebound = false;
+  for (let i = 1; i < recentPts.length; i++) {
+    const prevPt = recentPts[i - 1];
+    const curPt = recentPts[i];
+    if (Math.abs(prevPt.price - prevPt.avg) / prevPt.avg < 0.0035 && curPt.price < prevPt.price && curPt.price < curPt.avg) {
+      hasFailedRebound = true;
+      break;
+    }
+  }
+
+  // 2. 脉冲诱多检测 (Spike Trap)
+  let hasSpikeTrap = false;
+  let spikeDesc = '';
+  for (let i = 6; i < pts.length; i++) {
+    const pStart = pts[i - 6];
+    const pPeak = pts[i - 3];
+    const pNow = pts[i];
+    const spikePct = ((pPeak.price - pStart.price) / pStart.price) * 100;
+    if (spikePct >= 2.2 && pNow.price < pPeak.price * 0.985 && pNow.price <= pNow.avg * 1.002) {
+      hasSpikeTrap = true;
+      spikeDesc = `在 ${pPeak.t.slice(0, 2)}:${pPeak.t.slice(2)} 脉冲急拉 +${spikePct.toFixed(1)}% 后迅速砸穿均线`;
+      break;
+    }
+  }
+
+  // 3. 高位放量滞涨 (High Volume Stagnation / Divergence)
+  const maxPrice = Math.max(...pts.map(p => p.price));
+  const minPrice = Math.min(...pts.map(p => p.price));
+  const priceRng = maxPrice - minPrice;
+  const isNearHigh = priceRng > 0 ? (pxNow - minPrice) / priceRng >= 0.78 : false;
+  const avgVol = pts.reduce((a, b) => a + b.vol, 0) / pts.length || 1;
+  const recentVol = recentPts.reduce((a, b) => a + b.vol, 0) / recentLen || 0;
+  const isHeavyVol = recentVol >= avgVol * 1.8;
+  const priceStagnant = recentPts[recentPts.length - 1].price <= recentPts[0].price * 1.002;
+  const hasStagnation = isNearHigh && isHeavyVol && priceStagnant && bias > 0;
+
+  if (belowRatio >= 0.8 && bias < -0.5) {
+    return {
+      status: 'resistance',
+      level: 'danger',
+      title: '🚨 均线破位反压 (主力派发，严禁抄底)',
+      badge: '🚨 均线反压',
+      color: '#dc2626',
+      bg: '#fef2f2',
+      border: '#fca5a5',
+      desc: hasFailedRebound
+        ? `现价受制于分时黄线反压 (偏离度 ${bias.toFixed(2)}%)，反抽黄线均被大单砸回，主力借反抽出货，严禁逆势低吸！`
+        : `现价持续运行在分时黄线下方 (偏离度 ${bias.toFixed(2)}%)，全天均价形成强阻力，弱势格局，切勿盲目接飞刀！`,
+      bias
+    };
+  }
+
+  if (hasSpikeTrap && pxNow <= avgNow * 1.005) {
+    return {
+      status: 'spike_trap',
+      level: 'danger',
+      title: '⚠️ 疑似脉冲出货 (钓鱼波诱多，防追高)',
+      badge: '⚠️ 脉冲诱多',
+      color: '#ea580c',
+      bg: '#fff7ed',
+      border: '#fdba74',
+      desc: `${spikeDesc}。主力借脉冲拉高吸引跟风挂单后倾倒筹码，切忌冲动追高！`,
+      bias
+    };
+  }
+
+  if (hasStagnation) {
+    return {
+      status: 'stagnation',
+      level: 'warn',
+      title: '⚠️ 高位放量滞涨 (量大价滞，防主力开闸)',
+      badge: '⚠️ 放量滞涨',
+      color: '#b45309',
+      bg: '#fffbeb',
+      border: '#fde68a',
+      desc: `高位成交量放大至均量的 ${(recentVol / avgVol).toFixed(1)} 倍，但股价滞涨停顿，警惕主力高位对倒出货！`,
+      bias
+    };
+  }
+
+  if (pxNow > avgNow && bias >= 0.4) {
+    return {
+      status: 'support',
+      level: 'safe',
+      title: '🟢 均线上方健康承接 (主力护盘意愿良好)',
+      badge: '🟢 均线支撑',
+      color: '#16a34a',
+      bg: '#f0fdf4',
+      border: '#86efac',
+      desc: `股价稳健运行在分时均线上方 (偏离度 +${bias.toFixed(2)}%)，均线提供动态托底，日内可依托均线支撑轻仓低吸。`,
+      bias
+    };
+  }
+
+  return {
+    status: 'neutral',
+    level: 'normal',
+    title: '🟡 围绕分时均线窄幅震荡 (方向待抉择)',
+    badge: '🟡 窄幅震荡',
+    color: '#0284c7',
+    bg: '#f0f9ff',
+    border: '#bae6fd',
+    desc: `股价紧贴分时黄线波动 (偏离度 ${bias >= 0 ? '+' : ''}${bias.toFixed(2)}%)，多空处于平衡期，建议等待方向明确或在保本空间内操作。`,
+    bias
+  };
+}
 
 export const PERIODS = [
   ['rt','分时'], ['m1','1分'], ['m5','5分'], ['m15','15分'], ['m30','30分'], ['m60','60分'],
@@ -388,7 +526,8 @@ export function drawChart(cv, s){
 
 /* ===================== 分时图 =====================
    分时图自成一套坐标系：以昨收为中轴上下对称，右侧刻度同时看得到价格与涨跌幅，
-   分时均价线（权威算法：累计成交额 ÷ 累计成交量）是判断"强于/弱于大盘"的关键线。 */
+   分时均价线（权威算法：累计成交额 ÷ 累计成交量）是判断"强于/弱于大盘"的关键线。
+   支持叠加：持仓成本线、做T保本线、做T低吸/高抛点、主力出货风险雷达。 */
 function drawRt(cv, s, min, ctx, L){
   const { W, H, PL, PR, y0, y1, v0, v1, s0, s1, innerW } = L;
   const pts = (min && min.pts) || [];
@@ -399,11 +538,35 @@ function drawRt(cv, s, min, ctx, L){
     return;
   }
   const prev = (min.prev || +s.prevClose || pts[0].price);
+
+  // 分时做T叠加开关与保本价准备
+  const ovRt = s.ovRt || (s.ovRt = { cost: 1, be: 1, signal: 1, radar: 1 });
+  const cost = +s.cost || 0;
+  let bePrice = +s.bePrice || 0;
+  if (!bePrice && cost > 0) {
+    try {
+      const res = calcTBreakeven({ mode: 'BUY', entryPx: cost, qty: 1000, commRate: 0.00025, hasMin5: true });
+      bePrice = res.targetPx;
+      s.bePrice = bePrice;
+    } catch (_) {}
+  }
+
   let mx = 0.002;
   pts.forEach(p=>{
     const d1 = Math.abs(p.price - prev)/prev, d2 = Math.abs(p.avg - prev)/prev;
     if (d1 > mx) mx = d1; if (d2 > mx) mx = d2;
   });
+
+  // 如果成本或保本价在合理视口内（±18% 以内），适当延伸纵轴包含进去
+  if (ovRt.cost && cost > 0) {
+    const dCost = Math.abs(cost - prev) / prev;
+    if (dCost < 0.18 && dCost > mx) mx = dCost;
+  }
+  if (ovRt.be && bePrice > 0) {
+    const dBe = Math.abs(bePrice - prev) / prev;
+    if (dBe < 0.18 && dBe > mx) mx = dBe;
+  }
+
   mx = Math.min(0.2, Math.ceil(mx*100*1.12)/100);      // 上下各留 12% 余量，上限 20%（防止极端值压扁）
   const yHi = prev*(1+mx), yLo = prev*(1-mx);
   const Y = v => y1 - (v-yLo)/(yHi-yLo)*(y1-y0);
@@ -431,10 +594,84 @@ function drawRt(cv, s, min, ctx, L){
   // 价格线到昨收之间的淡填充
   ctx.lineTo(X(pts.length-1), Y(prev)); ctx.lineTo(X(0), Y(prev)); ctx.closePath();
   ctx.fillStyle = lineCol; ctx.globalAlpha = .07; ctx.fill(); ctx.globalAlpha = 1;
-  // 均价线
+
+  // 均价线（黄色/青色）
   ctx.beginPath();
   pts.forEach((p,i)=>{ const yy = Y(p.avg); if (i === 0) ctx.moveTo(X(i), yy); else ctx.lineTo(X(i), yy); });
-  ctx.strokeStyle = CH.avg; ctx.lineWidth = 1.2; ctx.stroke();
+  ctx.strokeStyle = CH.avg; ctx.lineWidth = 1.3; ctx.stroke();
+
+  // 绘制持仓成本线 (紫色实线)
+  if (ovRt.cost && cost > 0 && cost >= yLo && cost <= yHi) {
+    const yy = Y(cost);
+    ctx.save();
+    ctx.strokeStyle = CH.cost;
+    ctx.lineWidth = 1.2;
+    ctx.setLineDash([5, 3]);
+    ctx.beginPath(); ctx.moveTo(PL, yy + 0.5); ctx.lineTo(W - PR, yy + 0.5); ctx.stroke();
+    ctx.restore();
+    chipText(ctx, `持仓 ¥${f2(cost)}`, W - PR + 2, yy, '#fff', CH.cost);
+  }
+
+  // 绘制做T保本线 (琥珀色虚线)
+  if (ovRt.be && bePrice > 0 && bePrice >= yLo && bePrice <= yHi) {
+    const yy = Y(bePrice);
+    ctx.save();
+    ctx.strokeStyle = '#d97706';
+    ctx.lineWidth = 1.2;
+    ctx.setLineDash([3, 2]);
+    ctx.beginPath(); ctx.moveTo(PL, yy + 0.5); ctx.lineTo(W - PR, yy + 0.5); ctx.stroke();
+    ctx.restore();
+    chipText(ctx, `保本 ¥${f2(bePrice)}`, W - PR + 2, yy, '#fff', '#d97706');
+  }
+
+  // 绘制做T智能买卖点信号 (🟢低吸 / 🔴高抛)
+  if (ovRt.signal && pts.length >= 8) {
+    let lastSignalIdx = -999;
+    for (let i = 5; i < pts.length; i++) {
+      const p = pts[i];
+      const b = ((p.price - p.avg) / p.avg) * 100;
+      const pPrev = pts[i - 1];
+      const pNext = pts[i + 1];
+
+      // 保证信号间隔，避免密集堆叠（至少间隔 12 分钟）
+      if (i - lastSignalIdx < 12) continue;
+
+      // 🟢 低吸窗口：负乖离 <= -1.75% 且止跌企稳
+      if (b <= -1.75 && p.price <= pPrev.price && (!pNext || pNext.price >= p.price)) {
+        const px = X(i);
+        const py = Y(p.price);
+        ctx.save();
+        ctx.fillStyle = '#16a34a';
+        ctx.beginPath();
+        ctx.arc(px, py, 3, 0, Math.PI * 2);
+        ctx.fill();
+        chipText(ctx, '🟢低吸', px - 16, Math.min(y1 - 10, py + 14), '#fff', '#16a34a');
+        ctx.restore();
+        lastSignalIdx = i;
+      }
+      // 🔴 高抛窗口：正乖离 >= +2.1% 且局部冲高见顶滞涨
+      else if (b >= 2.1 && p.price >= pPrev.price && (!pNext || pNext.price <= p.price)) {
+        const px = X(i);
+        const py = Y(p.price);
+        ctx.save();
+        ctx.fillStyle = '#dc2626';
+        ctx.beginPath();
+        ctx.arc(px, py, 3, 0, Math.PI * 2);
+        ctx.fill();
+        chipText(ctx, '🔴高抛', px - 16, Math.max(y0 + 12, py - 12), '#fff', '#dc2626');
+        ctx.restore();
+        lastSignalIdx = i;
+      }
+    }
+  }
+
+  // 主力出货风险雷达诊断
+  const radar = analyzeIntradayDistribution(pts, prev, s);
+  s._distRadar = radar;
+  if (ovRt.radar) {
+    const radarW = ctx.measureText(radar.badge).width + 12;
+    chipText(ctx, radar.badge, W - PR - radarW, 12, radar.color, radar.bg);
+  }
 
   // 成交量（每分钟差分）
   const vMax = Math.max(...pts.map(p=>p.vol), 1);
@@ -506,12 +743,14 @@ function drawRt(cv, s, min, ctx, L){
   }
   const p = hi >= 0 ? pts[hi] : lastPt;
   const pctv = (p.price - prev)/prev*100;
+  const bias = p.avg > 0 ? ((p.price - p.avg) / p.avg * 100) : 0;
   const row = p.t.slice(0,2) + ':' + p.t.slice(2) + '  价 ' + f2(p.price) + '  ' + pct(pctv)
-            + '  均价 ' + f2(p.avg) + '  该分钟 ' + p.vol + ' 手';
+            + '  均价 ' + f2(p.avg) + '  偏离 ' + (bias >= 0 ? '+' : '') + bias.toFixed(2) + '%'
+            + '  该分钟 ' + p.vol + ' 手';
   ctx.textAlign = 'left';
   chipText(ctx, row, PL, 12, pctv >= 0 ? CH.up : CH.dn, 'rgba(255,255,255,.95)');
   chipText(ctx, '昨收 ' + f2(prev) + '　量比 ' + nf(+s.vr, 2) + '　换手 ' + (s._ta && s._ta.turnover ? s._ta.turnover.toFixed(2) + '%' : '—')
-    + '　现价' + (p.price >= p.avg ? '在均价上方（强）' : '在均价下方（弱）'), PL, 27, CH.txt, 'rgba(255,255,255,.95)');
+    + '　' + radar.badge + (cost > 0 ? ('　持仓成本 ¥' + f2(cost)) : '') + (bePrice > 0 ? ('　做T保本 ¥' + f2(bePrice)) : ''), PL, 27, CH.txt, 'rgba(255,255,255,.95)');
 }
 
 /* ===================== 图表工具条（周期 / 叠加 / 副图） ===================== */
@@ -563,6 +802,12 @@ export function chartLegendHTML(s){
   const out = [];
   if (p === 'rt'){
     out.push(it2('价格线', CH.up, CH.dn), it('均价线', CH.avg), it2('分时量', CH.up, CH.dn));
+    if (+s.cost > 0) out.push(it('持仓成本', CH.cost));
+    if (+s.bePrice > 0) out.push(it('做T保本', '#d97706'));
+    out.push(it('🟢低吸点', '#16a34a'), it('🔴高抛点', '#dc2626'));
+    if (s._distRadar) {
+      out.push(it(s._distRadar.badge, s._distRadar.color));
+    }
   } else {
     if (ov.ma) out.push(it('MA5',CH.ma5), it('MA10',CH.ma10), it('MA20',CH.ma20), it('MA60',CH.ma60));
     if (ov.boll) out.push(it('BOLL 上/下轨', CH.bollU), it('BOLL 中轨', CH.bollM));
@@ -585,9 +830,15 @@ export function chartStat(s){
     if (mn && mn.pts.length){
       const lastP = mn.pts[mn.pts.length-1];
       const prev = mn.prev || +s.prevClose;
+      const bias = lastP.avg > 0 ? ((lastP.price/lastP.avg - 1)*100) : 0;
       out.push(cell('现价', f2(lastP.price), lastP.price >= prev ? 'up' : 'dn'));
       out.push(cell('均价', f2(lastP.avg), lastP.price >= lastP.avg ? 'up' : 'dn'));
-      out.push(cell('价/均', ((lastP.price/lastP.avg - 1)*100).toFixed(2) + '%', lastP.price >= lastP.avg ? 'up' : 'dn'));
+      out.push(cell('偏离度', (bias >= 0 ? '+' : '') + bias.toFixed(2) + '%', bias >= 0 ? 'up' : 'dn'));
+      if (+s.cost > 0) out.push(cell('持仓成本', '¥' + f2(s.cost)));
+      if (+s.bePrice > 0) out.push(cell('做T保本', '¥' + f2(s.bePrice), lastP.price >= s.bePrice ? 'up' : 'dn'));
+      if (s._distRadar) {
+        out.push(cell('主力雷达', s._distRadar.badge, s._distRadar.level === 'danger' ? 'up' : s._distRadar.level === 'warn' ? 'warn' : 'dn'));
+      }
       const totV = (mn.pts[mn.pts.length-1] && (mn.pts.reduce((a,x)=>a+x.vol,0))) || 0;
       out.push(cell('分时量', totV >= 10000 ? (totV/10000).toFixed(2) + '万手' : totV + '手'));
     }

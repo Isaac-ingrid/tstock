@@ -11,6 +11,12 @@ import httpx
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
+from pydantic import BaseModel, Field
+
+from backend.diagnosis import get_stock_diagnosis
+from backend.limitup import get_limitup_pool, invalidate_limitup_cache
+from backend.strategy_ledger import get_strategy_performance, snapshot_strategies
+from backend.strong_herd import mutate_herd_pool
 
 ALLOWED_HOSTS = {
     "qt.gtimg.cn",
@@ -45,9 +51,6 @@ def _validate_upstream(url: str) -> str:
         raise HTTPException(status_code=400, detail="不允许的股票数据源")
     if parsed.username or parsed.password or parsed.port not in (None, 443):
         raise HTTPException(status_code=400, detail="上游地址格式不合法")
-    # 自动将容易触发腾讯云 WAF 501 拦截的 web.ifzq.gtimg.cn 重定向至免拦截数据节点 ifzq.gtimg.cn
-    if parsed.hostname == "web.ifzq.gtimg.cn":
-        url = url.replace("https://web.ifzq.gtimg.cn/", "https://ifzq.gtimg.cn/")
     return url
 
 
@@ -84,9 +87,18 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=False,
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+
+
+class HerdActionReq(BaseModel):
+    action: str = Field(..., pattern="^(add|remove|restore|pin)$")
+    code: str = Field(..., min_length=6, max_length=6, pattern="^[0-9]{6}$")
+    name: str = ""
+    hybk: str = ""
+    price: float = 0.0
+    reason: str = ""
 
 
 @app.get("/")
@@ -103,6 +115,72 @@ async def root() -> dict[str, object]:
 @app.get("/health")
 async def health() -> dict[str, object]:
     return {"ok": True, "service": "tstock-data", "upstreams": len(ALLOWED_HOSTS)}
+
+
+@app.get("/api/stock/diagnosis")
+async def stock_diagnosis(code: str = Query(min_length=6, max_length=6, pattern="^[0-9]{6}$")) -> dict[str, object]:
+    """个股全景体检报告：聚合行情、公告排雷、板块风口、公司主营、筹码分布与做T自救处方"""
+    try:
+        return await get_stock_diagnosis(code)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"体检诊断聚合失败: {exc}") from exc
+
+
+@app.get("/api/stock/limitup_pool")
+async def stock_limitup_pool(
+    request: Request,
+    date: str | None = Query(None, min_length=8, max_length=8, pattern="^[0-9]{8}$"),
+    mystic_roots: str | None = Query(None, max_length=200),
+) -> dict[str, object]:
+    """全市场连板天梯与打板股池：聚合连板高度、首封时点、封单额与封成比、热点题材、玄学字根共振与双轨评分"""
+    try:
+        http_client = getattr(request.app.state, "http", None)
+        return await get_limitup_pool(date, mystic_roots=mystic_roots, http_client=http_client)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"连板池数据拉取失败: {exc}") from exc
+
+
+@app.post("/api/stock/herd_action")
+async def stock_herd_action(payload: HerdActionReq) -> dict[str, object]:
+    """抱团自动跟踪池的手动干预接口（固定pin / 加池add / 移出remove / 恢复restore）"""
+    try:
+        res = await mutate_herd_pool(
+            action=payload.action,
+            code=payload.code,
+            name=payload.name,
+            hybk=payload.hybk,
+            price=payload.price,
+            reason=payload.reason,
+        )
+        await invalidate_limitup_cache()
+        return res
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"抱团池更新失败: {exc}") from exc
+
+
+@app.get("/api/stock/strategy_perf")
+async def stock_strategy_perf(
+    request: Request,
+    refresh: bool = Query(False),
+) -> dict[str, object]:
+    """四维策略推荐战绩与胜率统计（稳健长线 / 短线双列 / 尾盘黑马 / 连板打板已剔除一字与14:30+尾盘）"""
+    try:
+        http_client = getattr(request.app.state, "http", None)
+        return await get_strategy_performance(http_client=http_client, force_snapshot=refresh)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"策略战绩统计失败: {exc}") from exc
+
+
+@app.post("/api/stock/strategy_snapshot")
+async def stock_strategy_snapshot(request: Request) -> dict[str, object]:
+    """触发一次全策略建档快照并更新 data/strategy_ledger.json"""
+    try:
+        http_client = getattr(request.app.state, "http", None)
+        return await snapshot_strategies(http_client=http_client)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"策略建档失败: {exc}") from exc
 
 
 @app.get("/api/proxy")
@@ -123,10 +201,21 @@ async def proxy(request: Request, url: str = Query(min_length=12)) -> Response:
             _cache.pop(upstream, None)
 
     try:
+        host = urlsplit(upstream).hostname or ""
         result = await request.app.state.http.get(
             upstream,
-            headers={"Referer": f"https://{urlsplit(upstream).hostname}/"},
+            headers={"Referer": "https://gu.qq.com/" if "ifzq.gtimg.cn" in host else f"https://{host}/"},
         )
+        # 若腾讯某边缘节点触发 WAF 501，自动在 ifzq.gtimg.cn 与 web.ifzq.gtimg.cn 间互切重试一次
+        if result.status_code == 501 and host in ("ifzq.gtimg.cn", "web.ifzq.gtimg.cn"):
+            alt_host = "web.ifzq.gtimg.cn" if host == "ifzq.gtimg.cn" else "ifzq.gtimg.cn"
+            alt_url = upstream.replace(f"https://{host}/", f"https://{alt_host}/", 1)
+            alt_res = await request.app.state.http.get(
+                alt_url,
+                headers={"Referer": "https://gu.qq.com/"},
+            )
+            if 200 <= alt_res.status_code < 300:
+                result = alt_res
     except httpx.TimeoutException as exc:
         raise HTTPException(status_code=504, detail="股票数据源请求超时") from exc
     except httpx.HTTPError as exc:

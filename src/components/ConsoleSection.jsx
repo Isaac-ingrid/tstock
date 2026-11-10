@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import StockCard, { MODE_BADGE } from './StockCard.jsx';
 import { calc } from '../services/api.js';
-import { f2 } from '../services/utils.js';
+import { f2, money } from '../services/utils.js';
 import { getAuctionTier } from '../services/auction.js';
 
 export default function ConsoleSection({
   pool,
   activeStockCode,
+  totalAssets = 100000,
+  tradeLogs = [],
+  isTailAlertTime = false,
+  simTailAlert = false,
   onSelectStock,
   onUpdateStock,
   onBuyStock,
@@ -24,6 +28,22 @@ export default function ConsoleSection({
   const [internalActiveCode, setInternalActiveCode] = useState(() => (pool[0]?.code || ''));
   const [viewMode, setViewMode] = useState('single'); // 'single' (聚焦切换) | 'all' (全部平铺)
 
+  // 资金防混淆隔离测算 (70% 底仓做T池 vs 30% 超短打板机动池)
+  const totalAssetsNum = +totalAssets || 100000;
+  const baseRatio = 0.70;
+  const tacticalRatio = 0.30;
+  const baseCapital = totalAssetsNum * baseRatio;
+  const tacticalCapital = totalAssetsNum * tacticalRatio;
+
+  const baseStocks = pool.filter(s => (s.tier === 'long' || s.poolTag === '稳健'));
+  const tacticalStocks = pool.filter(s => (s.tier === 'short' || s.poolTag === '短线'));
+
+  const baseMktVal = baseStocks.reduce((acc, s) => acc + (s.shares || 0) * (s.price || s.cost || 0), 0);
+  const tacticalMktVal = tacticalStocks.reduce((acc, s) => acc + (s.shares || 0) * (s.price || s.cost || 0), 0);
+
+  const baseCash = Math.max(0, baseCapital - baseMktVal);
+  const tacticalCash = Math.max(0, tacticalCapital - tacticalMktVal);
+
   // 优先受控使用外部传入的 activeStockCode，否则使用内部 state
   const currentCode = (activeStockCode !== undefined) ? activeStockCode : internalActiveCode;
 
@@ -38,8 +58,8 @@ export default function ConsoleSection({
     return t === tierFilter;
   });
 
-  const shortCnt = pool.filter(s => (s.tier === 'short' || s.poolTag === '短线')).length;
-  const longCnt = pool.filter(s => (s.tier === 'long' || s.poolTag === '稳健')).length;
+  const shortCnt = tacticalStocks.length;
+  const longCnt = baseStocks.length;
 
   // 保证当前选中的股票在过滤后的列表中有效；若无效则自动降级到第一只
   const currentStock = filteredPool.find(s => s.code === currentCode) || filteredPool[0] || null;
@@ -58,38 +78,120 @@ export default function ConsoleSection({
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
         <h2 style={{ margin: 0 }}>二、决策引擎（自动算买卖点）</h2>
         <div style={{ fontSize: '12px', color: 'var(--sub)' }}>
-          当前股池：<b>{pool.length}</b> 只股票 · 点击上方股票标签即可单卡聚焦切换
+          当前股池：<b>{pool.length}</b> 只股票（底仓做T <b>{longCnt}</b> 只 · 超短打板 <b>{shortCnt}</b> 只）
         </div>
       </div>
 
-      {/* 顶部操作工具栏 */}
+      {/* 🛡️ 资金风控隔离看板（底仓做T区 vs 超短打板机动区 · 严格防范资金混淆） */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+        gap: '10px',
+        marginBottom: '12px'
+      }}>
+        {/* 左卡：底仓做T专用资金池 */}
+        <div
+          style={{
+            background: 'linear-gradient(180deg, #f0f7ff, #fff)',
+            border: tierFilter === 'long' ? '2px solid #1677ff' : '1px solid #bae0ff',
+            borderRadius: '10px',
+            padding: '10px 14px',
+            boxShadow: '0 1px 4px rgba(22, 119, 255, 0.08)',
+            cursor: 'pointer',
+            transition: 'all .2s'
+          }}
+          onClick={() => setTierFilter(tierFilter === 'long' ? 'all' : 'long')}
+          title="点击仅查看底仓做T区股票（再次点击恢复查看全部）"
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ fontSize: '15px' }}>🛡️</span>
+              <b style={{ color: '#0958d9', fontSize: '13px' }}>底仓做T专用资金池 (70%)</b>
+              <span style={{ fontSize: '10.5px', background: '#e6f4ff', color: '#1677ff', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                {longCnt} 只标的
+              </span>
+            </div>
+            <span style={{ fontSize: '12px', fontWeight: 800, fontFamily: 'monospace', color: '#0958d9' }}>
+              配额 ¥{money(baseCapital)}
+            </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '12px', color: 'var(--sub)', flexWrap: 'wrap' }}>
+            <span>已用底仓: <b style={{ color: 'var(--text)', fontFamily: 'monospace' }}>¥{money(baseMktVal)}</b></span>
+            <span>｜</span>
+            <span>做T备用金: <b style={{ color: '#0958d9', fontFamily: 'monospace' }}>¥{money(baseCash)}</b></span>
+          </div>
+          <div style={{ fontSize: '11px', color: '#597ef7', marginTop: '4px', lineHeight: 1.4 }}>
+            🎯 <b>纪律红线：</b>七底三仓专用，每天高抛低吸摊薄持仓成本，严禁挪作盘中追高！
+          </div>
+        </div>
+
+        {/* 右卡：短线机动资金池 */}
+        <div
+          style={{
+            background: 'linear-gradient(180deg, #fff7e6, #fff)',
+            border: tierFilter === 'short' ? '2px solid #fa8c16' : '1px solid #ffd591',
+            borderRadius: '10px',
+            padding: '10px 14px',
+            boxShadow: '0 1px 4px rgba(250, 140, 22, 0.08)',
+            cursor: 'pointer',
+            transition: 'all .2s'
+          }}
+          onClick={() => setTierFilter(tierFilter === 'short' ? 'all' : 'short')}
+          title="点击仅查看短线机动区股票（再次点击恢复查看全部）"
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ fontSize: '15px' }}>⚡</span>
+              <b style={{ color: '#d46b08', fontSize: '13px' }}>短线机动资金池 (30%)</b>
+              <span style={{ fontSize: '10.5px', background: '#fff2e8', color: '#d4380d', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                {shortCnt} 只标的
+              </span>
+            </div>
+            <span style={{ fontSize: '12px', fontWeight: 800, fontFamily: 'monospace', color: '#d46b08' }}>
+              配额 ¥{money(tacticalCapital)}
+            </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '12px', color: 'var(--sub)', flexWrap: 'wrap' }}>
+            <span>机动持仓: <b style={{ color: 'var(--text)', fontFamily: 'monospace' }}>¥{money(tacticalMktVal)}</b></span>
+            <span>｜</span>
+            <span>可用机动金: <b style={{ color: '#d46b08', fontFamily: 'monospace' }}>¥{money(tacticalCash)}</b></span>
+          </div>
+          <div style={{ fontSize: '11px', color: '#cf1322', marginTop: '4px', lineHeight: 1.4 }}>
+            ⚡ <b>纪律红线：</b>短线做T及冲板试错上限 ¥{money(tacticalCapital * 0.5)}，<b>严禁挪用底仓资金补仓加死码</b>！
+          </div>
+        </div>
+      </div>
+
+      {/* 顶部操作工具栏与分区切换按钮 */}
       <div className="actions" style={{ marginBottom: '10px' }}>
         <button className="primary" onClick={() => onRefresh(false)}>重新计算</button>
         <button onClick={onAddBlank}>＋ 手动新增空白行</button>
         <button onClick={onSaveLocal}>保存参数到本机</button>
         <button onClick={onResetDefault}>恢复默认数据</button>
 
-        <span className="tier-bar" title="按持仓属性分组：短线做T / 长线底仓。分组只影响显示，不影响算法。">
+        <span className="tier-bar" title="在界面上划分“底仓做T区”与“短线机动区”，严格防范资金混淆">
           <button
             type="button"
             className={`tier-btn ${tierFilter === 'all' ? 'cur' : ''}`}
             onClick={() => setTierFilter('all')}
           >
-            全部 <b>{pool.length}</b>
-          </button>
-          <button
-            type="button"
-            className={`tier-btn ${tierFilter === 'short' ? 'cur' : ''}`}
-            onClick={() => setTierFilter('short')}
-          >
-            短线 <b>{shortCnt}</b>
+            全部标的 <b>{pool.length}</b>
           </button>
           <button
             type="button"
             className={`tier-btn ${tierFilter === 'long' ? 'cur' : ''}`}
             onClick={() => setTierFilter('long')}
+            style={{ color: tierFilter === 'long' ? '#0958d9' : 'inherit' }}
           >
-            长线 <b>{longCnt}</b>
+            🛡️ 底仓做T区 <b>{longCnt}</b>
+          </button>
+          <button
+            type="button"
+            className={`tier-btn ${tierFilter === 'short' ? 'cur' : ''}`}
+            onClick={() => setTierFilter('short')}
+            style={{ color: tierFilter === 'short' ? '#d4380d' : 'inherit' }}
+          >
+            ⚡ 短线机动区 <b>{shortCnt}</b>
           </button>
         </span>
       </div>
@@ -122,29 +224,23 @@ export default function ConsoleSection({
                     handleSelectCode(s.code);
                     setViewMode('single');
                   }}
-                  title={`点击查看 ${s.name} (${s.code}) 决策卡片\n现价: ${f2(px)}  涨跌: ${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%\n${openGap != null ? `09:25 开盘跳空: ${openGap >= 0 ? '+' : ''}${openGap.toFixed(2)}% (${aucTier?.tag})\n` : ''}信号: ${mbd[1]}`}
+                  title={`点击聚焦切换：${s.name} (${s.code})\n${isShort ? '【⚡ 短线机动标的】' : '【🛡️ 底仓做T区标的】'}\n现价: ¥${f2(px)} (${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%)\n当前建议: ${mbd[1]}`}
                 >
-                  <span className={`tt ${isShort ? 't-short' : 't-long'}`}>{isShort ? '短' : '稳'}</span>
-                  <span className="tn">{s.name}</span>
-                  <span className={`pz ${chgCls}`}>{f2(px)}</span>
-                  <span className={`pc ${chgCls}`}>{chg >= 0 ? '+' : ''}{chg.toFixed(2)}%</span>
+                  <span className="pt-name">
+                    <span style={{ fontSize: '10px', marginRight: '2px' }}>{isShort ? '⚡' : '🛡️'}</span>
+                    {s.name}
+                  </span>
+                  <span className={`pt-px ${chgCls}`}>
+                    {f2(px)} <span className="pt-chg">({chg >= 0 ? '+' : ''}{chg.toFixed(1)}%)</span>
+                  </span>
+                  <span className={`pt-badge ${mbd[0]}`}>{mbd[1]}</span>
                   {aucTier && (
                     <span
-                      className="tag"
-                      style={{
-                        fontSize: '10px',
-                        padding: '1px 4px',
-                        background: aucTier.bg,
-                        color: aucTier.color,
-                        borderColor: aucTier.color,
-                        fontWeight: 700,
-                        borderRadius: '3px'
-                      }}
-                    >
-                      竞价{openGap >= 0 ? '+' : ''}{openGap.toFixed(1)}%
-                    </span>
+                      className="pt-auc-dot"
+                      style={{ background: aucTier.color }}
+                      title={`集合竞价开盘：${openGap >= 0 ? '+' : ''}${openGap.toFixed(2)}% (${aucTier.tag})`}
+                    />
                   )}
-                  <span className={`mg ${mbd[0]}`}>{mbd[1]}</span>
                 </div>
               );
             })}
@@ -231,6 +327,9 @@ export default function ConsoleSection({
                 stock={s}
                 index={pool.indexOf(s)}
                 isCur={true}
+                tradeLogs={tradeLogs}
+                isTailAlertTime={isTailAlertTime}
+                simTailAlert={simTailAlert}
                 onUpdateStock={onUpdateStock}
                 onBuyStock={onBuyStock}
                 onRemoveStock={onRemoveStock}
@@ -247,6 +346,9 @@ export default function ConsoleSection({
                 stock={currentStock}
                 index={pool.indexOf(currentStock)}
                 isCur={true}
+                tradeLogs={tradeLogs}
+                isTailAlertTime={isTailAlertTime}
+                simTailAlert={simTailAlert}
                 onUpdateStock={onUpdateStock}
                 onBuyStock={onBuyStock}
                 onRemoveStock={onRemoveStock}

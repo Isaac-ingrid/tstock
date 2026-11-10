@@ -80,6 +80,21 @@ async function main() {
     log(`[9/9] 发布统一数据契约至 data/ 与 public/data/ (publish.js)...`);
     runScript('publish.js');
 
+    // 9b. 同步通知策略战绩账本建档（若本地后端已启动）
+    try {
+      const apiBase = process.env.STOCK_API_BASE || 'http://127.0.0.1:18765';
+      const snapRes = await fetch(`${apiBase}/api/stock/strategy_snapshot`, {
+        method: 'POST',
+        signal: AbortSignal.timeout(8000),
+      });
+      if (snapRes.ok) {
+        const sj = await snapRes.json();
+        log(`✓ 策略收益账本建档已同步 (共 ${sj.totalSignals || 0} 条，本日新增引擎 ${sj.engineAdded || 0} / 打板 ${sj.boardAdded || 0})`);
+      }
+    } catch (_) {
+      log(`ℹ️ 策略战绩后端未响应，将在下次访问 /perf 时自动从 out/ 补齐建档。`);
+    }
+
     // 10. 可选的云端同步部署（若在本地运行并需向远程服务器部署）
     const deployScript = path.join(PROJECT_ROOT, 'deploy.sh');
     const shouldDeploy = process.env.DEPLOY_AFTER_DAILY === '1' || process.argv.includes('--deploy');

@@ -8,18 +8,21 @@ import TailPage from './views/TailPage.jsx';
 import AccountPage from './views/AccountPage.jsx';
 import LedgerPage from './views/LedgerPage.jsx';
 import RulesPage from './views/RulesPage.jsx';
+import DiagnosisPage from './views/DiagnosisPage.jsx';
+import BoardPage from './views/BoardPage.jsx';
+import PerfPage from './views/PerfPage.jsx';
 import { QuickTModal, StockReasonModal, TradingClockModal, ToastHost, OvernightBanner, AlertCenterModal } from './components/Modals.jsx';
 
 import { SITE_META, STORAGE_KEYS, DEFAULT_POOL } from './data/site.js';
 import useRoute from './router/useRoute.js';
-import { todayStr, f2, toast, toastOk, toastWarn, toastErr, setToastListener, copyPlain } from './services/utils.js';
+import { todayStr, f2, toast, toastOk, toastWarn, toastErr, setToastListener, copyPlain, getTodayTStatus } from './services/utils.js';
 import { loadStock, loadChart, loadResearch, loadMarket, addByQuery, selfTest, checkPriceAlerts } from './services/api.js';
 import { registerChartLoader } from './services/chart.js';
 import { getTailBuyCandidates } from './services/tail.js';
 
 export default function App() {
   /* ================= 1. 响应式 URL 路由与核心状态 ================= */
-  const { path, activeTab, navigate } = useRoute();
+  const { path, activeTab, navigate, query } = useRoute();
 
   const [pool, setPool] = useState(() => {
     try {
@@ -86,6 +89,7 @@ export default function App() {
   const [clockModalOpen, setClockModalOpen] = useState(false);
   const [alertModalOpen, setAlertModalOpen] = useState(false);
   const [overnightBannerOpen, setOvernightBannerOpen] = useState(false);
+  const [simTailAlert, setSimTailAlert] = useState(false); // 14:40 尾盘未平仓预警模拟演练开关
   const [toasts, setToasts] = useState([]);
 
   /* 当前选中的聚焦做T股票代码 */
@@ -199,6 +203,18 @@ export default function App() {
   const posRate = totalAssets > 0 ? (marketValue / totalAssets) * 100 : 0;
   const cash = Math.max(0, totalAssets - marketValue);
 
+  // 统计自选池中今日存在未平仓T仓的标的列表
+  const unclosedStocks = pool.map(s => {
+    const t = getTodayTStatus(s, tradeLogs);
+    return t.hasUnclosed ? { stock: s, ...t } : null;
+  }).filter(Boolean);
+
+  const nowTime = new Date();
+  const currentMins = nowTime.getHours() * 60 + nowTime.getMinutes();
+  const currentWd = nowTime.getDay();
+  const isWeekendNow = (currentWd === 0 || currentWd === 6);
+  const isTailAlertTime = (!isWeekendNow && currentMins >= 880 && currentMins < 900); // 14:40 - 15:00
+
   /* 时钟与盘中时段更新 */
   const updateClock = useCallback(() => {
     const now = new Date();
@@ -217,15 +233,15 @@ export default function App() {
       else if (mins >= 630 && mins < 690) phase = '震荡巩固 (10:30-11:30)';
       else if (mins >= 690 && mins < 780) phase = '午间休市 (11:30-13:00)';
       else if (mins >= 780 && mins < 840) phase = '缩量垃圾时间 (13:00-14:00 管住手)';
-      else if (mins >= 840 && mins < 870) phase = '变盘预警 (14:00-14:30 警惕跳水)';
-      else if (mins >= 870 && mins < 895) phase = '🚨 T仓强制平仓 (14:30-14:55 绝不过夜)';
+      else if (mins >= 840 && mins < 880) phase = '变盘预警 (14:00-14:40 警惕跳水)';
+      else if (mins >= 880 && mins < 895) phase = '🚨 14:40 尾盘清T平仓 (14:40-14:55 绝不过夜)';
       else if (mins >= 895 && mins < 900) phase = '尾盘定盘 (14:55-15:00)';
     }
     setClockPhase(`${timeStr} ${phase}`);
 
-    // 14:30-14:55 尾盘未平仓报警
-    if (!isWeekend && mins >= 870 && mins < 895) {
-      const hasUnclosed = tradeLogs.some(l => l.date === todayStr() && l.dir === '正T');
+    // 14:40-14:55 尾盘未平仓报警触发
+    if (!isWeekend && mins >= 880 && mins < 895) {
+      const hasUnclosed = (poolRef.current || []).some(s => getTodayTStatus(s, tradeLogs).hasUnclosed);
       if (hasUnclosed) setOvernightBannerOpen(true);
     }
   }, [tradeLogs]);
@@ -730,8 +746,18 @@ export default function App() {
 
       {/* 尾盘过夜风控横幅 */}
       <OvernightBanner
-        visible={overnightBannerOpen}
+        visible={overnightBannerOpen || ((isTailAlertTime || simTailAlert) && unclosedStocks.length > 0)}
+        unclosedList={unclosedStocks}
         onClose={() => setOvernightBannerOpen(false)}
+        onOpenQuickT={(stock, dir, px, qty) => setQuickTModal({ open: true, stock, defaultDir: dir, defaultPx: px, defaultQty: qty })}
+        simTailAlert={simTailAlert}
+        onToggleSimTailAlert={() => {
+          setSimTailAlert(prev => {
+            const next = !prev;
+            if (next) setOvernightBannerOpen(true);
+            return next;
+          });
+        }}
       />
 
       {/* 页面主体区：基于 URL 路由解耦展示 */}
@@ -741,6 +767,10 @@ export default function App() {
           <TradePage
             pool={pool}
             activeStockCode={activeStockCode}
+            totalAssets={totalAssets}
+            tradeLogs={tradeLogs}
+            isTailAlertTime={isTailAlertTime}
+            simTailAlert={simTailAlert}
             onSelectStock={handleSelectStock}
             wbLatest={wbLatest}
             dbStatus={dbStatus}
@@ -767,6 +797,15 @@ export default function App() {
           />
         )}
 
+        {/* 🔥 连板打板天梯与题材风口专栏 */}
+        {(activeTab === 'tabBoard' || activeTab === 'tabAll') && (
+          <BoardPage
+            pool={pool}
+            onAddStock={handleAddStockByQuery}
+            onTabChange={navigate}
+          />
+        )}
+
         {/* ⚡ 尾盘黑马 T+0 看板 */}
         {(activeTab === 'tabTail' || activeTab === 'tabAll') && (
           <TailPage
@@ -778,8 +817,28 @@ export default function App() {
           />
         )}
 
-        {/* 账户资产与战绩透视 */}
-        {(activeTab === 'tabAccount' || activeTab === 'tabPerf' || activeTab === 'tabAll') && (
+        {/* 🩺 个股全景体检报告 */}
+        {(activeTab === 'tabDiagnosis' || activeTab === 'tabAll') && (
+          <DiagnosisPage
+            pool={pool}
+            initialCode={query?.code || activeStockCode}
+            onAddStockToPool={handleAddStockByQuery}
+            onSelectStockInPool={handleSelectStock}
+          />
+        )}
+
+        {/* 📊 四维策略推荐胜率与战绩透视 */}
+        {(activeTab === 'tabPerf' || activeTab === 'tabAll') && (
+          <PerfPage
+            tradeLogs={tradeLogs}
+            pool={pool}
+            onAddStock={handleAddStockByQuery}
+            onTabChange={navigate}
+          />
+        )}
+
+        {/* 账户资产与收盘快照 */}
+        {(activeTab === 'tabAccount' || activeTab === 'tabAll') && (
           <AccountPage
             totalAssets={totalAssets}
             marketValue={marketValue}
@@ -839,6 +898,7 @@ export default function App() {
       {quickTModal.open && (
         <QuickTModal
           modalData={quickTModal}
+          tradeLogs={tradeLogs}
           onClose={() => setQuickTModal({ open: false, stock: null })}
           onConfirm={handleConfirmQuickT}
         />
@@ -870,6 +930,15 @@ export default function App() {
           onToggleNotify={handleToggleNotify}
           alertEnabled={alertEnabled}
           onToggleAlertEnabled={handleToggleAlertEnabled}
+          simTailAlert={simTailAlert}
+          onToggleSimTailAlert={() => {
+            setSimTailAlert(prev => {
+              const next = !prev;
+              if (next) setOvernightBannerOpen(true);
+              return next;
+            });
+          }}
+          unclosedCount={unclosedStocks.length}
         />
       )}
 

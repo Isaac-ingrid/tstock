@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { AUCTION_TIERS, getAuctionStatusInfo, getAuctionTier } from '../services/auction.js';
+import { AUCTION_TIERS, getAuctionStatusInfo, getAuctionTier, computeAuctionPattern, computeLimitUpRigidity } from '../services/auction.js';
 import { fetchQuotes } from '../services/api.js';
 import { f2 } from '../services/utils.js';
 
@@ -97,6 +97,26 @@ export default function SelectionSection({
     const tier = gap != null ? getAuctionTier(gap) : null;
     const chg = (livePx && livePrev) ? ((livePx - livePrev) / livePrev) * 100 : null;
 
+    // 轻量化短线与连板辅助：竞价弱转强量化模型与 9:40 涨停硬度模型
+    const stockLike = {
+      code: code6,
+      name: r.name,
+      open: liveOpen,
+      prevClose: livePrev,
+      price: livePx,
+      high: (q && q.high > 0) ? q.high : livePx,
+      low: (q && q.low > 0) ? q.low : livePx,
+      vr: (q && q.vr > 0) ? q.vr : 1.0,
+      ceiling: q?.ceiling,
+      b1_p: q?.b1_p,
+      b1_v: q?.b1_v,
+      amt: q?.amt,
+      to: q?.to,
+      prevChg: r.retOpen != null ? 0 : -1.5,
+    };
+    const aucPattern = computeAuctionPattern(stockLike);
+    const limitRig = computeLimitUpRigidity(stockLike);
+
     return {
       code6,
       tc,
@@ -106,7 +126,10 @@ export default function SelectionSection({
       gap,
       tier,
       chg,
-      isLive: !!(q && q.open > 0)
+      isLive: !!(q && q.open > 0),
+      vr: q?.vr || null,
+      aucPattern,
+      limitRig
     };
   }, [candQuotes]);
 
@@ -162,13 +185,15 @@ export default function SelectionSection({
     const vCls = r.verdict === '可做' ? 'c-can' : r.verdict === '小做' ? 'c-small' : 'c-watch';
     const rTier = data.tier;
     const rGap = data.gap;
+    const pat = data.aucPattern;
+    const rig = data.limitRig;
 
     return (
       <div
         key={data.code6}
         className={`sel-chip ${vCls} ${have ? 'in-pool' : ''}`}
         onClick={() => onOpenReason(r, have)}
-        title={`点击查看入选理由与量化支撑\n${data.isLive ? `【今日09:25实时竞价定盘】\n开盘价: ¥${f2(data.liveOpen)}  昨收: ¥${f2(data.livePrev)}\n跳空幅度: ${rGap >= 0 ? '+' : ''}${rGap.toFixed(2)}% (${rTier?.tag})\n冲高预期: +${rTier?.space}%  +2%触及率: ${rTier?.hit2}%` : '点击查看详情'}`}
+        title={`点击查看入选理由与量化支撑\n${data.isLive ? `【今日09:25实时竞价定盘】\n开盘价: ¥${f2(data.liveOpen)}  昨收: ¥${f2(data.livePrev)}\n跳空幅度: ${rGap >= 0 ? '+' : ''}${rGap.toFixed(2)}% (${rTier?.tag})\n冲高预期: +${rTier?.space}%  +2%触及率: ${rTier?.hit2}%\n竞价量比: ${data.vr ? data.vr.toFixed(2) + '倍' : '—'}${pat ? `\n竞价形态: ${pat.tag} - ${pat.title}` : ''}${rig && rig.status !== 'none' ? `\n涨停硬度: ${rig.label} (评分:${rig.score})` : ''}` : '点击查看详情'}`}
       >
         <span className="sc-name">{r.name}</span>
         <span className="sc-code">{data.code6}</span>
@@ -189,6 +214,86 @@ export default function SelectionSection({
             }}
           >
             竞价{rGap >= 0 ? '+' : ''}{rGap.toFixed(1)}%
+          </span>
+        )}
+        {pat && pat.isWeakToStrong && (
+          <span
+            style={{
+              fontSize: '10px',
+              padding: '1px 4px',
+              borderRadius: '3px',
+              background: pat.bg,
+              color: pat.color,
+              border: `1px solid ${pat.border}`,
+              fontWeight: 700
+            }}
+            title={pat.desc}
+          >
+            🚀 弱转强
+          </span>
+        )}
+        {rig && rig.isBoardTarget && rig.status === 'limit_up' && (
+          <span
+            style={{
+              fontSize: '10px',
+              padding: '1px 4px',
+              borderRadius: '3px',
+              background: rig.badgeBg,
+              color: rig.badgeColor,
+              border: `1px solid ${rig.badgeColor}`,
+              fontWeight: 700
+            }}
+            title={rig.desc}
+          >
+            💎 封板
+          </span>
+        )}
+        {rig && rig.isBoardTarget && rig.status === 'broken' && (
+          <span
+            style={{
+              fontSize: '10px',
+              padding: '1px 4px',
+              borderRadius: '3px',
+              background: rig.badgeBg,
+              color: rig.badgeColor,
+              border: `1px solid ${rig.badgeColor}`,
+              fontWeight: 700
+            }}
+            title={rig.desc}
+          >
+            🚨 炸板
+          </span>
+        )}
+        {rig && rig.isBoardTarget && rig.status === 'rush' && (
+          <span
+            style={{
+              fontSize: '10px',
+              padding: '1px 4px',
+              borderRadius: '3px',
+              background: rig.badgeBg,
+              color: rig.badgeColor,
+              border: `1px solid ${rig.badgeColor}`,
+              fontWeight: 700
+            }}
+            title={rig.desc}
+          >
+            ⚡ 冲板
+          </span>
+        )}
+        {rig && rig.isBoardTarget && rig.status === 'prev_relay' && (
+          <span
+            style={{
+              fontSize: '10px',
+              padding: '1px 4px',
+              borderRadius: '3px',
+              background: rig.badgeBg,
+              color: rig.badgeColor,
+              border: `1px solid ${rig.badgeColor}`,
+              fontWeight: 700
+            }}
+            title={rig.desc}
+          >
+            🎯 昨涨停
           </span>
         )}
         {have && <span className="sc-in">已在池</span>}
@@ -396,18 +501,20 @@ export default function SelectionSection({
 
               {/* 视图1：今日候选股竞价定盘实况一览表 */}
               {auctionViewTab === 'live' && (
-                <div className="tbl-scroll" style={{ maxHeight: '220px' }}>
+                <div className="tbl-scroll" style={{ maxHeight: '240px' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                     <thead>
                       <tr style={{ background: 'var(--surface)', textAlign: 'left' }}>
                         <th style={{ padding: '6px 8px' }}>股票标的</th>
-                        <th style={{ padding: '6px 8px' }}>09:25开盘价</th>
+                        <th style={{ padding: '6px 8px' }}>09:25开盘</th>
                         <th style={{ padding: '6px 8px' }}>昨日收盘</th>
-                        <th style={{ padding: '6px 8px' }}>竞价跳空幅度</th>
-                        <th style={{ padding: '6px 8px' }}>所属竞价档位</th>
-                        <th style={{ padding: '6px 8px' }}>平均冲高预期</th>
-                        <th style={{ padding: '6px 8px' }}>+2% 触及率</th>
-                        <th style={{ padding: '6px 8px' }}>做T操作指引</th>
+                        <th style={{ padding: '6px 8px' }}>竞价跳空</th>
+                        <th style={{ padding: '6px 8px' }}>竞价量比</th>
+                        <th style={{ padding: '6px 8px' }}>形态 / 弱转强</th>
+                        <th style={{ padding: '6px 8px' }}>9:40涨停硬度</th>
+                        <th style={{ padding: '6px 8px' }}>冲高预期</th>
+                        <th style={{ padding: '6px 8px' }}>+2%触及</th>
+                        <th style={{ padding: '6px 8px' }}>实战做T/打板指引</th>
                         <th style={{ padding: '6px 8px', textAlign: 'center' }}>操作</th>
                       </tr>
                     </thead>
@@ -417,6 +524,8 @@ export default function SelectionSection({
                         const t = st.tier;
                         const gapVal = st.gap;
                         const gapColor = gapVal > 0 ? 'var(--up)' : gapVal < 0 ? 'var(--down)' : 'inherit';
+                        const pat = st.aucPattern;
+                        const rig = st.limitRig;
 
                         return (
                           <tr key={st.code6} style={{ borderBottom: '1px solid var(--line)' }}>
@@ -432,12 +541,32 @@ export default function SelectionSection({
                             <td style={{ padding: '5px 8px', fontWeight: 700, color: gapColor, fontFamily: 'ui-monospace,Consolas,monospace' }}>
                               {gapVal != null ? `${gapVal >= 0 ? '+' : ''}${gapVal.toFixed(2)}%` : '—'}
                             </td>
+                            <td style={{ padding: '5px 8px', fontFamily: 'ui-monospace,Consolas,monospace', fontWeight: 600 }}>
+                              {st.vr ? `${(+st.vr).toFixed(2)}倍` : '—'}
+                            </td>
                             <td style={{ padding: '5px 8px' }}>
-                              {t ? (
-                                <span className="tag" style={{ color: t.color, borderColor: t.color, background: t.bg, fontWeight: 700, padding: '1px 6px', fontSize: '11px' }}>
-                                  {t.tag}
+                              {pat ? (
+                                <span
+                                  className="tag"
+                                  style={{ color: pat.color, borderColor: pat.border || pat.color, background: pat.bg, fontWeight: 700, padding: '1px 6px', fontSize: '11px' }}
+                                  title={pat.desc}
+                                >
+                                  {pat.tag}
                                 </span>
                               ) : '—'}
+                            </td>
+                            <td style={{ padding: '5px 8px' }}>
+                              {rig && rig.isBoardTarget ? (
+                                <span
+                                  className="tag"
+                                  style={{ color: rig.badgeColor, borderColor: rig.badgeColor, background: rig.badgeBg, fontWeight: 700, padding: '1px 6px', fontSize: '11px' }}
+                                  title={rig.desc}
+                                >
+                                  {rig.label}
+                                </span>
+                              ) : (
+                                <span style={{ color: 'var(--mute)', fontSize: '11px' }}>常规波动</span>
+                              )}
                             </td>
                             <td style={{ padding: '5px 8px', color: 'var(--accent)', fontWeight: 700 }}>
                               {t ? `+${t.space}%` : '—'}
@@ -445,8 +574,8 @@ export default function SelectionSection({
                             <td style={{ padding: '5px 8px', fontWeight: 700, color: (t && t.hit2 >= 70) ? 'var(--down)' : 'inherit' }}>
                               {t ? `${t.hit2}%` : '—'}
                             </td>
-                            <td style={{ padding: '5px 8px', color: 'var(--sub)', fontSize: '11.5px' }}>
-                              {t ? t.advice : '等待竞价撮合数据'}
+                            <td style={{ padding: '5px 8px', color: 'var(--sub)', fontSize: '11.5px', maxWidth: '220px' }}>
+                              {pat?.isWeakToStrong ? pat.title : (t ? t.advice : '等待竞价撮合数据')}
                             </td>
                             <td style={{ padding: '5px 8px', textAlign: 'center' }}>
                               {inPool ? (

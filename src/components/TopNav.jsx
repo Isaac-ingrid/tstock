@@ -32,6 +32,7 @@ export default function TopNav({
     if (key === 'poolCount') return pool.length > 0 ? pool.length : null;
     if (key === 'tailCount') return tailCount > 0 ? tailCount : null;
     if (key === 'ledgerCount') return ledgerCount > 0 ? ledgerCount : null;
+    if (key === 'boardCount') return '热';
     return null;
   };
 

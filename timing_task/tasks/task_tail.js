@@ -39,6 +39,19 @@ async function main() {
     log(`步骤 2/2: 将尾盘结果写入数据契约与前端目录 (publish.js)...`);
     runScript('publish.js');
 
+    // 2b. 同步通知策略战绩账本记录当日尾盘黑马样本（若后端在线）
+    try {
+      const apiBase = process.env.STOCK_API_BASE || 'http://127.0.0.1:18765';
+      const snapRes = await fetch(`${apiBase}/api/stock/strategy_snapshot`, {
+        method: 'POST',
+        signal: AbortSignal.timeout(8000),
+      });
+      if (snapRes.ok) {
+        const sj = await snapRes.json();
+        log(`✓ 尾盘黑马信号已入账策略战绩池 (当前共 ${sj.totalSignals || 0} 条)`);
+      }
+    } catch (_) {}
+
     // 3. 读取今日产物并生成汇报简报
     const tailFile = path.join(ENGINE_DIR, 'out', `tail-${today}.json`);
     let tailData = null;

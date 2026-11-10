@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { drawChart, chartMeta, chartLegendHTML, chartStat, PERIODS, PERIOD_LABEL, P_MAIN, P_MORE, OV_DEF, SUB_DEF, setHover } from '../services/chart.js';
+import { drawChart, chartMeta, chartLegendHTML, chartStat, PERIODS, PERIOD_LABEL, P_MAIN, P_MORE, OV_DEF, OV_RT_DEF, SUB_DEF, setHover } from '../services/chart.js';
 import { loadChart, loadDD } from '../services/api.js';
+import { f2 } from '../services/utils.js';
 
 const VALID_PERIODS = ['rt', 'day', 'week', 'month', 'm1', 'm5', 'm15', 'm30', 'm60'];
 
@@ -13,6 +14,7 @@ export default function ChartCanvas({ stock, poolIndex, onUpdateStock }) {
   // 周期合法性校验（防旧缓存或错误传参污染）
   const curPeriod = VALID_PERIODS.includes(stock.p) ? stock.p : 'day';
   const ov = stock.ov || { ma: 1, boll: 1, box: 1, cost: 1, sr: 0 };
+  const ovRt = stock.ovRt || { cost: 1, be: 1, signal: 1, radar: 1 };
   const subKind = stock.sub || 'macd';
 
   const renderCanvas = useCallback(() => {
@@ -30,7 +32,7 @@ export default function ChartCanvas({ stock, poolIndex, onUpdateStock }) {
     const handleResize = () => renderCanvas();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [renderCanvas, stock, stock.p, stock.ov, stock.sub, stock._k]);
+  }, [renderCanvas, stock, stock.p, stock.ov, stock.ovRt, stock.sub, stock._k, stock.bePrice, stock.cost]);
 
   // 切换周期：分时、日K、周K、月K或分钟级K线
   const handlePeriodChange = async (p) => {
@@ -44,6 +46,16 @@ export default function ChartCanvas({ stock, poolIndex, onUpdateStock }) {
     renderCanvas();
     if (onUpdateStock) {
       onUpdateStock({ ...stock, p });
+    }
+  };
+
+  // 切换分时做T叠加（持仓成本、做T保本、做T买卖点、主力出货雷达）
+  const handleToggleOverlayRt = (k) => {
+    const nextOvRt = { ...ovRt, [k]: ovRt[k] ? 0 : 1 };
+    stock.ovRt = nextOvRt;
+    renderCanvas();
+    if (onUpdateStock) {
+      onUpdateStock({ ...stock, ovRt: nextOvRt });
     }
   };
 
@@ -169,9 +181,18 @@ export default function ChartCanvas({ stock, poolIndex, onUpdateStock }) {
         {curPeriod === 'rt' ? (
           <>
             <span className="sp" style={{ width: '1px', height: '14px', background: 'var(--line)', margin: '0 4px' }}></span>
-            <span className="lbl" style={{ fontSize: '11.5px', color: 'var(--mute)' }}>
-              分时图自带：价格线 / 均价线 / 分时量 / 放量倍数
-            </span>
+            <span className="lbl" style={{ fontSize: '11.5px', color: 'var(--mute)', fontWeight: 600 }}>分时做T</span>
+            {Object.entries(OV_RT_DEF).map(([k, label]) => (
+              <button
+                key={k}
+                type="button"
+                className={`chip ov ${ovRt[k] ? 'on' : ''}`}
+                onClick={() => handleToggleOverlayRt(k)}
+                style={{ fontSize: '11px', padding: '2px 8px' }}
+              >
+                {label}
+              </button>
+            ))}
           </>
         ) : (
           <>
@@ -218,7 +239,45 @@ export default function ChartCanvas({ stock, poolIndex, onUpdateStock }) {
         </span>
       </div>
 
-      {/* 2. 手绘 Canvas 画布 */}
+      {/* 2. 分时主力出货风险雷达与做T保本诊断横幅 */}
+      {curPeriod === 'rt' && stock._distRadar && (
+        <div style={{
+          margin: '6px 12px 4px',
+          padding: '7px 12px',
+          borderRadius: '6px',
+          background: stock._distRadar.bg,
+          border: `1px solid ${stock._distRadar.border}`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '8px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '12px', fontWeight: 800, color: stock._distRadar.color }}>
+              {stock._distRadar.title}
+            </span>
+            <span style={{ fontSize: '11.5px', color: 'var(--sub)' }}>
+              {stock._distRadar.desc}
+            </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '11.5px', color: 'var(--mute)' }}>
+            <span>
+              偏离均线: <b style={{ fontFamily: 'monospace', color: stock._distRadar.bias >= 0 ? 'var(--up)' : 'var(--down)' }}>
+                {stock._distRadar.bias >= 0 ? '+' : ''}{stock._distRadar.bias.toFixed(2)}%
+              </b>
+            </span>
+            {stock.cost > 0 && (
+              <span>持仓: <b style={{ fontFamily: 'monospace' }}>¥{f2(stock.cost)}</b></span>
+            )}
+            {stock.bePrice > 0 && (
+              <span>做T保本: <b style={{ fontFamily: 'monospace', color: '#d97706' }}>¥{f2(stock.bePrice)}</b></span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 3. 手绘 Canvas 画布 */}
       <canvas
         id={`kln-${poolIndex}`}
         ref={canvasRef}

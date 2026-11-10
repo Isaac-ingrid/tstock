@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { f2, money, money2 } from '../services/utils.js';
+import { f2, money, money2, getTodayTStatus } from '../services/utils.js';
 import { calc } from '../services/api.js';
 
 /* 1. 快捷记T弹窗 */
-export function QuickTModal({ modalData, onClose, onConfirm }) {
+export function QuickTModal({ modalData, tradeLogs = [], onClose, onConfirm }) {
   if (!modalData || !modalData.open) return null;
-  return <QuickTModalInner modalData={modalData} onClose={onClose} onConfirm={onConfirm} />;
+  return <QuickTModalInner modalData={modalData} tradeLogs={tradeLogs} onClose={onClose} onConfirm={onConfirm} />;
 }
 
-function QuickTModalInner({ modalData, onClose, onConfirm }) {
+function QuickTModalInner({ modalData, tradeLogs = [], onClose, onConfirm }) {
   const stock = modalData.stock || {};
+  const todayT = getTodayTStatus(stock, tradeLogs);
   const { defaultDir, defaultPx, defaultQty } = modalData;
   const isInitSell = defaultDir === '直接卖出' || defaultDir === '卖出';
   const isInitBuy = defaultDir === '直接买入' || defaultDir === '买入' || defaultDir === '买入建仓' || defaultDir === '买入加仓';
@@ -36,7 +37,7 @@ function QuickTModalInner({ modalData, onClose, onConfirm }) {
         : (defaultPx || stock.price)
   );
   const [qty, setQty] = useState(
-    defaultQty || (isInitSell && totalHeld > 0 ? totalHeld : (isInitBuy && totalHeld > 0 ? 500 : 100))
+    defaultQty !== undefined ? defaultQty : (isInitSell ? (todayT.sellableShares > 0 ? todayT.sellableShares : 0) : (isInitBuy && totalHeld > 0 ? 500 : 100))
   );
 
   let c = null;
@@ -98,8 +99,12 @@ function QuickTModalInner({ modalData, onClose, onConfirm }) {
         alert('请输入正确的卖出价格与股数');
         return;
       }
-      if (totalHeld > 0 && q > totalHeld) {
-        if (!window.confirm(`卖出股数 (${q} 股) 大于当前持仓 (${totalHeld} 股)，确定要超额卖出吗？`)) {
+      if (totalHeld > 0 && todayT.sellableShares <= 0) {
+        alert(`受 A 股 T+1 交易制度限制，【${stock.name || stock.code}】当前持仓均系今日新买入，今日可用可卖股数为 0！明日开盘后才可卖出。`);
+        return;
+      }
+      if (totalHeld > 0 && q > todayT.sellableShares) {
+        if (!window.confirm(`当前可用可卖底仓为 ${todayT.sellableShares} 股（其余 ${todayT.t1LockedShares} 股系今日新买受 T+1 锁仓），卖出股数 (${q} 股) 超出今日可卖额度，确定继续吗？`)) {
           return;
         }
       }
@@ -206,7 +211,7 @@ function QuickTModalInner({ modalData, onClose, onConfirm }) {
               }}
               onClick={() => {
                 setDir('直接卖出');
-                if (totalHeld > 0) setQty(totalHeld);
+                setQty(todayT.sellableShares > 0 ? todayT.sellableShares : 0);
                 if (stock.price) setSellPx(String(stock.price));
                 if (stock.cost) setBuyPx(String(stock.cost));
               }}
@@ -369,12 +374,18 @@ function QuickTModalInner({ modalData, onClose, onConfirm }) {
             /* ===== 直接卖出界面 ===== */
             <div>
               <div style={{
-                padding: '8px 12px', background: 'var(--surface2)', borderRadius: '7px',
-                fontSize: '12px', marginBottom: '12px', color: 'var(--sub)', lineHeight: 1.6
+                padding: '8px 12px', background: todayT.sellableShares <= 0 && totalHeld > 0 ? '#fff1f0' : 'var(--surface2)',
+                border: todayT.sellableShares <= 0 && totalHeld > 0 ? '1px solid #ffa39e' : 'none',
+                borderRadius: '7px', fontSize: '12px', marginBottom: '12px', color: 'var(--sub)', lineHeight: 1.6
               }}>
-                💼 当前持仓: <b>{totalHeld} 股</b> ｜ 成本: <b>¥{f2(stock.cost || 0)}</b> ｜ 市值: <b>¥{money(totalHeld * (+stock.price || 0))}</b>
-                <div style={{ fontSize: '11px', color: 'var(--mute)', marginTop: '2px' }}>
-                  确认卖出后将直接扣减持仓股数并计入台账。若全卖则自动完成清仓。
+                💼 当前总持仓: <b>{totalHeld} 股</b> ｜ <b>今日可卖: <span style={{ color: todayT.sellableShares > 0 ? '#1677ff' : '#cf1322' }}>{todayT.sellableShares} 股</span></b>
+                {todayT.t1LockedShares > 0 && (
+                  <span style={{ color: '#64748b', marginLeft: '6px' }}>(含 T+1 今日新买锁仓 {todayT.t1LockedShares} 股)</span>
+                )}
+                <div style={{ fontSize: '11px', color: todayT.sellableShares <= 0 && totalHeld > 0 ? '#cf1322' : 'var(--mute)', marginTop: '2px', fontWeight: todayT.sellableShares <= 0 && totalHeld > 0 ? 700 : 400 }}>
+                  {todayT.sellableShares <= 0 && totalHeld > 0
+                    ? '🔒 受 A 股 T+1 制度限制：今日新买入股份当日无法卖出，需待明日开盘解锁！'
+                    : '确认卖出后将直接扣减可用底仓并计入台账。若全卖则自动完成清仓。'}
                 </div>
               </div>
 
@@ -439,30 +450,32 @@ function QuickTModalInner({ modalData, onClose, onConfirm }) {
               <div className="fld" style={{ marginBottom: '14px' }}>
                 <label style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>卖出股数 (股)</span>
-                  <span style={{ color: 'var(--sub)' }}>持仓可卖: {totalHeld} 股</span>
+                  <span style={{ color: todayT.sellableShares > 0 ? 'var(--sub)' : '#cf1322', fontWeight: todayT.sellableShares > 0 ? 400 : 700 }}>
+                    今日可用可卖: {todayT.sellableShares} 股
+                  </span>
                 </label>
                 <input
                   type="number" step="100" value={qty}
                   onChange={e => setQty(e.target.value)}
                   style={{ width: '100%', minHeight: '32px', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--line)' }}
                 />
-                <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
-                  {totalHeld > 0 && (
+                <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
+                  {todayT.sellableShares > 0 && (
                     <button
                       type="button"
-                      onClick={() => setQty(totalHeld)}
+                      onClick={() => setQty(todayT.sellableShares)}
                       style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', border: '1px solid #ffa39e', background: '#fff1f0', color: '#cf1322', fontWeight: 700, cursor: 'pointer' }}
                     >
-                      全部清仓 ({totalHeld}股)
+                      全卖可用底仓 ({todayT.sellableShares}股)
                     </button>
                   )}
-                  {totalHeld >= 200 && (
+                  {todayT.sellableShares >= 200 && (
                     <button
                       type="button"
-                      onClick={() => setQty(Math.floor(totalHeld / 200) * 100)}
+                      onClick={() => setQty(Math.floor(todayT.sellableShares / 200) * 100)}
                       style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', border: '1px solid var(--line)', background: '#fff', cursor: 'pointer' }}
                     >
-                      卖半仓 ({Math.floor(totalHeld / 200) * 100}股)
+                      卖半仓 ({Math.floor(todayT.sellableShares / 200) * 100}股)
                     </button>
                   )}
                   <button
@@ -534,10 +547,15 @@ function QuickTModalInner({ modalData, onClose, onConfirm }) {
                 </div>
               </div>
 
+              {todayT.isFirstDayLocked && (
+                <div style={{ padding: '7px 10px', marginBottom: '10px', borderRadius: '6px', background: '#fffbe6', border: '1px solid #ffe58f', color: '#d46b08', fontSize: '11.5px', fontWeight: 600 }}>
+                  🔒 T+1 提示：该股当前持仓全为今日新买入（今日可卖底仓 0 股），当日无法完成成对做T（正T/倒T），仅适合补录历史对倒流水或明日再做T！
+                </div>
+              )}
               <div className="fld" style={{ marginBottom: '14px' }}>
                 <label style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>成交股数</span>
-                  <span style={{ color: 'var(--sub)' }}>建议T仓: {Math.max(100, Math.floor((totalHeld * 0.3) / 100) * 100)} 股</span>
+                  <span style={{ color: 'var(--sub)' }}>建议T仓: {Math.max(100, Math.floor(((todayT.sellableShares || totalHeld) * 0.3) / 100) * 100)} 股</span>
                 </label>
                 <input
                   type="number" step="100" value={qty}
@@ -792,19 +810,155 @@ export function ToastHost({ toasts, onDismiss }) {
   );
 }
 
-/* 5. 尾盘过夜风控横幅 */
-export function OvernightBanner({ visible, onClose }) {
+/* 5. 尾盘过夜风控横幅 (14:40 之后触发日内做T未平仓醒目预警) */
+export function OvernightBanner({
+  visible,
+  onClose,
+  unclosedList = [],
+  onOpenQuickT,
+  simTailAlert = false,
+  onToggleSimTailAlert
+}) {
   if (!visible) return null;
+
+  const now = new Date();
+  const mins = now.getHours() * 60 + now.getMinutes();
+  const minsLeft = Math.max(0, 895 - mins); // 14:55 连续竞价结束
+
   return (
-    <div id="overnightAlertBanner" className="overnight-alert-banner">
-      <div className="oab-txt">🚨 尾盘强制风控：检测到今日存在尚未平仓的正T买入！做T铁律：绝不过夜变加仓！请在 14:55 前果断挂卖平仓或止损！</div>
-      <button className="oab-close" onClick={onClose}>×</button>
+    <div
+      id="overnightAlertBanner"
+      className="overnight-alert-banner tail-alert-pulse"
+      style={{
+        background: 'linear-gradient(90deg, #fff1f0, #fff7e6, #fff)',
+        borderLeft: '6px solid #cf1322',
+        borderTop: '1px solid #ffa39e',
+        borderBottom: '1.5px solid #ff4d4f',
+        padding: '12px 20px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '12px'
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '24px' }}>🚨</span>
+          <div>
+            <div style={{ fontSize: '13.5px', fontWeight: 800, color: '#cf1322', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <span>【14:40 尾盘清T强制风控警报】做T绝不过夜！严禁被动变加仓套牢！</span>
+              <span style={{
+                fontSize: '11px',
+                fontWeight: 700,
+                padding: '2px 8px',
+                borderRadius: '4px',
+                background: '#cf1322',
+                color: '#fff'
+              }}>
+                {minsLeft > 0 ? `距 14:55 闭市平仓仅剩 ${minsLeft} 分钟` : '连续竞价已临近尾声'}
+              </span>
+              {simTailAlert && (
+                <span style={{ fontSize: '10.5px', background: '#e6f4ff', color: '#1677ff', border: '1px solid #91caff', padding: '1px 6px', borderRadius: '4px' }}>
+                  🧪 模拟演练中
+                </span>
+              )}
+            </div>
+            <div style={{ fontSize: '12px', color: 'var(--sub)', marginTop: '2px' }}>
+              {unclosedList && unclosedList.length > 0 ? (
+                <span>检测到今日自选池中尚有 <b>{unclosedList.length}</b> 只标的未完成做T平仓！请在 14:55 前果断按市价挂卖平仓，守住做T纪律底线！</span>
+              ) : (
+                <span>做T第一铁律：绝不过夜！请检查今日是否仍有未平仓的做T底仓，切勿转为被动过夜加仓！</span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* 标的快捷平仓胶囊列表 */}
+        {unclosedList && unclosedList.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginLeft: '4px' }}>
+            {unclosedList.map(({ stock, unclosedShares }) => (
+              <div
+                key={stock.code}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: '#fff',
+                  border: '1px solid #ffa39e',
+                  borderRadius: '6px',
+                  padding: '4px 10px',
+                  fontSize: '12px',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                }}
+              >
+                <span style={{ fontWeight: 700, color: 'var(--text)' }}>{stock.name} ({stock.code})</span>
+                <span style={{ color: '#cf1322', fontWeight: 600 }}>未平 <b>{unclosedShares}</b> 股</span>
+                <span style={{ color: 'var(--sub)' }}>现价 ¥{f2(stock.price)}</span>
+                {onOpenQuickT && (
+                  <button
+                    type="button"
+                    style={{
+                      padding: '2px 8px',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      borderRadius: '4px',
+                      border: 'none',
+                      background: '#cf1322',
+                      color: '#fff',
+                      cursor: 'pointer'
+                    }}
+                    onClick={() => onOpenQuickT(stock, '直接卖出', f2(stock.price), unclosedShares)}
+                    title={`立即挂单卖出 ${unclosedShares} 股以平仓`}
+                  >
+                    ⚡ 一键平仓
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        {onToggleSimTailAlert && (
+          <button
+            type="button"
+            className="mini"
+            onClick={onToggleSimTailAlert}
+            style={{ fontSize: '11px', color: 'var(--sub)', padding: '2px 8px', cursor: 'pointer' }}
+            title="切换 14:40 尾盘未平仓预警模拟开关"
+          >
+            {simTailAlert ? '退出模拟' : '模拟14:40预警'}
+          </button>
+        )}
+        <button
+          className="oab-close"
+          onClick={onClose}
+          title="关闭警报条"
+          style={{ fontSize: '20px', fontWeight: 700, color: '#cf1322', cursor: 'pointer', background: 'none', border: 'none' }}
+        >
+          ×
+        </button>
+      </div>
     </div>
   );
 }
 
 /* 6. 盘中到价与买卖提醒中心弹窗 */
-export function AlertCenterModal({ open, onClose, pool, onJumpCard, notifyActive, onToggleNotify, alertEnabled = true, onToggleAlertEnabled }) {
+export function AlertCenterModal({
+  open,
+  onClose,
+  pool,
+  onJumpCard,
+  notifyActive,
+  onToggleNotify,
+  alertEnabled = true,
+  onToggleAlertEnabled,
+  simTailAlert = false,
+  onToggleSimTailAlert,
+  unclosedCount = 0
+}) {
   if (!open) return null;
   return (
     <AlertCenterModalInner
@@ -815,11 +969,25 @@ export function AlertCenterModal({ open, onClose, pool, onJumpCard, notifyActive
       onToggleNotify={onToggleNotify}
       alertEnabled={alertEnabled}
       onToggleAlertEnabled={onToggleAlertEnabled}
+      simTailAlert={simTailAlert}
+      onToggleSimTailAlert={onToggleSimTailAlert}
+      unclosedCount={unclosedCount}
     />
   );
 }
 
-function AlertCenterModalInner({ onClose, pool, onJumpCard, notifyActive, onToggleNotify, alertEnabled, onToggleAlertEnabled }) {
+function AlertCenterModalInner({
+  onClose,
+  pool,
+  onJumpCard,
+  notifyActive,
+  onToggleNotify,
+  alertEnabled,
+  onToggleAlertEnabled,
+  simTailAlert,
+  onToggleSimTailAlert,
+  unclosedCount = 0
+}) {
   const [alertList, setAlertList] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem('t-system-alerts') || '[]');
@@ -955,6 +1123,53 @@ function AlertCenterModalInner({ onClose, pool, onJumpCard, notifyActive, onTogg
                 style={{ padding: '5px 12px', fontSize: '12px', fontWeight: 700, whiteSpace: 'nowrap', cursor: 'pointer' }}
               >
                 开启桌面通知
+              </button>
+            )}
+          </div>
+
+          {/* 14:40 尾盘清T日内风控预警状态与演练模拟 */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '10px 14px',
+            background: simTailAlert ? '#fff1f0' : 'var(--surface2)',
+            border: simTailAlert ? '1px solid #ffa39e' : '1px solid var(--line)',
+            borderRadius: '8px',
+            marginBottom: '14px',
+            gap: '12px'
+          }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700, color: simTailAlert ? '#cf1322' : 'var(--text)', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>🚨 14:40 尾盘清T日内风控预警: {simTailAlert ? '模拟激活中' : '盘中自动监听 (14:40~14:55)'}</span>
+                {unclosedCount > 0 && (
+                  <span style={{ fontSize: '11px', background: '#cf1322', color: '#fff', padding: '1px 6px', borderRadius: '4px' }}>
+                    今日 {unclosedCount} 只待平仓
+                  </span>
+                )}
+              </div>
+              <div style={{ fontSize: '11.5px', color: 'var(--sub)', marginTop: '2px' }}>
+                交易日 14:40 之后若存在日内做T未平仓单，顶部将触发醒目红警提醒平仓，绝不过夜变加仓。
+              </div>
+            </div>
+            {onToggleSimTailAlert && (
+              <button
+                type="button"
+                onClick={onToggleSimTailAlert}
+                style={{
+                  padding: '5px 12px',
+                  fontSize: '11.5px',
+                  fontWeight: 700,
+                  whiteSpace: 'nowrap',
+                  cursor: 'pointer',
+                  borderRadius: '6px',
+                  border: '1px solid',
+                  background: simTailAlert ? '#cf1322' : '#fff',
+                  color: simTailAlert ? '#fff' : 'var(--text)',
+                  borderColor: simTailAlert ? '#cf1322' : 'var(--line)'
+                }}
+              >
+                {simTailAlert ? '退出模拟' : '🧪 模拟 14:40 预警'}
               </button>
             )}
           </div>
