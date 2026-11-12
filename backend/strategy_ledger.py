@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 
+from .ignition import get_ignition_pool, load_saved_ignition
 from .limitup import get_limitup_pool
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -337,6 +338,82 @@ async def _ingest_board_signals(signals: Dict[str, dict], today_iso: str, http_c
     return {"added": added, "excludedLocked": excluded_locked, "excludedLate": excluded_late, "signalDate": sig_date}
 
 
+async def _ingest_ignition_signals(signals: Dict[str, dict], today_iso: str, http_client: Optional[httpx.AsyncClient] = None) -> dict:
+    """从起爆点挖掘双方向结果建档「横盘起爆潜伏(ignition)」与「深跌抗跌抄底(bottom)」。"""
+    ig = load_saved_ignition()
+    is_weekday = datetime.date.today().weekday() < 5
+    if not ig or (is_weekday and _norm_iso_date(ig.get("date")) < today_iso):
+        try:
+            ig = await get_ignition_pool(http_client=http_client)
+        except Exception:
+            pass
+    if not isinstance(ig, dict) or not ig.get("ok"):
+        return {"ignitionAdded": 0, "bottomAdded": 0}
+
+    sig_date = _norm_iso_date(ig.get("date"))
+    if not sig_date or sig_date < STRATEGY_BASELINE_DATE:
+        return {"ignitionAdded": 0, "bottomAdded": 0}
+
+    ig_added = 0
+    for item in ((ig.get("breakout") or {}).get("items") or [])[:25]:
+        if item.get("stage") not in ("SHAKEOUT_READY", "CONVERGED_WAIT"):
+            continue
+        code6 = _to_six(item.get("code"))
+        px = round(_sf(item.get("price")), 2)
+        if not code6.isdigit() or px <= 0:
+            continue
+        rec = {
+            "id": f"ignition:{sig_date}:{code6}",
+            "strategy": "ignition",
+            "subType": str(item.get("stage") or "CONVERGED_WAIT"),
+            "signalDate": sig_date,
+            "code": code6,
+            "tcode": _to_tcode(code6),
+            "name": str(item.get("name") or code6).replace(" ", ""),
+            "hybk": str(item.get("hybk") or "其他"),
+            "score": _sf(item.get("ignitionScore")),
+            "verdict": str(item.get("stageLabel") or "起爆潜伏"),
+            "ztDate": str(item.get("ztDate") or ""),
+            "volShrinkPct": round(_sf(item.get("volShrinkPct")), 1),
+            "monthVolRatio": round(_sf(item.get("monthVolRatio")), 2),
+            "env": "OK",
+            "refPrice": px,
+            "buy": px,
+        }
+        if _upsert_signal(signals, rec, update_if_same_day=(sig_date == today_iso)):
+            ig_added += 1
+
+    bot_added = 0
+    for item in ((ig.get("dipLeaders") or {}).get("items") or [])[:18]:
+        if item.get("dipSignal") != "ANTI_DROP_BOTTOM":
+            continue
+        code6 = _to_six(item.get("code"))
+        px = round(_sf(item.get("price")), 2)
+        if not code6.isdigit() or px <= 0:
+            continue
+        rec = {
+            "id": f"bottom:{sig_date}:{code6}",
+            "strategy": "bottom",
+            "subType": str(item.get("dipSignal") or "ANTI_DROP_BOTTOM"),
+            "signalDate": sig_date,
+            "code": code6,
+            "tcode": _to_tcode(code6),
+            "name": str(item.get("name") or code6).replace(" ", ""),
+            "hybk": str(item.get("primaryBoardName") or "深跌板块"),
+            "score": _sf(item.get("dipScore")),
+            "verdict": str(item.get("dipLabel") or "抗跌抄底"),
+            "stockDrawdownPct": round(_sf(item.get("stockDrawdownPct")), 1),
+            "worstBoardDd": round(_sf(item.get("worstBoardDd")), 1),
+            "env": "OK",
+            "refPrice": px,
+            "buy": px,
+        }
+        if _upsert_signal(signals, rec, update_if_same_day=(sig_date == today_iso)):
+            bot_added += 1
+
+    return {"ignitionAdded": ig_added, "bottomAdded": bot_added}
+
+
 async def snapshot_strategies(http_client: Optional[httpx.AsyncClient] = None) -> dict:
     """触发一次全策略建档快照并原子落盘至 data/strategy_ledger.json。"""
     today_iso = datetime.date.today().strftime("%Y-%m-%d")
@@ -350,6 +427,7 @@ async def snapshot_strategies(http_client: Optional[httpx.AsyncClient] = None) -
 
         eng_added = await _ingest_node_engine_outputs(signals, today_iso)
         board_info = await _ingest_board_signals(signals, today_iso, http_client=http_client)
+        ig_info = await _ingest_ignition_signals(signals, today_iso, http_client=http_client)
 
         state["baselineDate"] = STRATEGY_BASELINE_DATE
         state["updatedAt"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -366,6 +444,8 @@ async def snapshot_strategies(http_client: Optional[httpx.AsyncClient] = None) -
             "totalSignals": len(signals),
             "engineAdded": eng_added,
             "boardAdded": board_info["added"],
+            "ignitionAdded": ig_info["ignitionAdded"],
+            "bottomAdded": ig_info["bottomAdded"],
             "excludedLocked": board_info["excludedLocked"],
             "excludedLate": board_info["excludedLate"],
             "updatedAt": state["updatedAt"],
@@ -718,6 +798,25 @@ def _evaluate_signal_record(sig: dict, bars: List[dict]) -> dict:
             out["maxDrawdownPct"] = _pct(min(b["low"] for b in future_bars), entry_px)
         return out
 
+    if strategy in ("ignition", "bottom"):
+        # 起爆潜伏 / 深跌抗跌抄底：收盘/信号后 T+1 开盘介入追踪波段 T+1~T+20
+        if not future_bars:
+            return out
+        b1 = future_bars[0]
+        entry_px = round(b1["open"], 2)
+        out["entryDate"] = b1["date"]
+        out["entryPrice"] = entry_px
+        out["status"] = "active"
+        out["retLatest"] = _pct(last_bar["close"], entry_px)
+        horizons = {}
+        for h in (1, 3, 5, 10, 20):
+            if len(future_bars) >= h:
+                horizons[f"t{h}"] = _pct(future_bars[h - 1]["close"], entry_px)
+        out["horizons"] = horizons
+        out["maxGainPct"] = _pct(max(b["high"] for b in future_bars), entry_px)
+        out["maxDrawdownPct"] = _pct(min(b["low"] for b in future_bars), entry_px)
+        return out
+
     return out
 
 
@@ -748,7 +847,7 @@ def _agg_numeric(vals: List[float], big_loss_thresh: float = -6.0) -> dict:
 
 
 def _build_strategy_summaries(evaluated: List[dict], last_exclude: dict) -> dict:
-    by_strat: Dict[str, List[dict]] = {"steady": [], "short": [], "tail": [], "board": []}
+    by_strat: Dict[str, List[dict]] = {"steady": [], "short": [], "tail": [], "board": [], "ignition": [], "bottom": []}
     for r in evaluated:
         if r["strategy"] in by_strat:
             by_strat[r["strategy"]].append(r)
@@ -861,11 +960,45 @@ def _build_strategy_summaries(evaluated: List[dict], last_exclude: dict) -> dict
         },
     }
 
+    # 5. 横盘起爆潜伏总结（支持震仓启动 vs 均线粘合胜率对照）
+    ig_all = by_strat["ignition"]
+    ig_active = [r for r in ig_all if r["status"] == "active"]
+    ig_shakeout = [r for r in ig_active if r.get("subType") == "SHAKEOUT_READY"]
+    ig_converged = [r for r in ig_active if r.get("subType") == "CONVERGED_WAIT"]
+    ignition_summary = {
+        "totalSignals": len(ig_all),
+        "activeCount": len(ig_active),
+        "pendingCount": len(ig_all) - len(ig_active),
+        "latestStats": _agg_numeric([r["retLatest"] for r in ig_active if r["retLatest"] is not None], -6.0),
+        "shakeoutStats": _agg_numeric([r["retLatest"] for r in ig_shakeout if r["retLatest"] is not None], -6.0),
+        "convergedStats": _agg_numeric([r["retLatest"] for r in ig_converged if r["retLatest"] is not None], -6.0),
+        "byHorizon": {
+            k: _agg_numeric([r["horizons"][k] for r in ig_active if r["horizons"].get(k) is not None], -6.0)
+            for k in ("t1", "t3", "t5", "t10", "t20")
+        },
+    }
+
+    # 6. 深跌龙头抗跌抄底总结
+    bot_all = by_strat["bottom"]
+    bot_active = [r for r in bot_all if r["status"] == "active"]
+    bottom_summary = {
+        "totalSignals": len(bot_all),
+        "activeCount": len(bot_active),
+        "pendingCount": len(bot_all) - len(bot_active),
+        "latestStats": _agg_numeric([r["retLatest"] for r in bot_active if r["retLatest"] is not None], -6.0),
+        "byHorizon": {
+            k: _agg_numeric([r["horizons"][k] for r in bot_active if r["horizons"].get(k) is not None], -6.0)
+            for k in ("t1", "t3", "t5", "t10", "t20")
+        },
+    }
+
     return {
         "steady": steady_summary,
         "short": short_summary,
         "tail": tail_summary,
         "board": board_summary,
+        "ignition": ignition_summary,
+        "bottom": bottom_summary,
     }
 
 

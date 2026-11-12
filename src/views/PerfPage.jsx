@@ -9,6 +9,8 @@ const STRAT_META = {
   short: { label: '短线做T', color: '#0f766e', bg: '#f0fdfa', border: '#5eead4', icon: '🎯' },
   tail: { label: '尾盘黑马', color: '#7c3aed', bg: '#faf5ff', border: '#d8b4fe', icon: '⚡' },
   board: { label: '连板打板', color: '#cf1322', bg: '#fff1f0', border: '#ffa39e', icon: '🔥' },
+  ignition: { label: '横盘起爆', color: '#c2410c', bg: '#fff7ed', border: '#fed7aa', icon: '🚀' },
+  bottom: { label: '深跌抄底', color: '#15803d', bg: '#f0fdf4', border: '#86efac', icon: '🛟' },
 };
 
 function fmtRet(v, emptyText = '待结算') {
@@ -131,9 +133,9 @@ export default function PerfPage({
 
   const handleCopyReport = () => {
     if (!data) return;
-    const { steady = {}, short = {}, tail = {}, board = {} } = summaries;
+    const { steady = {}, short = {}, tail = {}, board = {}, ignition = {}, bottom = {} } = summaries;
     const lines = [
-      `📊【T-Stock 四维策略推荐战绩透视 · 基线 ${data.baselineDate}】`,
+      `📊【智策战情室 六维策略战绩透视 · 基线 ${data.baselineDate}】`,
       `累计追踪信号：${data.totalSignals} 条 ｜ 费率口径：往返 ${data.feeRatePct}%`,
       `1️⃣ 稳健长线(${steady.totalSignals || 0}只): 纯持有均值 ${fmtRet(steady.holdStats?.mean)} (胜率 ${steady.holdStats?.winRate ?? '—'}%) ｜ 含倒T ${fmtRet(steady.withTStats?.mean)} (增厚 ${fmtRet(steady.avgTAlpha)})`,
       `2️⃣ 短线做T(${short.execSignals || 0}只):`,
@@ -142,6 +144,8 @@ export default function PerfPage({
       `   · 做T增厚α: ${fmtRet(short.tAlpha?.avgTAlpha)} ｜ BAD拦截对照: ${fmtRet(short.badControlStats?.mean)}`,
       `3️⃣ 尾盘黑马(${tail.totalSignals || 0}只): 次日冲高+2.5%命中率 ${tail.tpHitRate ?? '—'}% ｜ 规则出场均值 ${fmtRet(tail.t1RuleStats?.mean)} (中位 ${fmtRet(tail.t1RuleStats?.median)})`,
       `4️⃣ 连板打板(${board.totalSignals || 0}只, 已剔除一字/14:30+尾盘): T+1均值 ${fmtRet(board.t1CloseStats?.mean)} (中位 ${fmtRet(board.t1CloseStats?.median)}) ｜ 次日晋级率 ${board.promoRateT1 ?? '—'}%`,
+      `5️⃣ 横盘起爆(${ignition.totalSignals || 0}只): 最新均值 ${fmtRet(ignition.latestStats?.mean)} (震仓 ${fmtRet(ignition.shakeoutStats?.mean)} vs 粘合 ${fmtRet(ignition.convergedStats?.mean)})`,
+      `6️⃣ 深跌抄底(${bottom.totalSignals || 0}只): 抗跌触发均值 ${fmtRet(bottom.latestStats?.mean)} (胜率 ${bottom.latestStats?.winRate ?? '—'}%)`,
       `👤 实盘手工做T账本: ${manualStats.totalTrades} 笔 ｜ 胜率 ${manualStats.winRate ?? '—'}% ｜ 净盈亏 ¥${f2(manualStats.netSum)}`,
     ];
     copyPlain(lines.join('\n'), '✓ 已复制策略战绩透视摘要');
@@ -192,6 +196,8 @@ export default function PerfPage({
   const sh = summaries.short || {};
   const tl = summaries.tail || {};
   const bd = summaries.board || {};
+  const ig = summaries.ignition || {};
+  const bt = summaries.bottom || {};
 
   return (
     <div style={{ maxWidth: '1440px', margin: '0 auto', padding: '12px 16px 40px' }}>
@@ -207,13 +213,13 @@ export default function PerfPage({
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
           <div>
             <div style={{ fontSize: '18px', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              <span>📊 四维策略胜率与收益率归因透视</span>
+              <span>📊 六维策略胜率与收益率归因透视</span>
               <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: 'rgba(16,185,129,0.25)', border: '1px solid #34d399', color: '#6ee7b7' }}>
                 建档基线：{data?.baselineDate || '2026-11-10'} 起
               </span>
             </div>
             <div style={{ fontSize: '12px', color: '#cbd5e1', marginTop: '4px', lineHeight: 1.5 }}>
-              已纳入 <b>稳健长线 / 短线做T(双列) / 尾盘黑马 / 连板打板</b> 四条赛道，统一扣除双边交易费率 <b>{data?.feeRatePct ?? 0.102}%</b>；
+              已纳入 <b>稳健长线 / 短线做T(双列) / 尾盘黑马 / 连板打板 / 横盘起爆 / 深跌抄底</b> 六条赛道，统一扣除双边交易费率 <b>{data?.feeRatePct ?? 0.102}%</b>；
               连板打板已自动剔除「09:25 一字封死 ({bd.lastExclude?.excludedLocked ?? 0}只)」与「14:30+ 尾盘偷袭 ({bd.lastExclude?.excludedLate ?? 0}只)」。
             </div>
           </div>
@@ -343,6 +349,38 @@ export default function PerfPage({
             <span>红灯熔断组T+1: <b>{fmtRet(bd.redControlStats?.mean, '无红灯')}</b> · 绿黄灯: <b>{fmtRet(bd.greenYellowStats?.mean, '—')}</b></span>
           </div>
         </div>
+
+        {/* 5. 横盘试盘起爆 */}
+        <div style={{ padding: '14px', borderRadius: '10px', background: STRAT_META.ignition.bg, border: `1.5px solid ${STRAT_META.ignition.border}` }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <b style={{ fontSize: '14px', color: STRAT_META.ignition.color }}>🚀 ⑤ 横盘试盘起爆（多周期潜伏）</b>
+            <span style={{ fontSize: '11px', fontWeight: 700, color: STRAT_META.ignition.color }}>建档 {ig.totalSignals || 0} 只</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+            <MetricPill label="🔥 震仓完成·待起爆" stats={ig.shakeoutStats} />
+            <MetricPill label="⏳ 均线粘合·缩量蓄势" stats={ig.convergedStats} />
+          </div>
+          <div style={{ fontSize: '11px', color: 'var(--sub)', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '4px' }}>
+            <span>整体T+1开盘持有: <b style={{ color: retColor(ig.latestStats?.mean) }}>{fmtRet(ig.latestStats?.mean, '待T+1')}</b></span>
+            <span>T+3: <b>{fmtRet(ig.byHorizon?.t3?.mean, '—')}</b> · T+10: <b>{fmtRet(ig.byHorizon?.t10?.mean, '—')}</b></span>
+          </div>
+        </div>
+
+        {/* 6. 深跌抗跌抄底 */}
+        <div style={{ padding: '14px', borderRadius: '10px', background: STRAT_META.bottom.bg, border: `1.5px solid ${STRAT_META.bottom.border}` }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <b style={{ fontSize: '14px', color: STRAT_META.bottom.color }}>🛟 ⑥ 深跌抗跌抄底（利空钝化）</b>
+            <span style={{ fontSize: '11px', fontWeight: 700, color: STRAT_META.bottom.color }}>建档 {bt.totalSignals || 0} 只</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+            <MetricPill label="抗跌触发持有至今" stats={bt.latestStats} />
+            <MetricPill label="T+5 波段反抽均值" stats={bt.byHorizon?.t5} />
+          </div>
+          <div style={{ fontSize: '11px', color: 'var(--sub)', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '4px' }}>
+            <span>T+1: <b>{fmtRet(bt.byHorizon?.t1?.mean, '待T+1')}</b></span>
+            <span>T+10: <b>{fmtRet(bt.byHorizon?.t10?.mean, '—')}</b> · T+20: <b>{fmtRet(bt.byHorizon?.t20?.mean, '—')}</b></span>
+          </div>
+        </div>
       </div>
 
       {/* 明细筛选工具栏 */}
@@ -365,6 +403,8 @@ export default function PerfPage({
             { k: 'short', label: `🎯 短线做T (${sh.totalSignals || 0})` },
             { k: 'tail', label: `⚡ 尾盘黑马 (${tl.totalSignals || 0})` },
             { k: 'board', label: `🔥 连板打板 (${bd.totalSignals || 0})` },
+            { k: 'ignition', label: `🚀 横盘起爆 (${ig.totalSignals || 0})` },
+            { k: 'bottom', label: `🛟 深跌抄底 (${bt.totalSignals || 0})` },
           ].map(t => (
             <button
               key={t.k}
@@ -432,7 +472,7 @@ export default function PerfPage({
 
           {loading && !data && (
             <div style={{ padding: '30px', textAlign: 'center', color: 'var(--mute)', fontSize: '13px' }}>
-              正在聚合四维策略信号并拉取日K线实时回算…
+              正在聚合六维策略信号并拉取日K线实时回算…
             </div>
           )}
 
@@ -518,6 +558,14 @@ export default function PerfPage({
                   ) : r.strategy === 'tail' ? (
                     <div style={{ color: retColor(r.horizons?.t1RuleExit), fontWeight: 700 }}>
                       规则出 {fmtRet(r.horizons?.t1RuleExit, '待T+1')}
+                    </div>
+                  ) : r.strategy === 'ignition' ? (
+                    <div style={{ color: '#c2410c', fontWeight: 700 }}>
+                      月{r.monthVolRatio || '—'}x · 缩{r.volShrinkPct || '—'}%
+                    </div>
+                  ) : r.strategy === 'bottom' ? (
+                    <div style={{ color: '#15803d', fontWeight: 700 }}>
+                      回撤{r.stockDrawdownPct || '—'}%
                     </div>
                   ) : (
                     <div style={{ color: r.horizons?.promotedT1 ? '#cf1322' : 'var(--mute)', fontWeight: 700 }}>

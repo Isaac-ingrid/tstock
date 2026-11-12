@@ -375,7 +375,7 @@
   /* 列宽从 166px 提到 210px：BOLL 三轨 / MA 三值这类长串数字在 201px 卡里会挤到折行 */
   .ta-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:9px;margin:13px 0}
   .ta{border:1px solid var(--line);border-radius:9px;padding:9px 11px;background:#fff;font-size:12px}
-  .ta .h{font-size:11.5px;color:var(--sub);display:flex;justify-content:space-between;gap:6px;margin-bottom:3px}
+  .ta .h{font-size:11.5px;color:var(--sub);display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:3px;line-height:1.4}
   .ta .big{font-size:14px;font-weight:700;font-family:ui-monospace,Consolas,monospace}
   .ta .d{font-size:11.5px;color:var(--sub);margin-top:2px;line-height:1.5}
   .ta.t-ok{border-color:var(--down-b);background:var(--down-bg)}
@@ -385,7 +385,7 @@
   /* 支撑位/压力位要列 3 压力 + 3 支撑，天然比同行高约 300px。
      让它独占整行横排 6 档，同行的 RSI / 换手率 / 大单资金就不会被等高拉伸出大片空白。 */
   .ta.t-sr{grid-column:1/-1}
-  .sig{font-size:11.5px;padding:1px 7px;border-radius:999px;border:1px solid var(--line);white-space:nowrap}
+  .sig{display:inline-flex;align-items:center;flex-shrink:0;align-self:center;font-size:11px;line-height:1.35;padding:2px 8px;border-radius:999px;border:1px solid var(--line);white-space:nowrap}
   .sig.s-ok{background:var(--down-bg);border-color:var(--down-b);color:var(--down)}
   .sig.s-no{background:var(--up-bg);border-color:var(--up-b);color:var(--up)}
   .sig.s-wn{background:var(--warn-bg);border-color:var(--warn-b);color:var(--warn)}

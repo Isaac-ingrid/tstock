@@ -85,7 +85,7 @@ async function main() {
       const apiBase = process.env.STOCK_API_BASE || 'http://127.0.0.1:18765';
       const snapRes = await fetch(`${apiBase}/api/stock/strategy_snapshot`, {
         method: 'POST',
-        signal: AbortSignal.timeout(8000),
+        signal: AbortSignal.timeout(30000),
       });
       if (snapRes.ok) {
         const sj = await snapRes.json();
@@ -104,6 +104,7 @@ async function main() {
         const dep = spawnSync('bash', ['deploy.sh', '--soft'], {
           cwd: PROJECT_ROOT,
           env: cleanEnv(),
+          windowsHide: true,
           stdio: 'inherit',
           encoding: 'utf8'
         });

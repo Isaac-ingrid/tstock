@@ -15,7 +15,7 @@ export default function Header() {
             borderRadius: '10px'
           }}
         />
-        <h1 style={{ margin: 0 }}>做<span>T</span>执行台</h1>
+        <h1 style={{ margin: 0 }}>智策<span>战情室</span></h1>
       </div>
       <p>{SITE_META.subtitle}</p>
       <div className="badge-row">

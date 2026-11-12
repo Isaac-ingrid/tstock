@@ -10,13 +10,14 @@ import LedgerPage from './views/LedgerPage.jsx';
 import RulesPage from './views/RulesPage.jsx';
 import DiagnosisPage from './views/DiagnosisPage.jsx';
 import BoardPage from './views/BoardPage.jsx';
+import IgnitionPage from './views/IgnitionPage.jsx';
 import PerfPage from './views/PerfPage.jsx';
 import { QuickTModal, StockReasonModal, TradingClockModal, ToastHost, OvernightBanner, AlertCenterModal } from './components/Modals.jsx';
 
-import { SITE_META, STORAGE_KEYS, DEFAULT_POOL } from './data/site.js';
+import { SITE_META, APP_PAGE_TITLE, STORAGE_KEYS, DEFAULT_POOL } from './data/site.js';
 import useRoute from './router/useRoute.js';
-import { todayStr, f2, toast, toastOk, toastWarn, toastErr, setToastListener, copyPlain, getTodayTStatus } from './services/utils.js';
-import { loadStock, loadChart, loadResearch, loadMarket, addByQuery, selfTest, checkPriceAlerts } from './services/api.js';
+import { todayStr, nowTimeHHMM, f2, toast, toastOk, toastWarn, toastErr, setToastListener, copyPlain, getTodayTStatus } from './services/utils.js';
+import { loadStock, loadChart, loadResearch, loadMarket, addByQuery, selfTest, checkPriceAlerts, refreshSingleFastRt, isAShareTradingNow } from './services/api.js';
 import { registerChartLoader } from './services/chart.js';
 import { getTailBuyCandidates } from './services/tail.js';
 
@@ -79,6 +80,26 @@ export default function App() {
       return true;
     }
   });
+
+  const [fastRefresh, setFastRefresh] = useState(() => {
+    try {
+      const raw = localStorage.getItem('t-fast-refresh');
+      return raw !== null ? JSON.parse(raw) : true;
+    } catch (_) {
+      return true;
+    }
+  });
+
+  const handleToggleFastRefresh = useCallback(() => {
+    setFastRefresh(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('t-fast-refresh', JSON.stringify(next));
+      } catch (_) {}
+      toastOk(next ? '⚡ 已开启当前股 8 秒极速分时盯盘' : '已暂停 8 秒极速轮询（保留 60 秒常规刷新）');
+      return next;
+    });
+  }, []);
   const [wbLatest, setWbLatest] = useState(() => {
     return typeof window !== 'undefined' ? (window.WB_LATEST || null) : null;
   });
@@ -292,10 +313,47 @@ export default function App() {
     checkPriceAlerts();
   }, [fetchContract]);
 
+  const activeStockCodeRef = useRef(activeStockCode);
+  activeStockCodeRef.current = activeStockCode;
+  const activeTabRef = useRef(activeTab);
+  activeTabRef.current = activeTab;
   const handleRefreshRef = useRef(handleRefresh);
   handleRefreshRef.current = handleRefresh;
   const updateClockRef = useRef(updateClock);
   updateClockRef.current = updateClock;
+
+  /* 聚焦个股 8 秒极速增量轮询（交易时段且位于作战台分时视图时，仅拉单股现价+分时） */
+  useEffect(() => {
+    if (!fastRefresh) return undefined;
+    let inFlight = false;
+    const timer = setInterval(async () => {
+      if (inFlight || !isAShareTradingNow()) return;
+      const tab = activeTabRef.current;
+      if (tab !== 'tabConsole' && tab !== 'tabAll') return;
+      const currentPool = poolRef.current;
+      if (!currentPool || !currentPool.length) return;
+      const focusCode = activeStockCodeRef.current;
+      const target = (focusCode && currentPool.find(s => s.code === focusCode)) || currentPool[0];
+      if (!target || (target.p || 'rt') !== 'rt') return;
+
+      inFlight = true;
+      try {
+        await refreshSingleFastRt(target);
+        setPool(prev => prev.map(item => (item.code === target.code ? { ...target } : item)));
+        lastSuccessStamp.current = Date.now();
+        const d = new Date();
+        const timeStr = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+        setQuoteStamp(timeStr);
+        setIsStale(false);
+        checkPriceAlerts();
+      } catch (_) {
+        // 静默跳过单次极速超时，等待下个 8 秒周期或 60 秒全量刷新兜底
+      } finally {
+        inFlight = false;
+      }
+    }, 8000);
+    return () => clearInterval(timer);
+  }, [fastRefresh]);
 
   /* 定时任务与生命周期：仅在组件挂载时初始化一次，避免无限重置定时器引发界面闪烁 */
   useEffect(() => {
@@ -311,10 +369,7 @@ export default function App() {
 
     // 交易时间每分钟自动刷新
     const autoRefreshTimer = setInterval(() => {
-      const now = new Date();
-      const mins = now.getHours() * 60 + now.getMinutes();
-      const wd = now.getDay();
-      if (wd >= 1 && wd <= 5 && ((mins >= 570 && mins <= 690) || (mins >= 780 && mins <= 900))) {
+      if (isAShareTradingNow()) {
         handleRefreshRef.current(true);
       }
     }, 60000);
@@ -457,6 +512,8 @@ export default function App() {
     const newLog = {
       id: Date.now(),
       date: todayStr(),
+      time: nowTimeHHMM(),
+      code: String(stock.code || '').padStart(6, '0'),
       stock: `${stock.name} (${stock.code})`,
       dir: isInitial ? '买入建仓' : '买入加仓',
       buy: buyPx,
@@ -496,6 +553,8 @@ export default function App() {
     const newLog = {
       id: Date.now(),
       date: todayStr(),
+      time: nowTimeHHMM(),
+      code: String(stock.code || '').padStart(6, '0'),
       stock: `${stock.name} (${stock.code})`,
       dir: isDirectSell ? dir : dir,
       buy: buy || 0,
@@ -551,6 +610,8 @@ export default function App() {
     const newLog = {
       id: Date.now(),
       date: todayStr(),
+      time: nowTimeHHMM(),
+      code: String(cand.code || '').padStart(6, '0'),
       stock: `${cand.name} (${cand.code})`,
       dir: '尾盘买入',
       buy: buyPx,
@@ -579,6 +640,8 @@ export default function App() {
     const newLog = {
       id: Date.now(),
       date: todayStr(),
+      time: nowTimeHHMM(),
+      code: String(act.code || '').padStart(6, '0'),
       stock: `${act.name} (${act.code})`,
       dir: '尾盘平仓',
       buy: act.cost,
@@ -685,7 +748,7 @@ export default function App() {
       try {
         localStorage.setItem('t-alert-enabled', JSON.stringify(next));
         if (!next && typeof document !== 'undefined') {
-          document.title = '做T执行台 · 七格箱体 + 七底三仓';
+          document.title = APP_PAGE_TITLE;
         }
       } catch (_) {}
       if (next) {
@@ -787,6 +850,8 @@ export default function App() {
             onSaveLocal={handleSaveLocal}
             onResetDefault={handleResetDefault}
             onOpenQuickT={(stock, dir, px, qty) => setQuickTModal({ open: true, stock, defaultDir: dir, defaultPx: px, defaultQty: qty })}
+            fastRefresh={fastRefresh}
+            onToggleFastRefresh={handleToggleFastRefresh}
             onRefreshSingle={async (stock) => {
               await loadStock(stock);
               await loadChart(stock, true);
@@ -794,6 +859,14 @@ export default function App() {
               toastOk(`✓ ${stock.name} 行情与K线已更新！`);
             }}
             onCopySinglePlan={handleCopySinglePlan}
+          />
+        )}
+
+        {/* 🚀 起爆点挖掘专栏（多周期试盘潜伏 + 板块深跌抗跌抄底） */}
+        {(activeTab === 'tabIgnition' || activeTab === 'tabAll') && (
+          <IgnitionPage
+            pool={pool}
+            onAddStock={handleAddStockByQuery}
           />
         )}
 
@@ -821,9 +894,12 @@ export default function App() {
         {(activeTab === 'tabDiagnosis' || activeTab === 'tabAll') && (
           <DiagnosisPage
             pool={pool}
+            tradeLogs={tradeLogs}
             initialCode={query?.code || activeStockCode}
             onAddStockToPool={handleAddStockByQuery}
             onSelectStockInPool={handleSelectStock}
+            fastRefresh={fastRefresh}
+            onToggleFastRefresh={handleToggleFastRefresh}
           />
         )}
 

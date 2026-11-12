@@ -33,6 +33,7 @@ export default function TopNav({
     if (key === 'tailCount') return tailCount > 0 ? tailCount : null;
     if (key === 'ledgerCount') return ledgerCount > 0 ? ledgerCount : null;
     if (key === 'boardCount') return '热';
+    if (key === 'ignitionCount') return '新';
     return null;
   };
 
@@ -52,7 +53,7 @@ export default function TopNav({
           userSelect: 'none'
         }}
         onClick={() => onTabChange('/trade')}
-        title="做T执行台 · 首页"
+        title="智策战情室 · 首页"
       >
         <img
           src="/favicon.svg"

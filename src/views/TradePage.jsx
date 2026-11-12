@@ -31,7 +31,9 @@ export default function TradePage({
   onResetDefault,
   onOpenQuickT,
   onRefreshSingle,
-  onCopySinglePlan
+  onCopySinglePlan,
+  fastRefresh = true,
+  onToggleFastRefresh,
 }) {
   const [internalActiveCode, setInternalActiveCode] = useState(() => (pool[0]?.code || ''));
   const activeStockCode = externalActiveCode !== undefined ? externalActiveCode : internalActiveCode;
@@ -134,6 +136,8 @@ export default function TradePage({
         onOpenReason={onOpenReason}
         onRefreshSingle={onRefreshSingle}
         onCopySinglePlan={onCopySinglePlan}
+        fastRefresh={fastRefresh}
+        onToggleFastRefresh={onToggleFastRefresh}
       />
     </div>
   );

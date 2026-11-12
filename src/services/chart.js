@@ -2,8 +2,8 @@
    A股做T执行台 · Canvas 多周期手绘图表引擎 (chart.js)
    ============================================================ */
 
-import { f2, f3, pct, money, fvol, calcTBreakeven } from './utils.js';
-import { maArr, bollArr, rsiArr, macdArr, m5Slot } from './api.js';
+import { f2, f3, pct, money, fvol, calcTBreakeven, todayStr } from './utils.js';
+import { maArr, bollArr, rsiArr, macdArr, m5Slot, calc, computeExperimentalATRGrid, computeExperimentalStockDNA } from './api.js';
 import { pool } from './state.js';
 
 /* ===================== 图表引擎（Canvas 手绘，零依赖 · 多周期） =====================
@@ -26,7 +26,190 @@ export const _hover = {};                       // 每张图的悬停索引
 export function setHover(id, idx) { _hover[id] = idx; }
 export const OV_DEF = { ma:'均线', boll:'BOLL', box:'箱体', cost:'成本', sr:'支撑压力' };
 export const SUB_DEF = { macd:'MACD', rsi:'RSI' };
-export const OV_RT_DEF = { cost: '持仓成本', be: '做T保本', signal: '做T信号', radar: '防出货雷达' };
+export const OV_RT_DEF = {
+  cost: '持仓成本',
+  be: '做T保本',
+  zones: '推荐买卖带',
+  signal: '推荐买卖点',
+  actual: '实盘买卖',
+  radar: '防出货雷达'
+};
+
+function _hhmmToPtIdx(pts, hhmm) {
+  if (!hhmm || !pts || !pts.length) return -1;
+  const target = String(hhmm).replace(':', '').slice(0, 4);
+  if (!/^\d{4}$/.test(target)) return -1;
+  const tMin = (+target.slice(0, 2)) * 60 + (+target.slice(2, 4));
+  let bestIdx = -1;
+  let bestDiff = 9999;
+  for (let i = 0; i < pts.length; i++) {
+    const pt = String(pts[i].t || '').slice(0, 4);
+    if (!/^\d{4}$/.test(pt)) continue;
+    const pMin = (+pt.slice(0, 2)) * 60 + (+pt.slice(2, 4));
+    const d = Math.abs(pMin - tMin);
+    if (d < bestDiff) {
+      bestDiff = d;
+      bestIdx = i;
+    }
+  }
+  return bestDiff <= 15 ? bestIdx : -1;
+}
+
+/**
+ * 综合计算分时图上的三层买卖信号：
+ * 1. zones: 规则+ATR 算出的计划买区/卖区/止损红线
+ * 2. points: 盘中动态推荐买卖点（结合 ATR 步长、DNA 基因与量价止跌/滞涨，无需黑盒预测模型）
+ * 3. actualMarkers: 台账 tradeLogs 中当日真实已成交买卖点
+ */
+export function computeRtTradeOverlays(s, pts, prev, tradeLogs = []) {
+  const safePrev = prev > 0 ? prev : (pts[0]?.price || +s.prevClose || 0);
+  let plan = null;
+  let atrGrid = null;
+  let dna = null;
+  try { plan = calc(s); } catch (_) {}
+  try { atrGrid = computeExperimentalATRGrid(s); } catch (_) {}
+  try { dna = computeExperimentalStockDNA(s); } catch (_) {}
+
+  const zones = {
+    buyHi: plan && +plan.inA > 0 ? +plan.inA : 0,
+    buyLo: plan && +plan.inB > 0 ? +plan.inB : 0,
+    sellLo: plan && +plan.outA > 0 ? +plan.outA : 0,
+    sellHi: plan && +plan.outB > 0 ? +plan.outB : 0,
+    stopPx: plan && +plan.slA > 0 ? +plan.slA : 0,
+    flyPx: plan && +plan.fly > 0 ? +plan.fly : 0,
+    mode: plan?.mode || 'WAIT',
+    atrStep: atrGrid ? atrGrid.adaptiveGrid : 1.33,
+  };
+
+  // 个股波动率 + 历史DNA 校准分时偏离触发门槛
+  const baseBias = atrGrid ? Math.max(1.05, Math.min(2.6, atrGrid.adaptiveGrid * 1.25)) : 1.75;
+  const highOpenSmash = !!(dna && dna.gapUpTotal >= 6 && dna.gapUpSmashRate >= 65);
+  const weakVRebound = !!(dna && dna.dipTotal >= 6 && dna.dipWinRate <= 35);
+  const buyBiasThresh = weakVRebound ? -(baseBias * 1.35) : -baseBias;
+  const sellBiasThresh = highOpenSmash ? Math.max(1.25, baseBias * 0.90) : Math.max(1.55, baseBias * 1.12);
+
+  const points = [];
+  if (pts && pts.length >= 8) {
+    let lastSignalIdx = -999;
+    for (let i = 5; i < pts.length; i++) {
+      if (i - lastSignalIdx < 12) continue;
+      const p = pts[i];
+      const pPrev = pts[i - 1];
+      const pNext = pts[i + 1];
+      const b = p.avg > 0 ? ((p.price - p.avg) / p.avg) * 100 : 0;
+
+      // 连续单边破均线急跌防飞刀过滤
+      const recentWindow = pts.slice(Math.max(0, i - 6), i + 1);
+      const allBelowAvg = recentWindow.every(x => x.price < x.avg);
+      const droppingFast = p.price < pts[i - 3].price * 0.996;
+      const fallingKnifeGuard = allBelowAvg && droppingFast;
+
+      const hitBuyZone = zones.buyHi > 0 && p.price <= zones.buyHi * 1.002 && p.price >= (zones.stopPx || 0) * 0.995;
+      const hitBuyBias = b <= buyBiasThresh;
+      const stabilizeUp = p.price >= pPrev.price * 0.999 && (!pNext || pNext.price >= p.price);
+
+      if ((hitBuyZone || hitBuyBias) && stabilizeUp && (!fallingKnifeGuard || b <= buyBiasThresh * 1.25)) {
+        const isLastLive = i === pts.length - 1;
+        const parts = [];
+        if (hitBuyZone) parts.push(`踩入买区≤¥${f2(zones.buyHi)}`);
+        if (hitBuyBias) parts.push(`偏离均价${b.toFixed(2)}%`);
+        parts.push(isLastLive ? '试探企稳(待下分钟确认)' : '缩量企稳');
+        points.push({
+          type: 'BUY',
+          confirmed: !isLastLive,
+          idx: i,
+          t: p.t,
+          px: p.price,
+          bias: b,
+          reason: parts.join('·'),
+        });
+        lastSignalIdx = i;
+        continue;
+      }
+
+      const hitSellZone = zones.sellLo > 0 && p.price >= zones.sellLo * 0.998;
+      const hitSellBias = b >= sellBiasThresh;
+      const stallDown = p.price <= pPrev.price * 1.001 && (!pNext || pNext.price <= p.price);
+
+      if ((hitSellZone || hitSellBias) && stallDown) {
+        const isLastLive = i === pts.length - 1;
+        const parts = [];
+        if (hitSellZone) parts.push(`触及卖区≥¥${f2(zones.sellLo)}`);
+        if (hitSellBias) parts.push(`偏离均价+${b.toFixed(2)}%`);
+        if (highOpenSmash) parts.push('高开易回落基因');
+        else parts.push(isLastLive ? '试探滞涨(待下分钟确认)' : '冲高滞涨');
+        points.push({
+          type: 'SELL',
+          confirmed: !isLastLive,
+          idx: i,
+          t: p.t,
+          px: p.price,
+          bias: b,
+          reason: parts.join('·'),
+        });
+        lastSignalIdx = i;
+      }
+    }
+  }
+
+  // 读取当日台账中该股实际买卖记录
+  const code6 = String(s.code || '').padStart(6, '0');
+  const tDay = todayStr();
+  const actualMarkers = [];
+  (tradeLogs || []).forEach((lg) => {
+    if (!lg || lg.date !== tDay) return;
+    const matchCode = lg.code ? String(lg.code).padStart(6, '0') === code6 : String(lg.stock || '').includes(code6);
+    if (!matchCode) return;
+    const timeIdx = _hhmmToPtIdx(pts, lg.time);
+    const matchPtIdx = (px) => (
+      timeIdx >= 0 && pts[timeIdx] && px > 0 && Math.abs(pts[timeIdx].price - px) / px <= 0.018
+        ? timeIdx
+        : -1
+    );
+    if (+lg.buy > 0) {
+      const bpx = +lg.buy;
+      const matchedIdx = matchPtIdx(bpx);
+      actualMarkers.push({
+        side: 'B',
+        px: bpx,
+        time: matchedIdx >= 0 ? (lg.time || '') : '',
+        idx: matchedIdx,
+        dir: lg.dir || '买入',
+        qty: +lg.qty || 0,
+      });
+    }
+    if (+lg.sell > 0) {
+      const spx = +lg.sell;
+      const matchedIdx = matchPtIdx(spx);
+      actualMarkers.push({
+        side: 'S',
+        px: spx,
+        time: matchedIdx >= 0 ? (lg.time || '') : '',
+        idx: matchedIdx,
+        dir: lg.dir || '卖出',
+        qty: +lg.qty || 0,
+      });
+    }
+  });
+
+  const lastPt = pts && pts.length ? pts[pts.length - 1] : null;
+  const curPx = lastPt ? lastPt.price : (+s.price || safePrev);
+  const distToBuyPct = zones.buyHi > 0 && curPx > 0 ? ((zones.buyHi - curPx) / curPx) * 100 : null;
+  const distToSellPct = zones.sellLo > 0 && curPx > 0 ? ((zones.sellLo - curPx) / curPx) * 100 : null;
+
+  return {
+    zones,
+    points,
+    actualMarkers,
+    dna,
+    atrGrid,
+    buyBiasThresh: Math.round(buyBiasThresh * 100) / 100,
+    sellBiasThresh: Math.round(sellBiasThresh * 100) / 100,
+    distToBuyPct,
+    distToSellPct,
+    outOfView: [],
+  };
+}
 
 /**
  * 主力出货风险雷达（分时量化诊断）
@@ -264,13 +447,18 @@ export function drawChart(cv, s){
         const ci = cv.dataset.ki;
         const metaEl = ci != null ? document.getElementById(`kmeta-${ci}`) : null;
         if (metaEl) metaEl.innerHTML = chartMeta(s);
+        if (typeof cv._onDraw === 'function') cv._onDraw();
       }).catch(() => {
         s._chartLoading = false;
       });
     }
     return;
   }
-  if (entry.kind === 'line'){ drawRt(cv, s, entry.min, ctx, {W,H,PL,PR,y0,y1,v0,v1,s0,s1,innerW}); return; }
+  if (entry.kind === 'line'){
+    drawRt(cv, s, entry.min, ctx, {W,H,PL,PR,y0,y1,v0,v1,s0,s1,innerW});
+    if (typeof cv._onDraw === 'function') cv._onDraw();
+    return;
+  }
 
   const ks = entry.ks || [];
   if (ks.length < 12){
@@ -540,7 +728,8 @@ function drawRt(cv, s, min, ctx, L){
   const prev = (min.prev || +s.prevClose || pts[0].price);
 
   // 分时做T叠加开关与保本价准备
-  const ovRt = s.ovRt || (s.ovRt = { cost: 1, be: 1, signal: 1, radar: 1 });
+  const ovRt = Object.assign({ cost: 1, be: 1, zones: 1, signal: 1, actual: 1, radar: 1 }, s.ovRt || {});
+  s.ovRt = ovRt;
   const cost = +s.cost || 0;
   let bePrice = +s.bePrice || 0;
   if (!bePrice && cost > 0) {
@@ -551,13 +740,21 @@ function drawRt(cv, s, min, ctx, L){
     } catch (_) {}
   }
 
+  const rtBundle = computeRtTradeOverlays(s, pts, prev, s._rtTradeLogs || []);
+  const { zones, points: recPoints, actualMarkers } = rtBundle;
+
   let mx = 0.002;
   pts.forEach(p=>{
     const d1 = Math.abs(p.price - prev)/prev, d2 = Math.abs(p.avg - prev)/prev;
     if (d1 > mx) mx = d1; if (d2 > mx) mx = d2;
   });
 
-  // 如果成本或保本价在合理视口内（±18% 以内），适当延伸纵轴包含进去
+  // 仅当成本/保本价或推荐买卖区距昨收未显著超出分时波动时，才轻微外扩纵轴（避免远距线压扁分时曲线）
+  const maybeStretchMx = (pxVal, maxRatioLimit = 1.35) => {
+    if (!(pxVal > 0 && prev > 0)) return;
+    const d = Math.abs(pxVal - prev) / prev;
+    if (d < 0.18 && d > mx && d <= mx * maxRatioLimit) mx = d;
+  };
   if (ovRt.cost && cost > 0) {
     const dCost = Math.abs(cost - prev) / prev;
     if (dCost < 0.18 && dCost > mx) mx = dCost;
@@ -566,12 +763,24 @@ function drawRt(cv, s, min, ctx, L){
     const dBe = Math.abs(bePrice - prev) / prev;
     if (dBe < 0.18 && dBe > mx) mx = dBe;
   }
+  if (ovRt.zones) {
+    maybeStretchMx(zones.buyHi, 1.35);
+    maybeStretchMx(zones.sellLo, 1.35);
+  }
 
   mx = Math.min(0.2, Math.ceil(mx*100*1.12)/100);      // 上下各留 12% 余量，上限 20%（防止极端值压扁）
   const yHi = prev*(1+mx), yLo = prev*(1-mx);
   const Y = v => y1 - (v-yLo)/(yHi-yLo)*(y1-y0);
   const X = i => PL + (pts.length <= 1 ? innerW/2 : innerW*i/(pts.length-1));
   cv._geo = { kind:'line', n:pts.length, PL, innerW, pts, prev };
+
+  // 记录超出分时主图可视范围的推荐区间提示
+  const outOfView = [];
+  if (zones.buyHi > 0 && zones.buyHi < yLo) outOfView.push(`买区¥${f2(zones.buyLo || zones.buyHi)}~${f2(zones.buyHi)}(低于视口)`);
+  if (zones.sellLo > 0 && zones.sellLo > yHi) outOfView.push(`卖区¥${f2(zones.sellLo)}~${f2(zones.sellHi || zones.sellLo)}(高于视口)`);
+  if (zones.stopPx > 0 && zones.stopPx < yLo) outOfView.push(`止损¥${f2(zones.stopPx)}(低于视口)`);
+  rtBundle.outOfView = outOfView;
+  s._rtSignals = rtBundle;
 
   // 网格 + 右侧价格/涨跌幅刻度
   ctx.textAlign = 'left';
@@ -583,6 +792,61 @@ function drawRt(cv, s, min, ctx, L){
     ctx.fillText(f2(pv), W-PR+5, yy);
     ctx.fillStyle = pv >= prev ? CH.up : CH.dn;
     ctx.fillText((k>0?'+':'') + (k*mx/2*100).toFixed(2) + '%', W-PR+5, yy+11);
+  }
+
+  // 绘制推荐买卖区间带 & 止损线（仅画清爽半透明区带+虚线，不在曲线上堆大块文字）
+  if (ovRt.zones) {
+    // 推荐买点区间带 [buyLo ~ buyHi]（红系：买）
+    if (zones.buyHi > 0 && zones.buyHi >= yLo && (zones.buyLo || zones.buyHi) <= yHi) {
+      const topVal = Math.min(yHi, zones.buyHi);
+      const botVal = Math.max(yLo, zones.buyLo > 0 ? zones.buyLo : zones.buyHi * 0.992);
+      const yTop = Y(topVal);
+      const yBot = Y(botVal);
+      ctx.save();
+      ctx.fillStyle = 'rgba(220, 38, 38, 0.055)';
+      ctx.fillRect(PL, yTop, innerW, Math.max(4, yBot - yTop));
+      ctx.strokeStyle = 'rgba(220, 38, 38, 0.55)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.moveTo(PL, yTop + 0.5);
+      ctx.lineTo(W - PR, yTop + 0.5);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // 推荐卖点区间带 [sellLo ~ sellHi]（绿系：卖）
+    if (zones.sellLo > 0 && zones.sellLo <= yHi && (zones.sellHi || zones.sellLo) >= yLo) {
+      const botVal = Math.max(yLo, zones.sellLo);
+      const topVal = Math.min(yHi, zones.sellHi > 0 ? zones.sellHi : zones.sellLo * 1.008);
+      const yTop = Y(topVal);
+      const yBot = Y(botVal);
+      ctx.save();
+      ctx.fillStyle = 'rgba(22, 163, 74, 0.055)';
+      ctx.fillRect(PL, yTop, innerW, Math.max(4, yBot - yTop));
+      ctx.strokeStyle = 'rgba(22, 163, 74, 0.55)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.moveTo(PL, yBot + 0.5);
+      ctx.lineTo(W - PR, yBot + 0.5);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // 纪律止损线（仅画轻细虚线，具体价格见下方速览条）
+    if (zones.stopPx > 0 && zones.stopPx >= yLo && zones.stopPx <= yHi) {
+      const ys = Y(zones.stopPx);
+      ctx.save();
+      ctx.strokeStyle = 'rgba(180, 83, 9, 0.72)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([2, 3]);
+      ctx.beginPath();
+      ctx.moveTo(PL, ys + 0.5);
+      ctx.lineTo(W - PR, ys + 0.5);
+      ctx.stroke();
+      ctx.restore();
+    }
   }
 
   // 价格线（相对昨收的红绿）+ 昨收中轴
@@ -624,45 +888,78 @@ function drawRt(cv, s, min, ctx, L){
     chipText(ctx, `保本 ¥${f2(bePrice)}`, W - PR + 2, yy, '#fff', '#d97706');
   }
 
-  // 绘制做T智能买卖点信号 (🟢低吸 / 🔴高抛)
-  if (ovRt.signal && pts.length >= 8) {
-    let lastSignalIdx = -999;
-    for (let i = 5; i < pts.length; i++) {
-      const p = pts[i];
-      const b = ((p.price - p.avg) / p.avg) * 100;
-      const pPrev = pts[i - 1];
-      const pNext = pts[i + 1];
-
-      // 保证信号间隔，避免密集堆叠（至少间隔 12 分钟）
-      if (i - lastSignalIdx < 12) continue;
-
-      // 🟢 低吸窗口：负乖离 <= -1.75% 且止跌企稳
-      if (b <= -1.75 && p.price <= pPrev.price && (!pNext || pNext.price >= p.price)) {
-        const px = X(i);
-        const py = Y(p.price);
-        ctx.save();
-        ctx.fillStyle = '#16a34a';
+  // 绘制动态推荐买卖点（纯净红点=买点 / 绿点=卖点；实心=确认锁定，空心带光晕=最新1分钟试探；绝不堆文字）
+  if (ovRt.signal && recPoints.length > 0) {
+    recPoints.forEach((sig) => {
+      const px = X(sig.idx);
+      const py = Y(sig.px);
+      const isBuy = sig.type === 'BUY';
+      const col = isBuy ? '#dc2626' : '#16a34a';
+      ctx.save();
+      if (sig.confirmed) {
+        ctx.fillStyle = col;
         ctx.beginPath();
-        ctx.arc(px, py, 3, 0, Math.PI * 2);
+        ctx.arc(px, py, 4.3, 0, Math.PI * 2);
         ctx.fill();
-        chipText(ctx, '🟢低吸', px - 16, Math.min(y1 - 10, py + 14), '#fff', '#16a34a');
-        ctx.restore();
-        lastSignalIdx = i;
-      }
-      // 🔴 高抛窗口：正乖离 >= +2.1% 且局部冲高见顶滞涨
-      else if (b >= 2.1 && p.price >= pPrev.price && (!pNext || pNext.price <= p.price)) {
-        const px = X(i);
-        const py = Y(p.price);
-        ctx.save();
-        ctx.fillStyle = '#dc2626';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.3;
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = isBuy ? 'rgba(220, 38, 38, 0.22)' : 'rgba(22, 163, 74, 0.22)';
         ctx.beginPath();
-        ctx.arc(px, py, 3, 0, Math.PI * 2);
+        ctx.arc(px, py, 7.5, 0, Math.PI * 2);
         ctx.fill();
-        chipText(ctx, '🔴高抛', px - 16, Math.max(y0 + 12, py - 12), '#fff', '#dc2626');
-        ctx.restore();
-        lastSignalIdx = i;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(px, py, 4.3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 2;
+        ctx.stroke();
       }
-    }
+      ctx.restore();
+    });
+  }
+
+  // 绘制今日实盘已成交买卖点（红菱形=实盘买 / 绿菱形=实盘卖，金边区分）
+  if (ovRt.actual && actualMarkers.length > 0) {
+    let fallbackIdx = 0;
+    actualMarkers.forEach((mk) => {
+      const isBuy = mk.side === 'B';
+      const fill = isBuy ? '#b91c1c' : '#15803d';
+      if (mk.idx >= 0) {
+        const px = X(mk.idx);
+        const rawY = Y(mk.px);
+        const py = Math.max(y0 + 8, Math.min(y1 - 8, rawY));
+        ctx.save();
+        ctx.fillStyle = fill;
+        ctx.strokeStyle = '#fef08a';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(px, py - 5.5);
+        ctx.lineTo(px + 5.5, py);
+        ctx.lineTo(px, py + 5.5);
+        ctx.lineTo(px - 5.5, py);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      } else if (mk.px >= yLo && mk.px <= yHi) {
+        const py = Y(mk.px);
+        ctx.save();
+        ctx.strokeStyle = fill;
+        ctx.lineWidth = 1.1;
+        ctx.setLineDash([5, 3]);
+        ctx.beginPath();
+        ctx.moveTo(PL, py + 0.5);
+        ctx.lineTo(W - PR, py + 0.5);
+        ctx.stroke();
+        ctx.restore();
+        const tagY = Math.max(y0 + 10, Math.min(y1 - 10, py + (fallbackIdx % 2 === 0 ? -7 : 7)));
+        chipText(ctx, `${mk.side}¥${f2(mk.px)}`, PL + 2, tagY, '#fff', fill);
+        fallbackIdx += 1;
+      }
+    });
   }
 
   // 主力出货风险雷达诊断
@@ -744,9 +1041,16 @@ function drawRt(cv, s, min, ctx, L){
   const p = hi >= 0 ? pts[hi] : lastPt;
   const pctv = (p.price - prev)/prev*100;
   const bias = p.avg > 0 ? ((p.price - p.avg) / p.avg * 100) : 0;
+  const nearSig = hi >= 0 ? recPoints.find(sp => Math.abs(sp.idx - hi) <= 3) : null;
+  const nearAct = hi >= 0 ? actualMarkers.find(am => am.idx >= 0 && Math.abs(am.idx - hi) <= 3) : null;
+  const sigTag = nearSig
+    ? `${nearSig.confirmed ? '●确认' : '◐试探'}${nearSig.type === 'BUY' ? '买' : '卖'}`
+    : '';
   const row = p.t.slice(0,2) + ':' + p.t.slice(2) + '  价 ' + f2(p.price) + '  ' + pct(pctv)
             + '  均价 ' + f2(p.avg) + '  偏离 ' + (bias >= 0 ? '+' : '') + bias.toFixed(2) + '%'
-            + '  该分钟 ' + p.vol + ' 手';
+            + '  该分钟 ' + p.vol + ' 手'
+            + (nearSig ? `  | ${sigTag}:${nearSig.reason}` : '')
+            + (nearAct ? `  | ◆实盘${nearAct.side}:¥${f2(nearAct.px)}` : '');
   ctx.textAlign = 'left';
   chipText(ctx, row, PL, 12, pctv >= 0 ? CH.up : CH.dn, 'rgba(255,255,255,.95)');
   chipText(ctx, '昨收 ' + f2(prev) + '　量比 ' + nf(+s.vr, 2) + '　换手 ' + (s._ta && s._ta.turnover ? s._ta.turnover.toFixed(2) + '%' : '—')
@@ -804,7 +1108,9 @@ export function chartLegendHTML(s){
     out.push(it2('价格线', CH.up, CH.dn), it('均价线', CH.avg), it2('分时量', CH.up, CH.dn));
     if (+s.cost > 0) out.push(it('持仓成本', CH.cost));
     if (+s.bePrice > 0) out.push(it('做T保本', '#d97706'));
-    out.push(it('🟢低吸点', '#16a34a'), it('🔴高抛点', '#dc2626'));
+    out.push(it('推荐买区(红带)', 'rgba(220,38,38,0.40)'), it('推荐卖区(绿带)', 'rgba(22,163,74,0.40)'));
+    out.push(it('●/◐ 买点(实心确认/空心试探)', '#dc2626'), it('●/◐ 卖点(实心确认/空心试探)', '#16a34a'));
+    out.push(it('◆ 实盘B买', '#b91c1c'), it('◆ 实盘S卖', '#15803d'));
     if (s._distRadar) {
       out.push(it(s._distRadar.badge, s._distRadar.color));
     }

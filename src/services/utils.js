@@ -72,6 +72,11 @@ export const todayStr = () => {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 };
 
+export const nowTimeHHMM = () => {
+  const d = new Date();
+  return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+};
+
 /* Toast 提示事件分发 */
 let _toastListener = null;
 export function setToastListener(fn) {

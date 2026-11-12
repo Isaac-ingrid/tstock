@@ -92,6 +92,7 @@ function runScript(scriptName, args = [], options = {}) {
   const proc = spawnSync(process.execPath, [scriptPath, ...args], {
     cwd: options.cwd || ENGINE_DIR,
     env: cleanEnv(options.env || {}),
+    windowsHide: true,
     stdio: options.silent ? 'pipe' : 'inherit',
     encoding: 'utf8',
     maxBuffer: 10 * 1024 * 1024,

@@ -25,7 +25,9 @@ export default function StockCard({
   onOpenQuickT,
   onOpenReason,
   onRefreshSingle,
-  onCopySinglePlan
+  onCopySinglePlan,
+  fastRefresh = true,
+  onToggleFastRefresh,
 }) {
   const [quoteFoldOpen, setQuoteFoldOpen] = useState(false);
   const [chartFoldOpen, setChartFoldOpen] = useState(!!stock._fo);
@@ -1994,7 +1996,11 @@ export default function StockCard({
             <ChartCanvas
               stock={stock}
               poolIndex={index}
+              tradeLogs={tradeLogs}
+              onOpenQuickT={onOpenQuickT}
               onUpdateStock={onUpdateStock}
+              fastRefresh={fastRefresh}
+              onToggleFastRefresh={onToggleFastRefresh}
             />
             <TechAndResearchSection
               stock={stock}

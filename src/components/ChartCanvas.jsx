@@ -5,34 +5,58 @@ import { f2 } from '../services/utils.js';
 
 const VALID_PERIODS = ['rt', 'day', 'week', 'month', 'm1', 'm5', 'm15', 'm30', 'm60'];
 
-export default function ChartCanvas({ stock, poolIndex, onUpdateStock }) {
+export default function ChartCanvas({
+  stock,
+  poolIndex = 0,
+  tradeLogs = [],
+  onOpenQuickT,
+  onUpdateStock,
+  fastRefresh = true,
+  onToggleFastRefresh,
+}) {
   const canvasRef = useRef(null);
+  const lastSigKeyRef = useRef('');
   const [loading, setLoading] = useState(false);
   const [ddLoading, setDdLoading] = useState(false);
   const [showMorePeriods, setShowMorePeriods] = useState(false);
+  const [rtSig, setRtSig] = useState(null);
 
   // 周期合法性校验（防旧缓存或错误传参污染）
   const curPeriod = VALID_PERIODS.includes(stock.p) ? stock.p : 'day';
   const ov = stock.ov || { ma: 1, boll: 1, box: 1, cost: 1, sr: 0 };
-  const ovRt = stock.ovRt || { cost: 1, be: 1, signal: 1, radar: 1 };
+  const ovRt = Object.assign({ cost: 1, be: 1, zones: 1, signal: 1, actual: 1, radar: 1 }, stock.ovRt || {});
   const subKind = stock.sub || 'macd';
+
+  const syncRtSummary = useCallback(() => {
+    const sig = stock._rtSignals || null;
+    const ptsLen = stock._k?.rt?.min?.pts?.length || 0;
+    const z = sig?.zones || {};
+    const key = `${stock.code}:${curPeriod}:${ptsLen}:${sig?.points?.length || 0}:${sig?.actualMarkers?.length || 0}:${z.buyHi || 0}:${z.sellLo || 0}:${stock._distRadar?.badge || ''}`;
+    if (key !== lastSigKeyRef.current) {
+      lastSigKeyRef.current = key;
+      setRtSig(sig ? { ...sig } : null);
+    }
+  }, [stock, curPeriod]);
 
   const renderCanvas = useCallback(() => {
     if (canvasRef.current) {
       try {
+        stock._rtTradeLogs = tradeLogs;
+        canvasRef.current._onDraw = syncRtSummary;
         drawChart(canvasRef.current, stock);
+        syncRtSummary();
       } catch (err) {
         console.warn('Canvas render error suppressed:', err);
       }
     }
-  }, [stock]);
+  }, [stock, tradeLogs, syncRtSummary]);
 
   useEffect(() => {
     renderCanvas();
     const handleResize = () => renderCanvas();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [renderCanvas, stock, stock.p, stock.ov, stock.ovRt, stock.sub, stock._k, stock.bePrice, stock.cost]);
+  }, [renderCanvas, stock, tradeLogs, stock.p, stock.ov, stock.ovRt, stock.sub, stock._k, stock.bePrice, stock.cost]);
 
   // 切换周期：分时、日K、周K、月K或分钟级K线
   const handlePeriodChange = async (p) => {
@@ -193,6 +217,25 @@ export default function ChartCanvas({ stock, poolIndex, onUpdateStock }) {
                 {label}
               </button>
             ))}
+            {onToggleFastRefresh && (
+              <button
+                type="button"
+                className={`chip ${fastRefresh ? 'on' : ''}`}
+                onClick={onToggleFastRefresh}
+                title="开启后：当前聚焦个股在交易时段每8秒极速增量拉取最新分时与现价，降低信号滞后"
+                style={{
+                  fontSize: '11px',
+                  padding: '2px 8px',
+                  marginLeft: '4px',
+                  borderColor: fastRefresh ? '#f59e0b' : undefined,
+                  color: fastRefresh ? '#b45309' : undefined,
+                  background: fastRefresh ? '#fffbeb' : undefined,
+                  fontWeight: fastRefresh ? 600 : 400,
+                }}
+              >
+                ⚡ 8秒极速:{fastRefresh ? '开' : '关'}
+              </button>
+            )}
           </>
         ) : (
           <>
@@ -287,7 +330,110 @@ export default function ChartCanvas({ stock, poolIndex, onUpdateStock }) {
         style={{ width: '100%', display: 'block', cursor: 'crosshair' }}
       />
 
-      {/* 3. 画布下方颜色图例 */}
+      {/* 3b. 分时图买卖点与推荐区速览条 */}
+      {curPeriod === 'rt' && (rtSig || stock._rtSignals) && (() => {
+        const sig = rtSig || stock._rtSignals;
+        const z = sig.zones || {};
+        const ptsList = sig.points || [];
+        const actsList = sig.actualMarkers || [];
+        const oov = sig.outOfView || [];
+        const fmtDist = (d) => d == null ? '' : `(${d >= 0 ? '+' : ''}${d.toFixed(2)}%)`;
+        return (
+          <div style={{
+            padding: '7px 14px',
+            borderTop: '1px solid var(--line)',
+            background: '#fafbfc',
+            fontSize: '11.5px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '5px',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                {z.buyHi > 0 && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#cf1322' }}>
+                    <span>🔴 <b>推荐买区</b></span>
+                    <b style={{ fontFamily: 'monospace' }}>¥{f2(z.buyLo > 0 ? z.buyLo : z.buyHi)}~{f2(z.buyHi)}</b>
+                    <span style={{ color: 'var(--mute)', fontFamily: 'monospace' }}>{fmtDist(sig.distToBuyPct)}</span>
+                    {onOpenQuickT && (
+                      <button type="button" className="mini" onClick={() => onOpenQuickT(stock, '正T', f2(z.buyHi))} style={{ fontSize: '10px', padding: '1px 5px', borderColor: '#fca5a5', color: '#cf1322', background: '#fff1f0' }}>
+                        按此正T
+                      </button>
+                    )}
+                  </span>
+                )}
+                {z.sellLo > 0 && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#15803d' }}>
+                    <span>🟢 <b>推荐卖区</b></span>
+                    <b style={{ fontFamily: 'monospace' }}>¥{f2(z.sellLo)}~{f2(z.sellHi > 0 ? z.sellHi : z.sellLo)}</b>
+                    <span style={{ color: 'var(--mute)', fontFamily: 'monospace' }}>{fmtDist(sig.distToSellPct)}</span>
+                    {onOpenQuickT && (
+                      <button type="button" className="mini" onClick={() => onOpenQuickT(stock, '倒T', f2(z.sellLo))} style={{ fontSize: '10px', padding: '1px 5px', borderColor: '#86efac', color: '#15803d', background: '#f0fdf4' }}>
+                        按此倒T
+                      </button>
+                    )}
+                  </span>
+                )}
+                {z.stopPx > 0 && (
+                  <span style={{ color: '#991b1b', fontFamily: 'monospace' }}>
+                    🛡️ 止损 ¥{f2(z.stopPx)}
+                  </span>
+                )}
+              </div>
+
+              <span style={{ color: 'var(--mute)', fontSize: '11px' }}>
+                偏离阈值校准：{sig.buyBiasThresh}% / +{sig.sellBiasThresh}% (ATR步长 {z.atrStep}%)
+              </span>
+            </div>
+
+            {(ptsList.length > 0 || actsList.length > 0 || oov.length > 0) && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                {ptsList.slice(-4).map((pt, idx) => (
+                  <span
+                    key={`${pt.t}-${idx}`}
+                    style={{
+                      padding: '1px 6px',
+                      borderRadius: '4px',
+                      fontFamily: 'monospace',
+                      fontSize: '11px',
+                      background: pt.type === 'BUY' ? '#fff1f0' : '#f0fdf4',
+                      color: pt.type === 'BUY' ? '#cf1322' : '#15803d',
+                      border: `1px solid ${pt.type === 'BUY' ? '#ffa39e' : '#bbf7d0'}`,
+                    }}
+                    title={pt.reason}
+                  >
+                    {pt.confirmed === false ? '◐' : '●'}{pt.type === 'BUY' ? (pt.confirmed === false ? '试探买' : '确认买') : (pt.confirmed === false ? '试探卖' : '确认卖')} {pt.t.slice(0, 2)}:{pt.t.slice(2)} ¥{f2(pt.px)} ({pt.reason})
+                  </span>
+                ))}
+                {actsList.map((mk, idx) => (
+                  <span
+                    key={`act-${idx}`}
+                    style={{
+                      padding: '1px 6px',
+                      borderRadius: '4px',
+                      fontFamily: 'monospace',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      background: mk.side === 'B' ? '#fff1f0' : '#dcfce7',
+                      color: mk.side === 'B' ? '#b91c1c' : '#15803d',
+                      border: `1px solid ${mk.side === 'B' ? '#fca5a5' : '#86efac'}`,
+                    }}
+                  >
+                    ◆ {mk.side}实 {mk.time || '今日'} ¥{f2(mk.px)} ({mk.dir}{mk.qty ? ` ${mk.qty}股` : ''})
+                  </span>
+                ))}
+                {oov.length > 0 && (
+                  <span style={{ fontSize: '10.5px', color: 'var(--mute)' }}>
+                    视口外未框入：{oov.join(' · ')}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* 4. 画布下方颜色图例 */}
       <div
         className="k-legend"
         dangerouslySetInnerHTML={{ __html: chartLegendHTML(stock) }}

@@ -66,6 +66,7 @@ backend/.venv/
 backend/.env
 timing_task/logs/
 timing_task/scheduler.pid
+logs/
 backend/__pycache__/
 __pycache__/
 *.py[cod]

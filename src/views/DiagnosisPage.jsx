@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { f2, pct, money, money$, toastOk, toastErr, toastWarn, copyPlain } from '../services/utils.js';
-import { fetchStockDiagnosis, searchTencent, postHerdAction } from '../services/api.js';
+import { fetchStockDiagnosis, searchTencent, postHerdAction, loadChart, loadStock, refreshSingleFastRt, isAShareTradingNow } from '../services/api.js';
+import ChartCanvas from '../components/ChartCanvas.jsx';
 
 const QUICK_PRESETS = [
   { code: '002085', name: '万丰奥威' },
@@ -29,9 +30,12 @@ function fmtPct(v, signed = false, digits = null) {
 
 export default function DiagnosisPage({
   pool = [],
+  tradeLogs = [],
   initialCode = '',
   onAddStockToPool,
   onSelectStockInPool,
+  fastRefresh = true,
+  onToggleFastRefresh,
 }) {
   const defaultCode = initialCode || pool[0]?.code || '002085';
   const [activeCode, setActiveCode] = useState(defaultCode);
@@ -46,6 +50,7 @@ export default function DiagnosisPage({
   const [addingHerd, setAddingHerd] = useState(false);
   const [addedHerdCode, setAddedHerdCode] = useState('');
   const [highlightIdx, setHighlightIdx] = useState(-1);
+  const [diagChartStock, setDiagChartStock] = useState(null);
   const searchBoxRef = useRef(null);
   const suppressSuggestRef = useRef(false);
 
@@ -237,6 +242,99 @@ export default function DiagnosisPage({
   };
 
   const isInPool = report && pool.some(s => String(s.code).padStart(6, '0') === String(report.code).padStart(6, '0'));
+
+  // 当诊断报告切换新标的时，构造交互式股票对象并加载分时+日K用于买卖点画图
+  useEffect(() => {
+    if (!report || !report.ok || !report.code) {
+      setDiagChartStock(null);
+      return undefined;
+    }
+    let cancelled = false;
+    const code6 = String(report.code).padStart(6, '0');
+    const poolMatch = (pool || []).find(s => String(s.code).padStart(6, '0') === code6);
+    const rq = report.quote || {};
+    const rChips = report.chips || {};
+    const rIntra = report.intraday || {};
+    const tcode = rq.tcode || ((code6.startsWith('6') || code6.startsWith('9')) ? `sh${code6}` : `sz${code6}`);
+    const st = {
+      code: code6,
+      tcode,
+      name: rq.name || poolMatch?.name || code6,
+      prevClose: +rq.prevClose || poolMatch?.prevClose || 0,
+      open: +rq.open || poolMatch?.open || 0,
+      high: +rq.high || poolMatch?.high || 0,
+      low: +rq.low || poolMatch?.low || 0,
+      price: +rq.price || poolMatch?.price || 0,
+      avg: +rIntra.vwap || poolMatch?.avg || +rq.price || 0,
+      vr: +rq.vr || poolMatch?.vr || 1.0,
+      ma5: +rChips.ma5 || poolMatch?.ma5 || 0,
+      ma10: +rChips.ma10 || poolMatch?.ma10 || 0,
+      ma20: +rChips.ma20 || poolMatch?.ma20 || 0,
+      shares: poolMatch?.shares || 0,
+      cost: poolMatch?.cost || 0,
+      bePrice: poolMatch?.bePrice || 0,
+      cap: poolMatch?.cap || 0,
+      p: 'rt',
+      ovRt: { cost: 1, be: 1, zones: 1, signal: 1, actual: 1, radar: 1 },
+      _k: poolMatch?._k ? { ...poolMatch._k } : {},
+      _ks: poolMatch?._ks || null,
+    };
+    setDiagChartStock(prev => (prev && prev.code === code6
+      ? { ...st, p: prev.p || 'rt', ov: prev.ov || st.ov, ovRt: prev.ovRt || st.ovRt, _k: prev._k || st._k, _ks: prev._ks || st._ks }
+      : st));
+
+    Promise.allSettled([loadStock(st), loadChart(st, true)]).then(() => {
+      if (!cancelled) {
+        setDiagChartStock(prev => {
+          const keepPeriod = (prev && prev.code === code6 && prev.p) ? prev.p : 'rt';
+          return {
+            ...st,
+            p: keepPeriod,
+            ov: prev?.ov,
+            ovRt: (prev && prev.code === code6 && prev.ovRt) ? prev.ovRt : st.ovRt,
+          };
+        });
+      }
+    });
+    return () => { cancelled = true; };
+  }, [report?.code, report?.quote?.price]);
+
+  // 持仓或成本变化时轻同步到诊断图（不清空用户已选周期）
+  useEffect(() => {
+    if (!report?.code) return;
+    const code6 = String(report.code).padStart(6, '0');
+    const poolMatch = (pool || []).find(s => String(s.code).padStart(6, '0') === code6);
+    if (!poolMatch) return;
+    setDiagChartStock(prev => {
+      if (!prev || prev.code !== code6) return prev;
+      if (prev.shares === (poolMatch.shares || 0) && prev.cost === (poolMatch.cost || 0)) return prev;
+      return { ...prev, shares: poolMatch.shares || 0, cost: poolMatch.cost || 0, bePrice: poolMatch.bePrice || 0 };
+    });
+  }, [pool, report?.code]);
+
+  const diagStockRef = useRef(diagChartStock);
+  diagStockRef.current = diagChartStock;
+
+  /* 诊断页分时图：开启 8 秒极速轮询时在交易时段增量刷新现价与分时 */
+  useEffect(() => {
+    if (!fastRefresh || !diagChartStock?.code || (diagChartStock.p || 'rt') !== 'rt') return undefined;
+    let inFlight = false;
+    const timer = setInterval(async () => {
+      const target = diagStockRef.current;
+      if (inFlight || !target || (target.p || 'rt') !== 'rt') return;
+      if (!isAShareTradingNow()) return;
+      inFlight = true;
+      try {
+        await refreshSingleFastRt(target);
+        setDiagChartStock(prev => (prev && prev.code === target.code ? { ...target } : prev));
+      } catch (_) {
+        // 静默跳过单次极速超时
+      } finally {
+        inFlight = false;
+      }
+    }, 8000);
+    return () => clearInterval(timer);
+  }, [fastRefresh, diagChartStock?.code, diagChartStock?.p]);
 
   const q = report?.quote || {};
   const comp = report?.company || {};
@@ -964,6 +1062,28 @@ export default function DiagnosisPage({
                   🧭 <b>短线窗口应对：</b>{sts.cycleAdvice || sts.buyAction || sts.herdDesc}
                 </div>
               )}
+            </section>
+          )}
+
+          {/* A4. 📈 分时图买卖点 & 多周期K线交互看盘 */}
+          {diagChartStock && (
+            <section style={{ padding: '14px 16px', marginBottom: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
+                <h3 style={{ fontSize: '14px', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span>📈</span> {diagChartStock.name} ({diagChartStock.code}) · 分时推荐买卖点与实盘标注看盘
+                </h3>
+                <span style={{ fontSize: '11px', color: 'var(--mute)' }}>
+                  默认展示「分时」：已叠加推荐买/卖区带、ATR+DNA动态推荐买卖点、以及当日台账实盘成交标注
+                </span>
+              </div>
+              <ChartCanvas
+                stock={diagChartStock}
+                poolIndex={99}
+                tradeLogs={tradeLogs}
+                onUpdateStock={(updated) => setDiagChartStock({ ...updated })}
+                fastRefresh={fastRefresh}
+                onToggleFastRefresh={onToggleFastRefresh}
+              />
             </section>
           )}
 

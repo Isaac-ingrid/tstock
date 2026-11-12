@@ -22,7 +22,9 @@ export default function ConsoleSection({
   onOpenQuickT,
   onOpenReason,
   onRefreshSingle,
-  onCopySinglePlan
+  onCopySinglePlan,
+  fastRefresh = true,
+  onToggleFastRefresh,
 }) {
   const [tierFilter, setTierFilter] = useState('all');
   const [internalActiveCode, setInternalActiveCode] = useState(() => (pool[0]?.code || ''));
@@ -337,6 +339,8 @@ export default function ConsoleSection({
                 onOpenReason={onOpenReason}
                 onRefreshSingle={onRefreshSingle}
                 onCopySinglePlan={onCopySinglePlan}
+                fastRefresh={fastRefresh}
+                onToggleFastRefresh={onToggleFastRefresh}
               />
             ))
           ) : (
@@ -356,6 +360,8 @@ export default function ConsoleSection({
                 onOpenReason={onOpenReason}
                 onRefreshSingle={onRefreshSingle}
                 onCopySinglePlan={onCopySinglePlan}
+                fastRefresh={fastRefresh}
+                onToggleFastRefresh={onToggleFastRefresh}
               />
             )
           )

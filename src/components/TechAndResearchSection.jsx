@@ -8,6 +8,21 @@ export function pctTag(p) {
   return <span className={`sig ${cls}`}>{p.toFixed(0)}%</span>;
 }
 
+/* 将内置说明文本中的 <b>...</b> 安全解析为加粗节点，避免标签源码直接暴露在界面 */
+function renderInlineBold(text) {
+  if (!text || typeof text !== 'string') return text;
+  return text.split(/(<b>.*?<\/b>)/g).map((part, idx) => {
+    if (part.startsWith('<b>') && part.endsWith('</b>')) {
+      return (
+        <strong key={idx} style={{ color: 'var(--text)', fontWeight: 700 }}>
+          {part.slice(3, -4)}
+        </strong>
+      );
+    }
+    return <React.Fragment key={idx}>{part}</React.Fragment>;
+  });
+}
+
 export function winTxt(all) {
   return VAL_WIN.map(([k, label]) => {
     const s = (all || {})[k] || {};
@@ -197,7 +212,7 @@ export default function TechAndResearchSection({ stock, poolIndex, pool = [] }) 
         {/* 分时量能 */}
         <div className={`ta ${(vm && vm.ok && vm.cls) || 't-nt'}`}>
           <div className="h">
-            <span>分时量能（同时段基准）</span>
+            <span title="相对近 5 日同一时段均量基准">分时量能 · 同时段</span>
             <span className={`sig ${(vm && vm.ok && vm.sc) || 's-nt'}`}>
               {(vm && vm.ok && vm.label) || (vm && vm.err ? '未取到' : '未取数')}
             </span>
@@ -206,7 +221,7 @@ export default function TechAndResearchSection({ stock, poolIndex, pool = [] }) 
             {vm && vm.ok && vm.r3 != null ? vm.r3.toFixed(2) + '×' : '—'}
           </div>
           <div className="d">
-            {vm && vm.ok ? vm.text : '点卡片右上「⟳ 取数」拉取 m5 并对比近 5 日同时段基准'}
+            {vm && vm.ok ? renderInlineBold(vm.text) : '点卡片右上「⟳ 取数」拉取 m5 并对比近 5 日同时段基准'}
           </div>
         </div>
       </div>

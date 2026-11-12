@@ -11,7 +11,7 @@ export default function ClientShell() {
   }, []);
 
   if (!mounted) {
-    return <main className="app-loading">正在加载做T执行台…</main>;
+    return <main className="app-loading">正在加载智策战情室…</main>;
   }
 
   return <App />;

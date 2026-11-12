@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import time
 from contextlib import asynccontextmanager
@@ -14,6 +15,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from backend.diagnosis import get_stock_diagnosis
+from backend.ignition import get_ignition_pool
 from backend.limitup import get_limitup_pool, invalidate_limitup_cache
 from backend.strategy_ledger import get_strategy_performance, snapshot_strategies
 from backend.strong_herd import mutate_herd_pool
@@ -181,6 +183,40 @@ async def stock_strategy_snapshot(request: Request) -> dict[str, object]:
         return await snapshot_strategies(http_client=http_client)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"策略建档失败: {exc}") from exc
+
+
+@app.get("/api/stock/ignition_pool")
+async def stock_ignition_pool(
+    request: Request,
+    include_cyb: bool = Query(False),
+    lookback_days: int = Query(20, ge=5, le=30),
+    sector_dd_min: float = Query(30.0, ge=10.0, le=70.0),
+    stock_dd_min: float = Query(40.0, ge=15.0, le=80.0),
+    custom_mappings: str | None = Query(None, max_length=4000),
+    refresh: bool = Query(False),
+) -> dict[str, object]:
+    """起爆点挖掘双方向扫描：横盘多周期试盘起爆 + 板块深跌腰斩龙头抗跌抄底"""
+    parsed_custom = None
+    if custom_mappings and custom_mappings.strip():
+        try:
+            raw = json.loads(custom_mappings)
+            if isinstance(raw, list):
+                parsed_custom = raw
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"custom_mappings JSON 格式错误: {exc}") from exc
+    try:
+        http_client = getattr(request.app.state, "http", None)
+        return await get_ignition_pool(
+            include_cyb=include_cyb,
+            lookback_days=lookback_days,
+            sector_dd_min=sector_dd_min,
+            stock_dd_min=stock_dd_min,
+            custom_us_mappings=parsed_custom,
+            force_refresh=refresh,
+            http_client=http_client,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"起爆挖掘扫描失败: {exc}") from exc
 
 
 @app.get("/api/proxy")

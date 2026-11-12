@@ -15,7 +15,10 @@
     "task:daily": "node timing_task/tasks/task_daily.js",
     "timer:start": "node timing_task/start.js",
     "timer:stop": "node timing_task/stop.js",
-    "timer:status": "node timing_task/status.js"
+    "timer:status": "node timing_task/status.js",
+    "start:local": "node scripts/local-service.mjs start --no-open",
+    "stop:local": "node scripts/local-service.mjs stop",
+    "status:local": "node scripts/local-service.mjs status"
   },
   "dependencies": {
     "animejs": "^4.5.0",

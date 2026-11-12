@@ -25,6 +25,13 @@ uv venv --python 3.12
 uv pip install -r requirements.txt
 cd ..
 
+# Windows 一键启动全部本机服务（后端 18765 + 前端 3000 + 定时调度器）
+.\start.bat
+# 一键停止本机服务 / 查看状态
+.\stop.bat
+npm run status:local
+
+# 也可分终端手动启动：
 # 后端（项目根目录执行）
 npm run backend
 

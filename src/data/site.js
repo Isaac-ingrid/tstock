@@ -2,15 +2,18 @@
  * 站点全局配置与静态元数据 (Data & Config Separation)
  */
 
+export const APP_PAGE_TITLE = '智策战情室 · A股多维选股与实战终端';
+
 export const SITE_META = {
-  title: '做T执行台',
-  subtitle: '选股之后，在这里执行：一张表算出今天的买卖点、仓位和纪律线。',
-  footer: '做T修的是技术，炼的是心性。系统给的是概率，纪律给的是复利。',
+  title: '智策战情室',
+  subtitle: 'A股多维选股与实战终端：起爆潜伏、龙头抄底、连板情绪、尾盘黑马、盘中做T与战绩回算一体化。',
+  footer: '系统提供概率优势，纪律保障复利增长。多周期共振定拐点，仓位风控守底线。',
   methodologyTags: [
-    '七格箱体定位置',
-    '七庞三仓定仓位',
-    '1.5% 止损铁律',
-    '无信号不交易'
+    '多周期试盘起爆',
+    '深跌抗跌抄底',
+    '连板情绪接力',
+    '七格箱体做T',
+    '策略战绩回算'
   ]
 };
 
@@ -23,6 +26,15 @@ export const NAV_ROUTES = [
     icon: '🎯',
     badgeKey: 'poolCount',
     desc: '选股池与个股做T决策台'
+  },
+  {
+    path: '/ignition',
+    tab: 'tabIgnition',
+    label: '🚀 起爆挖掘',
+    icon: '🚀',
+    badgeKey: 'ignitionCount',
+    highlight: true,
+    desc: '横盘多周期试盘起爆潜伏 + 板块深跌龙头抗跌抄底'
   },
   {
     path: '/board',

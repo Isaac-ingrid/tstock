@@ -52,6 +52,7 @@ if (isDaemon) {
 
   const child = spawn(process.execPath, [SCHEDULER_FILE], {
     detached: true,
+    windowsHide: true,
     stdio: ['ignore', out, err],
     cwd: TIMING_ROOT
   });

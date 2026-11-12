@@ -5,6 +5,7 @@
 import { f2, f3, pct, money, money$, fmtIn, fvol, GRID, STOP, FLY, toast, toastOk, toastWarn, toastErr, soundChime, AUTO_FIELDS } from './utils.js';
 import { ALERT_CENTER, saveAlerts, stampData, pool, SNAP } from './state.js';
 import { chartInd, chartEntry, chartMeta } from './chart.js';
+import { APP_PAGE_TITLE } from '../data/site.js';
 
 /* ===================== 数据层：全腾讯源（行情 / 检索 / 日K） =====================
    选源原则：实测本机到东财域名严重不稳（searchapi 首包 11s+，push2his 直接连不上），
@@ -119,6 +120,39 @@ export async function triggerStrategySnapshot() {
     throw new Error(errJson.detail || `策略建档异常 (${res.status})`);
   }
   return await res.json();
+}
+
+/* 起爆点挖掘双方向扫描：横盘多周期试盘起爆 + 板块深跌腰斩龙头抗跌抄底 */
+export async function fetchIgnitionPool({
+  includeCyb = false,
+  lookbackDays = 20,
+  sectorDdMin = 30,
+  stockDdMin = 40,
+  customMappings = [],
+  refresh = false,
+} = {}) {
+  const qs = new URLSearchParams();
+  qs.set('include_cyb', includeCyb ? 'true' : 'false');
+  qs.set('lookback_days', String(lookbackDays));
+  qs.set('sector_dd_min', String(sectorDdMin));
+  qs.set('stock_dd_min', String(stockDdMin));
+  if (refresh) qs.set('refresh', 'true');
+  if (Array.isArray(customMappings) && customMappings.length > 0) {
+    qs.set('custom_mappings', JSON.stringify(customMappings));
+  }
+  const url = `${STOCK_API_BASE}/api/stock/ignition_pool?${qs.toString()}`;
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 35000);
+  try {
+    const res = await fetch(url, { cache: 'no-store', signal: ctl.signal });
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.detail || `起爆挖掘接口异常 (${res.status})`);
+    }
+    return await res.json();
+  } finally {
+    clearTimeout(t);
+  }
 }
 
 /* —— 本地代码解析：0 网络请求，纯规则。输入代码这条路完全不依赖检索接口 —— */
@@ -387,6 +421,43 @@ export async function loadChart(s, force){
     s._k[p] = chartEntry('bar', { ks: await fetchKlineMin(s.tcode, p, p === 'm1' ? 320 : 240) });
   }
   return s._k[p];
+}
+/* 极速单票刷新（供 8 秒盯盘聚焦使用）：仅并发拉取实时行情 + 分时分钟线，不重拉全量日K */
+export async function refreshSingleFastRt(s){
+  if (!s) return s;
+  if (!s.tcode && s.code) s.tcode = s.secid ? tencentCode(s.secid) : tcodeFromCode(s.code);
+  if (!s.tcode) return s;
+  const tc = s.tcode;
+  const [qRes, minRes] = await Promise.allSettled([
+    fetchQuotes([tc]),
+    fetchMinute(tc),
+  ]);
+  if (qRes.status === 'fulfilled' && qRes.value && qRes.value[tc] && qRes.value[tc].prevClose) {
+    const q = qRes.value[tc];
+    const px = q.price > 0 ? q.price : q.prevClose;
+    const hi = q.high > 0 ? q.high : px;
+    const lo = q.low > 0 ? q.low : px;
+    const man = s.manual || {};
+    const upd = {
+      name: q.name || s.name,
+      code: q.code || s.code,
+      prevClose: q.prevClose,
+      open: q.open || q.prevClose,
+      high: hi,
+      low: lo,
+      price: px,
+      avg: q.avg || px,
+      vr: q.vr || 1,
+      _t: nowStr(),
+    };
+    AUTO_FIELDS.forEach((k) => { if (man[k]) delete upd[k]; });
+    Object.assign(s, upd);
+  }
+  if (minRes.status === 'fulfilled' && minRes.value && Array.isArray(minRes.value.pts)) {
+    s._k = s._k || {};
+    s._k['rt'] = chartEntry('line', { min: minRes.value });
+  }
+  return s;
 }
 /* 大单资金装载（偏重：一次要打二十来个请求，所以单独控制、带 90 秒节流） */
 export async function loadDD(s, force){
@@ -1907,8 +1978,8 @@ export function checkPriceAlerts(){
   try {
     const raw = localStorage.getItem('t-alert-enabled');
     if (raw !== null && JSON.parse(raw) === false) {
-      if (typeof document !== 'undefined' && document.title !== '做T执行台 · 七格箱体 + 七底三仓') {
-        document.title = '做T执行台 · 七格箱体 + 七底三仓';
+      if (typeof document !== 'undefined' && document.title !== APP_PAGE_TITLE) {
+        document.title = APP_PAGE_TITLE;
       }
       return; // 上班免打扰模式：关闭声音、弹窗、气泡及标题闪烁
     }
@@ -1929,7 +2000,7 @@ export function checkPriceAlerts(){
   hits.sort((a,b)=>a.dev - b.dev);
   document.title = hits.length
     ? '⚡' + hits[0].name + ' ' + hits[0].p.toFixed(2) + ' 触及' + hits[0].label
-    : '做T执行台 · 七格箱体 + 七底三仓';
+    : APP_PAGE_TITLE;
   hits.filter(h=>!_hitSeen[h.key]).forEach(h=>{
     _hitSeen[h.key] = 1;
     const msg = h.name + ' ' + h.p.toFixed(2) + ' 已到「' + h.label + ' ' + h.lv.toFixed(2) + '」（差 ' + (h.dev*100).toFixed(2) + '%）';
@@ -1995,4 +2066,11 @@ export function posCalc(s){
            costNoT: tPerShare!==null ? cost + tPerShare : null,
            tBudget, hasPos: sh > 0,
            aboveCost: (sh && cost) ? px > cost : null };
+}
+
+/* 判断当前是否处于 A 股盘中连续竞价交易时段（工作日 09:30-11:30, 13:00-15:00） */
+export function isAShareTradingNow(now = new Date()) {
+  const mins = now.getHours() * 60 + now.getMinutes();
+  const wd = now.getDay();
+  return wd >= 1 && wd <= 5 && ((mins >= 570 && mins <= 690) || (mins >= 780 && mins <= 900));
 }
