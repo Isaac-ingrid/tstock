@@ -265,6 +265,35 @@ export async function fetchCoachReview(payload = {}) {
   }
 }
 
+/* 获取全市场玄学字辈共振全景天梯榜 */
+export async function fetchMemeRadar() {
+  const url = `${STOCK_API_BASE}/api/stock/meme_radar`;
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 12000);
+  try {
+    const res = await fetch(url, { cache: 'no-store', signal: ctl.signal });
+    if (!res.ok) throw new Error(`获取字辈雷达失败 (${res.status})`);
+    return await res.json();
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+/* 诊断任意单只个股的玄学宗族血统与共振/孤狼状态 */
+export async function diagnoseStockMeme(query) {
+  const url = `${STOCK_API_BASE}/api/stock/meme_diagnose?query=${encodeURIComponent(query)}`;
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 10000);
+  try {
+    const res = await fetch(url, { cache: 'no-store', signal: ctl.signal });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || `模因共振体检失败 (${res.status})`);
+    return data;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 /* —— 本地代码解析：0 网络请求，纯规则。输入代码这条路完全不依赖检索接口 —— */
 export function tcodeFromCode(code){
   const c = String(code).trim();

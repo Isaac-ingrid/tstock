@@ -152,9 +152,10 @@ COACH_SYSTEM_PROMPT = """你是由顶级对冲基金操盘手与资深A股游资
 1. A股交易制度与做T本质：日内做T以回踩VWAP分时均价线为准绳，绝不追高，破位坚决止损，绝不让做T变成被动隔夜加仓；
 2. 大盘环境闸门：大盘破位MA20（BAD环境）时逆市开仓九死一生，宁缺毋滥；
 3. 交易心魔与人性弱点：贪婪（追高天花板）、恐惧（刚回调就抢跑割肉）、侥幸（破位死扛不认输）、报复性交易（亏钱后冲动开仓试图翻本）；
-4. 人机对决与摩擦成本：必须明确计算由于交易员“主观情绪犯错（未按系统推荐点位挂单）”造成的真金白银亏损（即主观情绪摩擦损耗）。
+4. 人机对决与摩擦成本：必须明确计算由于交易员“主观情绪犯错（未按系统推荐点位挂单）”造成的真金白银亏损（即主观情绪摩擦损耗）；
+5. A股情绪模因与玄学共振：深刻理解东方系、日/阳字辈、华字辈、龙蛇生肖、中字头等名字字辈炒作背后的行为金融学本质（低成本共识与模因溢价）。对交易进行「五维共振」检验（个股 × 板块/宗族 × 指数 × 情绪 × 空间梯队），警惕孤狼单打（板块无跟风、一日游）与滞后接盘（高潮末期最后一棒）。
 
-请根据用户提供的交易流水、盘面数据、失误归因与心得，给出结构化、深度透彻的复盘诊断报告。
+请根据用户提供的交易流水、盘面数据、失误归因、玄学字辈共振背景与心得，给出结构化、深度透彻的复盘诊断报告。
 报告语气：如严师般冷静、客观、直指命门，但同时给出清晰、可执行的下一步修正SOP。"""
 
 
@@ -204,12 +205,25 @@ async def generate_coach_review(
         if bench.get("sysBuy"):
             bench_str = f" ｜ 系统推荐买入区间: {bench.get('sysBuy')}, 冲高目标1: {bench.get('sysSell1')}, 止损线: {bench.get('sysStop')}"
 
+        # 尝试进行玄学宗族与共振背景检测
+        meme_diag_str = ""
+        try:
+            from backend.meme_radar import diagnose_stock_meme
+            m_res = diagnose_stock_meme(stock)
+            if m_res.get("ok"):
+                verdict = m_res.get("verdict", {})
+                clans = [c.get("clanName") for c in m_res.get("matchedClans", [])]
+                clans_desc = "、".join(clans) if clans else "独立个股"
+                meme_diag_str = f"\n  - 模因与共振体检: 谱系[{clans_desc}] ｜ {verdict.get('title')}"
+        except Exception:
+            pass
+
         trades_text_list.append(
             f"第{idx}笔: 【{stock}】（{track} · {dir_name}）\n"
             f"  - 成交参数: 买入价 ¥{buy_px:.2f} ｜ 卖出价 ¥{sell_px:.2f} ｜ 股数 {qty} 股\n"
             f"  - 净套利额: {'+' if net_val >= 0 else ''}{net_val:.2f} 元 ｜ 决策计划: {plan_stat} ({basis})\n"
             f"  - 交易员归因失误标签: [{mistakes_str}]\n"
-            f"  - 交易员个人反思心得: {note}{bench_str}"
+            f"  - 交易员个人反思心得: {note}{bench_str}{meme_diag_str}"
         )
 
     trades_summary_text = "\n\n".join(trades_text_list)
@@ -261,18 +275,18 @@ async def generate_coach_review(
             {"role": "system", "content": COACH_SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
         ],
-        "max_tokens": 2500,
+        "max_tokens": 4096,
         "temperature": 0.35,
     }
 
     t0 = time.monotonic()
-    async with httpx.AsyncClient(timeout=httpx.Timeout(60.0), trust_env=False) as client:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(90.0), trust_env=False) as client:
         try:
             resp = await client.post(final_url, json=payload, headers=headers)
         except httpx.ConnectError as exc:
             raise ConnectionError(f"连接天翼云 API 失败 ({final_url}): {exc}") from exc
         except httpx.TimeoutException as exc:
-            raise TimeoutError("AI 复盘请求超时 (60s)，天翼云大模型正在繁忙，请稍候重试") from exc
+            raise TimeoutError("AI 复盘请求超时 (90s)，天翼云大模型正在繁忙，请稍候重试") from exc
 
     latency_ms = int((time.monotonic() - t0) * 1000)
 
@@ -290,7 +304,10 @@ async def generate_coach_review(
     if not choices or not isinstance(choices, list):
         raise ValueError(f"天翼云 API 返回格式异常: {data}")
 
-    review_content = choices[0].get("message", {}).get("content", "").strip()
+    msg = choices[0].get("message", {})
+    review_content = (msg.get("content") or "").strip()
+    if not review_content and msg.get("reasoning_content"):
+        review_content = msg.get("reasoning_content", "").strip()
 
     return {
         "ok": True,

@@ -19,6 +19,7 @@ from backend.coach import get_coach_config, test_coach_connection, generate_coac
 from backend.diagnosis import get_stock_diagnosis
 from backend.ignition import get_ignition_pool, get_ignition_tracking_pool, diagnose_ignition_stock
 from backend.limitup import get_limitup_pool, invalidate_limitup_cache
+from backend.meme_radar import get_meme_radar_overview, diagnose_stock_meme
 from backend.strategy_ledger import get_strategy_performance, snapshot_strategies
 from backend.strong_herd import mutate_herd_pool
 
@@ -239,6 +240,24 @@ async def stock_ignition_diagnose(request: Request, query: str = Query(..., min_
         return await diagnose_ignition_stock(query=query, http_client=http_client)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"起爆成色体检异常: {exc}") from exc
+
+
+@app.get("/api/stock/meme_radar")
+async def stock_meme_radar() -> dict[str, Any]:
+    """获取全市场玄学字辈共振全景榜单（东方系、日/阳字辈、华字辈、龙蛇生肖、中字头等）"""
+    try:
+        return get_meme_radar_overview()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"玄学字辈雷达统计失败: {exc}") from exc
+
+
+@app.get("/api/stock/meme_diagnose")
+async def stock_meme_diagnose(query: str = Query(..., min_length=1, max_length=50)) -> dict[str, Any]:
+    """诊断任意单只个股的玄学字辈血统、共振强度与是否属于孤狼自嗨"""
+    try:
+        return diagnose_stock_meme(query=query)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"个股玄学共振诊断失败: {exc}") from exc
 
 
 _tail_scan_lock = asyncio.Lock()

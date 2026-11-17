@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { fetchIgnitionPool, fetchIgnitionTracking, fetchIgnitionDiagnose } from '../services/api.js';
 import { f2, toastOk, toastErr, copyPlain } from '../services/utils.js';
+import MemeRadarSection from '../components/MemeRadarSection.jsx';
 
 const CUSTOM_US_KEY = 't-ignition-custom-us';
 
@@ -402,6 +403,23 @@ export default function IgnitionPage({
                 起爆 {trackingSummary.ignitedCount}
               </span>
             )}
+          </button>
+          <button
+            type="button"
+            className={`mini ${subTab === 'meme' ? 'primary' : ''}`}
+            onClick={() => setSubTab('meme')}
+            style={{
+              padding: '6px 12px',
+              fontSize: '13px',
+              fontWeight: 800,
+              background: subTab === 'meme' ? 'linear-gradient(135deg, #3730a3 0%, #1e1b4b 100%)' : undefined,
+              color: subTab === 'meme' ? '#fff' : undefined,
+            }}
+          >
+            🔮 方向三：玄学模因与字辈共振
+            <span style={{ marginLeft: '6px', padding: '1px 6px', borderRadius: '99px', background: '#e0e7ff', color: '#3730a3', fontSize: '11px', fontWeight: 700 }}>
+              14 宗族天梯
+            </span>
           </button>
         </div>
 
@@ -1499,6 +1517,11 @@ export default function IgnitionPage({
             </div>
           </div>
         </div>
+      )}
+
+      {/* ========================= 方向三：玄学模因与字辈共振 ========================= */}
+      {subTab === 'meme' && (
+        <MemeRadarSection />
       )}
 
     </div>

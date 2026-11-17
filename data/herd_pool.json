@@ -441,6 +441,28 @@
       "peakPriceSinceEntry": 13.1,
       "pinned": false,
       "autoAdded": true
+    },
+    "603078": {
+      "code": "603078",
+      "name": "江化微",
+      "hybk": "电子化学",
+      "entryDate": "20261117",
+      "entryPrice": 24.54,
+      "entryReason": "人气Top26资金抱团核心",
+      "peakPriceSinceEntry": 24.54,
+      "pinned": false,
+      "autoAdded": true
+    },
+    "002889": {
+      "code": "002889",
+      "name": "东方嘉盛",
+      "hybk": "物流",
+      "entryDate": "20261117",
+      "entryPrice": 15.21,
+      "entryReason": "人气Top29资金抱团核心",
+      "peakPriceSinceEntry": 15.21,
+      "pinned": false,
+      "autoAdded": true
     }
   },
   "evicted": [

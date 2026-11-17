@@ -12,6 +12,8 @@ export const MISTAKE_DICTIONARY = [
   { id: 'heavy_gamble', category: '仓位控制', name: '短线重仓单赌', icon: '💣', desc: '超过系统建议的 10% 顶格仓位，单票重仓导致心理严重变形' },
   { id: 'impulse_t', category: '节奏失序', name: '无量冲动乱T', icon: '⚡', desc: '无关键支撑压力位、量比平平无奇时频繁开仓磨损手续费' },
   { id: 'revenge_trade', category: '心态失衡', name: '报复性交易', icon: '💢', desc: '前一笔刚亏损，急于回本立刻盲目开新仓' },
+  { id: 'lone_wolf', category: '共振失误', name: '孤狼单打一日游', icon: '🐺', desc: '板块或同字辈宗族无跟风，单兵脉冲自拉自唱，次日熄火被套' },
+  { id: 'late_chase', category: '节奏失序', name: '滞后接盘高潮棒', icon: '⏰', desc: '全网明牌高潮狂欢时才后知后觉追高，刚好接在主力分歧出货末端' },
 ];
 
 const LOCAL_AI_KEY = 'tstock_ai_coach_config';
@@ -1100,6 +1102,15 @@ export default function LedgerSection({
                         <option value="破位止损">纪律止损平仓</option>
                       </>
                     )}
+                  </select>
+                </div>
+                <div className="fld">
+                  <label>决策依据</label>
+                  <select value={form.basis} onChange={e => handleFormChange('basis', e.target.value)}>
+                    <option value="系统SOP">系统SOP推荐 (尾盘/打板/起爆)</option>
+                    <option value="客观信号">客观技术信号 (量价/分时均线)</option>
+                    <option value="情绪模因/字辈共振">🎭 情绪模因/字辈共振 (东方系/日阳/生肖等)</option>
+                    <option value="主观判断">主观盘感 / 消息驱动</option>
                   </select>
                 </div>
                 <div className="fld">
