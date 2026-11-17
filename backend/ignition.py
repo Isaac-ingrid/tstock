@@ -4,7 +4,9 @@ import asyncio
 import datetime
 import json
 import os
+import re
 import time
+import urllib.parse
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -23,6 +25,7 @@ from .strong_herd import (
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 IGNITION_CACHE_FILE = DATA_DIR / "ignition_latest.json"
+STRATEGY_LEDGER_FILE = DATA_DIR / "strategy_ledger.json"
 
 _CACHE_LOCK = asyncio.Lock()
 _RESULT_CACHE: Dict[str, Tuple[float, dict]] = {}
@@ -124,6 +127,11 @@ def _is_noise_board(name: str) -> bool:
 
 
 def _save_latest_sync(payload: dict) -> None:
+    b_count = len((payload.get("breakout") or {}).get("items") or [])
+    d_count = len((payload.get("dipLeaders") or {}).get("items") or [])
+    if b_count == 0 and d_count == 0:
+        # 绝不将 0 结果的空数据或限流响应覆盖已有优质本地快照
+        return
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     tmp_path = IGNITION_CACHE_FILE.with_suffix(".json.tmp")
     with tmp_path.open("w", encoding="utf-8") as f:
@@ -204,14 +212,25 @@ async def _fetch_em_klines(
         except Exception:
             pass
 
-        if klt == 101 and tcode_fallback:
-            for host in ("web.ifzq.gtimg.cn", "ifzq.gtimg.cn"):
-                u = f"https://{host}/appstock/app/fqkline/get?param={tcode_fallback},day,,,{lmt},qfq"
+        tc = tcode_fallback
+        if not tc and ("." in secid) and not secid.startswith("90."):
+            c_part = secid.split(".")[-1]
+            if len(c_part) == 6 and c_part.isdigit():
+                tc = _to_tcode(c_part)
+
+        if tc:
+            p_map = {101: "day", 102: "week", 103: "month"}
+            period = p_map.get(klt, "day")
+            urls = [
+                f"https://proxy.finance.qq.com/ifzqgtimg/appstock/app/fqkline/get?param={tc},{period},,,{lmt},qfq",
+                f"https://ifzq.gtimg.cn/appstock/app/fqkline/get?param={tc},{period},,,{lmt},qfq",
+            ]
+            for u in urls:
                 try:
                     rt = await client.get(u, headers={"Referer": "https://gu.qq.com/"})
                     if rt.status_code == 200 and rt.text.lstrip().startswith("{"):
-                        jd = (rt.json().get("data") or {}).get(tcode_fallback) or {}
-                        arr = jd.get("qfqday") or jd.get("day") or []
+                        jd = (rt.json().get("data") or {}).get(tc) or {}
+                        arr = jd.get(f"qfq{period}") or jd.get(period) or []
                         bars: List[dict] = []
                         for row in arr:
                             if not isinstance(row, list) or len(row) < 6:
@@ -698,9 +717,10 @@ async def scan_breakout_ignition(
 
     async def _fetch_wm(code: str) -> Tuple[List[dict], List[dict]]:
         em_secid = f"{'1' if code.startswith(('6', '9')) else '0'}.{code}"
+        tc = _to_tcode(code)
         w_bars, m_bars = await asyncio.gather(
-            _fetch_em_klines(http_client, em_secid, 102, 26, sem_wm),
-            _fetch_em_klines(http_client, em_secid, 103, 15, sem_wm),
+            _fetch_em_klines(http_client, em_secid, 102, 26, sem_wm, tcode_fallback=tc),
+            _fetch_em_klines(http_client, em_secid, 103, 15, sem_wm, tcode_fallback=tc),
         )
         return w_bars, m_bars
 
@@ -992,13 +1012,16 @@ async def scan_dip_leaders(
 
     qualifying_boards: List[dict] = []
     for b, bars in zip(cand_boards, bk_klines):
-        if not isinstance(bars, list) or len(bars) < 25:
-            continue
-        peak_hi = max(bar["high"] for bar in bars)
-        cur_close = b["price"] if b["price"] > 0 else bars[-1]["close"]
-        dd_pct = ((cur_close - peak_hi) / max(1e-6, peak_hi)) * 100.0  # 负数，如 -38.5
         shock = board_shock_map.get(b["bkCode"])
         has_us_shock = bool(shock and shock["usMinChg"] <= -2.0)
+
+        if isinstance(bars, list) and len(bars) >= 25:
+            peak_hi = max(bar["high"] for bar in bars)
+            cur_close = b["price"] if b["price"] > 0 else bars[-1]["close"]
+            dd_pct = ((cur_close - peak_hi) / max(1e-6, peak_hi)) * 100.0  # 负数，如 -38.5
+        else:
+            # 若板块历史K线受阻，使用东财板块直出的 60日/年内跌幅作为保底
+            dd_pct = min(b.get("chg60d") or 0.0, b.get("chgYtd") or 0.0)
 
         # 入选门槛：板块真实高点回撤达标（如 >= 30%），或关联外盘暴跌且回撤 >= max(18, sector_dd_min - 12)%
         min_req = max(18.0, sector_dd_min - 12.0) if has_us_shock else sector_dd_min
@@ -1248,6 +1271,215 @@ async def scan_dip_leaders(
     }
 
 
+async def get_ignition_tracking_pool(
+    http_client: Optional[httpx.AsyncClient] = None,
+    fresh_breakout_items: Optional[List[dict]] = None,
+    fresh_date: Optional[str] = None,
+) -> dict:
+    """
+    拉取所有已入库的起爆推荐与抗跌抄底标的，
+    实时获取最新行情数据，计算当前收益率、在轨生命周期阶段（已起爆/持续蓄势/触及防守/达成大胜）及专属操盘 SOP 指引。
+    """
+    signals_map: Dict[str, dict] = {}
+    ledger_state: dict = {}
+    if STRATEGY_LEDGER_FILE.exists():
+        try:
+            with open(STRATEGY_LEDGER_FILE, "r", encoding="utf-8") as f:
+                ledger_state = json.load(f)
+            signals_map = ledger_state.get("signals") or {}
+        except Exception:
+            signals_map = {}
+
+    # 若传入了当日最新扫描出的起爆标的，自动保全入库，确保次日绝不丢失
+    if fresh_breakout_items and fresh_date:
+        modified = False
+        for it in fresh_breakout_items:
+            stg = it.get("stage")
+            if stg not in ("SHAKEOUT_READY", "CONVERGED_WAIT"):
+                continue
+            c6 = str(it.get("code") or "").strip().zfill(6)
+            px = _sf(it.get("price"))
+            if not c6.isdigit() or px <= 0:
+                continue
+            sig_id = f"ignition:{fresh_date}:{c6}"
+            if sig_id not in signals_map:
+                signals_map[sig_id] = {
+                    "id": sig_id,
+                    "strategy": "ignition",
+                    "subType": str(stg),
+                    "signalDate": fresh_date,
+                    "code": c6,
+                    "tcode": _to_tcode(c6),
+                    "name": str(it.get("name") or c6).replace(" ", ""),
+                    "hybk": str(it.get("hybk") or "其他"),
+                    "score": _sf(it.get("ignitionScore")),
+                    "verdict": str(it.get("stageLabel") or "起爆潜伏"),
+                    "ztDate": str(it.get("ztDate") or ""),
+                    "volShrinkPct": round(_sf(it.get("volShrinkPct")), 1),
+                    "monthVolRatio": round(_sf(it.get("monthVolRatio")), 2),
+                    "env": "OK",
+                    "refPrice": round(px, 2),
+                    "buy": round(px, 2),
+                }
+                modified = True
+        if modified and ledger_state:
+            try:
+                ledger_state["signals"] = signals_map
+                ledger_state["updatedAt"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                with open(STRATEGY_LEDGER_FILE, "w", encoding="utf-8") as f:
+                    json.dump(ledger_state, f, ensure_ascii=False, indent=2)
+            except Exception:
+                pass
+
+    tracking_sigs = [
+        v for v in signals_map.values()
+        if isinstance(v, dict) and v.get("strategy") in ("ignition", "bottom") and v.get("code")
+    ]
+
+    # 若账本暂无或初次运行，回退至最新扫描落盘文件
+    if not tracking_sigs and IGNITION_CACHE_FILE.exists():
+        try:
+            with open(IGNITION_CACHE_FILE, "r", encoding="utf-8") as f:
+                cache_payload = json.load(f)
+            b_items = (cache_payload.get("breakout") or {}).get("items") or []
+            sig_date = cache_payload.get("date") or datetime.date.today().strftime("%Y-%m-%d")
+            for it in b_items:
+                c6 = str(it.get("code") or "").strip().zfill(6)
+                if c6.isdigit():
+                    tracking_sigs.append({
+                        "id": f"ignition:{sig_date}:{c6}",
+                        "strategy": "ignition",
+                        "signalDate": sig_date,
+                        "code": c6,
+                        "name": it.get("name") or c6,
+                        "hybk": it.get("hybk") or "其他",
+                        "refPrice": _sf(it.get("price")),
+                        "subType": it.get("stage") or "CONVERGED_WAIT",
+                        "verdict": it.get("stageLabel") or "起爆潜伏",
+                        "ztDate": it.get("ztDate") or "",
+                    })
+        except Exception:
+            pass
+
+    if not tracking_sigs:
+        return {
+            "ok": True,
+            "updatedAt": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "summary": {
+                "totalCount": 0,
+                "ignitedCount": 0,
+                "waitingCount": 0,
+                "stoppedCount": 0,
+                "avgGainPct": 0.0,
+                "winRate": 0.0,
+            },
+            "items": [],
+        }
+
+    codes = list({s["code"] for s in tracking_sigs})
+
+    async def _fetch_q(client: httpx.AsyncClient) -> Dict[str, dict]:
+        return await _fetch_batch_quotes(client, codes)
+
+    if http_client is not None:
+        quotes = await _fetch_q(http_client)
+    else:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(8.0), trust_env=False) as client:
+            quotes = await _fetch_q(client)
+
+    items: List[dict] = []
+    for s in tracking_sigs:
+        c6 = s["code"]
+        q = quotes.get(c6) or {}
+        ref_px = _sf(s.get("refPrice") or s.get("buy"))
+        cur_px = _sf(q.get("price"), ref_px)
+        day_chg = _sf(q.get("chg"), 0.0)
+        gain_pct = round(((cur_px / ref_px) - 1.0) * 100.0, 2) if ref_px > 0 else 0.0
+
+        if gain_pct >= 8.0 or day_chg >= 9.5:
+            track_stage = "TARGET_REACHED"
+            stage_desc = "🚀 达成大胜"
+            stage_color = "#b45309"
+            stage_bg = "#fef3c7"
+            stage_border = "#fde68a"
+            advice = "已达成波段启动大胜目标；封死涨停则持股躺平，一旦冲高滞涨或开板分批倒T止盈兑现，将保本线上移至 +5%"
+        elif gain_pct >= 2.5 or day_chg >= 3.0:
+            track_stage = "IGNITED"
+            stage_desc = "🔥 放量起爆"
+            stage_color = "#b91c1c"
+            stage_bg = "#fee2e2"
+            stage_border = "#fca5a5"
+            advice = "已启动放量拉升，持有安全垫利润；以昨日收盘价或5日均线设移动防守，冲高至目标位可做倒T减半"
+        elif gain_pct <= -4.5:
+            track_stage = "STOPPED"
+            stage_desc = "🛑 触及防守"
+            stage_color = "#374151"
+            stage_bg = "#f3f4f6"
+            stage_border = "#d1d5db"
+            advice = "极度贴近或跌破防守底线，形态若有效破位请严格执行纪律认错离场，坚决防范深套"
+        else:
+            track_stage = "WAITING"
+            stage_desc = "⏳ 持续蓄势"
+            stage_color = "#0369a1"
+            stage_bg = "#e0f2fe"
+            stage_border = "#bae6fd"
+            advice = "处于横盘蓄势吸筹期，底仓拿好；日内分时踩均线可做正T低吸，建议观察周期 3~5 个交易日，等待二次起爆"
+
+        items.append({
+            "id": s.get("id") or f"ignition:{s.get('signalDate')}:{c6}",
+            "strategy": s.get("strategy") or "ignition",
+            "strategyLabel": "横盘待起爆" if (s.get("strategy") or "ignition") == "ignition" else "抗跌抄底",
+            "code": c6,
+            "name": s.get("name") or c6,
+            "hybk": s.get("hybk") or "其他",
+            "signalDate": s.get("signalDate") or "",
+            "subType": s.get("subType") or "CONVERGED_WAIT",
+            "verdict": s.get("verdict") or "起爆潜伏",
+            "refPrice": round(ref_px, 2),
+            "curPrice": round(cur_px, 2),
+            "dayChg": round(day_chg, 2),
+            "gainPct": gain_pct,
+            "high": _sf(q.get("high"), cur_px),
+            "low": _sf(q.get("low"), cur_px),
+            "open": _sf(q.get("open"), cur_px),
+            "trackStage": track_stage,
+            "stageDesc": stage_desc,
+            "stageColor": stage_color,
+            "stageBg": stage_bg,
+            "stageBorder": stage_border,
+            "sop": {
+                "defensePrice": round(ref_px * 0.955, 2),
+                "targetT1": round(ref_px * 1.05, 2),
+                "targetT2": round(ref_px * 1.10, 2),
+                "maxDays": 5,
+                "advice": advice,
+            },
+        })
+
+    items.sort(key=lambda x: (x["signalDate"], x["gainPct"]), reverse=True)
+    total_cnt = len(items)
+    ignited_cnt = sum(1 for x in items if x["trackStage"] in ("TARGET_REACHED", "IGNITED"))
+    waiting_cnt = sum(1 for x in items if x["trackStage"] == "WAITING")
+    stopped_cnt = sum(1 for x in items if x["trackStage"] == "STOPPED")
+    avg_gain = round(sum(x["gainPct"] for x in items) / total_cnt, 2) if total_cnt else 0.0
+    win_cnt = sum(1 for x in items if x["gainPct"] > 0)
+    win_rate = round((win_cnt / total_cnt) * 100.0, 1) if total_cnt else 0.0
+
+    return {
+        "ok": True,
+        "updatedAt": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "summary": {
+            "totalCount": total_cnt,
+            "ignitedCount": ignited_cnt,
+            "waitingCount": waiting_cnt,
+            "stoppedCount": stopped_cnt,
+            "avgGainPct": avg_gain,
+            "winRate": win_rate,
+        },
+        "items": items,
+    }
+
+
 async def get_ignition_pool(
     include_cyb: bool = False,
     lookback_days: int = 20,
@@ -1266,14 +1498,54 @@ async def get_ignition_pool(
     cache_key = f"{int(include_cyb)}:{lookback_days}:{sector_dd_min}:{stock_dd_min}:{custom_key}"
     now_ts = time.monotonic()
 
+    # 1. 内存缓存命中直接返回
     if not force_refresh:
         async with _CACHE_LOCK:
             cached = _RESULT_CACHE.get(cache_key)
             if cached and cached[0] > now_ts:
                 return cached[1]
 
+    # 2. 若非强制刷新，优先尝试使用本地落盘优质快照并毫秒更新实时现价（极速响应且防限流）
+    saved_payload = load_saved_ignition() if not force_refresh else None
+    if saved_payload and not force_refresh:
+        b_items = (saved_payload.get("breakout") or {}).get("items") or []
+        d_items = (saved_payload.get("dipLeaders") or {}).get("items") or []
+        if len(b_items) > 0 or len(d_items) > 0:
+            # 批量刷新最新现价
+            all_codes = list({x["code"] for x in [*b_items, *d_items] if x.get("code")})
+            try:
+                if http_client:
+                    quotes = await _fetch_batch_quotes(http_client, all_codes)
+                else:
+                    async with httpx.AsyncClient(timeout=8.0, trust_env=False) as c:
+                        quotes = await _fetch_batch_quotes(c, all_codes)
+                for it in b_items:
+                    q = quotes.get(it["code"])
+                    if q and q.get("price", 0) > 0:
+                        it["price"] = round(q["price"], 2)
+                        it["chg"] = round(q["chg"], 2)
+                for it in d_items:
+                    q = quotes.get(it["code"])
+                    if q and q.get("price", 0) > 0:
+                        it["price"] = round(q["price"], 2)
+                        it["chg"] = round(q["chg"], 2)
+            except Exception:
+                pass
+
+            try:
+                saved_payload["trackingPool"] = await get_ignition_tracking_pool(
+                    http_client=http_client,
+                    fresh_breakout_items=b_items,
+                    fresh_date=saved_payload.get("date"),
+                )
+            except Exception:
+                pass
+
+            async with _CACHE_LOCK:
+                _RESULT_CACHE[cache_key] = (now_ts + RESULT_TTL, saved_payload)
+            return saved_payload
+
     async def _run_both(client: httpx.AsyncClient) -> Tuple[dict, dict]:
-        # 顺序执行两个扫描，防止两路并发同时冲击东财导致 HTTP 000 限流
         b_res = await scan_breakout_ignition(client, include_cyb=include_cyb, lookback_days=lookback_days)
         d_res = await scan_dip_leaders(
             client,
@@ -1287,7 +1559,7 @@ async def get_ignition_pool(
         breakout_res, dip_res = await _run_both(http_client)
     else:
         async with httpx.AsyncClient(
-            timeout=httpx.Timeout(12.0),
+            timeout=httpx.Timeout(15.0),
             trust_env=False,
             headers={
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -1295,6 +1567,15 @@ async def get_ignition_pool(
             },
         ) as client:
             breakout_res, dip_res = await _run_both(client)
+
+    # 3. 若实时扫描因三方网络拦截或限流出现 0 结果，自动保底回退至本地已有优质快照
+    b_len = len((breakout_res or {}).get("items") or [])
+    d_len = len((dip_res or {}).get("items") or [])
+    if b_len == 0 and d_len == 0:
+        fallback = load_saved_ignition()
+        if fallback and (len((fallback.get("breakout") or {}).get("items") or []) > 0 or len((fallback.get("dipLeaders") or {}).get("items") or []) > 0):
+            breakout_res = fallback.get("breakout") or breakout_res
+            dip_res = fallback.get("dipLeaders") or dip_res
 
     # 优先采用日K样本/扫描中的真实最新交易日（防周末/盘前日期偏移）
     trade_date = (
@@ -1315,6 +1596,16 @@ async def get_ignition_pool(
         "dipLeaders": dip_res,
     }
 
+    try:
+        tracking_pool_res = await get_ignition_tracking_pool(
+            http_client=http_client,
+            fresh_breakout_items=breakout_res.get("items"),
+            fresh_date=trade_date,
+        )
+        payload["trackingPool"] = tracking_pool_res
+    except Exception:
+        payload["trackingPool"] = {"ok": False, "summary": {}, "items": []}
+
     async with _CACHE_LOCK:
         _RESULT_CACHE[cache_key] = (time.monotonic() + RESULT_TTL, payload)
 
@@ -1332,3 +1623,442 @@ async def get_ignition_pool(
             pass
 
     return payload
+
+
+async def diagnose_ignition_stock(query: str, http_client: Optional[httpx.AsyncClient] = None) -> dict:
+    """
+    自选横盘标的·专属起爆成色全息体检引擎：
+    接收用户任意输入的股票代码或名称，全面核验：
+    1. 试盘涨停：近60日内是否出现涨停试水、距今天数、板前横盘底座振幅与前期涨幅；
+    2. 月线放量：月成交量放大倍数及近15月历史价位分位（安全边际）；
+    3. 周线趋势：周MA5/MA10均线形态、周线更高低点抬升；
+    4. 日线缩量：较涨停日量能萎缩比率、连缩天数、阶梯洗盘递减特征；
+    5. 均线粘合与震仓：MA5/10/20极差（粘合度）、下影洗盘针/均线反包信号；
+    6. 底座防守：试盘起点防守位、距起点空间与破位风险。
+    输出：综合起爆评分 (0~100)、在轨阶段判定、六维条件核对清单与专属操盘 SOP 预案。
+    """
+    q_str = str(query or "").strip()
+    if not q_str:
+        return {"ok": False, "detail": "请输入股票代码或名称"}
+
+    close_client = False
+    if http_client is None:
+        http_client = httpx.AsyncClient(timeout=12.0, trust_env=False)
+        close_client = True
+
+    try:
+        m = re.search(r"\d{6}", q_str)
+        c6 = m.group(0) if m else None
+        if not c6:
+            search_url = f"https://proxy.finance.qq.com/ifzqgtimg/appstock/smartbox/search/get?q={urllib.parse.quote(q_str)}&t=all"
+            try:
+                sr = await http_client.get(search_url, headers={"Referer": "https://gu.qq.com/"})
+                if sr.status_code == 200:
+                    stocks = (sr.json().get("data") or {}).get("stock") or []
+                    for item in stocks:
+                        if isinstance(item, list) and len(item) >= 3:
+                            cand = str(item[1]).zfill(6)
+                            if cand.isdigit() and len(cand) == 6:
+                                c6 = cand
+                                break
+            except Exception:
+                pass
+
+        if not c6:
+            return {"ok": False, "detail": f"未能检索到股票「{q_str}」，请确认代码或名称正确"}
+
+        tc = _to_tcode(c6)
+        prefix = "1" if c6.startswith(("6", "9")) else "0"
+        em_secid = f"{prefix}.{c6}"
+
+        sem = asyncio.Semaphore(4)
+        results = await asyncio.gather(
+            _fetch_batch_quotes(http_client, [c6]),
+            _fetch_em_klines(http_client, em_secid, 101, 95, sem, tc),
+            _fetch_em_klines(http_client, em_secid, 102, 26, sem, tc),
+            _fetch_em_klines(http_client, em_secid, 103, 15, sem, tc),
+            _fetch_stock_notice_risk(http_client, c6, sem),
+            return_exceptions=True,
+        )
+
+        quotes = results[0] if isinstance(results[0], dict) else {}
+        dbars = results[1] if isinstance(results[1], list) else []
+        wbars = results[2] if isinstance(results[2], list) else []
+        mbars = results[3] if isinstance(results[3], list) else []
+        notice = results[4] if isinstance(results[4], dict) else {}
+
+        if len(dbars) < 25:
+            return {"ok": False, "detail": f"标的 {c6} 日K历史数据不足，上市交易时间过短"}
+
+        q = quotes.get(c6) or {}
+        cur_price = round(_sf(q.get("price"), dbars[-1]["close"]), 2)
+        day_chg = round(_sf(q.get("chg"), 0.0), 2)
+        name = str(q.get("name") or c6).replace(" ", "")
+        turnover = round(_sf(q.get("turnover"), 0.0), 2)
+        amount_yi = round(_sf(q.get("amount"), 0.0) / 1e8, 2)
+        mcap_yi = round(_sf(q.get("mcap"), 0.0) / 1e8, 1)
+
+        n = len(dbars)
+
+        # 维度一：试盘涨停与前置横盘
+        zt_indices = [i for i in range(max(0, n - 60), n) if _is_zt_bar(dbars, i, c6)]
+        has_zt = len(zt_indices) > 0
+        last_zt_idx = zt_indices[-1] if has_zt else -1
+        zt_bar = dbars[last_zt_idx] if has_zt else None
+        zt_date = zt_bar["date"] if zt_bar else ""
+        days_since_zt = (n - 1 - last_zt_idx) if has_zt else 999
+
+        pre_box_amp = 0.0
+        pre_runup = 0.0
+        if has_zt and last_zt_idx >= 8:
+            pre_slice = dbars[max(0, last_zt_idx - 35) : last_zt_idx]
+            if len(pre_slice) >= 8:
+                pre_hi = max(b["high"] for b in pre_slice)
+                pre_lo = min(b["low"] for b in pre_slice)
+                pre_box_amp = round(((pre_hi - pre_lo) / max(1e-6, pre_lo)) * 100.0, 1)
+                early_min = min(b["low"] for b in pre_slice[: min(10, len(pre_slice))])
+                pre_runup = round(((dbars[last_zt_idx - 1]["close"] - early_min) / max(1e-6, early_min)) * 100.0, 1)
+
+        if not has_zt:
+            d1_pass = False
+            d1_title = "试盘涨停"
+            d1_label = "近60日无试水涨停"
+            d1_val = "无涨停板"
+            d1_detail = "近60日未出现首板涨停试水，属于常态震荡，尚缺主力首板试盘测压信号"
+        elif days_since_zt == 0:
+            d1_pass = True
+            d1_title = "试盘涨停"
+            d1_label = "今日涨停试水"
+            d1_val = f"今日首板 ({zt_date})"
+            d1_detail = "今日放量拉涨停试盘，重点观察后续 2~3 个交易日能否缩量企稳不破起点"
+        elif 2 <= days_since_zt <= 22 and pre_runup <= 55.0:
+            d1_pass = True
+            d1_title = "试盘涨停"
+            d1_label = "标准首板试水"
+            d1_val = f"{zt_date} ({days_since_zt}天前)"
+            d1_detail = f"板前横盘振幅 {pre_box_amp}%，试水前未大幅暴涨透支，符合主力试水逻辑"
+        elif days_since_zt > 22:
+            d1_pass = "warn"
+            d1_title = "试盘涨停"
+            d1_label = "试盘时隔较长"
+            d1_val = f"{zt_date} ({days_since_zt}天前)"
+            d1_detail = f"试盘涨停距今已 {days_since_zt} 天，时间稍偏长，需重点确认底座防守"
+        else:
+            d1_pass = "warn"
+            d1_title = "试盘涨停"
+            d1_label = "刚涨停1天"
+            d1_val = f"{zt_date} (昨日涨停)"
+            d1_detail = "昨日刚完成试水涨停，需留至少 2 天观察洗盘缩量情况"
+
+        # 维度二：月线放量与历史估值位
+        month_vol_ratio = 1.0
+        month_pos_pct = 50.0
+        if len(mbars) >= 4:
+            cur_ym = mbars[-1]["date"][:7]
+            cur_m_trading_days = max(1, sum(1 for b in dbars if b["date"][:7] == cur_ym))
+            cur_m_scaled_vol = mbars[-1]["vol"] * max(1.0, 21.0 / min(21, cur_m_trading_days))
+            prev_full_m_vol = mbars[-2]["vol"] if len(mbars) >= 2 else mbars[-1]["vol"]
+            recent_m_peak = max(cur_m_scaled_vol, prev_full_m_vol)
+            base_slice = mbars[-7:-2] if len(mbars) >= 7 else mbars[:-2]
+            base_avg_vol = sum(b["vol"] for b in base_slice) / max(1, len(base_slice))
+            month_vol_ratio = round(recent_m_peak / max(1.0, base_avg_vol), 2)
+            m_hi = max(b["high"] for b in mbars)
+            m_lo = min(b["low"] for b in mbars)
+            month_pos_pct = round(((cur_price - m_lo) / max(1e-6, m_hi - m_lo)) * 100.0, 1)
+
+        if month_vol_ratio >= 1.25 and month_pos_pct <= 80.0:
+            d2_pass = True
+            d2_title = "月线放量"
+            d2_label = "放量蓄势充分"
+            d2_val = f"{month_vol_ratio}x (月位 {month_pos_pct}%)"
+            d2_detail = f"月成交量达基准 {month_vol_ratio} 倍且处于中低位，大资金长期建仓底色良好"
+        elif month_vol_ratio >= 1.10:
+            d2_pass = "warn"
+            d2_title = "月线放量"
+            d2_label = "温和放量"
+            d2_val = f"{month_vol_ratio}x (月位 {month_pos_pct}%)"
+            d2_detail = f"月线量能微增 {month_vol_ratio} 倍，中长期大级别异动尚在酝酿中"
+        elif month_pos_pct > 85.0:
+            d2_pass = "warn"
+            d2_title = "月线放量"
+            d2_label = "高位注意派发"
+            d2_val = f"{month_vol_ratio}x (月位 {month_pos_pct}%)"
+            d2_detail = f"月成交量虽放大但处于近15月极高位({month_pos_pct}%)，需谨防主力拉高出货"
+        else:
+            d2_pass = False
+            d2_title = "月线放量"
+            d2_label = "月量低迷"
+            d2_val = f"{month_vol_ratio}x (月位 {month_pos_pct}%)"
+            d2_detail = f"月成交量仅为基准的 {month_vol_ratio} 倍，中长线大资金介入迹象不明显"
+
+        # 维度三：周线趋势
+        weekly_up = False
+        weekly_higher_low = False
+        weekly_desc = "周线均线整理"
+        if len(wbars) >= 10:
+            w_closes = [b["close"] for b in wbars]
+            w_cur = w_closes[-1]
+            w_ma5 = _sma(w_closes, 5) or w_cur
+            w_ma10 = _sma(w_closes, 10) or w_cur
+            w_ma5_prev = _sma(w_closes[:-1], 5) or w_ma5
+            w_low_recent = min(b["low"] for b in wbars[-4:])
+            w_low_prior = min(b["low"] for b in wbars[-10:-4])
+            weekly_higher_low = w_low_recent >= w_low_prior * 0.97
+            weekly_up = (w_cur >= w_ma10 * 0.985) and (w_ma5 >= w_ma10 * 0.985 or w_ma5 > w_ma5_prev)
+            if w_ma5 > w_ma10 and w_ma5 > w_ma5_prev:
+                weekly_desc = "周MA5>MA10多头向上"
+            elif w_cur > w_ma10 and w_ma5 > w_ma5_prev:
+                weekly_desc = "周线MA5上拐支撑"
+            elif w_cur >= w_ma10:
+                weekly_desc = "周MA10上方震荡"
+            else:
+                weekly_desc = "周线下行破位承压"
+
+        if weekly_up and weekly_higher_low:
+            d3_pass = True
+            d3_title = "周线趋势"
+            d3_label = "趋势向上"
+            d3_val = weekly_desc
+            d3_detail = f"{weekly_desc}，且周低点逐级抬升，中期趋势保持向上动能"
+        elif weekly_up:
+            d3_pass = "warn"
+            d3_title = "周线趋势"
+            d3_label = "震荡企稳"
+            d3_val = weekly_desc
+            d3_detail = f"{weekly_desc}，中期趋势止跌走平，等待进一步放量走强"
+        else:
+            d3_pass = False
+            d3_title = "周线趋势"
+            d3_label = "中期承压"
+            d3_val = weekly_desc
+            d3_detail = f"{weekly_desc}，跌破周MA10均线，中期趋势偏弱"
+
+        # 维度四：日线缩量
+        vol_shrink_pct = 100.0
+        shrink_streak = 0
+        if has_zt and days_since_zt > 0:
+            post = dbars[last_zt_idx + 1 :]
+            zt_vol = max(1.0, zt_bar["vol"])
+            recent_post = post[-min(3, len(post)) :]
+            recent_avg_vol = sum(b["vol"] for b in recent_post) / len(recent_post)
+            vol_shrink_pct = round((recent_avg_vol / zt_vol) * 100.0, 1)
+            for idx in range(n - 1, max(last_zt_idx + 1, n - 7), -1):
+                if dbars[idx]["vol"] <= dbars[idx - 1]["vol"] * 1.05:
+                    shrink_streak += 1
+                else:
+                    break
+        else:
+            vol5 = sum(b["vol"] for b in dbars[-5:]) / 5.0
+            vol20 = sum(b["vol"] for b in dbars[-20:]) / 20.0
+            vol_shrink_pct = round((vol5 / max(1.0, vol20)) * 100.0, 1)
+
+        if has_zt and days_since_zt > 0:
+            if vol_shrink_pct <= 70.0:
+                d4_pass = True
+                d4_title = "日线缩量"
+                d4_label = "缩量衰竭"
+                d4_val = f"缩至试盘日 {vol_shrink_pct}%"
+                d4_detail = f"较涨停日缩量至 {vol_shrink_pct}%（连缩{shrink_streak}日），浮筹清洗彻底，抛压基本出清"
+            elif vol_shrink_pct <= 85.0:
+                d4_pass = "warn"
+                d4_title = "日线缩量"
+                d4_label = "温和缩量"
+                d4_val = f"缩至试盘日 {vol_shrink_pct}%"
+                d4_detail = f"缩量至 {vol_shrink_pct}%，浮筹在洗盘中，仍在寻找极致地量契机"
+            else:
+                d4_pass = False
+                d4_title = "日线缩量"
+                d4_label = "未见明显缩量"
+                d4_val = f"为试盘日 {vol_shrink_pct}%"
+                d4_detail = f"量能高达涨停日 {vol_shrink_pct}%，多空分歧巨大，尚未形成缩量防守"
+        else:
+            if vol_shrink_pct <= 75.0:
+                d4_pass = True
+                d4_title = "日线缩量"
+                d4_label = "地量沉寂"
+                d4_val = f"为20日均量 {vol_shrink_pct}%"
+                d4_detail = f"近期成交量仅为20日均量的 {vol_shrink_pct}%，处于地量蛰伏期"
+            else:
+                d4_pass = "warn"
+                d4_title = "日线缩量"
+                d4_label = "常态量能"
+                d4_val = f"为20日均量 {vol_shrink_pct}%"
+                d4_detail = f"近5日量能为均量的 {vol_shrink_pct}%，常态波动"
+
+        # 维度五：均线粘合与震仓信号
+        closes = [b["close"] for b in dbars]
+        ma5 = _sma(closes, 5) or cur_price
+        ma10 = _sma(closes, 10) or cur_price
+        ma20 = _sma(closes, 20) or cur_price
+        ma_spread_pct = round(((max(ma5, ma10, ma20) - min(ma5, ma10, ma20)) / max(1e-6, cur_price)) * 100.0, 1)
+        bias_ma5 = round(((cur_price - ma5) / max(1e-6, ma5)) * 100.0, 1)
+
+        shakeout_signals = []
+        check_slice = dbars[last_zt_idx + 1 :] if (has_zt and days_since_zt > 0) else dbars[-8:]
+        for b in check_slice:
+            body = abs(b["close"] - b["open"])
+            lo_shadow = min(b["close"], b["open"]) - b["low"]
+            if lo_shadow >= body * 1.6 and lo_shadow >= b["low"] * 0.015:
+                if "下影探底收回" not in shakeout_signals:
+                    shakeout_signals.append("下影探底收回")
+            if b["low"] < ma10 and b["close"] > ma10:
+                if "砸破均线反包" not in shakeout_signals:
+                    shakeout_signals.append("砸破均线反包")
+
+        if ma_spread_pct <= 3.5 and shakeout_signals:
+            d5_pass = True
+            d5_title = "均线粘合与震仓"
+            d5_label = "粘合+探底针"
+            d5_val = f"极差 {ma_spread_pct}% · {shakeout_signals[0]}"
+            d5_detail = f"MA5/10/20极差仅 {ma_spread_pct}%，且出现【{' + '.join(shakeout_signals)}】，震仓洗盘特征显著"
+        elif ma_spread_pct <= 4.0:
+            d5_pass = True
+            d5_title = "均线粘合与震仓"
+            d5_label = "均线紧密粘合"
+            d5_val = f"极差 {ma_spread_pct}%"
+            d5_detail = f"MA5/10/20极差 {ma_spread_pct}%，均线束高度收敛，筹码成本集中"
+        elif ma_spread_pct <= 6.5:
+            d5_pass = "warn"
+            d5_title = "均线粘合与震仓"
+            d5_label = "均线逐步收敛"
+            d5_val = f"极差 {ma_spread_pct}%"
+            d5_detail = f"均线极差 {ma_spread_pct}%，处于收拢阶段，尚未形成极致合力"
+        else:
+            d5_pass = False
+            d5_title = "均线粘合与震仓"
+            d5_label = "均线分散发散"
+            d5_val = f"极差 {ma_spread_pct}%"
+            d5_detail = f"均线极差 {ma_spread_pct}%，短期乖离过大，缺乏均线共振"
+
+        # 维度六：底座防守
+        support_floor = round(min(zt_bar["open"], zt_bar["low"]), 2) if zt_bar else round(min(b["low"] for b in dbars[-20:]), 2)
+        dist_floor_pct = round(((cur_price - support_floor) / max(1e-6, support_floor)) * 100.0, 1)
+
+        if cur_price >= support_floor * 0.99:
+            d6_pass = True
+            d6_title = "底座防守"
+            d6_label = "守住防守底线"
+            d6_val = f"支撑位 ¥{support_floor} (+{dist_floor_pct}%)"
+            d6_detail = f"现价稳稳站在起涨防守线 ¥{support_floor} 之上，主力试盘成本区支撑有效"
+        else:
+            d6_pass = False
+            d6_title = "底座防守"
+            d6_label = "跌破防守线"
+            d6_val = f"破位 ¥{support_floor} ({dist_floor_pct}%)"
+            d6_detail = f"现价已跌破防守线 ¥{support_floor}，起涨底座受损，存在深套破位风险"
+
+        # 综合评分 (0~100)
+        score = 0
+        score += 25 if d1_pass is True else (12 if d1_pass == "warn" else 0)
+        score += 20 if d2_pass is True else (10 if d2_pass == "warn" else 0)
+        score += 20 if d3_pass is True else (10 if d3_pass == "warn" else 0)
+        score += 15 if d4_pass is True else (8 if d4_pass == "warn" else 0)
+        score += 15 if d5_pass is True else (8 if d5_pass == "warn" else 0)
+        score += 5 if d6_pass is True else -20
+        if notice.get("riskLevel") == "高风险":
+            score -= 15
+        ignition_score = max(0, min(100, score))
+
+        # 状态判定
+        if day_chg >= 9.5 or (dist_floor_pct >= 25.0 and vol_shrink_pct >= 130.0):
+            stage = "IGNITING"
+            stage_label = "🚀 放量起爆拉升中"
+            stage_tip = "已启动放量主升行情，持有者转入移动倒T止盈模式，未持仓切勿盲目追高"
+            badge_bg = "#fee2e2"
+            badge_color = "#b91c1c"
+            badge_border = "#fca5a5"
+        elif ignition_score >= 80 and shakeout_signals:
+            stage = "SHAKEOUT_READY"
+            stage_label = "🔥 震仓完成·待起爆"
+            stage_tip = "试水后缩量洗盘到位，出现下影探底震仓针，主力控盘良好随时起爆"
+            badge_bg = "#fff1f0"
+            badge_color = "#cf1322"
+            badge_border = "#ffa39e"
+        elif ignition_score >= 70 and ma_spread_pct <= 4.0:
+            stage = "CONVERGED_WAIT"
+            stage_label = "⏳ 均线粘合·缩量蓄势"
+            stage_tip = "均线系统高度粘合收敛，量能温和萎缩，处于极佳的右侧起爆潜伏窗口"
+            badge_bg = "#fffbeb"
+            badge_color = "#b45309"
+            badge_border = "#fcd34d"
+        elif has_zt and vol_shrink_pct <= 85.0:
+            stage = "DIGESTING"
+            stage_label = "👀 试盘缩量消化"
+            stage_tip = "涨停试盘后进行正常的缩量消化回踩，关注能否回踩分时均价线企稳"
+            badge_bg = "#f0f9ff"
+            badge_color = "#0369a1"
+            badge_border = "#bae6fd"
+        elif not d6_pass:
+            stage = "BREAKDOWN_RISK"
+            stage_label = "🛑 破位防守风险"
+            stage_tip = "价格已跌破起涨试盘底线，短期形态破位，严禁盲目抄底接飞刀"
+            badge_bg = "#fef2f2"
+            badge_color = "#dc2626"
+            badge_border = "#fecaca"
+        else:
+            stage = "INCUBATING"
+            stage_label = "🌱 横盘蓄势孕育中"
+            stage_tip = "处于大周期横盘无量整理期，尚未出现首板点火试水信号，建议入池保持雷达跟踪"
+            badge_bg = "#f8fafc"
+            badge_color = "#475569"
+            badge_border = "#cbd5e1"
+
+        # 操盘 SOP
+        def_px = round(max(support_floor * 0.985, cur_price * 0.955), 2)
+        sop = {
+            "refPrice": cur_price,
+            "defensePrice": def_px,
+            "targetT1": round(cur_price * 1.05, 2),
+            "targetT2": round(cur_price * 1.10, 2),
+            "maxDays": 5,
+            "advice": (
+                f"【{name} 操盘建议】：当前处于「{stage_label}」阶段。"
+                + ("若有底仓：在第一倒T位 ¥" + str(round(cur_price*1.05, 2)) + " 附近倒T锁半，回踩均价线接回；" if stage in ("IGNITING", "SHAKEOUT_READY") else "若试仓潜伏：沿日内分时均线分批低吸，")
+                + f"严格以 ¥{def_px} 设防守底线，跌破执行纪律认错离场。"
+            ),
+        }
+
+        # 诊断总结
+        summary = (
+            f"【{name} ({c6}) 起爆成色体检报告】综合评分：{ignition_score} 分（{stage_label}）。\n"
+            f"① 试盘涨停：{d1_detail}；\n"
+            f"② 月线放量：{d2_detail}；\n"
+            f"③ 周线趋势：{d3_detail}；\n"
+            f"④ 日线缩量：{d4_detail}；\n"
+            f"⑤ 均线震仓：{d5_detail}；\n"
+            f"⑥ 底座防守：{d6_detail}。"
+        )
+
+        checklist = [
+            {"id": "zt", "title": d1_title, "passed": d1_pass, "badge": d1_label, "val": d1_val, "detail": d1_detail},
+            {"id": "month", "title": d2_title, "passed": d2_pass, "badge": d2_label, "val": d2_val, "detail": d2_detail},
+            {"id": "week", "title": d3_title, "passed": d3_pass, "badge": d3_label, "val": d3_val, "detail": d3_detail},
+            {"id": "daily", "title": d4_title, "passed": d4_pass, "badge": d4_label, "val": d4_val, "detail": d4_detail},
+            {"id": "ma", "title": d5_title, "passed": d5_pass, "badge": d5_label, "val": d5_val, "detail": d5_detail},
+            {"id": "floor", "title": d6_title, "passed": d6_pass, "badge": d6_label, "val": d6_val, "detail": d6_detail},
+        ]
+
+        return {
+            "ok": True,
+            "code": c6,
+            "name": name,
+            "price": cur_price,
+            "dayChg": day_chg,
+            "turnover": turnover,
+            "amountYi": amount_yi,
+            "mcapYi": mcap_yi,
+            "ignitionScore": ignition_score,
+            "stage": stage,
+            "stageLabel": stage_label,
+            "stageTip": stage_tip,
+            "badgeBg": badge_bg,
+            "badgeColor": badge_color,
+            "badgeBorder": badge_border,
+            "summaryText": summary,
+            "checklist": checklist,
+            "sop": sop,
+            "notice": notice,
+        }
+    finally:
+        if close_client:
+            await http_client.aclose()

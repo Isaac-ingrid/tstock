@@ -6,6 +6,7 @@ import LedgerSection from '../components/LedgerSection.jsx';
  */
 export default function LedgerPage({
   logs,
+  wbLatest,
   onAddLog,
   onDeleteLog,
   pool,
@@ -16,6 +17,7 @@ export default function LedgerPage({
     <div className="page-ledger">
       <LedgerSection
         logs={logs}
+        wbLatest={wbLatest}
         onAddLog={onAddLog}
         onDeleteLog={onDeleteLog}
         pool={pool}

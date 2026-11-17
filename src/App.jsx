@@ -419,14 +419,31 @@ export default function App() {
     toastOk('✓ 所有做T参数与自选持仓已成功保存至本地！');
   };
 
-  const handleAddStockByQuery = async (query) => {
+  const handleAddStockByQuery = async (query, meta = null) => {
     toast('正在全市场检索标的…', 'info');
     try {
       await addByQuery(query);
       // addByQuery 内部直接更新了 state.pool，重新同步到组件
       const raw = localStorage.getItem('t-system-pool');
       if (raw) {
-        const parsed = JSON.parse(raw);
+        let parsed = JSON.parse(raw);
+        if (meta && parsed.length > 0) {
+          const c6 = String(query).trim().padStart(6, '0');
+          parsed = parsed.map(st => {
+            if (st.code === c6 || st.name === query) {
+              return {
+                ...st,
+                strategyTag: meta.strategyTag || '起爆',
+                planStrategy: meta.strategy || 'ignition',
+                ignitionMeta: meta,
+              };
+            }
+            return st;
+          });
+          try {
+            localStorage.setItem('t-system-pool', JSON.stringify(parsed));
+          } catch (_) {}
+        }
         setPool(parsed);
         const lastCode = parsed[parsed.length - 1]?.code;
         if (lastCode) {
@@ -887,6 +904,7 @@ export default function App() {
             wbLatest={wbLatest}
             onExecTailBuy={handleExecTailBuy}
             onExecTailExit={handleExecTailExit}
+            onRefreshContract={fetchContract}
           />
         )}
 
@@ -945,9 +963,10 @@ export default function App() {
         {(activeTab === 'tabLedger' || activeTab === 'tabAll') && (
           <LedgerPage
             logs={tradeLogs}
+            wbLatest={wbLatest}
             onAddLog={(log) => {
               setTradeLogs(prev => [log, ...prev]);
-              toastOk('✓ 新做T台账流水记录已成功写入！');
+              toastOk('✓ 交易记录已成功录入台账！');
             }}
             onDeleteLog={(id) => {
               setTradeLogs(prev => prev.filter(x => x.id !== id));

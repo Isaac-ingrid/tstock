@@ -569,22 +569,22 @@ export function researchBlock(s, i, poolRef){
 export function vmCardHtml(s){
   const vm = s._vm;
   const box = (cls, title, sig, sc, big, desc) =>
-    `<div class="ta ${cls}"><div class="h"><span>${title}</span><span class="sig ${sc}">${sig}</span></div>
+    `<div class="ta ${cls}"><div class="h"><span>${title}</span><span class="sig ${sc}" style="white-space:nowrap;flex-shrink:0;align-self:center;height:fit-content;max-height:22px">${sig}</span></div>
      ${big?`<div class="big">${big}</div>`:''}<div class="d">${desc}</div></div>`;
   const note = `<br><span style="color:var(--mute)">分母是前 ${(vm && vm.baseDays) || 5} 个交易日<b>同一时段</b>的平均量，不是当日均量。</span>`;
   if (vm && vm.ok && vm.state !== 'na'){
-    return box(vm.cls, '分时量能（同时段基准）', vm.label, vm.sc,
+    return box(vm.cls, '分时量能 · 同时段', vm.label, vm.sc,
       (vm.r3 != null ? vm.r3.toFixed(2) + '×' : '—'), vm.text + note);
   }
   if (vm && vm.err){
-    return box('t-nt', '分时量能（同时段基准）', '未取到', 's-nt', '—',
+    return box('t-nt', '分时量能 · 同时段', '未取到', 's-nt', '—',
       `${vm.err}。日级量能卡片仍然有效。一旦恢复即自动判读。`);
   }
   if (vm && vm.ok){
-    return box('t-nt', '分时量能（同时段基准）', '样本不足', 's-nt', (vm.nBars || 0) + ' 根',
+    return box('t-nt', '分时量能 · 同时段', '样本不足', 's-nt', (vm.nBars || 0) + ' 根',
       `今日 5 分钟K 只有 <b>${vm.nBars || 0} 根</b>，样本不足，不做量价判定。`);
   }
-  return box('t-nt', '分时量能（同时段基准）', '未取数', 's-nt', '—',
+  return box('t-nt', '分时量能 · 同时段', '未取数', 's-nt', '—',
     '点右上「⟳ 取数」后计算：拉 m5 → 建前 5 日同时段基准 → 判量价关系。');
 }
 

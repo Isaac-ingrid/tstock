@@ -342,6 +342,24 @@ export default function StockCard({
             ⛔ 破位防套锁
           </span>
         )}
+        {(stock.strategyTag === '起爆' || stock.planStrategy === 'ignition') && (
+          <span
+            className="snap-tag"
+            style={{ background: '#fff7ed', borderColor: '#fdba74', color: '#c2410c', fontWeight: 700 }}
+            title={stock.ignitionMeta ? `起爆策略跟踪 ｜ 参考买价 ¥${stock.ignitionMeta.refPrice || '—'} ｜ 防守底线 ¥${stock.ignitionMeta.stopPrice || '—'}` : '起爆挖掘策略跟踪标的'}
+          >
+            🚀 起爆试盘跟踪
+          </span>
+        )}
+        {(stock.strategyTag === '抄底' || stock.planStrategy === 'bottom') && (
+          <span
+            className="snap-tag"
+            style={{ background: '#f0fdf4', borderColor: '#86efac', color: '#15803d', fontWeight: 700 }}
+            title={stock.ignitionMeta ? `抗跌抄底策略跟踪 ｜ 参考买价 ¥${stock.ignitionMeta.refPrice || '—'} ｜ 止损 ¥${stock.ignitionMeta.stopPrice || '—'}` : '抗跌抄底策略跟踪标的'}
+          >
+            🛟 抗跌抄底跟踪
+          </span>
+        )}
         {c.ignitionActive && (
           <span
             className="snap-tag"

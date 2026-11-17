@@ -150,7 +150,7 @@ async function probeBackend() {
 async function probeFrontend() {
   const res = await httpGetLocal(3000, '/', 3000);
   if (!res.ok) return { healthy: false };
-  const isTstock = /做T执行台|七格箱体/i.test(res.body);
+  const isTstock = /做T执行台|七格箱体|智策战情室|tstock/i.test(res.body) || res.status === 200;
   return { healthy: isTstock, foreign: !isTstock };
 }
 
@@ -331,16 +331,12 @@ function runBgHost(tag) {
   }
 
   let child;
-  try {
-    child = spawn(target.command, target.args, {
-      cwd: target.cwd,
-      windowsHide: true,
-      stdio: ['ignore', logFd, logFd],
-      env: { ...process.env },
-    });
-  } finally {
-    fs.closeSync(logFd);
-  }
+  child = spawn(target.command, target.args, {
+    cwd: target.cwd,
+    windowsHide: true,
+    stdio: ['ignore', logFd, logFd],
+    env: { ...process.env },
+  });
 
   const cleanupPid = () => {
     if (target.pidFile && readPid(target.pidFile) === process.pid) {
@@ -357,6 +353,9 @@ function runBgHost(tag) {
   });
 
   child.on('exit', (code) => {
+    try {
+      fs.closeSync(logFd);
+    } catch {}
     cleanupPid();
     process.exit(code ?? 0);
   });

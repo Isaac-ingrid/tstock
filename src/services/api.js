@@ -155,6 +155,116 @@ export async function fetchIgnitionPool({
   }
 }
 
+/* 获取起爆与抄底在轨生命周期跟踪池（近20日已推荐标的的最新实时行情、收益率、状态与操盘SOP） */
+export async function fetchIgnitionTracking() {
+  const url = `${STOCK_API_BASE}/api/stock/ignition_tracking`;
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 15000);
+  try {
+    const res = await fetch(url, { cache: 'no-store', signal: ctl.signal });
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.detail || `起爆跟踪接口异常 (${res.status})`);
+    }
+    return await res.json();
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+/* 专属诊断自选横盘标的的起爆成色（六维雷达 + SOP操盘预案） */
+export async function fetchIgnitionDiagnose(query) {
+  const q = String(query || '').trim();
+  const url = `${STOCK_API_BASE}/api/stock/ignition_diagnose?query=${encodeURIComponent(q)}`;
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 15000);
+  try {
+    const res = await fetch(url, { cache: 'no-store', signal: ctl.signal });
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.detail || `起爆成色体检异常 (${res.status})`);
+    }
+    return await res.json();
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+/* 一键触发全市场尾盘黑马实时选股扫描与契约同步 */
+export async function runTailScan(force = true) {
+  const url = `${STOCK_API_BASE}/api/stock/run_tail_scan?force=${force ? 'true' : 'false'}`;
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 65000);
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      cache: 'no-store',
+      signal: ctl.signal,
+    });
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.detail || `尾盘扫描失败 (${res.status})`);
+    }
+    return await res.json();
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+/* 获取 AI 交易复盘教练大模型配置（天翼云接口） */
+export async function fetchCoachConfig() {
+  const url = `${STOCK_API_BASE}/api/coach/config`;
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 6000);
+  try {
+    const res = await fetch(url, { cache: 'no-store', signal: ctl.signal });
+    if (!res.ok) throw new Error(`获取AI配置失败 (${res.status})`);
+    return await res.json();
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+/* 测试天翼云大模型连通性 */
+export async function testCoachConnection(params = {}) {
+  const url = `${STOCK_API_BASE}/api/coach/test`;
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 25000);
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+      signal: ctl.signal,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || `连接测试失败 (${res.status})`);
+    return data;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+/* 提交实盘交易流水至天翼云大模型进行专业级复盘诊断 */
+export async function fetchCoachReview(payload = {}) {
+  const url = `${STOCK_API_BASE}/api/coach/review`;
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 70000);
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: ctl.signal,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || `AI复盘诊断生成失败 (${res.status})`);
+    return data;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 /* —— 本地代码解析：0 网络请求，纯规则。输入代码这条路完全不依赖检索接口 —— */
 export function tcodeFromCode(code){
   const c = String(code).trim();

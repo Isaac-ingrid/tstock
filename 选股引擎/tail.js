@@ -125,23 +125,91 @@ async function fetchSnapshot({ force = true } = {}) {
     const c = JSON.parse(fs.readFileSync(CACHE, 'utf8'));
     if (c?.rows?.length > 3000) { console.log(`（复用 ${path.basename(CACHE)}，${c.rows.length} 只）`); return c.rows; }
   }
-  const total = (await getJson(`https://${emHost()}/api/qt/clist/get?${EM_QS}&pn=1`))?.data?.total || 0;
+  let total = 0;
+  for (let r = 0; r < 5; r++) {
+    try {
+      const j = await getJson(`https://${emHost()}/api/qt/clist/get?${EM_QS}&pn=1`, 'utf-8', 3);
+      total = j?.data?.total || 0;
+      if (total > 0) break;
+    } catch (e) {
+      await new Promise((res) => setTimeout(res, 300 * (r + 1)));
+    }
+  }
+
+  if (!total) {
+    if (fs.existsSync(OUT_DIR)) {
+      const snaps = fs.readdirSync(OUT_DIR)
+        .filter((f) => f.startsWith(`tail-snapshot-${TODAY}-`))
+        .map((f) => {
+          try {
+            const p = path.join(OUT_DIR, f);
+            const c = JSON.parse(fs.readFileSync(p, 'utf8'));
+            return { f, rows: c?.rows || [] };
+          } catch {
+            return { f, rows: [] };
+          }
+        })
+        .filter((x) => x.rows.length >= 3000)
+        .sort((a, b) => b.rows.length - a.rows.length);
+
+      if (snaps.length > 0) {
+        console.log(`⚠️ 东财 clist 首包重试超时，启动今日历史最全快照兜底: ${snaps[0].f} (${snaps[0].rows.length} 只)`);
+        return snaps[0].rows;
+      }
+    }
+    throw new Error('东财 clist 接口重试失败且无今日可用快照');
+  }
+
   const pages = Math.ceil(total / 100);
   console.log(`  全市场 ${total} 只，${pages} 页`);
+  const pageMap = new Map();
+  let pendingPages = Array.from({ length: pages }, (_, i) => i + 1);
+
+  for (let round = 1; round <= 3 && pendingPages.length > 0; round++) {
+    const queue = [...pendingPages];
+    pendingPages = [];
+    let cur = 0;
+    const worker = async () => {
+      while (cur < queue.length) {
+        const pn = queue[cur++];
+        try {
+          const j = await getJson(`https://${emHost()}/api/qt/clist/get?${EM_QS}&pn=${pn}`, 'utf-8', 3);
+          const diff = j?.data?.diff || [];
+          if (diff.length > 0) {
+            pageMap.set(pn, diff.map(mapRow));
+          } else {
+            pendingPages.push(pn);
+          }
+        } catch {
+          pendingPages.push(pn);
+        }
+        await new Promise((r) => setTimeout(r, 60));
+      }
+    };
+    await Promise.all(Array.from({ length: 4 }, worker));
+  }
+
   const out = [];
-  let next = 1;
-  const worker = async () => {
-    while (next <= pages) {
-      const pn = next++;
+  for (const list of pageMap.values()) {
+    out.push(...list);
+  }
+  let rows = out.filter((x) => Number.isFinite(x.chgPct) && x.price > 0);
+  if (rows.length < 4500 && fs.existsSync(OUT_DIR)) {
+    const snaps = fs.readdirSync(OUT_DIR)
+      .filter((f) => f.startsWith(`tail-snapshot-${TODAY}-`))
+      .sort()
+      .reverse();
+    for (const snap of snaps) {
       try {
-        const j = await getJson(`https://${emHost()}/api/qt/clist/get?${EM_QS}&pn=${pn}`, 'utf-8', 4);
-        for (const d of j?.data?.diff || []) out.push(mapRow(d));
-      } catch { /* 单页失败跳过 */ }
-      await new Promise((r) => setTimeout(r, 120));
+        const c = JSON.parse(fs.readFileSync(path.join(OUT_DIR, snap), 'utf8'));
+        if (c?.rows?.length > rows.length && c?.rows?.length > 4500) {
+          console.log(`⚠️ 本次抓包样本偏少(${rows.length})，补充今日全量快照(${snap}, ${c.rows.length}只)`);
+          rows = c.rows;
+          break;
+        }
+      } catch {}
     }
-  };
-  await Promise.all(Array.from({ length: 3 }, worker));
-  const rows = out.filter((x) => Number.isFinite(x.chgPct) && x.price > 0);
+  }
   if (rows.length > 2000) {
     fs.mkdirSync(OUT_DIR, { recursive: true });
     fs.writeFileSync(CACHE, JSON.stringify({ date: TODAY, at: HHMM, total, rows }, null, 0));

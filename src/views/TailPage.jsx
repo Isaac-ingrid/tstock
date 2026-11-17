@@ -9,7 +9,8 @@ export default function TailPage({
   actives,
   wbLatest,
   onExecTailBuy,
-  onExecTailExit
+  onExecTailExit,
+  onRefreshContract
 }) {
   return (
     <div className="page-tail">
@@ -19,6 +20,7 @@ export default function TailPage({
         wbLatest={wbLatest}
         onExecTailBuy={onExecTailBuy}
         onExecTailExit={onExecTailExit}
+        onRefreshContract={onRefreshContract}
       />
     </div>
   );

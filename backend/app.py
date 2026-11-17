@@ -6,6 +6,7 @@ import os
 import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from typing import Any, Optional
 from urllib.parse import urlsplit
 
 import httpx
@@ -14,8 +15,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
+from backend.coach import get_coach_config, test_coach_connection, generate_coach_review
 from backend.diagnosis import get_stock_diagnosis
-from backend.ignition import get_ignition_pool
+from backend.ignition import get_ignition_pool, get_ignition_tracking_pool, diagnose_ignition_stock
 from backend.limitup import get_limitup_pool, invalidate_limitup_cache
 from backend.strategy_ledger import get_strategy_performance, snapshot_strategies
 from backend.strong_herd import mutate_herd_pool
@@ -217,6 +219,145 @@ async def stock_ignition_pool(
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"起爆挖掘扫描失败: {exc}") from exc
+
+
+@app.get("/api/stock/ignition_tracking")
+async def stock_ignition_tracking(request: Request) -> dict[str, object]:
+    """获取起爆挖掘与抗跌抄底在轨生命周期跟踪池（毫秒级拉取最新现价与SOP建议）"""
+    try:
+        http_client = getattr(request.app.state, "http", None)
+        return await get_ignition_tracking_pool(http_client=http_client)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"起爆在轨跟踪获取失败: {exc}") from exc
+
+
+@app.get("/api/stock/ignition_diagnose")
+async def stock_ignition_diagnose(request: Request, query: str = Query(..., min_length=1, max_length=50)) -> dict[str, object]:
+    """诊断自选横盘标的的起爆成色（试盘涨停 + 月放量 + 周向上 + 日缩量 + 均线粘合震仓 + 底座防守）"""
+    try:
+        http_client = getattr(request.app.state, "http", None)
+        return await diagnose_ignition_stock(query=query, http_client=http_client)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"起爆成色体检异常: {exc}") from exc
+
+
+_tail_scan_lock = asyncio.Lock()
+
+
+@app.post("/api/stock/run_tail_scan")
+@app.get("/api/stock/run_tail_scan")
+async def run_tail_scan_api(force: bool = Query(default=True)) -> dict[str, object]:
+    """一键触发全市场尾盘黑马实时选股扫描并更新契约与前端缓存"""
+    if _tail_scan_lock.locked():
+        return {
+            "ok": False,
+            "busy": True,
+            "message": "全市场尾盘黑马扫描正在执行中，请稍候刷新结果…",
+        }
+
+    async with _tail_scan_lock:
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        task_script = os.path.join(project_root, "timing_task", "tasks", "task_tail.js")
+
+        cmd = ["node", task_script]
+        if force:
+            cmd.append("--force")
+
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=project_root,
+            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=60.0)
+            out_str = stdout.decode("utf-8", errors="replace")
+            err_str = stderr.decode("utf-8", errors="replace")
+
+            if proc.returncode != 0:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"尾盘扫描执行失败 (code {proc.returncode}): {err_str or out_str}",
+                )
+
+            latest_file = os.path.join(project_root, "data", "latest.json")
+            tail_data = []
+            tail_meta = None
+            if os.path.exists(latest_file):
+                try:
+                    with open(latest_file, "r", encoding="utf-8") as f:
+                        lj = json.load(f)
+                        tail_data = lj.get("tail", [])
+                        tail_meta = lj.get("tailMeta")
+                except Exception:
+                    pass
+
+            return {
+                "ok": True,
+                "message": f"尾盘扫描完成，共精选出 {len(tail_data)} 只隔夜黑马标的",
+                "count": len(tail_data),
+                "tailMeta": tail_meta,
+                "tail": tail_data,
+                "logs": [line.strip() for line in out_str.strip().splitlines() if line.strip()][-12:],
+            }
+        except asyncio.TimeoutError:
+            raise HTTPException(status_code=504, detail="尾盘黑马全市场扫描超时 (60s)")
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"触发尾盘扫描异常: {exc}") from exc
+
+
+class CoachTestReq(BaseModel):
+    apiKey: Optional[str] = None
+    apiUrl: Optional[str] = None
+    model: Optional[str] = None
+
+
+class CoachReviewReq(BaseModel):
+    trades: list[dict[str, Any]]
+    date: str
+    marketEnv: Optional[dict[str, Any]] = None
+    userNotes: Optional[str] = None
+    apiKey: Optional[str] = None
+    apiUrl: Optional[str] = None
+    model: Optional[str] = None
+
+
+@app.get("/api/coach/config")
+async def coach_config_api() -> dict[str, Any]:
+    """获取天翼云大模型配置状态与可用参数"""
+    return get_coach_config()
+
+
+@app.post("/api/coach/test")
+async def coach_test_api(req: CoachTestReq) -> dict[str, Any]:
+    """测试天翼云 / OpenAI 兼容接口连接性与模型延迟"""
+    try:
+        return await test_coach_connection(
+            api_key=req.apiKey,
+            api_url=req.apiUrl,
+            model=req.model,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/coach/review")
+async def coach_review_api(req: CoachReviewReq) -> dict[str, Any]:
+    """调用天翼云大模型执行今日操盘与做T实战复盘诊断"""
+    try:
+        return await generate_coach_review(
+            trades=req.trades,
+            date=req.date,
+            market_env=req.marketEnv,
+            user_notes=req.userNotes,
+            api_key=req.apiKey,
+            api_url=req.apiUrl,
+            model=req.model,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @app.get("/api/proxy")

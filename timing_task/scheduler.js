@@ -163,9 +163,27 @@ function startSchedulerLoop() {
     }
 
     SCHEDULE.forEach(task => {
-      // 若当前时间与计划时间匹配，且今天尚未成功执行
-      if (curTime === task.time && state.lastRun[task.id] !== today) {
-        log(`命中调度时刻 ${curTime}，开始执行 ${task.name}...`);
+      // 允许当前时刻命中，或若已过调度时刻但今天尚未成功执行（支持开机追赶补跑）
+      let shouldRun = false;
+      const hasRunToday = state.lastRun[task.id] === today && state.lastStatus[task.id] === 'success';
+
+      if (!hasRunToday) {
+        if (task.id === 'auction') {
+          // 09:26 任务：09:26 ~ 14:30 之间均可补跑
+          shouldRun = curTime >= task.time && curTime <= '14:30';
+        } else if (task.id === 'tail') {
+          // 14:30 任务：14:30 ~ 15:00 之间均可补跑
+          shouldRun = curTime >= task.time && curTime <= '15:00';
+        } else if (task.id === 'daily') {
+          // 15:10 任务：15:10 之后任何时刻均可补跑
+          shouldRun = curTime >= task.time;
+        } else {
+          shouldRun = curTime === task.time;
+        }
+      }
+
+      if (shouldRun) {
+        log(`命中调度触发窗口 (计划: ${task.time}, 当前: ${curTime})，开始执行 ${task.name}...`);
         executeTask(task, false);
       }
     });

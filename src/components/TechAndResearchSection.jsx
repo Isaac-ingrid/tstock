@@ -213,7 +213,10 @@ export default function TechAndResearchSection({ stock, poolIndex, pool = [] }) 
         <div className={`ta ${(vm && vm.ok && vm.cls) || 't-nt'}`}>
           <div className="h">
             <span title="相对近 5 日同一时段均量基准">分时量能 · 同时段</span>
-            <span className={`sig ${(vm && vm.ok && vm.sc) || 's-nt'}`}>
+            <span
+              className={`sig ${(vm && vm.ok && vm.sc) || 's-nt'}`}
+              style={{ whiteSpace: 'nowrap', flexShrink: 0, alignSelf: 'center', height: 'fit-content', maxHeight: '22px' }}
+            >
               {(vm && vm.ok && vm.label) || (vm && vm.err ? '未取到' : '未取数')}
             </span>
           </div>

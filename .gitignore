@@ -62,7 +62,9 @@ dist/
 out/
 public/data/
 backend/.venv/
+.env
 .env.local
+.env.*.local
 backend/.env
 timing_task/logs/
 timing_task/scheduler.pid
