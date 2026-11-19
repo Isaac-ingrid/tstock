@@ -782,7 +782,7 @@
   /* ===== 现金水位防御警戒条 ===== */
   .cash-risk-box{border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;font-size:12.5px;line-height:1.5}
   .cash-risk-box.warn{background:var(--warn-bg);border:1px solid var(--warn-b);color:var(--warn-d)}
-  .cash-risk-box.danger{background:var(--up-bg);border:1px solid var(--up-b);color:var(--up)}
+  .cash-risk-box.danger{background:var(--up-bg);border-color:var(--up-b);color:var(--up)}
   .cr-v{font-weight:700;font-family:ui-monospace,Consolas,monospace;font-size:13.5px}
 
   /* ===== T+1 锁仓指示 ===== */
@@ -1901,7 +1901,12 @@
   /* iOS Safari 防聚焦自动放大跳动（输入框字号 >= 16px） */
   .modal-bd input[type="number"],
   .modal-bd input[type="text"],
+  .modal-bd input[type="date"],
+  .modal-bd input[type="password"],
   .modal-bd select,
+  .modal-bd textarea,
+  .diag-search-input,
+  .ledger-stock-select,
   #dbInput,
   .bc-memo-edit input,
   .bcc-inputs input,
@@ -1941,7 +1946,7 @@
   }
   .modal-box {
     max-width: 100% !important;
-    width: 100%;
+    width: 100% !important;
     border-radius: 16px 16px 0 0;
     border-left: none;
     border-right: none;
@@ -1987,11 +1992,13 @@
     padding: 10px 14px calc(12px + env(safe-area-inset-bottom, 0px)) !important;
     flex-shrink: 0;
   }
-  .quickt-modal-box .modal-ft button {
+  .quickt-modal-box .modal-ft button,
+  .ledger-modal-box .modal-ft button {
     min-height: 40px;
     font-size: 13.5px;
   }
-  .quickt-modal-box .modal-ft button.primary {
+  .quickt-modal-box .modal-ft button.primary,
+  .ledger-modal-box .modal-ft button.primary {
     flex: 1;
   }
   .qt-chip {

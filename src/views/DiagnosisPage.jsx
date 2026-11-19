@@ -243,6 +243,13 @@ export default function DiagnosisPage({
     copyPlain(report.wechatSummary, '✓ 已复制完整体检报告！可直接粘贴至微信回复朋友');
   };
 
+  const scrollToDiagSection = (elId) => {
+    const el = document.getElementById(elId);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
   const isInPool = report && pool.some(s => String(s.code).padStart(6, '0') === String(report.code).padStart(6, '0'));
 
   // 当诊断报告切换新标的时，构造交互式股票对象并加载分时+日K用于买卖点画图
@@ -385,30 +392,31 @@ export default function DiagnosisPage({
 
   return (
     <div className="page-diagnosis" style={{ marginTop: '12px' }}>
-      {/* 1. 顶部检索与快速切换栏 */}
-      <section style={{ padding: '16px 20px', marginBottom: '14px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{ fontSize: '20px' }}>🩺</span>
-            <div>
-              <h2 style={{ fontSize: '16px', margin: 0, fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+      {/* 1. 顶部检索与单手快速切换栏 */}
+      <section className="diag-search-card">
+        <div className="diag-top-bar">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+            <span style={{ fontSize: '20px', flexShrink: 0 }}>🩺</span>
+            <div style={{ minWidth: 0 }}>
+              <h2 className="diag-top-title">
                 任意股票全景体检报告
-                <span style={{ fontSize: '11.5px', fontWeight: 400, color: 'var(--mute)', background: 'var(--surface2)', padding: '2px 8px', borderRadius: '4px' }}>
+                <span className="diag-top-badge">
                   二波预期 · 板块生态 · 分时VWAP · 排雷自救
                 </span>
               </h2>
-              <p style={{ margin: '3px 0 0', fontSize: '12.5px', color: 'var(--sub)' }}>
+              <p className="diag-top-desc">
                 临时看股、朋友问股、深套自救诊断 —— 深度透视板块二轮预期、日内分时黄白线、套牢盘筹码与做T处方
               </p>
             </div>
           </div>
 
-          {/* 搜索框：支持6位代码 / 股票名 / 拼音首字母联想与回车自动解析 */}
-          <div ref={searchBoxRef} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ position: 'relative' }}>
+          {/* 搜索框：窄屏 100% 全宽 + 16px 防 iOS 放大 + 大热区联想候选 */}
+          <div ref={searchBoxRef} className="diag-search-wrap">
+            <div className="diag-input-box">
               <input
                 type="text"
-                placeholder="输入代码 / 股票名 / 拼音（如 日出东方）"
+                enterKeyHint="search"
+                placeholder="输入代码 / 股票名 / 拼音（如 万丰奥威）"
                 value={inputText}
                 onFocus={() => {
                   if (suggestions.length > 0 && !extractCodeFromInput(inputText)) {
@@ -444,37 +452,19 @@ export default function DiagnosisPage({
                     handleSubmitSearch();
                   }
                 }}
-                style={{
-                  width: '250px',
-                  padding: '7px 26px 7px 12px',
-                  fontSize: '13px',
-                  borderRadius: '6px',
-                  border: '1px solid var(--line)',
-                  outline: 'none',
-                  background: 'var(--surface)'
-                }}
+                className="diag-search-input"
               />
               {inputText && (
                 <button
                   type="button"
                   title="清空"
+                  aria-label="清空输入"
+                  className="diag-clear-btn"
                   onClick={() => {
                     suppressSuggestRef.current = true;
                     setInputText('');
                     setSuggestions([]);
                     setShowSuggest(false);
-                  }}
-                  style={{
-                    position: 'absolute',
-                    right: '6px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    border: 'none',
-                    background: 'transparent',
-                    color: 'var(--mute)',
-                    cursor: 'pointer',
-                    fontSize: '13px',
-                    padding: '0 3px',
                   }}
                 >
                   ✕
@@ -482,23 +472,9 @@ export default function DiagnosisPage({
               )}
 
               {showSuggest && suggestions.length > 0 && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: 'calc(100% + 4px)',
-                    left: 0,
-                    right: 0,
-                    minWidth: '260px',
-                    zIndex: 99,
-                    background: 'var(--surface)',
-                    border: '1px solid var(--line)',
-                    borderRadius: '8px',
-                    boxShadow: '0 8px 24px rgba(15, 23, 42, 0.14)',
-                    overflow: 'hidden',
-                  }}
-                >
-                  <div style={{ padding: '4px 10px', fontSize: '10.5px', color: 'var(--mute)', background: 'var(--surface2)', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between' }}>
-                    <span>点击或 ↑↓ 选择 A 股标的</span>
+                <div className="diag-suggest-pop">
+                  <div style={{ padding: '5px 12px', fontSize: '11px', color: 'var(--mute)', background: 'var(--surface2)', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>点选 A 股标的立即体检</span>
                     {searching && <span>检索中…</span>}
                   </div>
                   {suggestions.map((cand, idx) => (
@@ -510,21 +486,7 @@ export default function DiagnosisPage({
                         runDiagnosis(cand.code, cand.name);
                       }}
                       onMouseEnter={() => setHighlightIdx(idx)}
-                      style={{
-                        width: '100%',
-                        border: 'none',
-                        borderBottom: idx === suggestions.length - 1 ? 'none' : '1px solid var(--line)',
-                        padding: '7px 10px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: '8px',
-                        fontSize: '12.5px',
-                        cursor: 'pointer',
-                        textAlign: 'left',
-                        background: highlightIdx === idx ? '#eff6ff' : 'var(--surface)',
-                        color: 'var(--text)',
-                      }}
+                      className={`diag-suggest-item ${highlightIdx === idx ? 'active' : ''}`}
                     >
                       <span style={{ fontWeight: 700 }}>{cand.name}</span>
                       <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -544,60 +506,35 @@ export default function DiagnosisPage({
             </div>
 
             <button
+              type="button"
               onClick={handleSubmitSearch}
               disabled={loading || searching}
-              style={{
-                padding: '7px 16px',
-                background: 'var(--info)',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '6px',
-                fontSize: '13px',
-                fontWeight: 600,
-                cursor: (loading || searching) ? 'not-allowed' : 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px'
-              }}
+              className="diag-submit-btn"
             >
-              {loading ? '🔍 正在体检…' : searching ? '🔎 匹配中…' : '🔍 立即体检'}
+              {loading ? '🔍 体检中…' : searching ? '🔎 匹配中…' : '🔍 立即体检'}
             </button>
           </div>
         </div>
 
-        {/* 快速选择候选池 */}
-        <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px dashed var(--line)', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', fontSize: '12px' }}>
-          <span style={{ color: 'var(--mute)' }}>⚡ 快捷诊断:</span>
-          {pool.length > 0 && pool.slice(0, 5).map(s => (
+        {/* 快速选择候选池（手机端单行丝滑横滑，不堆叠多行占首屏） */}
+        <div className="diag-preset-strip">
+          <span className="diag-preset-lbl">⚡ 快捷诊断:</span>
+          {pool.length > 0 && pool.slice(0, 6).map(s => (
             <button
               key={s.code}
+              type="button"
               onClick={() => handlePresetClick(s.code, s.name)}
-              style={{
-                padding: '2px 9px',
-                borderRadius: '12px',
-                border: '1px solid var(--line)',
-                background: activeCode === s.code ? 'var(--info-bg)' : 'var(--surface)',
-                color: activeCode === s.code ? 'var(--info)' : 'var(--text)',
-                cursor: 'pointer',
-                fontSize: '12px'
-              }}
+              className={`diag-preset-pill ${activeCode === s.code ? 'active' : ''}`}
             >
-              自选: {s.name} ({s.code})
+              自选·{s.name}
             </button>
           ))}
-          {QUICK_PRESETS.map(p => (
+          {QUICK_PRESETS.filter(p => !pool.slice(0, 6).some(s => s.code === p.code)).map(p => (
             <button
               key={p.code}
+              type="button"
               onClick={() => handlePresetClick(p.code, p.name)}
-              style={{
-                padding: '2px 9px',
-                borderRadius: '12px',
-                border: '1px solid var(--line)',
-                background: activeCode === p.code ? 'var(--surface2)' : 'var(--surface)',
-                color: 'var(--sub)',
-                cursor: 'pointer',
-                fontSize: '12px'
-              }}
+              className={`diag-preset-pill preset ${activeCode === p.code ? 'active' : ''}`}
             >
               {p.name}
             </button>
@@ -607,17 +544,18 @@ export default function DiagnosisPage({
 
       {/* 2. 诊断报告正文 */}
       {loading ? (
-        <section style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--sub)' }}>
+        <section style={{ textAlign: 'center', padding: '56px 16px', color: 'var(--sub)' }}>
           <div style={{ fontSize: '32px', marginBottom: '12px' }}>⏳</div>
           <div style={{ fontSize: '15px', fontWeight: 600 }}>正在并发扫描公告、板块二波预期、分时VWAP与做T自救处方…</div>
           <div style={{ fontSize: '12px', color: 'var(--mute)', marginTop: '6px' }}>连接东方财富公告与板块热点 + 腾讯日K与分钟级别VWAP</div>
         </section>
       ) : errorMsg ? (
-        <section style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--up)' }}>
+        <section style={{ textAlign: 'center', padding: '40px 16px', color: 'var(--up)' }}>
           <div style={{ fontSize: '28px', marginBottom: '8px' }}>⚠️</div>
           <div style={{ fontWeight: 600 }}>诊断数据获取失败</div>
           <div style={{ fontSize: '12px', color: 'var(--sub)', marginTop: '4px' }}>{errorMsg}</div>
           <button
+            type="button"
             onClick={() => runDiagnosis(activeCode)}
             style={{ marginTop: '14px', padding: '6px 14px', background: 'var(--surface2)', border: '1px solid var(--line)', borderRadius: '6px', cursor: 'pointer' }}
           >
@@ -626,13 +564,39 @@ export default function DiagnosisPage({
         </section>
       ) : report ? (
         <div>
+          {/* 🧭 单手章节速达锚点导航条（长报告在手机端拇指一点直达核心模块） */}
+          <div className="diag-anchor-bar" role="navigation" aria-label="体检报告章节速达">
+            {dec && (
+              <button type="button" className="diag-anchor-chip" onClick={() => scrollToDiagSection('diagSecDecision')}>
+                🎯 买点结论
+              </button>
+            )}
+            {diagChartStock && (
+              <button type="button" className="diag-anchor-chip" onClick={() => scrollToDiagSection('diagSecChart')}>
+                📈 分时看盘
+              </button>
+            )}
+            <button type="button" className="diag-anchor-chip" onClick={() => scrollToDiagSection('diagSecSector')}>
+              🌊 板块二波
+            </button>
+            <button type="button" className="diag-anchor-chip" onClick={() => scrollToDiagSection('diagSecChips')}>
+              🎯 筹码处方
+            </button>
+            <button type="button" className="diag-anchor-chip" onClick={() => scrollToDiagSection('diagSecAnn')}>
+              📰 公告排雷 ({report.announcements?.length || 0})
+            </button>
+            <button type="button" className="diag-anchor-chip copy" onClick={handleCopySummary}>
+              📋 复制结论
+            </button>
+          </div>
+
           {/* A. 标的概览头部卡 */}
-          <section style={{ padding: '16px 20px', marginBottom: '14px' }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '14px' }}>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <h1 style={{ fontSize: '22px', fontWeight: 800, margin: 0 }}>{q.name}</h1>
-                  <span style={{ fontFamily: 'ui-monospace, Consolas, monospace', fontSize: '15px', color: 'var(--sub)' }}>
+          <section className="diag-overview-card">
+            <div className="diag-overview-hd">
+              <div style={{ minWidth: 0, flex: '1 1 300px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <h1 style={{ fontSize: '21px', fontWeight: 800, margin: 0 }}>{q.name}</h1>
+                  <span style={{ fontFamily: 'ui-monospace, Consolas, monospace', fontSize: '14.5px', color: 'var(--sub)' }}>
                     {report.code}
                   </span>
                   <span style={{ fontSize: '11px', padding: '2px 7px', borderRadius: '4px', background: 'var(--surface2)', color: 'var(--mute)' }}>
@@ -642,7 +606,7 @@ export default function DiagnosisPage({
                     <button
                       type="button"
                       onClick={() => onSelectStockInPool && onSelectStockInPool(report.code)}
-                      style={{ fontSize: '11.5px', padding: '2px 8px', borderRadius: '5px', background: 'var(--accent-bg)', color: 'var(--accent)', border: '1px solid var(--accent-b)', fontWeight: 700, cursor: 'pointer' }}
+                      className="diag-quick-act in-pool"
                       title="点击直达今日作战台查看该股买卖点"
                     >
                       ✓ 进作战台 →
@@ -651,7 +615,7 @@ export default function DiagnosisPage({
                     <button
                       type="button"
                       onClick={() => onAddStockToPool(report.code)}
-                      style={{ fontSize: '11.5px', padding: '2px 8px', borderRadius: '5px', background: 'var(--surface2)', border: '1px solid var(--line)', cursor: 'pointer', fontWeight: 600 }}
+                      className="diag-quick-act"
                     >
                       + 加入自选
                     </button>
@@ -660,7 +624,7 @@ export default function DiagnosisPage({
                     <button
                       type="button"
                       onClick={() => onJumpIgnition(report.code)}
-                      style={{ fontSize: '11.5px', padding: '2px 8px', borderRadius: '5px', background: '#eef2ff', color: '#4338ca', border: '1px solid #c7d2fe', cursor: 'pointer', fontWeight: 700 }}
+                      className="diag-quick-act ignition"
                       title="跳转到起爆挖掘做六维成色体检"
                     >
                       🚀 起爆体检
@@ -673,48 +637,45 @@ export default function DiagnosisPage({
               </div>
 
               {/* 现价与关键指标 */}
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', justifyContent: 'flex-end' }}>
-                  <span style={{ fontSize: '26px', fontWeight: 800, fontFamily: 'ui-monospace, Consolas, monospace', color: isUp ? 'var(--up)' : 'var(--down)' }}>
+              <div className="diag-quote-box">
+                <div className="diag-quote-px">
+                  <span style={{ fontSize: '25px', fontWeight: 800, fontFamily: 'ui-monospace, Consolas, monospace', color: isUp ? 'var(--up)' : 'var(--down)' }}>
                     ¥{f2(q.price)}
                   </span>
                   <span style={{ fontSize: '15px', fontWeight: 700, fontFamily: 'ui-monospace, Consolas, monospace', color: isUp ? 'var(--up)' : 'var(--down)' }}>
                     {q.chg >= 0 ? `+${f2(q.chg)}%` : `${f2(q.chg)}%`}
                   </span>
                 </div>
-                <div style={{ fontSize: '12px', color: 'var(--sub)', marginTop: '4px', display: 'flex', gap: '10px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                  <span>换手: <b style={{ fontFamily: 'ui-monospace, monospace' }}>{f2(q.turnover)}%</b></span>
-                  {q.vr > 0 && <span>量比: <b style={{ fontFamily: 'ui-monospace, monospace' }}>{f2(q.vr)}倍</b></span>}
+                <div className="diag-quote-meta">
+                  <span>换手 <b style={{ fontFamily: 'ui-monospace, monospace' }}>{f2(q.turnover)}%</b></span>
+                  {q.vr > 0 && <span>量比 <b style={{ fontFamily: 'ui-monospace, monospace' }}>{f2(q.vr)}倍</b></span>}
                   {q.buyRatio > 0 && (
-                    <span>外盘买比: <b style={{ fontFamily: 'ui-monospace, monospace', color: q.buyRatio >= 52 ? 'var(--up)' : 'var(--down)' }}>{q.buyRatio}%</b></span>
+                    <span>外盘 <b style={{ fontFamily: 'ui-monospace, monospace', color: q.buyRatio >= 52 ? 'var(--up)' : 'var(--down)' }}>{q.buyRatio}%</b></span>
                   )}
-                  <span>流通: <b style={{ fontFamily: 'ui-monospace, monospace' }}>{f2(q.cap)}亿</b></span>
-                  <span>PE: <b style={{ fontFamily: 'ui-monospace, monospace' }}>{f2(q.pe)}</b></span>
-                  <span>PB: <b style={{ fontFamily: 'ui-monospace, monospace' }}>{f2(q.pb)}</b></span>
+                  <span>流通 <b style={{ fontFamily: 'ui-monospace, monospace' }}>{f2(q.cap)}亿</b></span>
+                  <span>PE <b style={{ fontFamily: 'ui-monospace, monospace' }}>{f2(q.pe)}</b></span>
+                  <span>PB <b style={{ fontFamily: 'ui-monospace, monospace' }}>{f2(q.pb)}</b></span>
                 </div>
               </div>
             </div>
 
             {/* 顶栏公告雷达横幅 */}
-            <div style={{
-              marginTop: '14px',
-              padding: '10px 14px',
-              borderRadius: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              background: report.riskColor === 'red' ? 'var(--up-bg)' : report.riskColor === 'yellow' ? 'var(--warn-bg)' : 'var(--down-bg)',
-              border: `1px solid ${report.riskColor === 'red' ? 'var(--up-b)' : report.riskColor === 'yellow' ? 'var(--warn-b)' : 'var(--down-b)'}`,
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span style={{ fontSize: '16px' }}>
+            <div
+              className="diag-radar-strip"
+              style={{
+                background: report.riskColor === 'red' ? 'var(--up-bg)' : report.riskColor === 'yellow' ? 'var(--warn-bg)' : 'var(--down-bg)',
+                border: `1px solid ${report.riskColor === 'red' ? 'var(--up-b)' : report.riskColor === 'yellow' ? 'var(--warn-b)' : 'var(--down-b)'}`,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', flex: 1, minWidth: 0 }}>
+                <span style={{ fontSize: '16px', flexShrink: 0, lineHeight: 1.4 }}>
                   {report.riskColor === 'red' ? '🚨' : report.riskColor === 'yellow' ? '⚠️' : '🟢'}
                 </span>
-                <div>
-                  <span style={{ fontWeight: 700, fontSize: '13px', color: report.riskColor === 'red' ? 'var(--up-d)' : report.riskColor === 'yellow' ? 'var(--warn-d)' : 'var(--down-d)' }}>
-                    【公告排雷雷达】{report.riskLevel}
-                  </span>
-                  <span style={{ fontSize: '12px', marginLeft: '8px', color: 'var(--text)' }}>
+                <div style={{ fontSize: '12.5px', lineHeight: 1.5 }}>
+                  <b style={{ color: report.riskColor === 'red' ? 'var(--up-d)' : report.riskColor === 'yellow' ? 'var(--warn-d)' : 'var(--down-d)' }}>
+                    【公告排雷雷达】{report.riskLevel}：
+                  </b>
+                  <span style={{ color: 'var(--text)' }}>
                     {report.redFlags?.length > 0
                       ? `近30天检测到 ${report.redFlags.length} 条高危公告，存在潜在雷区，切忌逆势盲目补仓！`
                       : report.yellowAlerts?.length > 0
@@ -724,30 +685,22 @@ export default function DiagnosisPage({
                 </div>
               </div>
               <button
+                type="button"
                 onClick={handleCopySummary}
-                style={{
-                  padding: '5px 12px',
-                  borderRadius: '6px',
-                  background: '#fff',
-                  border: '1px solid var(--line)',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}
+                className="diag-copy-btn"
               >
                 📋 复制微信结论
               </button>
             </div>
           </section>
 
-          {/* A2. 🎯 多维综合诊股决策与买点评估中心（回答：能不能买、评分多少、风险如何、现在是不是买点） */}
+          {/* A2. 🎯 多维综合诊股决策与买点评估中心 */}
           {dec && (
             <section
+              id="diagSecDecision"
+              className="diag-sec-anchor"
               style={{
-                padding: '18px 20px',
+                padding: '16px 18px',
                 marginBottom: '14px',
                 border: '1.5px solid',
                 borderColor: dec.canBuyLevel === 'STRONG_BUY' ? '#86efac' : dec.canBuyLevel === 'BUY_DIP' ? '#7dd3fc' : dec.canBuyLevel === 'WAIT' ? '#fde68a' : '#fca5a5',
@@ -755,16 +708,16 @@ export default function DiagnosisPage({
                 boxShadow: '0 4px 16px rgba(0, 0, 0, 0.05)'
               }}
             >
-              {/* 第一层：总分仪 + 能不能买结论 + 风险评级 + 当前大盘背景 */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.3fr) minmax(0, 1fr)', gap: '16px', alignItems: 'start' }}>
+              {/* 第一层：总分仪 + 能不能买结论 + 右侧五维拆解（窄屏自动上下堆叠，彻底告别挤压） */}
+              <div className="diag-dec-grid">
                 {/* 左侧：核心结论与买入时机判定 */}
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap', marginBottom: '12px' }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '12px' }}>
                     {/* 综合评分徽章 */}
                     <div
                       style={{
-                        width: '74px',
-                        height: '74px',
+                        width: '70px',
+                        height: '70px',
                         borderRadius: '14px',
                         background: dec.totalScore >= 75 ? 'linear-gradient(135deg, #16a34a, #15803d)' : dec.totalScore >= 60 ? 'linear-gradient(135deg, #0284c7, #0369a1)' : dec.totalScore >= 45 ? 'linear-gradient(135deg, #d97706, #b45309)' : 'linear-gradient(135deg, #dc2626, #991b1b)',
                         color: '#fff',
@@ -776,13 +729,13 @@ export default function DiagnosisPage({
                         flexShrink: 0
                       }}
                     >
-                      <span style={{ fontSize: '26px', fontWeight: 900, lineHeight: 1, fontFamily: 'monospace' }}>
+                      <span style={{ fontSize: '25px', fontWeight: 900, lineHeight: 1, fontFamily: 'monospace' }}>
                         {dec.totalScore}
                       </span>
-                      <span style={{ fontSize: '10.5px', opacity: 0.9, marginTop: '3px' }}>综合评分/100</span>
+                      <span style={{ fontSize: '10px', opacity: 0.9, marginTop: '3px' }}>综合分/100</span>
                     </div>
 
-                    <div>
+                    <div style={{ flex: 1, minWidth: '180px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                         <span
                           style={{
@@ -804,18 +757,18 @@ export default function DiagnosisPage({
                             border: `1px solid ${dec.riskColor === 'red' ? '#fca5a5' : dec.riskColor === 'yellow' ? '#fde68a' : '#86efac'}`
                           }}
                         >
-                          综合风险：{dec.riskRating}
+                          风险：{dec.riskRating}
                         </span>
                       </div>
 
                       {/* 关键技术 & 市场辅助标签 */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginTop: '6px', fontSize: '11.5px', color: 'var(--sub)' }}>
                         <span>📈 趋势: <b>{tech.trendStatus || '—'}</b></span>
-                        <span>· 6日RSI: <b style={{ color: (tech.rsi6 ?? 50) >= 78 ? 'var(--up)' : (tech.rsi6 ?? 50) <= 25 ? 'var(--down)' : 'var(--text)' }}>{tech.rsi6 != null ? Number(tech.rsi6).toFixed(1) : '—'}</b></span>
-                        <span>· 近5日: <b style={{ color: (tech.chg5d ?? 0) >= 0 ? 'var(--up)' : 'var(--down)' }}>{fmtPct(tech.chg5d, true)}</b></span>
+                        <span>· RSI(6): <b style={{ color: (tech.rsi6 ?? 50) >= 78 ? 'var(--up)' : (tech.rsi6 ?? 50) <= 25 ? 'var(--down)' : 'var(--text)' }}>{tech.rsi6 != null ? Number(tech.rsi6).toFixed(1) : '—'}</b></span>
+                        <span>· 5日: <b style={{ color: (tech.chg5d ?? 0) >= 0 ? 'var(--up)' : 'var(--down)' }}>{fmtPct(tech.chg5d, true)}</b></span>
                         {mkt.valveLabel && (
                           <span style={{ padding: '1px 6px', borderRadius: '4px', background: mkt.valveBg, color: mkt.valveColor, border: `1px solid ${mkt.valveBorder}`, fontWeight: 600 }}>
-                            大盘环境：{mkt.valveLabel}{mkt.brokenRate != null ? ` (炸板${fmtPct(mkt.brokenRate)})` : ''}
+                            大盘：{mkt.valveLabel}{mkt.brokenRate != null ? ` (炸板${fmtPct(mkt.brokenRate)})` : ''}
                           </span>
                         )}
                       </div>
@@ -842,7 +795,7 @@ export default function DiagnosisPage({
                   {/* 现在是不是买点判定框 */}
                   <div
                     style={{
-                      padding: '10px 14px',
+                      padding: '10px 13px',
                       borderRadius: '8px',
                       background: dec.isBuyPointNow ? '#f0fdf4' : '#fff7ed',
                       border: `1px solid ${dec.isBuyPointNow ? '#86efac' : '#fdba74'}`,
@@ -857,32 +810,32 @@ export default function DiagnosisPage({
                     </div>
                   </div>
 
-                  {/* A股K线形态与缺口状态机警示条（岛形反转/避雷针/阴包阳/仙人指路/3日不补缺口） */}
+                  {/* A股K线形态与缺口状态机警示条 */}
                   <KlinePatternBadges klinePatterns={report.klinePatterns} variant="banner" style={{ marginBottom: '12px', marginTop: 0 }} />
 
-                  {/* 参考交易价格带 (Trade Plan) */}
+                  {/* 参考交易价格带（手机窄屏自动转为 2×2 双列网格） */}
                   {dec.tradePlan && (
                     <div>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
-                        <div style={{ padding: '8px 10px', background: '#f8fafc', borderRadius: '6px', border: '1px solid var(--line)' }}>
+                      <div className="diag-grid-4">
+                        <div style={{ padding: '8px 10px', background: '#f8fafc', borderRadius: '6px', border: '1px solid var(--line)', minWidth: 0 }}>
                           <div style={{ fontSize: '11px', color: 'var(--mute)' }}>建议仓位配比</div>
-                          <div style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text)', marginTop: '2px' }}>
+                          <div style={{ fontSize: '12.5px', fontWeight: 800, color: 'var(--text)', marginTop: '2px' }}>
                             {dec.tradePlan.suggestedPosition}
                           </div>
                         </div>
-                        <div style={{ padding: '8px 10px', background: '#f0fdf4', borderRadius: '6px', border: '1px solid #bbf7d0' }}>
+                        <div style={{ padding: '8px 10px', background: '#f0fdf4', borderRadius: '6px', border: '1px solid #bbf7d0', minWidth: 0 }}>
                           <div style={{ fontSize: '11px', color: '#15803d' }}>理想低吸区间</div>
-                          <div style={{ fontSize: '12.5px', fontWeight: 800, fontFamily: 'monospace', color: '#15803d', marginTop: '2px' }}>
+                          <div style={{ fontSize: '12.5px', fontWeight: 800, fontFamily: 'monospace', color: '#15803d', marginTop: '2px', overflowWrap: 'anywhere' }}>
                             ¥{f2(dec.tradePlan.idealBuyLow)}~¥{f2(dec.tradePlan.idealBuyHigh)}
                           </div>
                         </div>
-                        <div style={{ padding: '8px 10px', background: '#fef2f2', borderRadius: '6px', border: '1px solid #fecaca' }}>
+                        <div style={{ padding: '8px 10px', background: '#fef2f2', borderRadius: '6px', border: '1px solid #fecaca', minWidth: 0 }}>
                           <div style={{ fontSize: '11px', color: '#dc2626' }}>破位防套止损线</div>
                           <div style={{ fontSize: '12.5px', fontWeight: 800, fontFamily: 'monospace', color: '#dc2626', marginTop: '2px' }}>
                             ¥{f2(dec.tradePlan.stopLossPrice)}
                           </div>
                         </div>
-                        <div style={{ padding: '8px 10px', background: '#eff6ff', borderRadius: '6px', border: '1px solid #bfdbfe' }}>
+                        <div style={{ padding: '8px 10px', background: '#eff6ff', borderRadius: '6px', border: '1px solid #bfdbfe', minWidth: 0 }}>
                           <div style={{ fontSize: '11px', color: '#1d4ed8' }}>上方压力/目标位</div>
                           <div style={{ fontSize: '12.5px', fontWeight: 800, fontFamily: 'monospace', color: '#1d4ed8', marginTop: '2px' }}>
                             ¥{f2(dec.tradePlan.targetPrice1)}
@@ -899,7 +852,7 @@ export default function DiagnosisPage({
                 </div>
 
                 {/* 右侧：5 维量化评分拆解条 */}
-                <div style={{ padding: '12px 14px', background: '#fff', borderRadius: '8px', border: '1px solid var(--line)' }}>
+                <div style={{ padding: '12px 14px', background: '#fff', borderRadius: '8px', border: '1px solid var(--line)', minWidth: 0 }}>
                   <div style={{ fontSize: '13px', fontWeight: 700, marginBottom: '10px', color: 'var(--text)', display: 'flex', justifyContent: 'space-between' }}>
                     <span>📊 五维量化得分拆解</span>
                     <span style={{ fontSize: '11.5px', fontWeight: 400, color: 'var(--mute)' }}>总分 {dec.totalScore}/100</span>
@@ -910,7 +863,7 @@ export default function DiagnosisPage({
                       const barCol = ratio >= 75 ? '#16a34a' : ratio >= 55 ? '#0284c7' : ratio >= 40 ? '#d97706' : '#dc2626';
                       return (
                         <div key={idx}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', marginBottom: '3px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '6px', fontSize: '11.5px', marginBottom: '3px', flexWrap: 'wrap' }}>
                             <span style={{ fontWeight: 600, color: 'var(--text)' }}>{item.name}</span>
                             <span>
                               <b style={{ fontFamily: 'monospace', color: barCol }}>{item.score}</b>
@@ -927,8 +880,8 @@ export default function DiagnosisPage({
                 </div>
               </div>
 
-              {/* 第二层：支撑买入依据 vs 风险隐患提示 双栏明细 */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '14px', paddingTop: '12px', borderTop: '1px dashed var(--line)' }}>
+              {/* 第二层：支撑买入依据 vs 风险隐患提示 双栏明细（窄屏自动单列） */}
+              <div className="diag-grid-2" style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px dashed var(--line)' }}>
                 <div style={{ padding: '10px 12px', background: '#f0fdf4', borderRadius: '6px', border: '1px solid #dcfce7' }}>
                   <div style={{ fontSize: '12px', fontWeight: 700, color: '#15803d', marginBottom: '6px' }}>
                     ✅ 积极加分与买入依据 ({dec.positivePoints?.length || 0})
@@ -961,7 +914,7 @@ export default function DiagnosisPage({
           {/* ⚡ 今日短线身位与连板/抱团/字辈联动雷达 */}
           {sts && (
             <section style={{
-              padding: '14px 18px',
+              padding: '14px 16px',
               marginBottom: '14px',
               background: sts.isBrokenBoard ? '#fffafa' : 'linear-gradient(135deg, #f8fafc 0%, #f5f3ff 100%)',
               border: sts.isBrokenBoard ? '1.5px solid #ffa39e' : '1.5px solid #c4b5fd',
@@ -1000,8 +953,8 @@ export default function DiagnosisPage({
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   {sts.inHerdPool || addedHerdCode === String(report.code).padStart(6, '0') ? (
-                    <a href="#/board" style={{ fontSize: '11.5px', fontWeight: 700, color: '#6d28d9', textDecoration: 'none', padding: '3px 8px', borderRadius: '5px', background: '#f5f3ff', border: '1px solid #c4b5fd' }}>
-                      ✓ 已在抱团池 · 去看板查看 →
+                    <a href="#/board" style={{ fontSize: '11.5px', fontWeight: 700, color: '#6d28d9', textDecoration: 'none', padding: '4px 9px', borderRadius: '5px', background: '#f5f3ff', border: '1px solid #c4b5fd' }}>
+                      ✓ 已在抱团池 · 去看板 →
                     </a>
                   ) : (String(report.code).startsWith('00') || String(report.code).startsWith('60')) && (
                     <button
@@ -1009,7 +962,7 @@ export default function DiagnosisPage({
                       className="mini"
                       disabled={addingHerd}
                       onClick={handleQuickAddHerd}
-                      style={{ fontSize: '11.5px', color: '#6d28d9', borderColor: '#c4b5fd', background: '#fff', fontWeight: 700 }}
+                      style={{ fontSize: '11.5px', color: '#6d28d9', borderColor: '#c4b5fd', background: '#fff', fontWeight: 700, marginLeft: 0 }}
                     >
                       {addingHerd ? '加入中…' : '📌 加入抱团跟踪池'}
                     </button>
@@ -1038,7 +991,7 @@ export default function DiagnosisPage({
                 </div>
               )}
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px', marginBottom: '8px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px', marginBottom: '8px' }}>
                 {sts.identityScore != null && (
                   <div style={{ padding: '8px 12px', borderRadius: '8px', background: '#eff6ff', border: '1px solid #bfdbfe' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
@@ -1088,13 +1041,13 @@ export default function DiagnosisPage({
 
           {/* A4. 📈 分时图买卖点 & 多周期K线交互看盘 */}
           {diagChartStock && (
-            <section style={{ padding: '14px 16px', marginBottom: '14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
+            <section id="diagSecChart" className="diag-sec-anchor" style={{ padding: '14px 14px', marginBottom: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
                 <h3 style={{ fontSize: '14px', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span>📈</span> {diagChartStock.name} ({diagChartStock.code}) · 分时推荐买卖点与实盘标注看盘
+                  <span>📈</span> {diagChartStock.name} ({diagChartStock.code}) · 分时买卖点看盘
                 </h3>
-                <span style={{ fontSize: '11px', color: 'var(--mute)' }}>
-                  默认展示「分时」：已叠加推荐买/卖区带、ATR+DNA动态推荐买卖点、以及当日台账实盘成交标注
+                <span className="diag-chart-note">
+                  叠加推荐买/卖区带、动态推荐点位与当日实盘标注
                 </span>
               </div>
               <ChartCanvas
@@ -1108,14 +1061,13 @@ export default function DiagnosisPage({
             </section>
           )}
 
-          {/* B. 两列主网格：左侧板块/二波/分时/筹码，右侧排雷公告雷达 */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.15fr) minmax(0, 0.85fr)', gap: '14px', marginBottom: '14px' }}>
+          {/* B. 两列主网格（窄屏自动切为 1fr 全宽单列流，消除 170px 挤压） */}
+          <div className="diag-main-grid">
             {/* 左列：板块生态 + 二波预期 + 分时VWAP + 筹码处方 */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', minWidth: 0 }}>
               {/* 1. 板块身位与今日生态 */}
-              <section style={{ padding: '16px 18px', margin: 0 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+              <section id="diagSecSector" className="diag-sec-anchor" style={{ padding: '15px 16px', margin: 0 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
                   <h3 style={{ fontSize: '14px', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <span>🌊</span> 板块生态与身位层级
                   </h3>
@@ -1127,28 +1079,25 @@ export default function DiagnosisPage({
                 </div>
 
                 {/* 板块身位卡 */}
-                <div style={{
-                  padding: '10px 12px',
+                <div className="diag-grid-3" style={{
+                  padding: '10px 10px',
                   borderRadius: '6px',
                   background: 'var(--surface)',
                   border: '1px solid var(--line)',
                   marginBottom: '10px',
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(3, 1fr)',
-                  gap: '10px',
                   textAlign: 'center'
                 }}>
-                  <div>
+                  <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: '11px', color: 'var(--mute)' }}>板块今日生态</div>
                     <div style={{ fontSize: '13px', fontWeight: 700, color: (sec.sectorChg ?? 0) >= 0 ? 'var(--up)' : 'var(--down)', marginTop: '2px' }}>
                       {fmtPct(sec.sectorChg, true, 2)}
                     </div>
                     <div style={{ fontSize: '11px', color: 'var(--sub)' }}>
-                      {sec.upCount ? `${sec.upCount}涨 / ${sec.downCount}跌 (${sec.breadth})` : '非主线板块'}
+                      {sec.upCount ? `${sec.upCount}涨/${sec.downCount}跌 (${sec.breadth})` : '非主线板块'}
                     </div>
                   </div>
 
-                  <div>
+                  <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: '11px', color: 'var(--mute)' }}>个股身位定位</div>
                     <div style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--text)', marginTop: '2px' }}>
                       {sec.role || '普通标的'}
@@ -1158,13 +1107,13 @@ export default function DiagnosisPage({
                     </div>
                   </div>
 
-                  <div>
+                  <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: '11px', color: 'var(--mute)' }}>板块领涨龙头</div>
-                    <div style={{ fontSize: '13px', fontWeight: 700, fontFamily: 'monospace', color: 'var(--info)', marginTop: '2px' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 700, fontFamily: 'monospace', color: 'var(--info)', marginTop: '2px', overflowWrap: 'anywhere' }}>
                       {sec.leader || '—'}
                     </div>
                     <div style={{ fontSize: '11px', color: 'var(--sub)' }}>
-                      {sec.sectorRank ? `行业排名前 ${sec.sectorRank} 位` : '无排名'}
+                      {sec.sectorRank ? `行业前 ${sec.sectorRank} 位` : '无排名'}
                     </div>
                   </div>
                 </div>
@@ -1196,8 +1145,8 @@ export default function DiagnosisPage({
               </section>
 
               {/* 2. 板块二轮 / 二波潜力预期时钟 */}
-              <section style={{ padding: '16px 18px', margin: 0 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+              <section style={{ padding: '15px 16px', margin: 0 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
                   <h3 style={{ fontSize: '14px', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <span>🔄</span> 板块二轮 / 二波预期时钟
                   </h3>
@@ -1217,22 +1166,22 @@ export default function DiagnosisPage({
                 {wave.stage ? (
                   <div>
                     {/* 二波四项指标 */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', textAlign: 'center', marginBottom: '10px' }}>
-                      <div style={{ padding: '6px', background: 'var(--surface)', borderRadius: '6px', border: '1px solid var(--line)' }}>
+                    <div className="diag-grid-4" style={{ textAlign: 'center', marginBottom: '10px' }}>
+                      <div style={{ padding: '7px 6px', background: 'var(--surface)', borderRadius: '6px', border: '1px solid var(--line)' }}>
                         <div style={{ fontSize: '11px', color: 'var(--mute)' }}>首轮最大波幅</div>
                         <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--up)' }}>{fmtPct(wave.wave1Amplitude, true)}</div>
                       </div>
-                      <div style={{ padding: '6px', background: 'var(--surface)', borderRadius: '6px', border: '1px solid var(--line)' }}>
+                      <div style={{ padding: '7px 6px', background: 'var(--surface)', borderRadius: '6px', border: '1px solid var(--line)' }}>
                         <div style={{ fontSize: '11px', color: 'var(--mute)' }}>高位最高价</div>
                         <div style={{ fontSize: '13px', fontWeight: 700, fontFamily: 'monospace' }}>¥{f2(wave.maxHigh)}</div>
                       </div>
-                      <div style={{ padding: '6px', background: 'var(--surface)', borderRadius: '6px', border: '1px solid var(--line)' }}>
+                      <div style={{ padding: '7px 6px', background: 'var(--surface)', borderRadius: '6px', border: '1px solid var(--line)' }}>
                         <div style={{ fontSize: '11px', color: 'var(--mute)' }}>高位回撤深度</div>
                         <div style={{ fontSize: '13px', fontWeight: 700, color: (wave.drawdown ?? 0) < -28 ? 'var(--up)' : 'var(--sub)' }}>
                           {fmtPct(wave.drawdown)}
                         </div>
                       </div>
-                      <div style={{ padding: '6px', background: 'var(--surface)', borderRadius: '6px', border: '1px solid var(--line)' }}>
+                      <div style={{ padding: '7px 6px', background: 'var(--surface)', borderRadius: '6px', border: '1px solid var(--line)' }}>
                         <div style={{ fontSize: '11px', color: 'var(--mute)' }}>量能萎缩沉淀</div>
                         <div style={{ fontSize: '13px', fontWeight: 700, color: (wave.volShrink ?? 100) <= 50 ? 'var(--down)' : 'var(--sub)' }}>
                           {fmtPct(wave.volShrink)}
@@ -1258,8 +1207,8 @@ export default function DiagnosisPage({
               </section>
 
               {/* 3. 全天分时态势与 VWAP 均价线 */}
-              <section style={{ padding: '16px 18px', margin: 0 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+              <section style={{ padding: '15px 16px', margin: 0 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
                   <h3 style={{ fontSize: '14px', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <span>📈</span> 全天分时态势与 VWAP 均价线
                   </h3>
@@ -1271,43 +1220,39 @@ export default function DiagnosisPage({
 
                 {intra.vwap ? (
                   <div>
-                    <div style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(3, 1fr)',
-                      gap: '8px',
-                      textAlign: 'center',
-                      marginBottom: '10px'
-                    }}>
-                      <div style={{ padding: '6px', background: 'var(--surface)', borderRadius: '6px', border: '1px solid var(--line)' }}>
+                    <div className="diag-grid-3" style={{ textAlign: 'center', marginBottom: '10px' }}>
+                      <div style={{ padding: '7px 6px', background: 'var(--surface)', borderRadius: '6px', border: '1px solid var(--line)', minWidth: 0 }}>
                         <div style={{ fontSize: '11px', color: 'var(--mute)' }}>分时VWAP均价</div>
                         <div style={{ fontSize: '13px', fontWeight: 700, fontFamily: 'monospace' }}>¥{f2(intra.vwap)}</div>
                         <div style={{ fontSize: '11px', color: (intra.vwapDiff ?? 0) >= 0 ? 'var(--up)' : 'var(--down)' }}>
-                          现价偏离: {fmtPct(intra.vwapDiff, true)}
+                          偏离: {fmtPct(intra.vwapDiff, true)}
                         </div>
                       </div>
 
-                      <div style={{ padding: '6px', background: 'var(--surface)', borderRadius: '6px', border: '1px solid var(--line)' }}>
+                      <div style={{ padding: '7px 6px', background: 'var(--surface)', borderRadius: '6px', border: '1px solid var(--line)', minWidth: 0 }}>
                         <div style={{ fontSize: '11px', color: 'var(--mute)' }}>站上均价线时间</div>
                         <div style={{ fontSize: '13px', fontWeight: 700, color: (intra.aboveRatio ?? 50) >= 60 ? 'var(--up)' : (intra.aboveRatio ?? 50) <= 30 ? 'var(--down)' : 'var(--sub)' }}>
                           {fmtPct(intra.aboveRatio)}
                         </div>
                         <div style={{ fontSize: '11px', color: 'var(--sub)' }}>
-                          {(intra.aboveRatio ?? 50) >= 60 ? '多头全天控盘' : (intra.aboveRatio ?? 50) <= 30 ? '空头全程压制' : '中性多空拉锯'}
+                          {(intra.aboveRatio ?? 50) >= 60 ? '多头控盘' : (intra.aboveRatio ?? 50) <= 30 ? '空头压制' : '多空拉锯'}
                         </div>
                       </div>
 
-                      <div style={{ padding: '6px', background: 'var(--surface)', borderRadius: '6px', border: '1px solid var(--line)' }}>
+                      <div style={{ padding: '7px 6px', background: 'var(--surface)', borderRadius: '6px', border: '1px solid var(--line)', minWidth: 0 }}>
                         <div style={{ fontSize: '11px', color: 'var(--mute)' }}>日内高低极值</div>
-                        <div style={{ fontSize: '13px', fontWeight: 700, fontFamily: 'monospace' }}>¥{f2(intra.lowPrice)} ~ ¥{f2(intra.highPrice)}</div>
-                        <div style={{ fontSize: '11px', color: 'var(--sub)' }}>日内区间波幅</div>
+                        <div style={{ fontSize: '12.5px', fontWeight: 700, fontFamily: 'monospace', overflowWrap: 'anywhere' }}>
+                          ¥{f2(intra.lowPrice)}~¥{f2(intra.highPrice)}
+                        </div>
+                        <div style={{ fontSize: '11px', color: 'var(--sub)' }}>日内波幅</div>
                       </div>
                     </div>
 
                     {/* 分时进度条 */}
                     <div style={{ marginBottom: '10px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', marginBottom: '3px', color: 'var(--sub)' }}>
-                        <span>均价线上方占比: {fmtPct(intra.aboveRatio)}</span>
-                        <span>均价线下方占比: {intra.aboveRatio != null ? `${(100 - intra.aboveRatio).toFixed(1)}%` : '—'}</span>
+                        <span>均价线上方: {fmtPct(intra.aboveRatio)}</span>
+                        <span>均价线下方: {intra.aboveRatio != null ? `${(100 - intra.aboveRatio).toFixed(1)}%` : '—'}</span>
                       </div>
                       <div style={{ height: '6px', background: 'var(--down-bg)', borderRadius: '3px', overflow: 'hidden', display: 'flex' }}>
                         <div style={{ width: `${intra.aboveRatio ?? 50}%`, background: 'var(--up)', height: '100%' }} />
@@ -1331,7 +1276,7 @@ export default function DiagnosisPage({
               </section>
 
               {/* 4. 技术结构与筹码套牢盘诊断 */}
-              <section style={{ padding: '16px 18px', margin: 0 }}>
+              <section id="diagSecChips" className="diag-sec-anchor" style={{ padding: '15px 16px', margin: 0 }}>
                 <h3 style={{ fontSize: '14px', fontWeight: 700, margin: '0 0 10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <span>🎯</span> 筹码结构与技术位透视
                 </h3>
@@ -1339,20 +1284,20 @@ export default function DiagnosisPage({
                 {chips && chips.ma5 > 0 ? (
                   <div>
                     {/* 均线矩阵 */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', textAlign: 'center', marginBottom: '12px' }}>
-                      <div style={{ padding: '6px', background: 'var(--surface)', borderRadius: '6px', border: '1px solid var(--line)' }}>
+                    <div className="diag-grid-4" style={{ textAlign: 'center', marginBottom: '12px' }}>
+                      <div style={{ padding: '7px 6px', background: 'var(--surface)', borderRadius: '6px', border: '1px solid var(--line)' }}>
                         <div style={{ fontSize: '11px', color: 'var(--mute)' }}>MA5 均线</div>
                         <div style={{ fontSize: '13px', fontWeight: 700, fontFamily: 'monospace' }}>¥{f2(chips.ma5)}</div>
                       </div>
-                      <div style={{ padding: '6px', background: 'var(--surface)', borderRadius: '6px', border: '1px solid var(--line)' }}>
+                      <div style={{ padding: '7px 6px', background: 'var(--surface)', borderRadius: '6px', border: '1px solid var(--line)' }}>
                         <div style={{ fontSize: '11px', color: 'var(--mute)' }}>MA10 均线</div>
                         <div style={{ fontSize: '13px', fontWeight: 700, fontFamily: 'monospace' }}>¥{f2(chips.ma10)}</div>
                       </div>
-                      <div style={{ padding: '6px', background: 'var(--surface)', borderRadius: '6px', border: '1px solid var(--line)' }}>
+                      <div style={{ padding: '7px 6px', background: 'var(--surface)', borderRadius: '6px', border: '1px solid var(--line)' }}>
                         <div style={{ fontSize: '11px', color: 'var(--mute)' }}>MA20 均线</div>
                         <div style={{ fontSize: '13px', fontWeight: 700, fontFamily: 'monospace' }}>¥{f2(chips.ma20)}</div>
                       </div>
-                      <div style={{ padding: '6px', background: 'var(--surface)', borderRadius: '6px', border: '1px solid var(--line)' }}>
+                      <div style={{ padding: '7px 6px', background: 'var(--surface)', borderRadius: '6px', border: '1px solid var(--line)' }}>
                         <div style={{ fontSize: '11px', color: 'var(--mute)' }}>MA60 均线</div>
                         <div style={{ fontSize: '13px', fontWeight: 700, fontFamily: 'monospace' }}>¥{f2(chips.ma60)}</div>
                       </div>
@@ -1360,8 +1305,8 @@ export default function DiagnosisPage({
 
                     {/* 20日箱体条 */}
                     <div style={{ marginBottom: '12px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
-                        <span>20日箱体结构: <b>¥{f2(chips.boxBot)} ~ ¥{f2(chips.boxTop)}</b></span>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '4px', fontSize: '12px', marginBottom: '4px' }}>
+                        <span>20日箱体: <b>¥{f2(chips.boxBot)} ~ ¥{f2(chips.boxTop)}</b></span>
                         <span style={{ color: (chips.boxPos ?? 50) >= 75 ? 'var(--warn)' : (chips.boxPos ?? 50) <= 25 ? 'var(--down)' : 'var(--mute)' }}>
                           当前处于箱内 <b>{fmtPct(chips.boxPos)}</b>
                         </span>
@@ -1379,7 +1324,7 @@ export default function DiagnosisPage({
                     </div>
 
                     {/* 筹码成本与获利盘 */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '12.5px', padding: '10px', background: 'var(--surface)', borderRadius: '6px', border: '1px solid var(--line)' }}>
+                    <div className="diag-chips-pair">
                       <div>
                         <div style={{ color: 'var(--mute)', fontSize: '11.5px' }}>近60日筹码均价:</div>
                         <div style={{ fontWeight: 700, fontSize: '15px', fontFamily: 'monospace' }}>
@@ -1395,12 +1340,12 @@ export default function DiagnosisPage({
                           {fmtPct(chips.profitRatio)}
                         </div>
                         <div style={{ fontSize: '11px', color: 'var(--mute)' }}>
-                          {chips.profitRatio <= 20 ? '80%以上筹码被套 (超跌深水区)' : chips.profitRatio >= 80 ? '获利盘主导 (注意兑现抛压)' : '多空换手均衡区'}
+                          {chips.profitRatio <= 20 ? '80%以上筹码被套 (超跌区)' : chips.profitRatio >= 80 ? '获利盘主导 (防兑现抛压)' : '多空换手均衡区'}
                         </div>
                       </div>
                     </div>
 
-                    {/* 🧬 实验性弱参考：14日 ATR 波动率 + 近120日个股历史基因概率回测 */}
+                    {/* 🧬 实验性弱参考 */}
                     {(report.atrProfile || report.experimentalDNA) && (
                       <details style={{ marginTop: '10px', padding: '7px 10px', background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: '6px', fontSize: '11.5px', color: 'var(--sub)' }}>
                         <summary style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '4px', userSelect: 'none' }}>
@@ -1447,7 +1392,7 @@ export default function DiagnosisPage({
               </section>
 
               {/* 5. 做T自救与二波解套处方 */}
-              <section style={{ padding: '16px 18px', margin: 0 }}>
+              <section style={{ padding: '15px 16px', margin: 0 }}>
                 <h3 style={{ fontSize: '14px', fontWeight: 700, margin: '0 0 10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <span>💡</span> 做T自救与二波解套处方
                 </h3>
@@ -1472,8 +1417,8 @@ export default function DiagnosisPage({
             </div>
 
             {/* 右列：实时公告雷达（排雷与催化） */}
-            <section style={{ padding: '16px 18px', margin: 0, height: 'fit-content' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+            <section id="diagSecAnn" className="diag-sec-anchor" style={{ padding: '15px 16px', margin: 0, height: 'fit-content', minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
                 <h3 style={{ fontSize: '14px', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <span>📰</span> 近30天公告雷达
                   <span style={{ fontSize: '11.5px', fontWeight: 400, color: 'var(--mute)' }}>
@@ -1481,47 +1426,26 @@ export default function DiagnosisPage({
                   </span>
                 </h3>
 
-                {/* 筛选按钮 */}
-                <div style={{ display: 'flex', gap: '4px' }}>
+                {/* 筛选按钮（大拇指易点尺寸） */}
+                <div className="diag-ann-filters">
                   <button
+                    type="button"
                     onClick={() => setAnnFilter('all')}
-                    style={{
-                      fontSize: '11px',
-                      padding: '2px 7px',
-                      borderRadius: '4px',
-                      border: '1px solid var(--line)',
-                      background: annFilter === 'all' ? 'var(--info)' : 'var(--surface)',
-                      color: annFilter === 'all' ? '#fff' : 'var(--sub)',
-                      cursor: 'pointer'
-                    }}
+                    className={annFilter === 'all' ? 'active-all' : ''}
                   >
                     全部
                   </button>
                   <button
+                    type="button"
                     onClick={() => setAnnFilter('red')}
-                    style={{
-                      fontSize: '11px',
-                      padding: '2px 7px',
-                      borderRadius: '4px',
-                      border: '1px solid var(--line)',
-                      background: annFilter === 'red' ? 'var(--up)' : 'var(--surface)',
-                      color: annFilter === 'red' ? '#fff' : 'var(--sub)',
-                      cursor: 'pointer'
-                    }}
+                    className={annFilter === 'red' ? 'active-red' : ''}
                   >
                     利空 ({report.redFlags?.length || 0})
                   </button>
                   <button
+                    type="button"
                     onClick={() => setAnnFilter('green')}
-                    style={{
-                      fontSize: '11px',
-                      padding: '2px 7px',
-                      borderRadius: '4px',
-                      border: '1px solid var(--line)',
-                      background: annFilter === 'green' ? 'var(--down)' : 'var(--surface)',
-                      color: annFilter === 'green' ? '#fff' : 'var(--sub)',
-                      cursor: 'pointer'
-                    }}
+                    className={annFilter === 'green' ? 'active-green' : ''}
                   >
                     催化 ({report.greenCatalysts?.length || 0})
                   </button>
@@ -1529,7 +1453,7 @@ export default function DiagnosisPage({
               </div>
 
               {/* 公告信息流 */}
-              <div style={{ maxHeight: '720px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px', paddingRight: '4px' }}>
+              <div className="diag-ann-list">
                 {filteredAnnouncements.length === 0 ? (
                   <div style={{ textAlign: 'center', padding: '30px 0', fontSize: '12px', color: 'var(--mute)' }}>
                     此分类下暂无公告

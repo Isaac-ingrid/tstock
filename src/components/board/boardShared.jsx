@@ -5,6 +5,11 @@ import { f2, money$ } from '../../services/utils.js';
 
 export const DEFAULT_MYSTIC_ROOTS = '东方,阳,洋,祥,羊,龙,凤,福,瑞,泰,昌,盛,金,马,猴';
 
+export function isMainboard0060(code) {
+  const c = String(code || '').trim().padStart(6, '0');
+  return c.startsWith('00') || c.startsWith('60');
+}
+
 export function TagBadges({ tags = [] }) {
   if (!tags || tags.length === 0) return null;
   return (
@@ -30,6 +35,131 @@ export function TagBadges({ tags = [] }) {
   );
 }
 
+/**
+ * 统一且绝不折行裁切的连板模块个股操作按钮组：
+ * 支持 📊评分拆解(可选) · 🩺诊股 · 📌跟踪/✓跟踪(主板00/60) · ＋自选/✓已自选(全池通用)
+ */
+export function BoardStockActions({
+  stock,
+  inPoolCodes,
+  herdCodeSet,
+  herdBusyCode = '',
+  onHerdAction,
+  onAddSingle,
+  onSelectStock,
+  onOpenScore,
+  onJumpHerd,
+  onJumpIgnition,
+  compact = false,
+  showHerd = true,
+  showDiag = true,
+  readOnlyHistory = false,
+}) {
+  if (!stock || !stock.code) return null;
+  const code6 = String(stock.code).trim().padStart(6, '0');
+  const inT = Boolean(inPoolCodes?.has(code6));
+  const inH = Boolean(herdCodeSet?.has(code6));
+  const canTrackHerd = showHerd && Boolean(onHerdAction) && isMainboard0060(code6);
+
+  return (
+    <div className={`board-act-group ${compact ? 'is-compact' : 'is-full'}`}>
+      {onOpenScore && (
+        <button
+          type="button"
+          className="board-act-btn score"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenScore(stock);
+          }}
+          title="查看双轨评分拆解与周期操作建议"
+        >
+          {compact ? '📊' : '📊 评分拆解'}
+        </button>
+      )}
+
+      {showDiag && (
+        <a
+          href={`#/diagnosis?code=${code6}`}
+          className="board-act-btn diag"
+          onClick={(e) => e.stopPropagation()}
+          title={`全景诊股：${stock.name || ''} (${code6})`}
+        >
+          {compact ? '🩺' : '🩺 诊股'}
+        </a>
+      )}
+
+      {onJumpIgnition && !compact && (
+        <button
+          type="button"
+          className="board-act-btn ignition"
+          onClick={(e) => {
+            e.stopPropagation();
+            onJumpIgnition(code6);
+          }}
+          title="跳转到起爆挖掘做六维成色体检"
+        >
+          🚀 起爆
+        </button>
+      )}
+
+      {canTrackHerd && (
+        inH ? (
+          <button
+            type="button"
+            className="board-act-btn tracked"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onJumpHerd) onJumpHerd();
+            }}
+            title={onJumpHerd ? '已在自动抱团跟踪池，点击查看跟踪详情' : '已在自动抱团跟踪池'}
+          >
+            {compact ? '✓跟踪' : '✓ 已跟踪'}
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="board-act-btn track"
+            disabled={readOnlyHistory || herdBusyCode === code6}
+            onClick={(e) => {
+              e.stopPropagation();
+              onHerdAction('add', stock);
+            }}
+            title={readOnlyHistory ? '历史复盘模式暂禁修改实时抱团池' : '加入自动抱团跟踪池'}
+          >
+            {herdBusyCode === code6 ? '…' : compact ? '📌跟踪' : '📌 加跟踪'}
+          </button>
+        )
+      )}
+
+      {inT ? (
+        <button
+          type="button"
+          className="board-act-btn in-pool"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (onSelectStock) onSelectStock(code6);
+          }}
+          title="已在自选池，点击前往今日作战台查看买卖点"
+        >
+          {compact ? '✓已自选' : '✓ 已自选 →'}
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="board-act-btn add-pool"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (onAddSingle) onAddSingle(code6, stock.name, stock);
+          }}
+          title="加入自选池（留在当前页可连续添加多只标的）"
+        >
+          {compact ? '＋自选' : '＋ 加入自选'}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function CoreRoleBox({
   roleLabel,
   accent,
@@ -41,6 +171,9 @@ export function CoreRoleBox({
   herdBusyCode,
   onHerdAction,
   onAddSingle,
+  onSelectStock,
+  onJumpHerd,
+  readOnlyHistory = false,
 }) {
   if (!stock) {
     return (
@@ -50,12 +183,10 @@ export function CoreRoleBox({
       </div>
     );
   }
-  const inT = inPoolCodes?.has(stock.code);
-  const inH = herdCodeSet?.has(stock.code);
   const chgVal = Number(stock.chg || 0);
   return (
-    <div style={{ padding: '10px 12px', borderRadius: '8px', border: `1px solid ${bdColor}`, background: bgColor, display: 'flex', flexDirection: 'column', gap: '6px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+    <div style={{ padding: '10px 12px', borderRadius: '8px', border: `1px solid ${bdColor}`, background: bgColor, display: 'flex', flexDirection: 'column', gap: '6px', minWidth: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', flexWrap: 'wrap' }}>
         <span style={{ fontSize: '11.5px', fontWeight: 800, color: accent }}>{roleLabel}</span>
         {stock.popRank && (
           <span style={{ fontSize: '10.5px', padding: '1px 5px', borderRadius: '4px', background: '#fff7ed', color: '#c2410c', border: '1px solid #fdba74', fontWeight: 700 }}>
@@ -64,7 +195,7 @@ export function CoreRoleBox({
         )}
       </div>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '6px', flexWrap: 'wrap' }}>
-        <div>
+        <div style={{ minWidth: 0 }}>
           <span style={{ fontSize: '15px', fontWeight: 800, color: 'var(--text)' }}>{stock.name}</span>
           <span style={{ fontSize: '11.5px', fontFamily: 'monospace', color: 'var(--mute)', marginLeft: '5px' }}>{stock.code}</span>
         </div>
@@ -75,38 +206,20 @@ export function CoreRoleBox({
       <div style={{ fontSize: '11.5px', color: '#334155', lineHeight: 1.45 }}>
         {stock.roleReason || stock.statTag}
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '4px', fontSize: '11px', color: 'var(--sub)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px', fontSize: '11px', color: 'var(--sub)', paddingTop: '2px' }}>
         <span>成交: <b>{money$(stock.amount)}</b> · 流通: <b>{money$(stock.mcap)}</b></span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <a href={`#/diagnosis?code=${stock.code}`} className="mini" style={{ textDecoration: 'none', padding: '2px 6px', fontSize: '10.5px' }}>
-            🩺体检
-          </a>
-          {inH ? (
-            <span style={{ fontSize: '10.5px', color: '#6d28d9', fontWeight: 700, padding: '2px 4px' }}>✓跟踪中</span>
-          ) : (
-            <button
-              type="button"
-              className="mini"
-              disabled={herdBusyCode === stock.code}
-              onClick={() => onHerdAction('add', stock)}
-              style={{ fontSize: '10.5px', padding: '2px 6px', color: '#6d28d9', borderColor: '#c4b5fd', background: '#fff' }}
-            >
-              📌跟踪
-            </button>
-          )}
-          {!inT ? (
-            <button
-              type="button"
-              className="mini primary"
-              onClick={() => onAddSingle(stock.code, stock.name)}
-              style={{ fontSize: '10.5px', padding: '2px 6px' }}
-            >
-              ＋做T
-            </button>
-          ) : (
-            <span style={{ fontSize: '10.5px', color: 'var(--info)', fontWeight: 700 }}>✓已选</span>
-          )}
-        </div>
+        <BoardStockActions
+          stock={stock}
+          inPoolCodes={inPoolCodes}
+          herdCodeSet={herdCodeSet}
+          herdBusyCode={herdBusyCode}
+          onHerdAction={onHerdAction}
+          onAddSingle={onAddSingle}
+          onSelectStock={onSelectStock}
+          onJumpHerd={onJumpHerd}
+          compact
+          readOnlyHistory={readOnlyHistory}
+        />
       </div>
     </div>
   );

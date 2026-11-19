@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { f2, money$, toastWarn } from '../../services/utils.js';
 import { searchTencent } from '../../services/api.js';
-import { TagBadges } from './boardShared.jsx';
+import { TagBadges, BoardStockActions } from './boardShared.jsx';
 import KlinePatternBadges from '../KlinePatternBadges.jsx';
 
 export default function HerdPoolPanel({
@@ -19,6 +19,7 @@ export default function HerdPoolPanel({
   onHerdAction,
   inPoolCodes,
   onAddSingle,
+  onSelectStock,
   readOnlyHistory = false,
 }) {
   const [herdQuery, setHerdQuery] = useState('');
@@ -143,14 +144,14 @@ export default function HerdPoolPanel({
                 type="button"
                 className={`mini ${herdHealthFilter === st.k ? 'primary' : ''}`}
                 onClick={() => setHerdHealthFilter(st.k)}
-                style={{ fontSize: '11.5px', fontWeight: herdHealthFilter === st.k ? 800 : 600 }}
+                style={{ marginLeft: 0, fontSize: '11.5px', fontWeight: herdHealthFilter === st.k ? 800 : 600 }}
               >
                 {st.label}
               </button>
             ))}
           </div>
 
-          <div ref={boxRef} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div ref={boxRef} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
             <input
               type="text"
               placeholder="输入00/60代码或股票名…"
@@ -172,7 +173,7 @@ export default function HerdPoolPanel({
               className="mini"
               disabled={readOnlyHistory || !herdQuery.trim() || searching || Boolean(herdBusyCode)}
               onClick={handleManualAdd}
-              style={{ fontSize: '11.5px', background: '#6d28d9', color: '#fff', borderColor: '#6d28d9', fontWeight: 700 }}
+              style={{ marginLeft: 0, fontSize: '11.5px', background: '#6d28d9', color: '#fff', borderColor: '#6d28d9', fontWeight: 700 }}
             >
               {searching ? '匹配中…' : '＋ 加池锁定'}
             </button>
@@ -235,6 +236,7 @@ export default function HerdPoolPanel({
               className="mini"
               onClick={() => setSelectedTheme('all')}
               style={{
+                marginLeft: 0,
                 fontSize: '11px',
                 padding: '1px 7px',
                 fontWeight: selectedTheme === 'all' ? 800 : 600,
@@ -254,6 +256,7 @@ export default function HerdPoolPanel({
                   className="mini"
                   onClick={() => setSelectedTheme(active ? 'all' : sec.name)}
                   style={{
+                    marginLeft: 0,
                     fontSize: '11px',
                     padding: '1px 7px',
                     fontWeight: active ? 800 : 600,
@@ -270,122 +273,119 @@ export default function HerdPoolPanel({
         )}
       </div>
 
-      {displayItems.map(item => {
-        const inT = inPoolCodes.has(item.code);
-        return (
-          <div
-            key={item.code}
-            style={{
-              background: 'var(--surface)',
-              border: `1.5px solid ${item.healthBorder || '#cbd5e1'}`,
-              borderRadius: '10px',
-              padding: '12px 16px',
-              boxShadow: '0 2px 6px rgba(109, 40, 217, 0.06)',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '6px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                <span
-                  style={{
-                    fontSize: '11.5px',
-                    fontWeight: 800,
-                    padding: '2px 8px',
-                    borderRadius: '4px',
-                    background: item.healthBg,
-                    color: item.healthColor,
-                    border: `1px solid ${item.healthBorder}`,
-                  }}
-                >
-                  {item.healthLabel}
+      {displayItems.map(item => (
+        <div
+          key={item.code}
+          style={{
+            background: 'var(--surface)',
+            border: `1.5px solid ${item.healthBorder || '#cbd5e1'}`,
+            borderRadius: '10px',
+            padding: '12px 16px',
+            boxShadow: '0 2px 6px rgba(109, 40, 217, 0.06)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <span
+                style={{
+                  fontSize: '11.5px',
+                  fontWeight: 800,
+                  padding: '2px 8px',
+                  borderRadius: '4px',
+                  background: item.healthBg,
+                  color: item.healthColor,
+                  border: `1px solid ${item.healthBorder}`,
+                }}
+              >
+                {item.healthLabel}
+              </span>
+              <span style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text)' }}>{item.name}</span>
+              <span style={{ fontFamily: 'monospace', fontSize: '13px', color: 'var(--mute)' }}>{item.code}</span>
+              <span
+                onClick={() => setSelectedTheme(selectedTheme === item.hybk ? 'all' : item.hybk)}
+                style={{ fontSize: '11px', padding: '1px 6px', borderRadius: '4px', background: '#f0f5ff', color: '#1d39c4', cursor: 'pointer' }}
+              >
+                🔥 {item.hybk}
+              </span>
+              {item.isMysticResonant && item.mysticCluster && (
+                <span style={{ fontSize: '11px', padding: '1px 6px', borderRadius: '4px', background: '#f5f3ff', color: '#7c3aed', border: '1px solid #d8b4fe', fontWeight: 700 }}>
+                  🔮 {item.mysticCluster}
                 </span>
-                <span style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text)' }}>{item.name}</span>
-                <span style={{ fontFamily: 'monospace', fontSize: '13px', color: 'var(--mute)' }}>{item.code}</span>
-                <span style={{ fontSize: '11px', padding: '1px 6px', borderRadius: '4px', background: '#f0f5ff', color: '#1d39c4' }}>
-                  🔥 {item.hybk}
+              )}
+              <span style={{ fontSize: '11px', color: '#64748b' }}>
+                已跟踪 <b>D{item.trackDays}</b>天 · 入池 {item.entryDate} (¥{f2(item.entryPrice)})
+              </span>
+              {item.pinned && (
+                <span style={{ fontSize: '10.5px', padding: '1px 5px', borderRadius: '4px', background: '#fef3c7', color: '#b45309', border: '1px solid #fcd34d', fontWeight: 700 }}>
+                  🔒 已锁定防踢
                 </span>
-                {item.isMysticResonant && item.mysticCluster && (
-                  <span style={{ fontSize: '11px', padding: '1px 6px', borderRadius: '4px', background: '#f5f3ff', color: '#7c3aed', border: '1px solid #d8b4fe', fontWeight: 700 }}>
-                    🔮 {item.mysticCluster}
-                  </span>
-                )}
-                <span style={{ fontSize: '11px', color: '#64748b' }}>
-                  已跟踪 <b>D{item.trackDays}</b>天 · 入池 {item.entryDate} (¥{f2(item.entryPrice)})
-                </span>
-                {item.pinned && (
-                  <span style={{ fontSize: '10.5px', padding: '1px 5px', borderRadius: '4px', background: '#fef3c7', color: '#b45309', border: '1px solid #fcd34d', fontWeight: 700 }}>
-                    🔒 已锁定防踢
-                  </span>
-                )}
+              )}
+            </div>
+
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontFamily: 'monospace', fontSize: '15px', fontWeight: 800, color: item.chg >= 0 ? 'var(--up)' : 'var(--down)' }}>
+                ¥{f2(item.price)} ({item.chg >= 0 ? `+${item.chg.toFixed(2)}%` : `${item.chg.toFixed(2)}%`})
               </div>
-
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontFamily: 'monospace', fontSize: '15px', fontWeight: 800, color: item.chg >= 0 ? 'var(--up)' : 'var(--down)' }}>
-                  ¥{f2(item.price)} ({item.chg >= 0 ? `+${item.chg.toFixed(2)}%` : `${item.chg.toFixed(2)}%`})
-                </div>
-                <div style={{ fontSize: '11px', fontFamily: 'monospace', color: item.cumReturnPct >= 0 ? 'var(--up)' : 'var(--down)' }}>
-                  入池累计 {item.cumReturnPct >= 0 ? `+${item.cumReturnPct.toFixed(2)}%` : `${item.cumReturnPct.toFixed(2)}%`}
-                </div>
-              </div>
-            </div>
-
-            <div style={{ marginBottom: '8px' }}>
-              <TagBadges tags={item.tags} />
-              <KlinePatternBadges klinePatterns={item.klinePatterns} variant="compact" />
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '8px', padding: '6px 10px', background: 'var(--surface2)', borderRadius: '6px', fontSize: '12px', marginBottom: '8px' }}>
-              <div>偏离 MA5: <b style={{ fontFamily: 'monospace', color: item.vsMa5 >= 0 ? 'var(--up)' : '#d97706' }}>{item.vsMa5 >= 0 ? `+${item.vsMa5}%` : `${item.vsMa5}%`}</b></div>
-              <div>偏离 MA10: <b style={{ fontFamily: 'monospace', color: item.vsMa10 >= 0 ? 'var(--up)' : '#d97706' }}>{item.vsMa10 >= 0 ? `+${item.vsMa10}%` : `${item.vsMa10}%`}</b></div>
-              <div>偏离 MA20: <b style={{ fontFamily: 'monospace', color: item.vsMa20 >= 0 ? '#15803d' : '#cf1322' }}>{item.vsMa20 >= 0 ? `+${item.vsMa20}%` : `${item.vsMa20}%`}</b></div>
-              <div>高点回撤: <b style={{ fontFamily: 'monospace', color: item.ddFromPeak <= -14 ? '#cf1322' : 'var(--text)' }}>{item.ddFromPeak}%</b> <span style={{ fontSize: '10.5px', color: 'var(--mute)' }}>(峰¥{f2(item.peakPrice)})</span></div>
-              <div>成交额: <b style={{ fontFamily: 'monospace' }}>{money$(item.amount)}</b></div>
-              <div>人气: <b style={{ color: item.popRank ? '#c2410c' : 'var(--mute)' }}>{item.popRank ? `#${item.popRank}` : '—'}</b></div>
-            </div>
-
-            <div style={{ padding: '6px 10px', borderRadius: '6px', background: item.healthBg, border: `1px dashed ${item.healthBorder}`, fontSize: '11.5px', color: '#334155', marginBottom: '8px' }}>
-              <b>承接与破位边界评估：</b>{item.healthDesc} <span style={{ color: '#64748b' }}>（入池依据：{item.entryReason}）</span>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <button
-                  type="button"
-                  className="mini"
-                  disabled={readOnlyHistory || herdBusyCode === item.code}
-                  onClick={() => onHerdAction('pin', item)}
-                  style={{ fontSize: '11px' }}
-                >
-                  {item.pinned ? '🔓 取消锁定' : '🔒 锁定免自动移出'}
-                </button>
-                <button
-                  type="button"
-                  className="mini"
-                  disabled={readOnlyHistory || herdBusyCode === item.code}
-                  onClick={() => onHerdAction('remove', { ...item, reason: '手动移出抱团池' })}
-                  style={{ fontSize: '11px', color: '#cf1322', borderColor: '#ffa39e', background: '#fff1f0' }}
-                >
-                  🗑️ 移出池子
-                </button>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <a href={`#/diagnosis?code=${item.code}`} className="mini" style={{ textDecoration: 'none', padding: '3px 8px' }}>
-                  🩺 全景体检
-                </a>
-                {inT ? (
-                  <span style={{ fontSize: '11px', color: 'var(--info)', fontWeight: 600 }}>✓ 已在决策台</span>
-                ) : (
-                  <button type="button" className="mini primary" onClick={() => onAddSingle(item.code, item.name)} style={{ fontSize: '11.5px' }}>
-                    ＋ 选入做T决策台
-                  </button>
-                )}
+              <div style={{ fontSize: '11px', fontFamily: 'monospace', color: item.cumReturnPct >= 0 ? 'var(--up)' : 'var(--down)' }}>
+                入池累计 {item.cumReturnPct >= 0 ? `+${item.cumReturnPct.toFixed(2)}%` : `${item.cumReturnPct.toFixed(2)}%`}
               </div>
             </div>
           </div>
-        );
-      })}
 
-      {/* 破位自动 / 手动移出记录折叠区 */}
+          <div style={{ marginBottom: '8px' }}>
+            <TagBadges tags={item.tags} />
+            <KlinePatternBadges klinePatterns={item.klinePatterns} variant="compact" />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '8px', padding: '6px 10px', background: 'var(--surface2)', borderRadius: '6px', fontSize: '12px', marginBottom: '8px' }}>
+            <div>偏离 MA5: <b style={{ fontFamily: 'monospace', color: item.vsMa5 >= 0 ? 'var(--up)' : '#d97706' }}>{item.vsMa5 >= 0 ? `+${item.vsMa5}%` : `${item.vsMa5}%`}</b></div>
+            <div>偏离 MA10: <b style={{ fontFamily: 'monospace', color: item.vsMa10 >= 0 ? 'var(--up)' : '#d97706' }}>{item.vsMa10 >= 0 ? `+${item.vsMa10}%` : `${item.vsMa10}%`}</b></div>
+            <div>偏离 MA20: <b style={{ fontFamily: 'monospace', color: item.vsMa20 >= 0 ? '#15803d' : '#cf1322' }}>{item.vsMa20 >= 0 ? `+${item.vsMa20}%` : `${item.vsMa20}%`}</b></div>
+            <div>高点回撤: <b style={{ fontFamily: 'monospace', color: item.ddFromPeak <= -14 ? '#cf1322' : 'var(--text)' }}>{item.ddFromPeak}%</b> <span style={{ fontSize: '10.5px', color: 'var(--mute)' }}>(峰¥{f2(item.peakPrice)})</span></div>
+            <div>成交额: <b style={{ fontFamily: 'monospace' }}>{money$(item.amount)}</b></div>
+            <div>人气: <b style={{ color: item.popRank ? '#c2410c' : 'var(--mute)' }}>{item.popRank ? `#${item.popRank}` : '—'}</b></div>
+          </div>
+
+          <div style={{ padding: '6px 10px', borderRadius: '6px', background: item.healthBg, border: `1px dashed ${item.healthBorder}`, fontSize: '11.5px', color: '#334155', marginBottom: '8px' }}>
+            <b>承接与破位边界评估：</b>{item.healthDesc} <span style={{ color: '#64748b' }}>（入池依据：{item.entryReason}）</span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="mini"
+                disabled={readOnlyHistory || herdBusyCode === item.code}
+                onClick={() => onHerdAction('pin', item)}
+                style={{ marginLeft: 0, fontSize: '11px' }}
+              >
+                {item.pinned ? '🔓 取消锁定' : '🔒 锁定免自动移出'}
+              </button>
+              <button
+                type="button"
+                className="mini"
+                disabled={readOnlyHistory || herdBusyCode === item.code}
+                onClick={() => onHerdAction('remove', { ...item, reason: '手动移出抱团池' })}
+                style={{ marginLeft: 0, fontSize: '11px', color: '#cf1322', borderColor: '#ffa39e', background: '#fff1f0' }}
+              >
+                🗑️ 移出池子
+              </button>
+            </div>
+
+            <BoardStockActions
+              stock={item}
+              inPoolCodes={inPoolCodes}
+              herdCodeSet={null}
+              showHerd={false}
+              onAddSingle={onAddSingle}
+              onSelectStock={onSelectStock}
+              readOnlyHistory={readOnlyHistory}
+            />
+          </div>
+        </div>
+      ))}
+
+      {/* 破位自动 / 手动移出记录折叠区（同样支持诊股与加入自选观察） */}
       <details style={{ marginTop: '6px', padding: '10px 14px', background: '#fafafa', border: '1px dashed #cbd5e1', borderRadius: '8px' }}>
         <summary style={{ cursor: 'pointer', fontSize: '12.5px', fontWeight: 700, color: '#475569', userSelect: 'none' }}>
           🗑️ 查看破位自动/手动移出记录 ({evictedPool.length} 只) —— 避免盲目抄底死猫跳
@@ -396,29 +396,55 @@ export default function HerdPoolPanel({
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' }}>
-            {evictedPool.map((ev, i) => (
-              <div
-                key={`${ev.code}_${i}`}
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', padding: '6px 10px', background: '#fff', border: '1px solid #fee2e2', borderRadius: '6px', fontSize: '12px' }}
-              >
-                <div>
-                  <b>{ev.name}</b> <span style={{ fontFamily: 'monospace', color: 'var(--mute)' }}>{ev.code}</span>
-                  <span style={{ marginLeft: '8px', color: '#cf1322', fontWeight: 600 }}>踢出原因：{ev.reason}</span>
-                  <div style={{ fontSize: '11px', color: 'var(--mute)' }}>
-                    入池 {ev.entryDate} ¥{f2(ev.entryPrice)} → 移出 {ev.evictedDate} ¥{f2(ev.evictPrice)} ({ev.returnPct >= 0 ? `+${ev.returnPct}%` : `${ev.returnPct}%`})
+            {evictedPool.map((ev, i) => {
+              const evCode = String(ev.code || '').padStart(6, '0');
+              const inT = inPoolCodes?.has(evCode);
+              return (
+                <div
+                  key={`${evCode}_${i}`}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', padding: '8px 10px', background: '#fff', border: '1px solid #fee2e2', borderRadius: '6px', fontSize: '12px' }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <b>{ev.name}</b> <span style={{ fontFamily: 'monospace', color: 'var(--mute)' }}>{evCode}</span>
+                    <span style={{ marginLeft: '8px', color: '#cf1322', fontWeight: 600 }}>踢出原因：{ev.reason}</span>
+                    <div style={{ fontSize: '11px', color: 'var(--mute)', marginTop: '2px' }}>
+                      入池 {ev.entryDate} ¥{f2(ev.entryPrice)} → 移出 {ev.evictedDate} ¥{f2(ev.evictPrice)} ({ev.returnPct >= 0 ? `+${ev.returnPct}%` : `${ev.returnPct}%`})
+                    </div>
+                  </div>
+                  <div className="board-act-group is-compact">
+                    <a href={`#/diagnosis?code=${evCode}`} className="board-act-btn diag" title="全景诊股">
+                      🩺
+                    </a>
+                    <button
+                      type="button"
+                      className="board-act-btn track"
+                      disabled={readOnlyHistory || herdBusyCode === evCode}
+                      onClick={() => onHerdAction('restore', ev)}
+                      title="恢复至自动抱团跟踪池并锁定防踢"
+                    >
+                      ↩️恢复跟踪
+                    </button>
+                    {inT ? (
+                      <button
+                        type="button"
+                        className="board-act-btn in-pool"
+                        onClick={() => onSelectStock && onSelectStock(evCode)}
+                      >
+                        ✓已自选
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="board-act-btn add-pool"
+                        onClick={() => onAddSingle(evCode, ev.name, ev)}
+                      >
+                        ＋自选
+                      </button>
+                    )}
                   </div>
                 </div>
-                <button
-                  type="button"
-                  className="mini"
-                  disabled={readOnlyHistory || herdBusyCode === ev.code}
-                  onClick={() => onHerdAction('restore', ev)}
-                  style={{ fontSize: '11px', color: '#0958d9', borderColor: '#91caff', background: '#e6f4ff' }}
-                >
-                  ↩️ 恢复并锁定跟踪
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </details>

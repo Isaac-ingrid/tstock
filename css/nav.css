@@ -4,7 +4,7 @@
 
 /* 全局容器放宽，释放宽屏呼吸感 */
 .wrap {
-  max-width: 1320px;
+  max-width: 1380px;
 }
 
 .main-content {
@@ -2089,3 +2089,1665 @@ html[data-pwa="standalone"] .topbar {
   font-size: 10.5px;
   color: var(--mute);
 }
+
+/* ==================== 10. 「台账复盘」窄屏卡片流、触屏曲线与单手操作适配 ==================== */
+.ledger-vault-guard {
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #fffbeb;
+  border: 1.5px solid #f59e0b;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 12.5px;
+}
+
+.ledger-main-card {
+  padding: 16px;
+}
+
+.ledger-head-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 12px;
+}
+
+.ledger-head-title {
+  font-size: 18px;
+  font-weight: 800;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ledger-sub-badge {
+  font-size: 11px;
+  background: var(--surface2);
+  color: var(--sub);
+}
+
+.ledger-head-desc {
+  font-size: 12px;
+  color: var(--sub);
+  margin-top: 4px;
+}
+
+.ledger-head-acts {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.ledger-btn-eod {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 700;
+}
+
+.ledger-btn-coach {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: linear-gradient(135deg, #1d4ed8 0%, #7c3aed 100%) !important;
+  border: none !important;
+  color: #fff !important;
+  font-weight: 700;
+}
+
+.ledger-btn-add {
+  font-weight: 700;
+  border-color: var(--info-b);
+  background: var(--info-bg);
+  color: var(--info-d);
+}
+
+/* 四维纪律评分卡：桌面端左总分+右四维，手机端上下堆叠+2x2 */
+.ledger-scorecard-grid {
+  background: linear-gradient(135deg, #f8fafc 0%, #f0f9ff 100%);
+  border: 1px solid #bae6fd;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  display: grid;
+  grid-template-columns: minmax(190px, 225px) minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+}
+
+.ledger-score-main {
+  border-right: 1px dashed #cbd5e1;
+  padding-right: 12px;
+}
+
+.ledger-dim-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+/* 双轨切换条 */
+.ledger-track-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.ledger-track-tab {
+  font-size: 12px;
+  padding: 5px 12px;
+  min-height: 32px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.ledger-track-tab.active {
+  border-color: var(--text);
+  font-weight: 700;
+}
+
+/* 4维战报KPI */
+.ledger-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.ledger-kpi-card {
+  padding: 11px 13px;
+  margin-bottom: 0;
+  background: var(--surface2);
+}
+
+.ledger-kpi-k {
+  font-size: 11.5px;
+  color: var(--mute);
+}
+
+.ledger-kpi-v {
+  font-size: 20px;
+  font-weight: 800;
+  font-family: ui-monospace, Consolas, monospace;
+  margin-top: 3px;
+  line-height: 1.25;
+}
+
+.ledger-kpi-v.up { color: var(--up); }
+.ledger-kpi-v.down { color: var(--down); }
+
+.ledger-kpi-sub {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--sub);
+  margin-left: 5px;
+}
+
+.ledger-bench-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+/* 曲线查点提示与浮窗 */
+.ledger-chart-hint {
+  font-size: 11.5px;
+  color: var(--mute);
+}
+
+.ledger-stock-select {
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface2);
+  color: var(--text);
+  font-weight: 600;
+  max-width: 100%;
+}
+
+.ledger-curve-tip {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--line2);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 11.5px;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
+  z-index: 10;
+  min-width: 138px;
+}
+
+.ledger-tip-close {
+  border: none;
+  background: transparent;
+  min-height: 20px;
+  padding: 0 3px;
+  font-size: 11px;
+  color: var(--mute);
+}
+
+/* 流水视图切换栏 */
+.ledger-list-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.ledger-view-switch {
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 8px;
+  background: var(--surface2);
+  border: 1px solid var(--line);
+}
+
+.ledger-view-switch button {
+  border: none;
+  background: transparent;
+  min-height: 26px;
+  padding: 2px 9px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--sub);
+}
+
+.ledger-view-switch button.active {
+  background: #fff;
+  color: var(--text);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.09);
+}
+
+/* 桌面端默认展示宽表，隐藏卡片；窄屏自动反转；支持手动强制切换 */
+.ledger-log-cards.mode-auto {
+  display: none;
+}
+.ledger-log-cards.mode-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ledger-log-cards.mode-table {
+  display: none !important;
+}
+.ledger-table-wrap.mode-card {
+  display: none !important;
+}
+.ledger-table-wrap.mode-table {
+  display: block !important;
+}
+
+/* 单手复盘卡片样式 */
+.ledger-log-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 12px 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+
+.llc-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.llc-ident {
+  min-width: 0;
+  flex: 1;
+}
+
+.llc-stock {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1.3;
+}
+
+.llc-badges {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.llc-track {
+  font-size: 10.5px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.llc-track.long {
+  background: #f0f9ff;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+}
+
+.llc-track.short {
+  background: #faf5ff;
+  color: #7c3aed;
+  border: 1px solid #d8b4fe;
+}
+
+.llc-date {
+  font-size: 11px;
+  color: var(--mute);
+  font-family: ui-monospace, Consolas, monospace;
+}
+
+.llc-pnl {
+  text-align: right;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.llc-net {
+  font-size: 17px;
+  font-weight: 800;
+  font-family: ui-monospace, Consolas, monospace;
+  line-height: 1.2;
+}
+
+.llc-net.up { color: var(--up); }
+.llc-net.down { color: var(--down); }
+
+.llc-net-lbl {
+  font-size: 10px;
+  color: var(--mute);
+}
+
+.llc-hold-tag {
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 5px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+
+.llc-prices {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  background: var(--surface);
+  border: 1px solid var(--hair);
+  border-radius: 8px;
+  padding: 6px 9px;
+}
+
+.llc-px-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.llc-px-cell span {
+  font-size: 10.5px;
+  color: var(--mute);
+}
+
+.llc-px-cell b {
+  font-size: 13px;
+  font-family: ui-monospace, Consolas, monospace;
+  color: var(--text);
+}
+
+.llc-audit {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.llc-tags-row {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.llc-score-pill {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-weight: 700;
+}
+
+.llc-mistake-pill {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: #fff1f0;
+  color: #cf1322;
+  border: 1px solid #ffa39e;
+  font-weight: 600;
+}
+
+.llc-sop-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--sub);
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 6px;
+  padding: 5px 8px;
+}
+
+.llc-sop-row em {
+  font-style: normal;
+  font-family: ui-monospace, Consolas, monospace;
+  margin-left: 3px;
+  font-weight: 700;
+}
+
+.llc-note {
+  font-size: 12px;
+  color: var(--text);
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 7px;
+  padding: 6px 9px;
+  line-height: 1.5;
+}
+
+.llc-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 7px;
+  border-top: 1px dashed var(--hair);
+}
+
+.llc-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.llc-btn-review {
+  min-height: 32px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 7px;
+  border: 1px solid var(--info-b);
+  background: var(--info-bg);
+  color: var(--info-d);
+}
+
+.llc-btn-del {
+  min-height: 32px;
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--sub);
+}
+
+.llc-btn-del.confirm {
+  background: #cf1322;
+  border-color: #cf1322;
+  color: #fff;
+  font-weight: 700;
+}
+
+/* 台账弹窗表单增强 */
+.ledger-form-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ledger-form-grid-2 select,
+.ledger-add-bd select {
+  width: 100%;
+  min-height: 34px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--text);
+}
+
+.ledger-mistake-picker {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.ledger-mistake-btn {
+  min-height: 32px;
+  padding: 4px 10px;
+  font-size: 11.5px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--sub);
+  cursor: pointer;
+}
+
+.ledger-mistake-btn.selected {
+  border-color: #cf1322;
+  background: #fff1f0;
+  color: #cf1322;
+  font-weight: 700;
+}
+
+.ledger-textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  font-size: 13px;
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+.ledger-coach-inputs {
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr);
+  gap: 10px;
+  background: var(--surface2);
+  padding: 10px 12px;
+  border-radius: 8px;
+  margin-bottom: 14px;
+}
+
+.ledger-coach-btns {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 14px 0;
+}
+
+.ledger-add-bd {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  font-size: 12.5px;
+}
+
+/* ==================== 11. 「全景诊股」窄屏搜索、章节速达与六维面板适配 ==================== */
+.diag-search-card {
+  padding: 16px 20px;
+  margin-bottom: 14px;
+}
+
+.diag-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.diag-top-title {
+  font-size: 16px;
+  margin: 0;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.diag-top-badge {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--mute);
+  background: var(--surface2);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.diag-top-desc {
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  color: var(--sub);
+}
+
+.diag-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.diag-input-box {
+  position: relative;
+  width: 265px;
+}
+
+.diag-search-input {
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 32px 7px 12px;
+  font-size: 13.5px;
+  border-radius: 8px;
+  border: 1px solid var(--line2);
+  outline: none;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.diag-search-input:focus {
+  border-color: var(--info);
+  background: #fff;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.14);
+}
+
+.diag-clear-btn {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: transparent;
+  color: var(--mute);
+  cursor: pointer;
+  min-height: 28px;
+  min-width: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+}
+
+.diag-suggest-pop {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0;
+  right: 0;
+  min-width: 265px;
+  z-index: 99;
+  background: #fff;
+  border: 1px solid var(--line2);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.16);
+  overflow: hidden;
+}
+
+.diag-suggest-item {
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid var(--hair);
+  padding: 9px 12px;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+  background: #fff;
+  color: var(--text);
+  border-radius: 0;
+}
+
+.diag-suggest-item:last-child {
+  border-bottom: none;
+}
+
+.diag-suggest-item.active,
+.diag-suggest-item:hover {
+  background: #eff6ff;
+}
+
+.diag-submit-btn {
+  min-height: 36px;
+  padding: 0 16px;
+  background: var(--info);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.diag-submit-btn:hover {
+  background: var(--info-d);
+  color: #fff;
+}
+
+.diag-preset-strip {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+
+.diag-preset-lbl {
+  color: var(--mute);
+  flex-shrink: 0;
+}
+
+.diag-preset-pill {
+  min-height: 28px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.diag-preset-pill.preset {
+  color: var(--sub);
+}
+
+.diag-preset-pill.active {
+  background: var(--info-bg);
+  border-color: var(--info-b);
+  color: var(--info-d);
+  font-weight: 700;
+}
+
+/* 章节单手速达锚点条 */
+.diag-anchor-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: 4px 2px 10px;
+}
+
+.diag-anchor-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.diag-anchor-chip {
+  flex: 0 0 auto;
+  min-height: 30px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--line2);
+  background: #fff;
+  color: var(--sub);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.diag-anchor-chip:hover {
+  border-color: var(--info);
+  color: var(--info);
+}
+
+.diag-anchor-chip.copy {
+  margin-left: auto;
+  background: var(--accent-bg);
+  border-color: var(--accent-b);
+  color: var(--accent-d);
+}
+
+.diag-sec-anchor {
+  scroll-margin-top: 108px;
+}
+
+/* 标的概览头部卡 */
+.diag-overview-card {
+  padding: 16px 20px;
+  margin-bottom: 14px;
+}
+
+.diag-overview-hd {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.diag-quick-act {
+  min-height: 28px;
+  font-size: 11.5px;
+  padding: 2px 9px;
+  border-radius: 6px;
+  background: var(--surface2);
+  border: 1px solid var(--line);
+  font-weight: 600;
+}
+
+.diag-quick-act.in-pool {
+  background: var(--accent-bg);
+  color: var(--accent);
+  border-color: var(--accent-b);
+  font-weight: 700;
+}
+
+.diag-quick-act.ignition {
+  background: #eef2ff;
+  color: #4338ca;
+  border-color: #c7d2fe;
+  font-weight: 700;
+}
+
+.diag-quote-box {
+  text-align: right;
+}
+
+.diag-quote-px {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.diag-quote-meta {
+  font-size: 12px;
+  color: var(--sub);
+  margin-top: 4px;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.diag-radar-strip {
+  margin-top: 14px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.diag-copy-btn {
+  min-height: 32px;
+  padding: 5px 12px;
+  border-radius: 7px;
+  background: #fff;
+  border: 1px solid var(--line2);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* 诊股响应式核心网格 */
+.diag-dec-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.diag-main-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.diag-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.diag-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.diag-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.diag-chart-note {
+  font-size: 11px;
+  color: var(--mute);
+}
+
+.diag-chips-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  font-size: 12.5px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border-radius: 6px;
+  border: 1px solid var(--line);
+}
+
+.diag-ann-filters {
+  display: inline-flex;
+  gap: 5px;
+}
+
+.diag-ann-filters button {
+  font-size: 11.5px;
+  min-height: 28px;
+  padding: 2px 9px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--sub);
+}
+
+.diag-ann-filters button.active-all {
+  background: var(--info);
+  border-color: var(--info);
+  color: #fff;
+  font-weight: 700;
+}
+
+.diag-ann-filters button.active-red {
+  background: var(--up);
+  border-color: var(--up);
+  color: #fff;
+  font-weight: 700;
+}
+
+.diag-ann-filters button.active-green {
+  background: var(--down);
+  border-color: var(--down);
+  color: #fff;
+  font-weight: 700;
+}
+
+.diag-ann-list {
+  max-height: 720px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 2px;
+}
+
+/* ==================== 12. 台账复盘 & 全景诊股 手机窄屏断点响应 ==================== */
+@media (max-width: 920px) {
+  .diag-main-grid {
+    grid-template-columns: 1fr;
+  }
+  .diag-dec-grid {
+    grid-template-columns: 1fr;
+  }
+  .ledger-dim-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  /* 台账复盘窄屏切换：默认自动展示单手复盘卡、收起12列宽表 */
+  .ledger-main-card {
+    padding: 12px;
+  }
+  .ledger-head-title {
+    font-size: 16px;
+  }
+  .ledger-sub-badge,
+  .ledger-head-desc,
+  .ledger-chart-hint {
+    display: none;
+  }
+  .ledger-head-acts {
+    width: 100%;
+    gap: 6px;
+  }
+  .ledger-head-acts button {
+    flex: 1 1 auto;
+    justify-content: center;
+    min-height: 35px;
+    padding: 5px 9px;
+    font-size: 12px;
+  }
+  .ledger-scorecard-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    padding: 11px 12px;
+  }
+  .ledger-score-main {
+    border-right: none;
+    border-bottom: 1px dashed #cbd5e1;
+    padding-right: 0;
+    padding-bottom: 10px;
+  }
+  .ledger-track-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  .ledger-track-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .ledger-track-tab {
+    flex: 0 0 auto;
+    min-height: 33px;
+  }
+  .ledger-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .ledger-kpi-card {
+    padding: 9px 10px;
+  }
+  .ledger-kpi-v {
+    font-size: 17px;
+  }
+  .ledger-kpi-sub {
+    display: block;
+    margin-left: 0;
+    margin-top: 1px;
+  }
+  .ledger-bench-grid {
+    grid-template-columns: 1fr;
+  }
+  .ledger-log-cards.mode-auto {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .ledger-table-wrap.mode-auto {
+    display: none;
+  }
+  .ledger-coach-inputs {
+    grid-template-columns: 1fr;
+  }
+  .ledger-coach-btns button {
+    flex: 1 1 100%;
+    min-height: 40px;
+  }
+
+  /* 全景诊股窄屏适配：全宽搜索框 + 单行横滑快捷池 + 现价左对齐防挤压 */
+  .diag-search-card,
+  .diag-overview-card {
+    padding: 12px 13px;
+  }
+  .diag-top-badge,
+  .diag-top-desc,
+  .diag-chart-note {
+    display: none;
+  }
+  .diag-search-wrap {
+    width: 100%;
+  }
+  .diag-input-box {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+  }
+  .diag-search-input {
+    min-height: 38px;
+  }
+  .diag-suggest-pop {
+    min-width: 0;
+  }
+  .diag-suggest-item {
+    min-height: 42px;
+  }
+  .diag-submit-btn {
+    min-height: 38px;
+    padding: 0 13px;
+  }
+  .diag-preset-strip {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    margin-top: 10px;
+    padding-top: 9px;
+    padding-bottom: 2px;
+  }
+  .diag-preset-strip::-webkit-scrollbar {
+    display: none;
+  }
+  .diag-preset-pill {
+    flex: 0 0 auto;
+    min-height: 31px;
+    padding: 4px 11px;
+  }
+  .diag-overview-hd {
+    flex-direction: column;
+    gap: 10px;
+  }
+  .diag-quote-box {
+    width: 100%;
+    text-align: left;
+    padding-top: 8px;
+    border-top: 1px dashed var(--hair);
+  }
+  .diag-quote-px,
+  .diag-quote-meta {
+    justify-content: flex-start;
+  }
+  .diag-radar-strip {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 9px 11px;
+  }
+  .diag-copy-btn {
+    width: 100%;
+    justify-content: center;
+    display: inline-flex;
+    align-items: center;
+    min-height: 35px;
+  }
+  .diag-grid-2 {
+    grid-template-columns: 1fr;
+  }
+  .diag-ann-list {
+    max-height: 460px;
+  }
+}
+
+@media (max-width: 640px) {
+  .diag-grid-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .ledger-form-grid-2 {
+    grid-template-columns: 1fr;
+  }
+  .ledger-mistake-btn {
+    min-height: 35px;
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+  .llc-btn-review,
+  .llc-btn-del {
+    min-height: 35px;
+  }
+}
+
+@media (max-width: 480px) {
+  .diag-grid-3 {
+    gap: 6px;
+  }
+  .diag-chips-pair {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .ledger-add-bd {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ==================== 13. 「连板打热」全池无裁切列表、操作按钮组与窄屏卡片适配 ==================== */
+.board-page-wrap {
+  width: 100%;
+  padding: 2px 0 36px;
+}
+
+.board-filter-toolbar {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.board-tier-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.board-search-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.board-search-input {
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  width: 180px;
+  background: var(--surface2);
+}
+
+.board-main-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 292px;
+  gap: 14px;
+  align-items: start;
+}
+
+.board-main-left {
+  min-width: 0;
+}
+
+.board-main-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+/* 统一个股操作按钮组：彻底杜绝 margin-left 继承挤压、竖排折行与右缘裁切 */
+.board-act-group {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+}
+
+.board-act-group.is-full {
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.board-act-btn {
+  margin: 0 !important;
+  white-space: nowrap !important;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1.2;
+  border-radius: 5px;
+  font-weight: 700;
+  min-height: 27px;
+  padding: 3px 8px;
+  font-size: 11.5px;
+  transition: all 0.15s ease;
+}
+
+.board-act-group.is-compact .board-act-btn {
+  min-height: 25px;
+  padding: 2px 6px;
+  font-size: 11px;
+}
+
+.board-act-group.is-compact .board-act-btn.score,
+.board-act-group.is-compact .board-act-btn.diag {
+  padding: 2px 5px;
+}
+
+.board-act-btn.score,
+.board-act-btn.diag,
+.board-act-btn.ignition {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+}
+
+.board-act-btn.score:hover,
+.board-act-btn.diag:hover,
+.board-act-btn.ignition:hover {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
+.board-act-btn.track {
+  background: #fff;
+  border: 1px solid #c4b5fd;
+  color: #6d28d9;
+}
+
+.board-act-btn.track:hover:not(:disabled) {
+  background: #f5f3ff;
+  border-color: #8b5cf6;
+  color: #5b21b6;
+}
+
+.board-act-btn.tracked {
+  background: #f5f3ff;
+  border: 1px solid #c4b5fd;
+  color: #6d28d9;
+}
+
+.board-act-btn.add-pool {
+  background: #2563eb;
+  border: 1px solid #1d4ed8;
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.18);
+}
+
+.board-act-btn.add-pool:hover {
+  background: #1d4ed8;
+  border-color: #1e40af;
+  color: #fff;
+}
+
+.board-act-btn.in-pool {
+  background: #eff6ff;
+  border: 1px solid #93c5fd;
+  color: #1d4ed8;
+}
+
+.board-act-btn.in-pool:hover {
+  background: #dbeafe;
+  border-color: #60a5fa;
+}
+
+.board-act-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* 主线与字辈内联具体股胶囊 */
+.board-inline-stock-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  font-size: 11.5px;
+  line-height: 1.3;
+}
+
+.board-inline-stock-pill .code {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 10.5px;
+  color: var(--mute);
+}
+
+.board-inline-stock-pill .tag {
+  font-size: 10px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: #fff1f0;
+  color: #cf1322;
+  font-weight: 700;
+}
+
+.board-inline-stock-pill .chg {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.board-inline-stock-pill .chg.up { color: var(--up); }
+.board-inline-stock-pill .chg.down { color: var(--down); }
+
+.board-mini-pill-btn {
+  margin: 0 !important;
+  white-space: nowrap !important;
+  flex-shrink: 0;
+  min-height: 20px;
+  padding: 1px 5px;
+  font-size: 10.5px;
+  font-weight: 700;
+  border-radius: 4px;
+  cursor: pointer;
+  line-height: 1.2;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.board-mini-pill-btn.diag {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+}
+
+.board-mini-pill-btn.track {
+  background: #fff;
+  border: 1px solid #c4b5fd;
+  color: #6d28d9;
+}
+
+.board-mini-pill-btn.tracked {
+  background: #f5f3ff;
+  border: 1px solid #c4b5fd;
+  color: #6d28d9;
+}
+
+.board-mini-pill-btn.add-pool {
+  background: #2563eb;
+  border: 1px solid #1d4ed8;
+  color: #fff;
+}
+
+.board-mini-pill-btn.in-pool {
+  background: #eff6ff;
+  border: 1px solid #93c5fd;
+  color: #1d4ed8;
+}
+
+/* 强共振紧凑列表：精确对齐 7 列宽度，彻底消除右缘溢出裁切 */
+.board-strong-scroll {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+
+.board-strong-scroll.is-nested {
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.board-strong-scroll-inner {
+  min-width: 936px;
+}
+
+.board-strong-header,
+.board-strong-row {
+  display: grid;
+  grid-template-columns: 78px 132px 74px minmax(152px, 0.85fr) minmax(160px, 1.65fr) 86px 180px;
+  gap: 8px;
+  padding: 8px 12px;
+  align-items: center;
+}
+
+.board-strong-header {
+  background: #f8fafc;
+  border-bottom: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--mute);
+  user-select: none;
+}
+
+.board-strong-row {
+  font-size: 12px;
+  background: #fff;
+}
+
+.board-strong-row.is-zt {
+  background: #fffafa;
+}
+
+.board-strong-row.is-alt {
+  background: #fcfcfd;
+}
+
+.bsr-col-ident {
+  min-width: 0;
+}
+
+.bsr-col-seal {
+  padding-right: 4px;
+}
+
+.bsr-col-acts {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* 标准涨停天梯表格视图：收紧标的列留白，释放买点与封单列空间 */
+.board-ladder-scroll {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+
+.board-ladder-scroll-inner {
+  min-width: 936px;
+}
+
+.board-ladder-header,
+.board-ladder-row {
+  display: grid;
+  grid-template-columns: 84px 132px minmax(104px, 0.8fr) minmax(106px, 0.75fr) minmax(118px, 0.9fr) 88px 54px 164px;
+  gap: 8px;
+  padding: 8px 12px;
+  align-items: center;
+}
+
+.board-ladder-header {
+  background: #f8fafc;
+  border-bottom: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--mute);
+  user-select: none;
+}
+
+.board-ladder-row {
+  font-size: 12px;
+  background: #fff;
+}
+
+.board-ladder-row.is-high {
+  background: #fff7f7;
+}
+
+.board-ladder-row.is-alt {
+  background: #fcfcfd;
+}
+
+.blr-col-acts {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* <= 1280px（13寸笔记本/分屏/平板横屏）：右侧风口栏自动下沉为横排网格，释放 100% 列表宽度 */
+@media (max-width: 1280px) {
+  .board-main-layout {
+    grid-template-columns: 1fr;
+  }
+  .board-main-sidebar {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    align-items: start;
+  }
+}
+
+/* <= 860px（平板竖屏与手机窄屏）：紧凑表格自动化身为零横滑单手卡片，所有股票与按钮 100% 完整呈现 */
+@media (max-width: 860px) {
+  .board-strong-scroll-inner,
+  .board-ladder-scroll-inner {
+    min-width: 0;
+  }
+  .board-strong-header,
+  .board-ladder-header {
+    display: none;
+  }
+  .board-strong-row,
+  .board-ladder-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 10px;
+    padding: 11px 12px;
+  }
+  .bsr-col-ident,
+  .blr-col-ident {
+    order: 1;
+    flex: 1 1 46%;
+  }
+  .bsr-col-price,
+  .blr-col-px {
+    order: 2;
+    text-align: right;
+  }
+  .bsr-col-score,
+  .blr-col-tier {
+    order: 3;
+  }
+  .bsr-col-seal,
+  .blr-col-time,
+  .blr-col-seal {
+    order: 4;
+  }
+  .bsr-col-amt,
+  .blr-col-amt,
+  .blr-col-score {
+    order: 5;
+  }
+  .bsr-col-tags {
+    order: 6;
+    flex: 1 1 100%;
+  }
+  .bsr-col-acts,
+  .blr-col-acts {
+    order: 7;
+    flex: 1 1 100%;
+    justify-content: flex-end;
+    padding-top: 6px;
+    border-top: 1px dashed var(--hair);
+  }
+  .board-act-group.is-compact .board-act-btn {
+    min-height: 31px;
+    padding: 4px 9px;
+    font-size: 11.5px;
+  }
+}
+
+@media (max-width: 760px) {
+  .board-filter-toolbar {
+    padding: 9px 11px;
+    gap: 8px;
+  }
+  .board-tier-tabs {
+    width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  .board-tier-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .board-tier-tabs button.mini {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    min-height: 32px;
+  }
+  .board-search-controls {
+    width: 100%;
+  }
+  .board-search-input {
+    flex: 1 1 160px;
+    width: auto;
+    min-height: 34px;
+  }
+}
+

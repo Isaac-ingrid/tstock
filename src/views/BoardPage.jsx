@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { fetchLimitUpPool, postHerdAction } from '../services/api.js';
 import { f2, money$, toastOk, toastWarn, toastErr, copyPlain } from '../services/utils.js';
 import MarketSentimentBar from '../components/MarketSentimentBar.jsx';
-import { DEFAULT_MYSTIC_ROOTS, buildDailyReviewBrief } from '../components/board/boardShared.jsx';
+import { DEFAULT_MYSTIC_ROOTS, buildDailyReviewBrief, BoardStockActions } from '../components/board/boardShared.jsx';
 import StrongPoolPanel from '../components/board/StrongPoolPanel.jsx';
 import HerdPoolPanel from '../components/board/HerdPoolPanel.jsx';
 import MainThemesPanel from '../components/board/MainThemesPanel.jsx';
@@ -318,6 +318,7 @@ export default function BoardPage({
         count: stocks.length,
         maxLbc: Math.max(...stocks.map(x => x.lbc || 1)),
         leader: sorted[0]?.name || '',
+        leaderCode: sorted[0]?.code || '',
         stocks: sorted,
       };
     }).sort((a, b) => (b.count - a.count) || (b.maxLbc - a.maxLbc));
@@ -329,8 +330,10 @@ export default function BoardPage({
     }
 
     if (filterTier === 'strong') {
-      let sList = strongPool.filter(x => (x.tagCount || x.tags?.length || 0) >= strongMinTags);
-      if (strongOnlyNonZt) {
+      const isMysticFilter = String(selectedTheme || '').startsWith('字辈·');
+      const effMinTags = isMysticFilter ? 1 : strongMinTags;
+      let sList = strongPool.filter(x => (x.tagCount || x.tags?.length || 0) >= effMinTags);
+      if (strongOnlyNonZt && !isMysticFilter) {
         sList = sList.filter(x => !x.isLimitUp);
       }
       if (strongSelectedTags.length > 0) {
@@ -483,16 +486,23 @@ export default function BoardPage({
       .sort((a, b) => (b.stocks.length - a.stocks.length) || (b.ztCount - a.ztCount) || (b.totalAmount - a.totalAmount));
   }, [displayItems, filterTier]);
 
-  const handleAddSingle = (code, name) => {
-    if (inPoolCodes.has(code)) {
-      toastWarn(`${name} (${code}) 已在今日做T决策台中`);
+  /**
+   * 原位加入自选池（jumpToTrade: false）：
+   * 在连板打热页点「＋自选」直接写入自选池并变更为「✓已自选」，不会把用户强行跳走；
+   * 若已在自选池中点「✓已自选」则直达今日作战台定位该股。
+   */
+  const handleAddSingle = useCallback((code, name, stockMeta = null) => {
+    const code6 = String(code || '').trim().padStart(6, '0');
+    if (!code6 || code6 === '000000') return;
+    if (inPoolCodes.has(code6)) {
+      if (onSelectStock) onSelectStock(code6);
       return;
     }
     if (onAddStock) {
-      onAddStock(code);
-      toastOk(`已成功选入 ${name} (${code}) 到今日做T决策台！`);
+      const tag = stockMeta?.statTag || (stockMeta?.lbc >= 2 ? `${stockMeta.lbc}连板` : '超短热门');
+      onAddStock(code6, { tier: 'short', strategyTag: tag }, { jumpToTrade: false });
     }
-  };
+  }, [inPoolCodes, onAddStock, onSelectStock]);
 
   const handleCopyBrief = () => {
     const txt = buildDailyReviewBrief({ data, mainThemes, mysticClusters, herdPool, allItems });
@@ -504,7 +514,7 @@ export default function BoardPage({
   };
 
   return (
-    <div className="board-page-wrap" style={{ maxWidth: '1440px', margin: '0 auto', padding: '12px 16px 40px' }}>
+    <div className="board-page-wrap">
       {/* 顶部聚合战况看板 */}
       <div style={{
         background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #2e1065 100%)',
@@ -528,7 +538,7 @@ export default function BoardPage({
                 </span>
               </div>
               <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>
-                连板接力 · 一票多标签强势池 · 全自动抱团跟踪(断板高横监测/破位自动淘汰) · 动态主线与历史日期复盘
+                连板接力 · 一票多标签强势池 · 全自动抱团跟踪(断板高横监测/破位自动淘汰) · 全模块一键跟踪与加入自选
               </div>
             </div>
           </div>
@@ -550,7 +560,7 @@ export default function BoardPage({
                 type="button"
                 className="mini"
                 onClick={() => setBoardDate('')}
-                style={{ background: 'rgba(251,191,36,0.2)', color: '#fde68a', borderColor: '#f59e0b', padding: '3px 8px', fontSize: '11.5px', fontWeight: 700 }}
+                style={{ marginLeft: 0, background: 'rgba(251,191,36,0.2)', color: '#fde68a', borderColor: '#f59e0b', padding: '3px 8px', fontSize: '11.5px', fontWeight: 700 }}
               >
                 回今日实时
               </button>
@@ -569,7 +579,7 @@ export default function BoardPage({
               type="button"
               className="mini"
               onClick={handleCopyBrief}
-              style={{ background: 'rgba(56,189,248,0.18)', color: '#bae6fd', border: '1px solid rgba(56,189,248,0.45)', padding: '4px 9px' }}
+              style={{ marginLeft: 0, background: 'rgba(56,189,248,0.18)', color: '#bae6fd', border: '1px solid rgba(56,189,248,0.45)', padding: '4px 9px' }}
               title="一键复制今日情绪、四大核心、字辈暗线与抱团核心复盘简报"
             >
               📋 复制简报
@@ -577,7 +587,7 @@ export default function BoardPage({
             <button
               type="button"
               className="mini"
-              style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', padding: '4px 10px' }}
+              style={{ marginLeft: 0, background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', padding: '4px 10px' }}
               onClick={() => loadData(false)}
               disabled={loading}
             >
@@ -588,7 +598,10 @@ export default function BoardPage({
 
         {/* 6 维核心数据卡片 */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(165px, 1fr))', gap: '10px' }}>
-          <div style={{ background: 'rgba(255, 255, 255, 0.08)', borderRadius: '8px', padding: '10px 14px', border: '1px solid rgba(255,255,255,0.1)' }}>
+          <div
+            onClick={() => setFilterTier('all')}
+            style={{ background: 'rgba(255, 255, 255, 0.08)', borderRadius: '8px', padding: '10px 14px', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer' }}
+          >
             <div style={{ fontSize: '11.5px', color: '#cbd5e1' }}>📈 涨停封死总数</div>
             <div style={{ fontSize: '22px', fontWeight: 800, color: '#f87171', fontFamily: 'monospace', marginTop: '2px' }}>
               {data ? allItems.length : '—'} <span style={{ fontSize: '12px', fontWeight: 400, color: '#e2e8f0' }}>家 ({onlyMainboard ? '纯主板' : '不含创业板'})</span>
@@ -606,21 +619,30 @@ export default function BoardPage({
             </div>
           </div>
 
-          <div style={{ background: 'rgba(255, 255, 255, 0.08)', borderRadius: '8px', padding: '10px 14px', border: '1px solid rgba(255,255,255,0.1)' }}>
+          <div
+            onClick={() => !isHistoryReplay && setFilterTier('rushing')}
+            style={{ background: 'rgba(255, 255, 255, 0.08)', borderRadius: '8px', padding: '10px 14px', border: '1px solid rgba(255,255,255,0.1)', cursor: isHistoryReplay ? 'default' : 'pointer' }}
+          >
             <div style={{ fontSize: '11.5px', color: '#cbd5e1' }}>⚡ 开盘冲板临界可买</div>
             <div style={{ fontSize: '22px', fontWeight: 800, color: '#38bdf8', fontFamily: 'monospace', marginTop: '2px' }}>
               {data ? rushingPool.length : '—'} <span style={{ fontSize: '12px', fontWeight: 400, color: '#e2e8f0' }}>家逼近涨停</span>
             </div>
           </div>
 
-          <div style={{ background: 'rgba(255, 255, 255, 0.08)', borderRadius: '8px', padding: '10px 14px', border: '1px solid rgba(255,255,255,0.1)' }}>
+          <div
+            onClick={() => setFilterTier('auction')}
+            style={{ background: 'rgba(255, 255, 255, 0.08)', borderRadius: '8px', padding: '10px 14px', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer' }}
+          >
             <div style={{ fontSize: '11.5px', color: '#cbd5e1' }}>🌅 09:25 竞价可买</div>
             <div style={{ fontSize: '22px', fontWeight: 800, color: '#4ade80', fontFamily: 'monospace', marginTop: '2px' }}>
               {buyWindows.auctionBuy.length} <span style={{ fontSize: '12px', fontWeight: 400, color: '#e2e8f0' }}>家竞价放量</span>
             </div>
           </div>
 
-          <div style={{ background: 'rgba(255, 255, 255, 0.08)', borderRadius: '8px', padding: '10px 14px', border: '1px solid rgba(255,255,255,0.1)' }}>
+          <div
+            onClick={() => setFilterTier('high')}
+            style={{ background: 'rgba(255, 255, 255, 0.08)', borderRadius: '8px', padding: '10px 14px', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer' }}
+          >
             <div style={{ fontSize: '11.5px', color: '#cbd5e1' }}>👑 最高连板高度</div>
             <div style={{ fontSize: '22px', fontWeight: 800, color: '#fbbf24', fontFamily: 'monospace', marginTop: '2px' }}>
               {data ? data.maxLadder : '—'} <span style={{ fontSize: '12px', fontWeight: 400, color: '#e2e8f0' }}>连板空间标杆</span>
@@ -660,7 +682,7 @@ export default function BoardPage({
             onClick={(e) => { e.preventDefault(); if (onTabChange) onTabChange('/trade'); }}
             style={{ color: '#38bdf8', textDecoration: 'none', fontWeight: 700 }}
           >
-            返回做T决策台 →
+            前往今日作战台 ({pool?.length || 0}只自选) →
           </a>
         </div>
       </div>
@@ -687,9 +709,9 @@ export default function BoardPage({
           gap: '8px',
         }}>
           <span>
-            🕰️ <b>历史复盘只读模式（{data?.date}）：</b>已自动停止改写今日抱团跟踪池并屏蔽实时冲板盘口，仅作复盘查看。
+            🕰️ <b>历史复盘只读模式（{data?.date}）：</b>已自动停止改写今日抱团跟踪池并屏蔽实时冲板盘口，仍可将心仪标的加入自选池。
           </span>
-          <button type="button" className="mini" onClick={() => setBoardDate('')} style={{ fontSize: '11.5px', background: '#fff', borderColor: '#f59e0b', color: '#b45309', fontWeight: 700 }}>
+          <button type="button" className="mini" onClick={() => setBoardDate('')} style={{ marginLeft: 0, fontSize: '11.5px', background: '#fff', borderColor: '#f59e0b', color: '#b45309', fontWeight: 700 }}>
             回到今日实时
           </button>
         </div>
@@ -709,7 +731,7 @@ export default function BoardPage({
           flexWrap: 'wrap',
           fontSize: '12px',
         }}>
-          <b style={{ color: '#0f172a' }}>🔔 自选做T池持仓联动：</b>
+          <b style={{ color: '#0f172a' }}>🔔 自选池持仓联动：</b>
           {poolAlerts.map(al => (
             <span
               key={`${al.kind}_${al.code}`}
@@ -737,27 +759,16 @@ export default function BoardPage({
       )}
 
       {/* 控制与筛选工具栏 */}
-      <div style={{
-        background: 'var(--surface)',
-        border: '1px solid var(--line)',
-        borderRadius: '10px',
-        padding: '10px 14px',
-        marginBottom: '14px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        flexWrap: 'wrap',
-        gap: '10px'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-          <button type="button" className={`mini ${filterTier === 'all' ? 'primary' : ''}`} onClick={() => setFilterTier('all')} style={{ fontWeight: 700 }}>
+      <div className="board-filter-toolbar">
+        <div className="board-tier-tabs">
+          <button type="button" className={`mini ${filterTier === 'all' ? 'primary' : ''}`} onClick={() => setFilterTier('all')} style={{ marginLeft: 0, fontWeight: 700 }}>
             🔥 全部天梯 ({allItems.length})
           </button>
           <button
             type="button"
             className={`mini ${filterTier === 'themes' ? 'primary' : ''}`}
             onClick={() => setFilterTier('themes')}
-            style={{ color: filterTier === 'themes' ? '#fff' : '#9333ea', background: filterTier === 'themes' ? '#9333ea' : '#faf5ff', borderColor: '#d8b4fe', fontWeight: 800 }}
+            style={{ marginLeft: 0, color: filterTier === 'themes' ? '#fff' : '#9333ea', background: filterTier === 'themes' ? '#9333ea' : '#faf5ff', borderColor: '#d8b4fe', fontWeight: 800 }}
           >
             🧭 主题材与四大核心 ({(mainThemes.themes || []).length})
           </button>
@@ -765,7 +776,7 @@ export default function BoardPage({
             type="button"
             className={`mini ${filterTier === 'strong' ? 'primary' : ''}`}
             onClick={() => setFilterTier('strong')}
-            style={{ color: filterTier === 'strong' ? '#fff' : '#0f766e', background: filterTier === 'strong' ? '#0f766e' : '#f0fdfa', borderColor: '#5eead4', fontWeight: 800 }}
+            style={{ marginLeft: 0, color: filterTier === 'strong' ? '#fff' : '#0f766e', background: filterTier === 'strong' ? '#0f766e' : '#f0fdfa', borderColor: '#5eead4', fontWeight: 800 }}
           >
             💪 强共振多标签 ({strongMulti2Count}/{strongPool.length})
           </button>
@@ -773,7 +784,7 @@ export default function BoardPage({
             type="button"
             className={`mini ${filterTier === 'herd' ? 'primary' : ''}`}
             onClick={() => setFilterTier('herd')}
-            style={{ color: filterTier === 'herd' ? '#fff' : '#6d28d9', background: filterTier === 'herd' ? '#6d28d9' : '#f5f3ff', borderColor: '#c4b5fd', fontWeight: 800 }}
+            style={{ marginLeft: 0, color: filterTier === 'herd' ? '#fff' : '#6d28d9', background: filterTier === 'herd' ? '#6d28d9' : '#f5f3ff', borderColor: '#c4b5fd', fontWeight: 800 }}
           >
             🤝 自动抱团跟踪 ({herdPool.length})
           </button>
@@ -782,7 +793,7 @@ export default function BoardPage({
               type="button"
               className={`mini ${filterTier === 'rushing' ? 'primary' : ''}`}
               onClick={() => setFilterTier('rushing')}
-              style={{ color: filterTier === 'rushing' ? '#fff' : '#0284c7', background: filterTier === 'rushing' ? '#0284c7' : '#e0f2fe', borderColor: '#38bdf8', fontWeight: 800 }}
+              style={{ marginLeft: 0, color: filterTier === 'rushing' ? '#fff' : '#0284c7', background: filterTier === 'rushing' ? '#0284c7' : '#e0f2fe', borderColor: '#38bdf8', fontWeight: 800 }}
             >
               ⚡ 正在冲板临界可买 ({rushingPool.length})
             </button>
@@ -791,7 +802,7 @@ export default function BoardPage({
             type="button"
             className={`mini ${filterTier === 'auction' ? 'primary' : ''}`}
             onClick={() => setFilterTier('auction')}
-            style={{ color: filterTier === 'auction' ? '#fff' : '#15803d', background: filterTier === 'auction' ? '#15803d' : '#dcfce7', borderColor: '#4ade80', fontWeight: 800 }}
+            style={{ marginLeft: 0, color: filterTier === 'auction' ? '#fff' : '#15803d', background: filterTier === 'auction' ? '#15803d' : '#dcfce7', borderColor: '#4ade80', fontWeight: 800 }}
           >
             🌅 09:25 竞价可买 ({buyWindows.auctionBuy.length})
           </button>
@@ -799,7 +810,7 @@ export default function BoardPage({
             type="button"
             className={`mini ${filterTier === 'rush' ? 'primary' : ''}`}
             onClick={() => setFilterTier('rush')}
-            style={{ color: filterTier === 'rush' ? '#fff' : '#c2410c', background: filterTier === 'rush' ? '#c2410c' : '#ffedd5', borderColor: '#fb923c', fontWeight: 800 }}
+            style={{ marginLeft: 0, color: filterTier === 'rush' ? '#fff' : '#c2410c', background: filterTier === 'rush' ? '#c2410c' : '#ffedd5', borderColor: '#fb923c', fontWeight: 800 }}
           >
             🚀 09:30 秒板扫板 ({buyWindows.rushBuy.length})
           </button>
@@ -807,7 +818,7 @@ export default function BoardPage({
             type="button"
             className={`mini ${filterTier === 'reseal' ? 'primary' : ''}`}
             onClick={() => setFilterTier('reseal')}
-            style={{ color: filterTier === 'reseal' ? '#fff' : '#b45309', fontWeight: 700 }}
+            style={{ marginLeft: 0, color: filterTier === 'reseal' ? '#fff' : '#b45309', fontWeight: 700 }}
           >
             🔄 炸板回封 ({buyWindows.reSealBuy.length})
           </button>
@@ -815,7 +826,7 @@ export default function BoardPage({
             type="button"
             className={`mini ${filterTier === 'high' ? 'primary' : ''}`}
             onClick={() => setFilterTier('high')}
-            style={{ color: filterTier === 'high' ? '#fff' : '#cf1322', fontWeight: 700 }}
+            style={{ marginLeft: 0, color: filterTier === 'high' ? '#fff' : '#cf1322', fontWeight: 700 }}
           >
             👑 高标龙头(≥4板) ({ladder.high.length})
           </button>
@@ -823,7 +834,7 @@ export default function BoardPage({
             type="button"
             className={`mini ${filterTier === 'board3' ? 'primary' : ''}`}
             onClick={() => setFilterTier('board3')}
-            style={{ color: filterTier === 'board3' ? '#fff' : '#d4380d', fontWeight: 700 }}
+            style={{ marginLeft: 0, color: filterTier === 'board3' ? '#fff' : '#d4380d', fontWeight: 700 }}
           >
             🔥 3连板(梯队) ({ladder.board3.length})
           </button>
@@ -831,7 +842,7 @@ export default function BoardPage({
             type="button"
             className={`mini ${filterTier === 'board2' ? 'primary' : ''}`}
             onClick={() => setFilterTier('board2')}
-            style={{ color: filterTier === 'board2' ? '#fff' : '#1677ff', fontWeight: 700 }}
+            style={{ marginLeft: 0, color: filterTier === 'board2' ? '#fff' : '#1677ff', fontWeight: 700 }}
           >
             🎯 2连板(1进2) ({ladder.board2.length})
           </button>
@@ -839,7 +850,7 @@ export default function BoardPage({
             type="button"
             className={`mini ${filterTier === 'late' ? 'primary' : ''}`}
             onClick={() => setFilterTier('late')}
-            style={{ color: filterTier === 'late' ? '#fff' : '#b45309', background: filterTier === 'late' ? '#b45309' : '#fffbeb', borderColor: '#fde68a', fontWeight: 700 }}
+            style={{ marginLeft: 0, color: filterTier === 'late' ? '#fff' : '#b45309', background: filterTier === 'late' ? '#b45309' : '#fffbeb', borderColor: '#fde68a', fontWeight: 700 }}
             title="14:30 及以后（最后30分钟）才首次封板的尾盘偷袭股"
           >
             ⚠️ 尾盘偷袭(14:30+) ({buyWindows.lateBuy.length})
@@ -848,7 +859,7 @@ export default function BoardPage({
             type="button"
             className={`mini ${filterTier === 'locked' ? 'primary' : ''}`}
             onClick={() => setFilterTier('locked')}
-            style={{ color: filterTier === 'locked' ? '#fff' : 'var(--mute)', fontWeight: 600 }}
+            style={{ marginLeft: 0, color: filterTier === 'locked' ? '#fff' : 'var(--mute)', fontWeight: 600 }}
           >
             🔒 一字买不进 ({buyWindows.locked.length})
           </button>
@@ -856,17 +867,17 @@ export default function BoardPage({
             type="button"
             className={`mini ${filterTier === 'zb' ? 'primary' : ''}`}
             onClick={() => setFilterTier('zb')}
-            style={{ color: filterTier === 'zb' ? '#fff' : '#cf1322', background: filterTier === 'zb' ? '#cf1322' : '#fff1f0', borderColor: '#ffa39e', fontWeight: 700 }}
+            style={{ marginLeft: 0, color: filterTier === 'zb' ? '#fff' : '#cf1322', background: filterTier === 'zb' ? '#cf1322' : '#fff1f0', borderColor: '#ffa39e', fontWeight: 700 }}
           >
             💥 曾涨停炸板 ({zbPool.length})
           </button>
         </div>
 
         {/* 搜索与排序 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--text)', cursor: 'pointer', padding: '4px 8px', borderRadius: '6px', background: onlyMainboard ? '#e6f4ff' : 'var(--surface2)', border: '1px solid', borderColor: onlyMainboard ? '#91caff' : 'var(--line)', fontWeight: onlyMainboard ? 700 : 500 }}>
+        <div className="board-search-controls">
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--text)', cursor: 'pointer', padding: '4px 8px', borderRadius: '6px', background: onlyMainboard ? '#e6f4ff' : 'var(--surface2)', border: '1px solid', borderColor: onlyMainboard ? '#91caff' : 'var(--line)', fontWeight: onlyMainboard ? 700 : 500, whiteSpace: 'nowrap' }}>
             <input type="checkbox" checked={onlyMainboard} onChange={e => setOnlyMainboard(e.target.checked)} style={{ cursor: 'pointer' }} />
-            <span>仅10cm主板 (过滤科创)</span>
+            <span>仅10cm主板</span>
           </label>
 
           {filterTier === 'strong' ? (
@@ -944,19 +955,21 @@ export default function BoardPage({
             placeholder="搜索代码 / 名称 / 炒作题材…"
             value={searchKw}
             onChange={e => setSearchKw(e.target.value)}
-            style={{ padding: '4px 10px', fontSize: '12px', borderRadius: '6px', border: '1px solid var(--line)', width: '180px', background: 'var(--surface2)' }}
+            className="board-search-input"
           />
         </div>
       </div>
 
-      {/* 主体两栏布局 */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 320px', gap: '14px', alignItems: 'start' }}>
-        <div>
+      {/* 主体响应式两栏布局（<=1200px 自动全宽单栏防裁切） */}
+      <div className="board-main-layout">
+        <div className="board-main-left">
           {selectedTheme !== 'all' && (
             <div style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '8px',
               padding: '8px 12px',
               borderRadius: '8px',
               background: '#e6f4ff',
@@ -966,7 +979,7 @@ export default function BoardPage({
               fontSize: '12.5px'
             }}>
               <span>🎯 当前筛选炒作风口板块：<b>{selectedTheme}</b>（共 {displayItems.length} 只标的）</span>
-              <button type="button" className="mini" onClick={() => setSelectedTheme('all')} style={{ fontSize: '11px', padding: '2px 8px' }}>
+              <button type="button" className="mini" onClick={() => setSelectedTheme('all')} style={{ marginLeft: 0, fontSize: '11px', padding: '2px 8px' }}>
                 ✕ 清除板块筛选
               </button>
             </div>
@@ -976,7 +989,7 @@ export default function BoardPage({
             <div style={{ padding: '16px', background: '#fff1f0', border: '1px solid #ffa39e', borderRadius: '8px', color: '#cf1322', fontSize: '13px', marginBottom: '14px' }}>
               <b>连板池接口异常：</b>{error}
               <div style={{ marginTop: '6px' }}>
-                <button className="mini primary" onClick={() => loadData(false)}>重新尝试连接</button>
+                <button className="mini primary" onClick={() => loadData(false)} style={{ marginLeft: 0 }}>重新尝试连接</button>
               </div>
             </div>
           )}
@@ -1006,7 +1019,17 @@ export default function BoardPage({
               herdBusyCode={herdBusyCode}
               onHerdAction={handleHerdAction}
               onAddSingle={handleAddSingle}
-              onFilterThemeToStrong={(tName) => { setSelectedTheme(tName); setFilterTier('strong'); }}
+              onSelectStock={onSelectStock}
+              onJumpHerd={() => setFilterTier('herd')}
+              onFilterThemeToStrong={(tName) => {
+                if (String(tName || '').startsWith('字辈·')) {
+                  setStrongMinTags(1);
+                  setStrongOnlyNonZt(false);
+                }
+                setSelectedTheme(tName);
+                setFilterTier('strong');
+              }}
+              readOnlyHistory={isHistoryReplay}
             />
           )}
 
@@ -1043,6 +1066,7 @@ export default function BoardPage({
               herdBusyCode={herdBusyCode}
               onHerdAction={handleHerdAction}
               onAddSingle={handleAddSingle}
+              onSelectStock={onSelectStock}
               setFilterTier={setFilterTier}
               strongDetailItem={strongDetailItem}
               setStrongDetailItem={setStrongDetailItem}
@@ -1064,6 +1088,7 @@ export default function BoardPage({
               onHerdAction={handleHerdAction}
               inPoolCodes={inPoolCodes}
               onAddSingle={handleAddSingle}
+              onSelectStock={onSelectStock}
               readOnlyHistory={isHistoryReplay}
             />
           )}
@@ -1074,76 +1099,73 @@ export default function BoardPage({
               <div style={{ padding: '8px 12px', background: '#e0f2fe', border: '1px solid #7dd3fc', borderRadius: '8px', color: '#0369a1', fontSize: '12px' }}>
                 💡 <b>开盘冲板可买说明：</b>以下标的开盘后快速放量拉升至 +7%~+9.5%，现价逼近涨停价（仅差 0.2%~2.0%），处于游资挂涨停价扫板打入的黄金决策临界点！
               </div>
-              {displayItems.map(item => {
-                const inPool = inPoolCodes.has(item.code);
-                return (
-                  <div
-                    key={item.code}
-                    style={{
-                      background: 'linear-gradient(180deg, #fff, #f8fafc)',
-                      border: '1.5px solid #38bdf8',
-                      borderRadius: '10px',
-                      padding: '12px 16px',
-                      boxShadow: '0 2px 8px rgba(56, 189, 248, 0.15)'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: '11px', fontWeight: 800, padding: '2px 8px', borderRadius: '4px', background: '#0284c7', color: '#fff' }}>
-                          ⚡ 冲击涨停中
-                        </span>
-                        <span style={{ fontSize: '16px', fontWeight: 800 }}>{item.name}</span>
-                        <span style={{ fontFamily: 'monospace', fontSize: '13px', color: 'var(--mute)' }}>{item.code}</span>
-                        <span
-                          onClick={() => setSelectedTheme(item.hybk)}
-                          style={{ fontSize: '11px', padding: '1px 6px', borderRadius: '4px', background: '#f0f5ff', color: '#1d39c4', cursor: 'pointer' }}
-                        >
-                          🔥 {item.hybk}
-                        </span>
-                      </div>
-
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ fontSize: '12px', fontWeight: 800, color: '#0284c7' }}>距涨停仅差 {item.distCeiling.toFixed(1)}%</span>
-                        <span style={{ fontSize: '12px', fontFamily: 'monospace', fontWeight: 700, color: 'var(--up)' }}>涨停价 ¥{f2(item.ceiling)}</span>
-                      </div>
+              {displayItems.map(item => (
+                <div
+                  key={item.code}
+                  style={{
+                    background: 'linear-gradient(180deg, #fff, #f8fafc)',
+                    border: '1.5px solid #38bdf8',
+                    borderRadius: '10px',
+                    padding: '12px 16px',
+                    boxShadow: '0 2px 8px rgba(56, 189, 248, 0.15)'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '11px', fontWeight: 800, padding: '2px 8px', borderRadius: '4px', background: '#0284c7', color: '#fff' }}>
+                        ⚡ 冲击涨停中
+                      </span>
+                      <span style={{ fontSize: '16px', fontWeight: 800 }}>{item.name}</span>
+                      <span style={{ fontFamily: 'monospace', fontSize: '13px', color: 'var(--mute)' }}>{item.code}</span>
+                      <span
+                        onClick={() => setSelectedTheme(item.hybk)}
+                        style={{ fontSize: '11px', padding: '1px 6px', borderRadius: '4px', background: '#f0f5ff', color: '#1d39c4', cursor: 'pointer' }}
+                      >
+                        🔥 {item.hybk}
+                      </span>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px', padding: '8px 10px', background: '#f0f9ff', borderRadius: '6px', fontSize: '12px', marginBottom: '8px' }}>
-                      <div>现价: <b style={{ color: 'var(--up)', fontFamily: 'monospace' }}>¥{f2(item.price)}</b> (+{item.chg.toFixed(1)}%)</div>
-                      <div>距涨停差额: <b style={{ color: '#0284c7', fontFamily: 'monospace' }}>¥{f2(item.ceiling - item.price)}</b></div>
-                      <div>换手率: <b style={{ fontFamily: 'monospace' }}>{item.turnover.toFixed(1)}%</b></div>
-                      <div>成交额: <b style={{ fontFamily: 'monospace' }}>{money$(item.amount)}</b></div>
-                      <div>量比: <b style={{ fontFamily: 'monospace' }}>{item.vr ? item.vr.toFixed(1) : '—'}倍</b></div>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
-                      <div style={{ fontSize: '11.5px', color: '#0369a1' }}>
-                        🎯 <b>打板动作：</b>{item.buyAction}
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <a href={`#/diagnosis?code=${item.code}`} className="mini" style={{ textDecoration: 'none', padding: '3px 8px' }}>
-                          🩺 全景体检
-                        </a>
-                        {inPool ? (
-                          <span style={{ fontSize: '11px', color: 'var(--info)', fontWeight: 600 }}>✓ 已在决策台</span>
-                        ) : (
-                          <button type="button" className="mini primary" onClick={() => handleAddSingle(item.code, item.name)} style={{ fontSize: '11.5px' }}>
-                            ＋ 选入做T决策台
-                          </button>
-                        )}
-                      </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '12px', fontWeight: 800, color: '#0284c7' }}>距涨停仅差 {item.distCeiling.toFixed(1)}%</span>
+                      <span style={{ fontSize: '12px', fontFamily: 'monospace', fontWeight: 700, color: 'var(--up)' }}>涨停价 ¥{f2(item.ceiling)}</span>
                     </div>
                   </div>
-                );
-              })}
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px', padding: '8px 10px', background: '#f0f9ff', borderRadius: '6px', fontSize: '12px', marginBottom: '8px' }}>
+                    <div>现价: <b style={{ color: 'var(--up)', fontFamily: 'monospace' }}>¥{f2(item.price)}</b> (+{item.chg.toFixed(1)}%)</div>
+                    <div>距涨停差额: <b style={{ color: '#0284c7', fontFamily: 'monospace' }}>¥{f2(item.ceiling - item.price)}</b></div>
+                    <div>换手率: <b style={{ fontFamily: 'monospace' }}>{item.turnover.toFixed(1)}%</b></div>
+                    <div>成交额: <b style={{ fontFamily: 'monospace' }}>{money$(item.amount)}</b></div>
+                    <div>量比: <b style={{ fontFamily: 'monospace' }}>{item.vr ? item.vr.toFixed(1) : '—'}倍</b></div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                    <div style={{ fontSize: '11.5px', color: '#0369a1' }}>
+                      🎯 <b>打板动作：</b>{item.buyAction}
+                    </div>
+                    <BoardStockActions
+                      stock={item}
+                      inPoolCodes={inPoolCodes}
+                      herdCodeSet={herdCodeSet}
+                      herdBusyCode={herdBusyCode}
+                      onHerdAction={handleHerdAction}
+                      onAddSingle={handleAddSingle}
+                      onSelectStock={onSelectStock}
+                      onJumpHerd={() => setFilterTier('herd')}
+                      onJumpIgnition={onJumpIgnition}
+                      readOnlyHistory={isHistoryReplay}
+                    />
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 
-          {/* 曾涨停炸板大面警报池 */}
+          {/* 曾涨停炸板大面警报池（补齐跟踪与加入自选能力） */}
           {filterTier === 'zb' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div style={{ padding: '8px 12px', background: '#fff1f0', border: '1px solid #ffa39e', borderRadius: '8px', color: '#cf1322', fontSize: '12px' }}>
-                🚨 <b>炸板大面避险提示：</b>以下标的今日曾封涨停但遭大单砸开且至今未能回封！属于典型开闸兑现或分歧溃败形态，严禁散户盲目抄底打回封！
+                🚨 <b>炸板大面避险提示：</b>以下标的今日曾封涨停但遭大单砸开且至今未能回封！严禁盲目抄底打回封，可先加入自选或跟踪观察次日竞价能否弱转强反包。
               </div>
               {displayItems.map(item => (
                 <div key={item.code} style={{ background: '#fffafa', border: '1.5px solid #ffa39e', borderRadius: '10px', padding: '12px 16px' }}>
@@ -1162,32 +1184,31 @@ export default function BoardPage({
                       曾炸板 {item.zbc} 次 · 现价 ¥{f2(item.price)} ({item.chg >= 0 ? '+' : ''}{item.chg.toFixed(1)}%)
                     </div>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12px', color: 'var(--sub)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', fontSize: '12px', color: 'var(--sub)' }}>
                     <span>涨停价 ¥{f2(item.ztPrice)} · 换手率 {item.hs.toFixed(1)}% · 首封 {item.fbt}</span>
-                    <a href={`#/diagnosis?code=${item.code}`} className="mini" style={{ textDecoration: 'none', padding: '2px 8px' }}>
-                      🩺 全景体检
-                    </a>
+                    <BoardStockActions
+                      stock={item}
+                      inPoolCodes={inPoolCodes}
+                      herdCodeSet={herdCodeSet}
+                      herdBusyCode={herdBusyCode}
+                      onHerdAction={handleHerdAction}
+                      onAddSingle={handleAddSingle}
+                      onSelectStock={onSelectStock}
+                      onJumpHerd={() => setFilterTier('herd')}
+                      compact
+                      readOnlyHistory={isHistoryReplay}
+                    />
                   </div>
                 </div>
               ))}
             </div>
           )}
 
-          {/* 标准涨停天梯与可买时点（表格视图） */}
+          {/* 标准涨停天梯与可买时点（表格视图：无裁切网格 + 窄屏自动转卡片） */}
           {!['rushing', 'zb', 'themes', 'strong', 'herd'].includes(filterTier) && ladderViewMode === 'table' && displayItems.length > 0 && (
-            <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: '10px', overflowX: 'auto', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-              <div style={{ minWidth: '880px' }}>
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: '86px 156px 96px 108px 118px 94px 86px 1fr',
-                  gap: '8px',
-                  padding: '8px 12px',
-                  background: '#f8fafc',
-                  borderBottom: '1px solid var(--line)',
-                  fontSize: '11px',
-                  fontWeight: 700,
-                  color: 'var(--mute)',
-                }}>
+            <div className="board-ladder-scroll">
+              <div className="board-ladder-scroll-inner">
+                <div className="board-ladder-header">
                   <div>梯队 / 评级</div>
                   <div>标的 / 题材</div>
                   <div>现价 / 买点</div>
@@ -1195,28 +1216,21 @@ export default function BoardPage({
                   <div>封单额 / 封成比</div>
                   <div>成交额 / 换手</div>
                   <div>量化分</div>
-                  <div style={{ textAlign: 'right' }}>操作</div>
+                  <div style={{ textAlign: 'right' }}>跟踪 / 加入自选</div>
                 </div>
                 {displayItems.map((item, idx) => {
-                  const inPool = inPoolCodes.has(item.code);
                   const isHigh = item.lbc >= 4;
                   const isLadder3 = item.lbc === 3;
                   const isLadder2 = item.lbc === 2;
                   return (
                     <div
                       key={item.code}
+                      className={`board-ladder-row ${isHigh ? 'is-high' : idx % 2 === 1 ? 'is-alt' : ''}`}
                       style={{
-                        display: 'grid',
-                        gridTemplateColumns: '86px 156px 96px 108px 118px 94px 86px 1fr',
-                        gap: '8px',
-                        alignItems: 'center',
-                        padding: '7px 12px',
                         borderBottom: idx === displayItems.length - 1 ? 'none' : '1px solid var(--line)',
-                        background: isHigh ? '#fff7f7' : idx % 2 === 1 ? '#fcfcfd' : '#fff',
-                        fontSize: '12px',
                       }}
                     >
-                      <div>
+                      <div className="blr-col-tier">
                         <span style={{
                           display: 'inline-block',
                           padding: '1px 6px',
@@ -1225,53 +1239,56 @@ export default function BoardPage({
                           fontWeight: 800,
                           color: '#fff',
                           background: isHigh ? '#cf1322' : isLadder3 ? '#d4380d' : isLadder2 ? '#1677ff' : '#52c41a',
+                          whiteSpace: 'nowrap',
                         }}>
                           {item.statTag}
                         </span>
-                        <div style={{ fontSize: '10.5px', fontWeight: 700, color: '#0958d9', marginTop: '2px' }}>{item.verdict}</div>
+                        <div style={{ fontSize: '10.5px', fontWeight: 700, color: '#0958d9', marginTop: '2px', whiteSpace: 'nowrap' }}>{item.verdict}</div>
                       </div>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          <b style={{ fontSize: '13px' }}>{item.name}</b>{' '}
-                          <span style={{ fontFamily: 'monospace', fontSize: '11px', color: 'var(--mute)' }}>{item.code}</span>
+                      <div className="blr-col-ident">
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '5px', flexWrap: 'wrap' }}>
+                          <b style={{ fontSize: '13px', whiteSpace: 'nowrap' }}>{item.name}</b>
+                          <span style={{ fontFamily: 'monospace', fontSize: '11px', color: 'var(--mute)', whiteSpace: 'nowrap' }}>{item.code}</span>
                         </div>
                         <div
                           onClick={() => setSelectedTheme(selectedTheme === item.hybk ? 'all' : item.hybk)}
-                          style={{ fontSize: '10.5px', color: '#1d39c4', cursor: 'pointer', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                          style={{ fontSize: '10.5px', color: '#1d39c4', cursor: 'pointer', whiteSpace: 'nowrap' }}
                         >
                           {item.hybk}
                         </div>
                       </div>
-                      <div style={{ fontFamily: 'monospace' }}>
+                      <div className="blr-col-px" style={{ fontFamily: 'monospace' }}>
                         <div style={{ fontWeight: 800, color: 'var(--up)' }}>¥{f2(item.price)}</div>
-                        <div style={{ fontSize: '10.5px', color: 'var(--sub)' }}>{item.buyTag}</div>
+                        <div style={{ fontSize: '10.5px', color: 'var(--sub)', whiteSpace: 'nowrap' }}>{item.buyTag}</div>
                       </div>
-                      <div style={{ fontFamily: 'monospace' }}>
+                      <div className="blr-col-time" style={{ fontFamily: 'monospace' }}>
                         <div style={{ fontWeight: 700, color: item.fbt <= '09:35:00' ? '#cf1322' : 'var(--text)' }}>{item.fbt}</div>
-                        <div style={{ fontSize: '10.5px', color: item.zbc > 0 ? '#cf1322' : 'var(--mute)' }}>
+                        <div style={{ fontSize: '10.5px', color: item.zbc > 0 ? '#cf1322' : 'var(--mute)', whiteSpace: 'nowrap' }}>
                           {item.zbc > 0 ? `炸板${item.zbc}次` : `末封 ${item.lbt}`}
                         </div>
                       </div>
-                      <div style={{ fontFamily: 'monospace' }}>
-                        <div style={{ fontWeight: 700, color: '#cf1322' }}>{money$(item.fund)}</div>
-                        <div style={{ fontSize: '10.5px', color: 'var(--mute)' }}>封成比 {item.sealRatio.toFixed(2)}x</div>
+                      <div className="blr-col-seal" style={{ fontFamily: 'monospace' }}>
+                        <div style={{ fontWeight: 700, color: '#cf1322', whiteSpace: 'nowrap' }}>{money$(item.fund)}</div>
+                        <div style={{ fontSize: '10.5px', color: 'var(--mute)', whiteSpace: 'nowrap' }}>封成比 {item.sealRatio.toFixed(2)}x</div>
                       </div>
-                      <div style={{ fontFamily: 'monospace', fontSize: '11px', color: 'var(--sub)' }}>
-                        <div>{money$(item.amount)}</div>
-                        <div>{item.turnover.toFixed(1)}%</div>
+                      <div className="blr-col-amt" style={{ fontFamily: 'monospace', fontSize: '11px', color: 'var(--sub)' }}>
+                        <div style={{ whiteSpace: 'nowrap' }}>{money$(item.amount)}</div>
+                        <div style={{ whiteSpace: 'nowrap' }}>{item.turnover.toFixed(1)}%</div>
                       </div>
-                      <div style={{ fontFamily: 'monospace', fontWeight: 800, color: '#cf1322' }}>{item.score}分</div>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
-                        <a href={`#/diagnosis?code=${item.code}`} className="mini" style={{ textDecoration: 'none', padding: '2px 6px', fontSize: '10.5px' }}>
-                          🩺体检
-                        </a>
-                        {inPool ? (
-                          <span style={{ fontSize: '10.5px', color: 'var(--info)', fontWeight: 700 }}>✓已选</span>
-                        ) : (
-                          <button type="button" className="mini primary" onClick={() => handleAddSingle(item.code, item.name)} style={{ fontSize: '10.5px', padding: '2px 7px' }}>
-                            ＋T
-                          </button>
-                        )}
+                      <div className="blr-col-score" style={{ fontFamily: 'monospace', fontWeight: 800, color: '#cf1322', whiteSpace: 'nowrap' }}>{item.score}分</div>
+                      <div className="blr-col-acts">
+                        <BoardStockActions
+                          stock={item}
+                          inPoolCodes={inPoolCodes}
+                          herdCodeSet={herdCodeSet}
+                          herdBusyCode={herdBusyCode}
+                          onHerdAction={handleHerdAction}
+                          onAddSingle={handleAddSingle}
+                          onSelectStock={onSelectStock}
+                          onJumpHerd={() => setFilterTier('herd')}
+                          compact
+                          readOnlyHistory={isHistoryReplay}
+                        />
                       </div>
                     </div>
                   );
@@ -1284,7 +1301,6 @@ export default function BoardPage({
           {!['rushing', 'zb', 'themes', 'strong', 'herd'].includes(filterTier) && ladderViewMode === 'card' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {displayItems.map(item => {
-                const inPool = inPoolCodes.has(item.code);
                 const isHigh = item.lbc >= 4;
                 const isLadder3 = item.lbc === 3;
                 const isLadder2 = item.lbc === 2;
@@ -1424,47 +1440,25 @@ export default function BoardPage({
                     </details>
 
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
-                      <div style={{ fontSize: '11.5px', color: 'var(--sub)', display: 'flex', alignItems: 'center', gap: '6px', maxWidth: '75%' }}>
-                        <span style={{ fontWeight: 700, color: item.riskLevel === '高' ? '#cf1322' : item.riskLevel === '中偏高' ? '#d46b08' : '#389e0d' }}>
+                      <div style={{ fontSize: '11.5px', color: 'var(--sub)', display: 'flex', alignItems: 'center', gap: '6px', flex: '1 1 260px' }}>
+                        <span style={{ fontWeight: 700, color: item.riskLevel === '高' ? '#cf1322' : item.riskLevel === '中偏高' ? '#d46b08' : '#389e0d', flexShrink: 0 }}>
                           [{item.riskLevel}风险]
                         </span>
                         <span>{item.riskDesc}</span>
                       </div>
 
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                        <a
-                          href={`#/diagnosis?code=${item.code}`}
-                          style={{ fontSize: '11px', color: '#0958d9', textDecoration: 'none', border: '1px solid #91caff', background: '#e6f4ff', padding: '3px 8px', borderRadius: '4px', fontWeight: 600 }}
-                        >
-                          🩺 全景体检
-                        </a>
-                        {onJumpIgnition && (
-                          <button
-                            type="button"
-                            className="mini"
-                            onClick={() => onJumpIgnition(item.code)}
-                            style={{ fontSize: '11px', padding: '3px 8px', marginLeft: 0 }}
-                            title="跳转到起爆挖掘做六维成色体检"
-                          >
-                            🚀 起爆
-                          </button>
-                        )}
-                        {inPool ? (
-                          <button
-                            type="button"
-                            className="mini"
-                            onClick={() => onSelectStock && onSelectStock(item.code)}
-                            style={{ fontSize: '11px', color: 'var(--info)', fontWeight: 700, padding: '3px 8px', marginLeft: 0, borderColor: 'var(--info-b)', background: 'var(--info-bg)' }}
-                            title="点击直达今日作战台查看该股买卖点"
-                          >
-                            ✓ 进作战台 →
-                          </button>
-                        ) : (
-                          <button type="button" className="mini primary" onClick={() => handleAddSingle(item.code, item.name)} style={{ fontSize: '11.5px', padding: '3px 10px', marginLeft: 0 }}>
-                            ＋ 选入做T决策台
-                          </button>
-                        )}
-                      </div>
+                      <BoardStockActions
+                        stock={item}
+                        inPoolCodes={inPoolCodes}
+                        herdCodeSet={herdCodeSet}
+                        herdBusyCode={herdBusyCode}
+                        onHerdAction={handleHerdAction}
+                        onAddSingle={handleAddSingle}
+                        onSelectStock={onSelectStock}
+                        onJumpHerd={() => setFilterTier('herd')}
+                        onJumpIgnition={onJumpIgnition}
+                        readOnlyHistory={isHistoryReplay}
+                      />
                     </div>
                   </div>
                 );
@@ -1473,43 +1467,64 @@ export default function BoardPage({
           )}
         </div>
 
-        {/* 右侧：炒作风口榜 + 跨行业字辈暗线 + 打板军规 */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        {/* 右侧：炒作风口榜（支持展开具体涨停股一键加自选） + 跨行业字辈暗线 + 打板军规 */}
+        <div className="board-main-sidebar">
           <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: '10px', padding: '14px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
               <div style={{ fontSize: '13.5px', fontWeight: 800, color: 'var(--text)' }}>🔥 今日炒作风口排行</div>
-              <span style={{ fontSize: '11px', color: 'var(--mute)' }}>按涨停家数</span>
+              <span style={{ fontSize: '11px', color: 'var(--mute)' }}>点击筛选 · 领涨可加自选</span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {hotThemes.slice(0, 10).map((th, idx) => {
                 const isSelected = selectedTheme === th.name;
+                const ldrCode = String(th.leaderCode || '').padStart(6, '0');
+                const ldrInPool = ldrCode && inPoolCodes.has(ldrCode);
                 return (
                   <div
                     key={th.name}
-                    onClick={() => setSelectedTheme(isSelected ? 'all' : th.name)}
                     style={{
                       display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
+                      flexDirection: 'column',
+                      gap: '5px',
                       padding: '6px 8px',
                       borderRadius: '6px',
                       background: isSelected ? '#e6f4ff' : 'var(--surface2)',
                       border: isSelected ? '1px solid #91caff' : '1px solid transparent',
-                      cursor: 'pointer',
                       fontSize: '12px'
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ width: '18px', height: '18px', borderRadius: '4px', background: idx < 3 ? '#cf1322' : 'var(--mute)', color: '#fff', fontSize: '10.5px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        {idx + 1}
-                      </span>
-                      <span style={{ fontWeight: isSelected ? 800 : 600, color: isSelected ? '#0958d9' : 'var(--text)' }}>{th.name}</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ fontSize: '11px', color: 'var(--sub)' }}>领涨: {th.leader} ({th.maxLbc}板)</span>
-                      <span style={{ background: '#fff1f0', color: '#cf1322', padding: '1px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 700 }}>
+                    <div
+                      onClick={() => setSelectedTheme(isSelected ? 'all' : th.name)}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', cursor: 'pointer' }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
+                        <span style={{ width: '18px', height: '18px', borderRadius: '4px', background: idx < 3 ? '#cf1322' : 'var(--mute)', color: '#fff', fontSize: '10.5px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          {idx + 1}
+                        </span>
+                        <span style={{ fontWeight: isSelected ? 800 : 600, color: isSelected ? '#0958d9' : 'var(--text)', whiteSpace: 'nowrap' }}>{th.name}</span>
+                      </div>
+                      <span style={{ background: '#fff1f0', color: '#cf1322', padding: '1px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 700, flexShrink: 0 }}>
                         {th.count}家
                       </span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px', fontSize: '11px', color: 'var(--sub)' }}>
+                      <span>领涨: <b>{th.leader}</b> ({th.maxLbc}板)</span>
+                      {ldrCode && ldrCode !== '000000' && (
+                        <button
+                          type="button"
+                          className={`board-mini-pill-btn ${ldrInPool ? 'in-pool' : 'add-pool'}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (ldrInPool) {
+                              if (onSelectStock) onSelectStock(ldrCode);
+                            } else {
+                              handleAddSingle(ldrCode, th.leader, th.stocks?.[0]);
+                            }
+                          }}
+                        >
+                          {ldrInPool ? '✓自选' : '＋自选'}
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -1523,32 +1538,72 @@ export default function BoardPage({
                 <span style={{ fontSize: '13px', fontWeight: 800, color: '#6d28d9' }}>🔮 跨行业字辈暗线</span>
                 <span style={{ fontSize: '10.5px', color: '#7c3aed' }}>同字根≥2板</span>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
                 {mysticClusters.slice(0, 6).map(cl => {
                   const tKey = `字辈·${cl.name}`;
                   const active = selectedTheme === tKey && filterTier === 'strong';
                   return (
                     <div
                       key={cl.name}
-                      onClick={() => {
-                        setFilterTier('strong');
-                        setSelectedTheme(active ? 'all' : tKey);
-                      }}
                       style={{
-                        padding: '6px 8px',
+                        padding: '7px 9px',
                         borderRadius: '6px',
                         background: active ? '#f3e8ff' : '#fff',
                         border: active ? '1px solid #9333ea' : '1px solid #e9d5ff',
-                        cursor: 'pointer',
                         fontSize: '11.5px',
                       }}
                     >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div
+                        onClick={() => {
+                          setFilterTier('strong');
+                          if (!active) {
+                            setStrongMinTags(1);
+                            setStrongOnlyNonZt(false);
+                          }
+                          setSelectedTheme(active ? 'all' : tKey);
+                        }}
+                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', marginBottom: '4px' }}
+                      >
                         <b style={{ color: '#6d28d9' }}>{cl.name}</b>
-                        <span style={{ fontWeight: 800, color: '#7c3aed', fontSize: '11px' }}>{cl.ztCount}板</span>
+                        <span style={{ fontWeight: 800, color: '#7c3aed', fontSize: '11px' }}>{cl.ztCount}板 →</span>
                       </div>
-                      <div style={{ fontSize: '11px', color: 'var(--sub)', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {(cl.leaders || []).map(l => `${l.name}(${l.lbc})`).join(' · ')}
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                        {(cl.leaders || []).map(l => {
+                          const lc = String(l.code || '').padStart(6, '0');
+                          const inT = inPoolCodes.has(lc);
+                          return (
+                            <span
+                              key={lc}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                                padding: '1px 5px',
+                                borderRadius: '4px',
+                                background: '#faf5ff',
+                                border: '1px solid #e9d5ff',
+                                fontSize: '10.5px',
+                              }}
+                            >
+                              <span>{l.name}({l.lbc}板)</span>
+                              <button
+                                type="button"
+                                className={`board-mini-pill-btn ${inT ? 'in-pool' : 'add-pool'}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (inT) {
+                                    if (onSelectStock) onSelectStock(lc);
+                                  } else {
+                                    handleAddSingle(lc, l.name, l);
+                                  }
+                                }}
+                                title={inT ? '已在自选池，点击去作战台' : '一键加入自选池'}
+                              >
+                                {inT ? '✓' : '＋'}
+                              </button>
+                            </span>
+                          );
+                        })}
                       </div>
                     </div>
                   );

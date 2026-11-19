@@ -1091,13 +1091,18 @@ export default function App() {
     performVaultSync(false, true);
   };
 
-  const handleAddStockByQuery = async (qStr, meta = null) => {
+  const handleAddStockByQuery = async (qStr, meta = null, options = {}) => {
+    const { jumpToTrade = true, silentToast = false } = options || {};
     toast('正在全市场检索标的…', 'info');
     try {
       const res = await addByQuery(qStr, poolRef.current);
       if (res && res.status === 'exists') {
-        if (res.code) handleSelectStock(res.code);
-        return;
+        if (jumpToTrade && res.code) {
+          handleSelectStock(res.code);
+        } else if (!silentToast) {
+          toastWarn(`${qStr} 已在自选池中`);
+        }
+        return res;
       }
       const raw = localStorage.getItem(STORAGE_KEYS.POOL);
       if (raw) {
@@ -1108,9 +1113,10 @@ export default function App() {
             if (String(st.code).padStart(6, '0') === c6 || st.name === qStr) {
               return {
                 ...st,
-                strategyTag: meta.strategyTag || '起爆',
-                planStrategy: meta.strategy || 'ignition',
-                ignitionMeta: meta,
+                tier: meta.tier || st.tier || 'short',
+                strategyTag: meta.strategyTag || st.strategyTag || '超短',
+                ...(meta.strategy ? { planStrategy: meta.strategy } : {}),
+                ...(meta.strategy === 'ignition' ? { ignitionMeta: meta } : {}),
               };
             }
             return st;
@@ -1122,12 +1128,20 @@ export default function App() {
         setPool(parsed);
         const targetCode = res?.stock?.code || parsed[parsed.length - 1]?.code;
         if (targetCode) {
-          handleSelectStock(targetCode);
+          if (jumpToTrade) {
+            handleSelectStock(targetCode);
+          } else {
+            setActiveStockCode(String(targetCode).padStart(6, '0'));
+          }
         }
       }
-      toastOk(`✓ 标的 ${res?.stock?.name || qStr} 已成功加入自选做T台！`);
+      if (!silentToast) {
+        toastOk(`✓ 已将 ${res?.stock?.name || qStr} 加入自选池！`);
+      }
+      return res;
     } catch (e) {
       toastErr('添加标的失败：' + e.message);
+      return null;
     }
   };
 

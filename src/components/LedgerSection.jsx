@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { f2, money, todayStr, toastOk, toastErr, copyPlain } from '../services/utils.js';
 import { fetchCoachConfig, testCoachConnection, fetchCoachReview, MKT } from '../services/api.js';
 import { resolveSystemBenchmark, auditTradeExecution, computeDisciplineScorecard } from '../services/ledger.js';
@@ -37,12 +37,19 @@ export default function LedgerSection({
 }) {
   // 核心导航轨制：'ALL' | 'long_t' | 'short_swing' | 'BENCHMARK'
   const [activeTrackTab, setActiveTrackTab] = useState('ALL');
+  // 流水展示模式：'auto'（桌面宽表 + 手机窄屏自动卡片）| 'card' | 'table'
+  const [logViewMode, setLogViewMode] = useState('auto');
+  // 移动端单手防误删二次确认 ID（3秒自动复位）
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const deleteTimerRef = useRef(null);
+
   const [showAddModal, setShowAddModal] = useState(false);
   const [showCoachModal, setShowCoachModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [editingLog, setEditingLog] = useState(null);
   const [selectedChartStock, setSelectedChartStock] = useState('ALL');
   const [hoverIdx, setHoverIdx] = useState(null);
+  const svgRef = useRef(null);
 
   // AI 配置状态
   const [aiConfig, setAiConfig] = useState({
@@ -81,6 +88,24 @@ export default function LedgerSection({
     reflection: '',
     satisfaction: 5
   });
+
+  useEffect(() => () => {
+    if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
+  }, []);
+
+  const requestDeleteLog = (id) => {
+    if (confirmDeleteId === id) {
+      if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
+      setConfirmDeleteId(null);
+      onDeleteLog(id);
+      return;
+    }
+    setConfirmDeleteId(id);
+    if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
+    deleteTimerRef.current = setTimeout(() => {
+      setConfirmDeleteId(prev => (prev === id ? null : prev));
+    }, 3200);
+  };
 
   // 读取后端与本地 AI 配置
   useEffect(() => {
@@ -219,6 +244,17 @@ export default function LedgerSection({
           ? prev.mistakeTags.filter(id => id !== tagId)
           : [...prev.mistakeTags, tagId]
       };
+    });
+  };
+
+  const openEditLogModal = (lg) => {
+    if (!onUpdateLog) return;
+    setEditingLog({
+      ...lg,
+      mistakeTags: Array.isArray(lg.mistakeTags) ? [...lg.mistakeTags] : [],
+      reflection: lg.reflection || '',
+      plan: lg.plan || '计划内',
+      track: lg.track || 'long_t',
     });
   };
 
@@ -482,6 +518,21 @@ export default function LedgerSection({
     }
   }, [closedTLogs, selectedChartStock, pool]);
 
+  // 手机端触屏在 SVG 曲线上横向滑动跟手查点
+  const handleCurveTouch = (e) => {
+    const pts = chartData.points || [];
+    if (pts.length < 2 || !svgRef.current) return;
+    const touch = e.touches && e.touches[0];
+    if (!touch) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    if (!rect.width) return;
+    const W = 760, PL = 58, PR = 26;
+    const svgX = ((touch.clientX - rect.left) / rect.width) * W;
+    const ratio = Math.max(0, Math.min(1, (svgX - PL) / (W - PL - PR)));
+    const nearestIdx = Math.round(ratio * (pts.length - 1));
+    setHoverIdx(nearestIdx);
+  };
+
   const renderCurveSvg = () => {
     const pts = chartData.points || [];
     if (pts.length < 2) {
@@ -508,8 +559,14 @@ export default function LedgerSection({
     const strokeColor = isCostMode ? '#0a7f42' : '#cf1322';
 
     return (
-      <div style={{ position: 'relative', width: '100%', overflowX: 'auto' }}>
-        <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
+      <div style={{ position: 'relative', width: '100%' }}>
+        <svg
+          ref={svgRef}
+          viewBox={`0 0 ${W} ${H}`}
+          onTouchStart={handleCurveTouch}
+          onTouchMove={handleCurveTouch}
+          style={{ width: '100%', height: 'auto', display: 'block', touchAction: 'pan-y', userSelect: 'none' }}
+        >
           <line x1={PL} y1={PT} x2={W - PR} y2={PT} stroke="var(--line)" strokeDasharray="3 3" />
           <line x1={PL} y1={PT + innerH / 2} x2={W - PR} y2={PT + innerH / 2} stroke="var(--line)" strokeDasharray="3 3" />
           <line x1={PL} y1={PT + innerH} x2={W - PR} y2={PT + innerH} stroke="var(--line)" />
@@ -521,38 +578,54 @@ export default function LedgerSection({
 
           <path d={pathD} fill="none" stroke={strokeColor} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
 
+          {hoverIdx !== null && pts[hoverIdx] && (
+            <line
+              x1={xCoord(hoverIdx)}
+              y1={PT}
+              x2={xCoord(hoverIdx)}
+              y2={PT + innerH}
+              stroke={strokeColor}
+              strokeDasharray="3 3"
+              strokeOpacity="0.45"
+            />
+          )}
+
           {pts.map((p, i) => (
-            <g key={i} onMouseEnter={() => setHoverIdx(i)} onMouseLeave={() => setHoverIdx(null)} style={{ cursor: 'pointer' }}>
+            <g
+              key={i}
+              onMouseEnter={() => setHoverIdx(i)}
+              onMouseLeave={() => setHoverIdx(null)}
+              onClick={() => setHoverIdx(i)}
+              style={{ cursor: 'pointer' }}
+            >
               <circle
                 cx={xCoord(i)}
                 cy={yCoord(p.val)}
-                r={hoverIdx === i ? 5.5 : 3.5}
+                r={hoverIdx === i ? 6 : 3.8}
                 fill={hoverIdx === i ? '#fff' : strokeColor}
                 stroke={strokeColor}
-                strokeWidth={hoverIdx === i ? 2.5 : 1.5}
+                strokeWidth={hoverIdx === i ? 2.6 : 1.5}
               />
             </g>
           ))}
         </svg>
 
         {hoverIdx !== null && pts[hoverIdx] && (
-          <div style={{
-            position: 'absolute',
-            top: '8px',
-            right: '12px',
-            background: 'var(--surface)',
-            border: '1px solid var(--line)',
-            borderRadius: '6px',
-            padding: '6px 10px',
-            fontSize: '11.5px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-            pointerEvents: 'none',
-            zIndex: 10
-          }}>
-            <div style={{ fontWeight: 700 }}>{pts[hoverIdx].label}</div>
+          <div className="ledger-curve-tip">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+              <b>{pts[hoverIdx].label}</b>
+              <button
+                type="button"
+                className="ledger-tip-close"
+                onClick={() => setHoverIdx(null)}
+                aria-label="关闭曲线浮窗"
+              >
+                ✕
+              </button>
+            </div>
             <div>{isCostMode ? '摊薄成本: ' : '累计套利: '}<b>{f2(pts[hoverIdx].val)}</b></div>
             {pts[hoverIdx].delta !== 0 && (
-              <div style={{ color: pts[hoverIdx].delta > 0 ? 'var(--up)' : 'var(--down)' }}>
+              <div style={{ color: pts[hoverIdx].delta > 0 ? 'var(--up)' : 'var(--down)', fontWeight: 700 }}>
                 单笔影响: {pts[hoverIdx].delta > 0 ? '+' : ''}{money(pts[hoverIdx].delta)}
               </div>
             )}
@@ -567,31 +640,20 @@ export default function LedgerSection({
 
   return (
     <div className="ledger-wrap" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      {/* 🛡️ 本地磁盘自动双写金库防丢保护提示横幅（当检测到磁盘存在更丰富备份被防覆盖拦截时显示） */}
+      {/* 🛡️ 本地磁盘自动双写金库防丢保护提示横幅 */}
       {vaultStatus?.guarded && vaultStatus?.remoteSummary && (
-        <div style={{
-          padding: '10px 14px',
-          borderRadius: '10px',
-          background: '#fffbeb',
-          border: '1.5px solid #f59e0b',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: '10px',
-          fontSize: '12.5px'
-        }}>
+        <div className="ledger-vault-guard">
           <div style={{ color: '#92400e' }}>
             <b>🛡️ 本地磁盘金库防误删保护已触发：</b>
             检测到本机 <code>data/user_vault.json</code> 存有 <b>{vaultStatus.remoteSummary.logCount}</b> 笔成交流水与 <b>{vaultStatus.remoteSummary.snapshotCount}</b> 条净值快照（更新于 {vaultStatus.remoteSummary.updatedAt}），已阻止当前空白浏览器缓存覆盖磁盘。
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             {onRestoreVault && (
               <button
                 type="button"
                 className="primary"
                 onClick={onRestoreVault}
-                style={{ fontSize: '12px', padding: '4px 12px', background: '#d97706', border: 'none', color: '#fff', fontWeight: 700 }}
+                style={{ fontSize: '12px', padding: '5px 12px', background: '#d97706', border: 'none', color: '#fff', fontWeight: 700 }}
               >
                 🔄 立即从本地磁盘恢复数据
               </button>
@@ -600,7 +662,7 @@ export default function LedgerSection({
               <button
                 type="button"
                 onClick={() => onForceSyncVault(true)}
-                style={{ fontSize: '12px', padding: '4px 10px' }}
+                style={{ fontSize: '12px', padding: '5px 10px' }}
               >
                 强制以当前状态覆盖磁盘
               </button>
@@ -609,13 +671,13 @@ export default function LedgerSection({
         </div>
       )}
 
-      <section className="card" style={{ padding: '16px' }}>
-        {/* 顶部标题栏 + 本地磁盘双写状态 + 功能操作区 */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '14px', borderBottom: '1px solid var(--line)', paddingBottom: '12px' }}>
+      <section className="card ledger-main-card">
+        {/* 顶部标题栏 + 本地磁盘双写状态 + 单手操作按钮区 */}
+        <div className="ledger-head-bar">
           <div>
-            <h2 style={{ fontSize: '18px', fontWeight: 800, margin: 0, display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <h2 className="ledger-head-title">
               <span>📒</span> 实盘交易台账与人机对决复盘系统
-              <span className="tag" style={{ fontSize: '11px', background: 'var(--surface2)', color: 'var(--sub)' }}>全链路点位审计 · 本地磁盘双写</span>
+              <span className="tag ledger-sub-badge">全链路点位审计 · 本地磁盘双写</span>
               {vaultStatus && (
                 <span
                   style={{
@@ -636,29 +698,26 @@ export default function LedgerSection({
                   {vaultStatus.syncing
                     ? '💾 磁盘同步中…'
                     : vaultStatus.connected
-                    ? `💾 磁盘金库已同步 ${vaultStatus.updatedAt ? vaultStatus.updatedAt.slice(11, 19) : ''}`
-                    : '💾 仅浏览器缓存(后端离线)'}
+                    ? `💾 金库已同步 ${vaultStatus.updatedAt ? vaultStatus.updatedAt.slice(11, 19) : ''}`
+                    : '💾 仅浏览器缓存'}
                 </span>
               )}
             </h2>
-            <div style={{ fontSize: '12px', color: 'var(--sub)', marginTop: '3px' }}>
-              作战台快捷记T、建仓加仓与尾盘交割均自动计算【系统SOP点位偏离度%】与【主观情绪摩擦损耗】，支持免密钥秒级量化复盘与天翼云大模型深度剖析。
+            <div className="ledger-head-desc">
+              作战台快捷记T、建仓加仓与尾盘交割均自动计算【系统SOP点位偏离度%】与【主观情绪摩擦损耗】，支持免密钥秒级量化复盘与大模型深度剖析。
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '7px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <div className="ledger-head-acts">
             {onOpenEodModal && (
               <button
                 type="button"
                 onClick={onOpenEodModal}
+                className="ledger-btn-eod"
                 style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px',
                   background: todayArchived ? '#f0fdf4' : '#0f766e',
                   color: todayArchived ? '#15803d' : '#fff',
                   border: todayArchived ? '1px solid #86efac' : 'none',
-                  fontWeight: 700,
                 }}
                 title="15:05 盘后一键收盘归档（同步收盘价 · 排查未平T · 净值快照 · 复盘简报 · 本地金库落盘）"
               >
@@ -667,11 +726,17 @@ export default function LedgerSection({
             )}
             <button
               type="button"
-              className="primary"
+              className="primary ledger-btn-coach"
               onClick={() => setShowCoachModal(true)}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: 'linear-gradient(135deg, #1d4ed8 0%, #7c3aed 100%)', border: 'none', color: '#fff', fontWeight: 700 }}
             >
               <span>🤖</span> 呼叫复盘教练
+            </button>
+            <button
+              type="button"
+              className="ledger-btn-add"
+              onClick={() => setShowAddModal(true)}
+            >
+              ＋ 记一笔
             </button>
             <button
               type="button"
@@ -680,9 +745,6 @@ export default function LedgerSection({
               title="配置天翼云/DeepSeek 大模型密钥（未配置时自动使用内置量化规则教练）"
             >
               <span>⚙️</span> {hasAiKey ? 'AI已就绪' : 'AI配置'}
-            </button>
-            <button type="button" onClick={() => setShowAddModal(true)} style={{ fontWeight: 600 }}>
-              ＋ 记一笔
             </button>
             {vaultStatus?.connected && onForceSyncVault && (
               <button
@@ -698,21 +760,11 @@ export default function LedgerSection({
           </div>
         </div>
 
-        {/* 🏅 四维操盘纪律与计划偏离度量化评分卡 */}
-        <div style={{
-          background: 'linear-gradient(135deg, #f8fafc 0%, #f0f9ff 100%)',
-          border: '1px solid #bae6fd',
-          borderRadius: '10px',
-          padding: '12px 14px',
-          marginBottom: '14px',
-          display: 'grid',
-          gridTemplateColumns: 'minmax(185px, 220px) 1fr',
-          gap: '14px',
-          alignItems: 'center'
-        }}>
-          <div style={{ borderRight: '1px dashed #cbd5e1', paddingRight: '12px' }}>
+        {/* 🏅 四维操盘纪律与计划偏离度量化评分卡（响应式无挤压布局） */}
+        <div className="ledger-scorecard-grid">
+          <div className="ledger-score-main">
             <div style={{ fontSize: '11.5px', color: 'var(--sub)', fontWeight: 600 }}>🛡️ 操盘纪律与偏离度评分</div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginTop: '4px' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '28px', fontWeight: 900, fontFamily: 'monospace', color: scoreColor, lineHeight: 1 }}>
                 {scorecard.totalScore}
               </span>
@@ -730,7 +782,7 @@ export default function LedgerSection({
               </span>
             </div>
             <div style={{ fontSize: '11px', color: 'var(--sub)', marginTop: '6px' }}>
-              买点平均偏离:{' '}
+              买点均偏:{' '}
               <b style={{ fontFamily: 'monospace', color: scorecard.avgBuyDevPct != null && scorecard.avgBuyDevPct > 0.6 ? '#cf1322' : '#15803d' }}>
                 {scorecard.avgBuyDevPct != null ? `${scorecard.avgBuyDevPct >= 0 ? '+' : ''}${scorecard.avgBuyDevPct.toFixed(2)}%` : '0.00%'}
               </b>
@@ -741,29 +793,29 @@ export default function LedgerSection({
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(145px, 1fr))', gap: '10px' }}>
+          <div className="ledger-dim-grid">
             {[
               { label: '🎯 买点精准度', val: scorecard.buyScore, max: 25, desc: '防追高/锚定低吸区', color: '#0284c7' },
               { label: '💰 止盈兑现度', val: scorecard.sellScore, max: 25, desc: '按目标分批锁盈', color: '#16a34a' },
               { label: '🛡️ 止损铁律度', val: scorecard.stopScore, max: 25, desc: '破位秒砍绝不死扛', color: '#dc2626' },
               { label: '🧭 环境与仓位', val: scorecard.envScore, max: 25, desc: '顺应大盘防报复单', color: '#7c3aed' },
             ].map((dim) => (
-              <div key={dim.label} style={{ background: '#fff', padding: '8px 10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', fontWeight: 700 }}>
-                  <span>{dim.label}</span>
-                  <span style={{ fontFamily: 'monospace', color: dim.color }}>{dim.val}/{dim.max}</span>
+              <div key={dim.label} style={{ background: '#fff', padding: '8px 10px', borderRadius: '8px', border: '1px solid #e2e8f0', minWidth: 0 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', fontWeight: 700, gap: '4px' }}>
+                  <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{dim.label}</span>
+                  <span style={{ fontFamily: 'monospace', color: dim.color, flexShrink: 0 }}>{dim.val}/{dim.max}</span>
                 </div>
                 <div style={{ height: '6px', background: '#f1f5f9', borderRadius: '999px', overflow: 'hidden', margin: '6px 0 4px' }}>
                   <div style={{ width: `${(dim.val / dim.max) * 100}%`, height: '100%', background: dim.color, borderRadius: '999px' }} />
                 </div>
-                <div style={{ fontSize: '10.5px', color: 'var(--mute)' }}>{dim.desc}</div>
+                <div style={{ fontSize: '10.5px', color: 'var(--mute)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{dim.desc}</div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* 🔀 双轨分仓导航切换栏 */}
-        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '14px' }}>
+        {/* 🔀 双轨分仓导航切换栏（窄屏单行丝滑横滑） */}
+        <div className="ledger-track-tabs">
           {[
             { id: 'ALL', label: `📊 全部流水 (${enrichedAllLogs.length}笔)` },
             { id: 'long_t', label: `🛡️ 长线做T轨 (${enrichedAllLogs.filter(x => (x.track || 'long_t') === 'long_t').length}笔)` },
@@ -773,55 +825,48 @@ export default function LedgerSection({
             <button
               key={tab.id}
               type="button"
-              className={activeTrackTab === tab.id ? 'primary' : ''}
+              className={`ledger-track-tab ${activeTrackTab === tab.id ? 'primary active' : ''}`}
               onClick={() => setActiveTrackTab(tab.id)}
-              style={{
-                fontSize: '12px',
-                padding: '4px 12px',
-                borderRadius: '6px',
-                border: activeTrackTab === tab.id ? '1px solid var(--accent)' : '1px solid var(--line)',
-                fontWeight: activeTrackTab === tab.id ? 700 : 500
-              }}
             >
               {tab.label}
             </button>
           ))}
         </div>
 
-        {/* 🏆 4 维核心绩效战报 KPI 卡片 */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px', marginBottom: '16px' }}>
-          <div className="card" style={{ padding: '12px 14px', background: 'var(--surface2)', borderLeft: `4px solid ${stats.todayNet >= 0 ? '#cf1322' : '#0a7f42'}` }}>
-            <div style={{ fontSize: '11.5px', color: 'var(--mute)' }}>☀️ 今日净落袋 ({stats.todayCount}笔已平仓)</div>
-            <div className={stats.todayNet >= 0 ? 'up' : 'down'} style={{ fontSize: '20px', fontWeight: 800, fontFamily: 'monospace', marginTop: '4px' }}>
+        {/* 🏆 4 维核心绩效战报 KPI 卡片（手机端紧凑 2×2 双列宫格） */}
+        <div className="ledger-kpi-grid">
+          <div className="card ledger-kpi-card" style={{ borderLeft: `4px solid ${stats.todayNet >= 0 ? '#cf1322' : '#0a7f42'}` }}>
+            <div className="ledger-kpi-k">☀️ 今日净落袋 ({stats.todayCount}笔)</div>
+            <div className={`ledger-kpi-v ${stats.todayNet >= 0 ? 'up' : 'down'}`}>
               {stats.todayNet >= 0 ? '+' : ''}{money(stats.todayNet)}
             </div>
           </div>
 
-          <div className="card" style={{ padding: '12px 14px', background: 'var(--surface2)', borderLeft: `4px solid ${stats.totalNet >= 0 ? '#cf1322' : '#0a7f42'}` }}>
-            <div style={{ fontSize: '11.5px', color: 'var(--mute)' }}>
-              {activeTrackTab === 'long_t' ? '💰 累计做T降本套利额' : activeTrackTab === 'short_swing' ? '⚡ 短线累计闭环净利' : '💰 历史累计净落袋'}
+          <div className="card ledger-kpi-card" style={{ borderLeft: `4px solid ${stats.totalNet >= 0 ? '#cf1322' : '#0a7f42'}` }}>
+            <div className="ledger-kpi-k">
+              {activeTrackTab === 'long_t' ? '💰 累计做T套利' : activeTrackTab === 'short_swing' ? '⚡ 短线闭环净利' : '💰 历史累计落袋'}
             </div>
-            <div className={stats.totalNet >= 0 ? 'up' : 'down'} style={{ fontSize: '20px', fontWeight: 800, fontFamily: 'monospace', marginTop: '4px' }}>
+            <div className={`ledger-kpi-v ${stats.totalNet >= 0 ? 'up' : 'down'}`}>
               {stats.totalNet >= 0 ? '+' : ''}{money(stats.totalNet)}
             </div>
           </div>
 
-          <div className="card" style={{ padding: '12px 14px', background: 'var(--surface2)', borderLeft: '4px solid #0958d9' }}>
-            <div style={{ fontSize: '11.5px', color: 'var(--mute)' }}>🎯 综合平仓胜率</div>
-            <div style={{ fontSize: '20px', fontWeight: 800, fontFamily: 'monospace', marginTop: '4px', color: '#0958d9' }}>
+          <div className="card ledger-kpi-card" style={{ borderLeft: '4px solid #0958d9' }}>
+            <div className="ledger-kpi-k">🎯 综合平仓胜率</div>
+            <div className="ledger-kpi-v" style={{ color: '#0958d9' }}>
               {stats.winRate.toFixed(1)}%
-              <span style={{ fontSize: '11.5px', fontWeight: 500, color: 'var(--sub)', marginLeft: '6px' }}>
-                ({stats.winCount}胜 / {stats.lossCount}负)
+              <span className="ledger-kpi-sub">
+                ({stats.winCount}胜/{stats.lossCount}负)
               </span>
             </div>
           </div>
 
-          <div className="card" style={{ padding: '12px 14px', background: 'var(--surface2)', borderLeft: '4px solid #7c3aed' }}>
-            <div style={{ fontSize: '11.5px', color: 'var(--mute)' }}>🛡️ 计划内纪律执行率</div>
-            <div style={{ fontSize: '20px', fontWeight: 800, fontFamily: 'monospace', marginTop: '4px', color: '#7c3aed' }}>
+          <div className="card ledger-kpi-card" style={{ borderLeft: '4px solid #7c3aed' }}>
+            <div className="ledger-kpi-k">🛡️ 计划内纪律率</div>
+            <div className="ledger-kpi-v" style={{ color: '#7c3aed' }}>
               {stats.disciplineRate.toFixed(0)}%
               {stats.bestTrade && (
-                <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--sub)', marginLeft: '6px' }}>
+                <span className="ledger-kpi-sub">
                   最佳 +{money(stats.bestTrade.net)}
                 </span>
               )}
@@ -839,7 +884,7 @@ export default function LedgerSection({
               逐笔比对实盘成交价与当时系统推荐低吸买点 (`inA`)、冲高止盈位 (`tp1 / outA`) 及纪律止损线 (`slA`)，精准剥离出「主观情绪摩擦账单」。
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px', marginBottom: '14px' }}>
+            <div className="ledger-bench-grid">
               <div style={{ padding: '10px 12px', background: '#fff', borderRadius: '6px', border: '1px solid var(--line)' }}>
                 <div style={{ fontSize: '11.5px', color: 'var(--mute)' }}>🤖 系统理论 SOP 预期净收益 ({stats.benchmarkCompareCount}笔)</div>
                 <div style={{ fontSize: '18px', fontWeight: 800, fontFamily: 'monospace', marginTop: '4px', color: stats.benchmarkTotalNet >= 0 ? 'var(--up)' : 'var(--down)' }}>
@@ -882,21 +927,21 @@ export default function LedgerSection({
           </div>
         )}
 
-        {/* 📈 成本摊薄与累计套利曲线看板 */}
+        {/* 📈 成本摊薄与累计套利曲线看板（支持触屏跟手滑动查数） */}
         {activeTrackTab !== 'BENCHMARK' && (
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: '10px', padding: '14px', marginBottom: '16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: '10px', padding: '12px 14px', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
               <div style={{ fontSize: '13.5px', fontWeight: 800, color: 'var(--text)' }}>
                 {selectedChartStock === 'ALL'
                   ? '📈 账户累计净套利资金曲线'
-                  : `📉 【${selectedChartStock}】底仓每股成本动态下降轨迹`}
+                  : `📉 【${selectedChartStock}】底仓每股成本下降轨迹`}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '12px', color: 'var(--mute)' }}>切换标的维度：</span>
+                <span className="ledger-chart-hint">手指横滑曲线可查点 · 标的：</span>
                 <select
                   value={selectedChartStock}
                   onChange={e => { setSelectedChartStock(e.target.value); setHoverIdx(null); }}
-                  style={{ padding: '4px 10px', fontSize: '12px', borderRadius: '6px', border: '1px solid var(--line)', background: 'var(--surface2)', color: 'var(--text)', fontWeight: 600 }}
+                  className="ledger-stock-select"
                 >
                   <option value="ALL">📊 全部标的 · 累计资金曲线</option>
                   {stats.stockOptions.map(st => (
@@ -909,8 +954,170 @@ export default function LedgerSection({
           </div>
         )}
 
-        {/* 流水明细表格 */}
-        <div className="tbl-scroll" style={{ maxHeight: '420px' }}>
+        {/* 📋 流水明细视图切换工具条（手机端默认单手复盘卡片，支持随时切宽表） */}
+        <div className="ledger-list-toolbar">
+          <div style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--sub)' }}>
+            📋 成交流水与纪律审计明细（共 <b>{filteredLogs.length}</b> 笔）
+          </div>
+          <div className="ledger-view-switch" role="group" aria-label="流水视图切换">
+            {[
+              { id: 'auto', label: '✨ 自适应' },
+              { id: 'card', label: '📱 复盘卡' },
+              { id: 'table', label: '📋 全宽表' },
+            ].map(m => (
+              <button
+                key={m.id}
+                type="button"
+                className={logViewMode === m.id ? 'active' : ''}
+                onClick={() => setLogViewMode(m.id)}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 📱 移动端原生单手复盘卡片流（窄屏默认开启，零横向滚动） */}
+        <div className={`ledger-log-cards mode-${logViewMode}`}>
+          {filteredLogs.length > 0 ? (
+            filteredLogs.map(lg => {
+              const tagList = (lg.mistakeTags || []).map(id => {
+                const item = MISTAKE_DICTIONARY.find(m => m.id === id);
+                return item ? `${item.icon} ${item.name}` : id;
+              });
+              const dScore = lg.disciplineScore ?? 100;
+              const isOpenHold = (lg.dir || '').includes('建仓') || (lg.dir || '').includes('加仓') || lg.dir === '尾盘买入';
+              const isBuyDir = (lg.dir || '').includes('买') || (lg.dir || '').includes('正T') || (lg.dir || '').includes('潜伏');
+              const isConfirmingDel = confirmDeleteId === lg.id;
+
+              return (
+                <div key={lg.id} className="ledger-log-card">
+                  {/* 第一行：标的 + 轨制/方向 + 右侧大号净落袋 */}
+                  <div className="llc-top">
+                    <div className="llc-ident">
+                      <div className="llc-stock">{lg.stock}</div>
+                      <div className="llc-badges">
+                        <span className={`llc-track ${lg.track === 'short_swing' ? 'short' : 'long'}`}>
+                          {lg.track === 'short_swing' ? '⚡ 短线攻防' : '🛡️ 长线做T'}
+                        </span>
+                        <span className={`pill ${isBuyDir ? 'p-buy' : 'p-sell'}`} style={{ fontSize: '11px', padding: '1px 7px' }}>
+                          {lg.dir}
+                        </span>
+                        <span className="llc-date">{lg.date}{lg.time ? ` ${lg.time}` : ''}</span>
+                      </div>
+                    </div>
+
+                    <div className="llc-pnl">
+                      {isOpenHold ? (
+                        <span className="llc-hold-tag">开仓持仓中</span>
+                      ) : (
+                        <>
+                          <span className={`llc-net ${lg.net >= 0 ? 'up' : 'down'}`}>
+                            {lg.net >= 0 ? '+' : ''}{money(lg.net)}
+                          </span>
+                          <span className="llc-net-lbl">净落袋(元)</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 第二行：买价 / 卖价 / 股数 紧凑三宫格 */}
+                  <div className="llc-prices">
+                    <div className="llc-px-cell">
+                      <span>买入价</span>
+                      <b>{lg.buy > 0 ? `¥${f2(lg.buy)}` : '—'}</b>
+                    </div>
+                    <div className="llc-px-cell">
+                      <span>卖出价</span>
+                      <b>{lg.sell > 0 ? `¥${f2(lg.sell)}` : '—'}</b>
+                    </div>
+                    <div className="llc-px-cell">
+                      <span>成交数量</span>
+                      <b>{lg.qty}股</b>
+                    </div>
+                  </div>
+
+                  {/* 第三行：SOP 人机对决 & 纪律评分 & 失误标签 */}
+                  <div className="llc-audit">
+                    <div className="llc-tags-row">
+                      <span
+                        className="llc-score-pill"
+                        style={{
+                          background: dScore >= 85 ? '#f0fdf4' : dScore >= 70 ? '#eff6ff' : '#fffbeb',
+                          color: dScore >= 85 ? '#15803d' : dScore >= 70 ? '#1d4ed8' : '#b45309',
+                          border: `1px solid ${dScore >= 85 ? '#86efac' : dScore >= 70 ? '#bfdbfe' : '#fcd34d'}`
+                        }}
+                      >
+                        🛡️ {dScore}分 · {lg.plan || '计划内'}
+                      </span>
+                      {tagList.map((t, idx) => (
+                        <span key={idx} className="llc-mistake-pill">{t}</span>
+                      ))}
+                    </div>
+
+                    {lg.systemBenchmark && (
+                      <div className="llc-sop-row">
+                        <span>
+                          SOP买 <b>¥{f2(lg.systemBenchmark.sysBuy)}</b>
+                          {lg.buyDevPct != null && (
+                            <em style={{ color: lg.buyDevPct > 0.6 ? '#cf1322' : '#15803d' }}>
+                              ({lg.buyDevPct >= 0 ? '+' : ''}{lg.buyDevPct.toFixed(1)}%)
+                            </em>
+                          )}
+                          {' ｜ '}目标 <b>¥{f2(lg.systemBenchmark.sysSell1)}</b>
+                        </span>
+                        {lg.alphaNet != null && (
+                          <b style={{ color: lg.alphaNet >= 0 ? '#15803d' : '#cf1322' }}>
+                            {lg.alphaNet >= 0 ? `跑赢SOP +¥${money(lg.alphaNet)}` : `情绪损耗 -¥${money(Math.abs(lg.alphaNet))}`}
+                          </b>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 第四行：反思心得（不省略截断，完整呈现） */}
+                  {(lg.reflection || lg.note) && (
+                    <div className="llc-note">
+                      📝 {lg.reflection || lg.note}
+                    </div>
+                  )}
+
+                  {/* 第五行：底部单手大拇指操作区 */}
+                  <div className="llc-foot">
+                    <span style={{ fontSize: '11px', color: 'var(--mute)' }}>
+                      依据：{lg.basis || '客观信号'}
+                    </span>
+                    <div className="llc-actions">
+                      {onUpdateLog && (
+                        <button
+                          type="button"
+                          className="llc-btn-review"
+                          onClick={() => openEditLogModal(lg)}
+                        >
+                          ✏️ 复盘打标
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className={`llc-btn-del ${isConfirmingDel ? 'confirm' : ''}`}
+                        onClick={() => requestDeleteLog(lg.id)}
+                      >
+                        {isConfirmingDel ? '确认删除?' : '删除'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div style={{ textAlign: 'center', padding: '28px 16px', color: 'var(--mute)', background: 'var(--surface)', borderRadius: '10px', border: '1px dashed var(--line)' }}>
+              暂无符合条件的交易流水记录。
+            </div>
+          )}
+        </div>
+
+        {/* 📋 桌面端 12 列完整专业宽表（桌面默认开启，窄屏也可手动切换查看） */}
+        <div className={`tbl-scroll ledger-table-wrap mode-${logViewMode}`} style={{ maxHeight: '440px' }}>
           <table>
             <thead>
               <tr>
@@ -936,6 +1143,7 @@ export default function LedgerSection({
                     return item ? `${item.icon} ${item.name}` : id;
                   });
                   const dScore = lg.disciplineScore ?? 100;
+                  const isConfirmingDel = confirmDeleteId === lg.id;
 
                   return (
                     <tr key={lg.id}>
@@ -957,7 +1165,7 @@ export default function LedgerSection({
                           {lg.track === 'short_swing' ? '⚡ 短线攻防' : '🛡️ 长线做T'}
                         </span>
                       </td>
-                      <td style={{ fontWeight: 700 }}>{lg.stock}</td>
+                      <td style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{lg.stock}</td>
                       <td>
                         <span className={`pill ${
                           (lg.dir || '').includes('买') || (lg.dir || '').includes('正T') || (lg.dir || '').includes('潜伏') ? 'p-buy' : 'p-sell'
@@ -997,7 +1205,7 @@ export default function LedgerSection({
                       </td>
                       <td>
                         {lg.systemBenchmark ? (
-                          <div style={{ fontSize: '11px', lineHeight: 1.35 }}>
+                          <div style={{ fontSize: '11px', lineHeight: 1.35, whiteSpace: 'nowrap' }}>
                             <div style={{ color: 'var(--sub)' }}>
                               SOP买 <b>{f2(lg.systemBenchmark.sysBuy)}</b>
                               {lg.buyDevPct != null && (
@@ -1026,20 +1234,26 @@ export default function LedgerSection({
                             <button
                               type="button"
                               className="mini"
-                              onClick={() => setEditingLog({
-                                ...lg,
-                                mistakeTags: Array.isArray(lg.mistakeTags) ? [...lg.mistakeTags] : [],
-                                reflection: lg.reflection || '',
-                                plan: lg.plan || '计划内',
-                                track: lg.track || 'long_t',
-                              })}
-                              style={{ color: '#0958d9' }}
+                              onClick={() => openEditLogModal(lg)}
+                              style={{ color: '#0958d9', marginLeft: 0 }}
                               title="补充或修改本笔成交的失误归因标签与复盘心得"
                             >
                               复盘
                             </button>
                           )}
-                          <button type="button" className="mini" onClick={() => onDeleteLog(lg.id)} style={{ color: 'var(--up)' }}>删除</button>
+                          <button
+                            type="button"
+                            className="mini"
+                            onClick={() => requestDeleteLog(lg.id)}
+                            style={{
+                              marginLeft: 0,
+                              color: isConfirmingDel ? '#fff' : 'var(--up)',
+                              background: isConfirmingDel ? '#cf1322' : '#fff',
+                              borderColor: isConfirmingDel ? '#cf1322' : 'var(--line)'
+                            }}
+                          >
+                            {isConfirmingDel ? '确认删?' : '删除'}
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -1057,22 +1271,22 @@ export default function LedgerSection({
         </div>
       </section>
 
-      {/* ✏️ 单笔成交复盘打标与反思编辑弹窗 */}
+      {/* ✏️ 单笔成交复盘打标与反思编辑弹窗（移动端自动贴底抽屉 + 大拇指归因胶囊） */}
       {editingLog && (
         <div className="modal-mask" onClick={() => setEditingLog(null)}>
-          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '540px', width: '92%' }}>
+          <div className="modal-box ledger-modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '540px' }}>
             <div className="modal-hd">
               <h3 style={{ margin: 0 }}>✏️ 复盘归因与心得编辑 · {editingLog.stock}</h3>
               <button className="modal-close" onClick={() => setEditingLog(null)}>×</button>
             </div>
-            <form onSubmit={handleSaveEditLog}>
+            <form onSubmit={handleSaveEditLog} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
               <div className="modal-bd" style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '12.5px' }}>
                 <div style={{ padding: '8px 10px', borderRadius: '6px', background: 'var(--surface2)', fontSize: '12px', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
                   <span><b>{editingLog.date} {editingLog.time || ''}</b> · {editingLog.dir} {editingLog.qty}股</span>
                   <span>买 ¥{f2(editingLog.buy)} / 卖 {editingLog.sell > 0 ? `¥${f2(editingLog.sell)}` : '—'} ｜ 净额 <b>{editingLog.net >= 0 ? '+' : ''}¥{money(editingLog.net)}</b></span>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div className="ledger-form-grid-2">
                   <div className="fld">
                     <label style={{ fontWeight: 600 }}>交易轨制归属</label>
                     <select
@@ -1096,14 +1310,15 @@ export default function LedgerSection({
                 </div>
 
                 <div className="fld">
-                  <label style={{ fontWeight: 600 }}>失误归因标签（点击切换勾选）</label>
-                  <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', marginTop: '6px' }}>
+                  <label style={{ fontWeight: 600 }}>失误归因标签（单手轻点即可切换勾选）</label>
+                  <div className="ledger-mistake-picker">
                     {MISTAKE_DICTIONARY.map(m => {
                       const selected = (editingLog.mistakeTags || []).includes(m.id);
                       return (
                         <button
                           key={m.id}
                           type="button"
+                          className={`ledger-mistake-btn ${selected ? 'selected' : ''}`}
                           onClick={() => {
                             setEditingLog(prev => {
                               const cur = prev.mistakeTags || [];
@@ -1112,16 +1327,6 @@ export default function LedgerSection({
                                 mistakeTags: cur.includes(m.id) ? cur.filter(x => x !== m.id) : [...cur, m.id]
                               };
                             });
-                          }}
-                          style={{
-                            padding: '4px 9px',
-                            fontSize: '11.5px',
-                            borderRadius: '5px',
-                            border: selected ? '1px solid #cf1322' : '1px solid var(--line)',
-                            background: selected ? '#fff1f0' : 'var(--surface)',
-                            color: selected ? '#cf1322' : 'var(--sub)',
-                            fontWeight: selected ? 700 : 400,
-                            cursor: 'pointer'
                           }}
                           title={m.desc}
                         >
@@ -1139,11 +1344,11 @@ export default function LedgerSection({
                     value={editingLog.reflection}
                     onChange={e => setEditingLog(prev => ({ ...prev, reflection: e.target.value }))}
                     placeholder="记录本笔买卖当时的心理活动、盘口观察与下次改进要点…"
-                    style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '12.5px' }}
+                    className="ledger-textarea"
                   />
                 </div>
               </div>
-              <div className="modal-ft" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', padding: '10px 14px', borderTop: '1px solid var(--line)' }}>
+              <div className="modal-ft ledger-modal-ft">
                 <button type="button" className="btn-cancel" onClick={() => setEditingLog(null)}>取消</button>
                 <button type="submit" className="primary">保存复盘归因</button>
               </div>
@@ -1155,7 +1360,7 @@ export default function LedgerSection({
       {/* 🤖 双模复盘教练诊断弹窗（内置零延迟量化规则教练 + 天翼云大模型） */}
       {showCoachModal && (
         <div className="modal-mask" onClick={() => setShowCoachModal(false)}>
-          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '800px', width: '92%' }}>
+          <div className="modal-box ledger-modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '800px' }}>
             <div className="modal-hd" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '20px' }}>🤖</span>
@@ -1168,30 +1373,31 @@ export default function LedgerSection({
                   color: hasAiKey ? '#1d4ed8' : '#15803d',
                   border: `1px solid ${hasAiKey ? '#bfdbfe' : '#86efac'}`
                 }}>
-                  {hasAiKey ? `双引擎就绪：大模型 (${aiConfig.model}) + 量化规则引擎` : '⚡ 内置量化规则教练就绪（免API密钥）'}
+                  {hasAiKey ? `双引擎：${aiConfig.model} + 量化规则` : '⚡ 内置量化规则教练就绪'}
                 </span>
               </div>
               <button className="modal-close" onClick={() => setShowCoachModal(false)}>×</button>
             </div>
 
-            <div className="modal-bd" style={{ maxHeight: '72vh', overflowY: 'auto', padding: '16px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '10px', background: 'var(--surface2)', padding: '10px', borderRadius: '8px', marginBottom: '14px' }}>
+            <div className="modal-bd" style={{ padding: '16px' }}>
+              <div className="ledger-coach-inputs">
                 <div>
                   <label style={{ fontSize: '11.5px', color: 'var(--mute)', display: 'block', marginBottom: '4px' }}>复盘日期</label>
                   <input
                     type="date"
                     value={coachDate}
                     onChange={e => setCoachDate(e.target.value)}
-                    style={{ width: '100%', padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--line)' }}
+                    style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: '1px solid var(--line)' }}
                   />
                 </div>
                 <div>
                   <label style={{ fontSize: '11.5px', color: 'var(--mute)', display: 'block', marginBottom: '4px' }}>交易员整体心态备注（可选补充）</label>
                   <input
+                    type="text"
                     value={coachNotes}
                     onChange={e => setCoachNotes(e.target.value)}
                     placeholder="如：早盘脉冲没忍住追了一笔，午后按均线做T挽回部分损耗..."
-                    style={{ width: '100%', padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--line)' }}
+                    style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: '1px solid var(--line)' }}
                   />
                 </div>
               </div>
@@ -1217,13 +1423,13 @@ export default function LedgerSection({
               </div>
 
               {/* 双模触发按钮 */}
-              <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', flexWrap: 'wrap', margin: '14px 0' }}>
+              <div className="ledger-coach-btns">
                 <button
                   type="button"
                   onClick={() => handleRunCoach('rule')}
                   disabled={coachLoading || !enrichedAllLogs.filter(l => l.date === coachDate).length}
                   style={{
-                    padding: '8px 18px',
+                    padding: '9px 16px',
                     fontSize: '13px',
                     fontWeight: 700,
                     borderRadius: '7px',
@@ -1233,7 +1439,7 @@ export default function LedgerSection({
                     cursor: coachLoading ? 'not-allowed' : 'pointer'
                   }}
                 >
-                  ⚡ 秒级量化规则诊断（免Key本地算力）
+                  ⚡ 秒级量化规则诊断（免Key）
                 </button>
                 <button
                   type="button"
@@ -1241,7 +1447,7 @@ export default function LedgerSection({
                   onClick={() => handleRunCoach('auto')}
                   disabled={coachLoading || !enrichedAllLogs.filter(l => l.date === coachDate).length}
                   style={{
-                    padding: '8px 20px',
+                    padding: '9px 18px',
                     fontSize: '13px',
                     fontWeight: 700,
                     borderRadius: '7px',
@@ -1255,12 +1461,12 @@ export default function LedgerSection({
                     ? '⏳ 正在深度切片复盘中…'
                     : hasAiKey
                     ? `🧠 启动大模型深度复盘 (${aiConfig.model})`
-                    : '🚀 一键智能复盘（未填Key自动启用量化教练）'}
+                    : '🚀 一键智能复盘（自动量化教练）'}
                 </button>
               </div>
 
               {coachReviewResult && (
-                <div style={{ marginTop: '16px', background: '#fdfdfe', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '16px', lineHeight: 1.65 }}>
+                <div style={{ marginTop: '16px', background: '#fdfdfe', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '14px', lineHeight: 1.65 }}>
                   {coachReviewResult.fallbackReason && (
                     <div style={{ marginBottom: '10px', padding: '6px 10px', borderRadius: '6px', background: '#fffbeb', border: '1px solid #fcd34d', color: '#92400e', fontSize: '11.5px' }}>
                       ℹ️ {coachReviewResult.fallbackReason}
@@ -1276,7 +1482,7 @@ export default function LedgerSection({
                     <button
                       type="button"
                       onClick={() => { copyPlain(coachReviewResult.review, '诊断书已复制到剪贴板！'); }}
-                      style={{ padding: '3px 8px', fontSize: '11px' }}
+                      style={{ padding: '4px 10px', fontSize: '11.5px' }}
                     >
                       📋 复制诊断书
                     </button>
@@ -1294,7 +1500,7 @@ export default function LedgerSection({
       {/* ⚙️ 天翼云大模型配置 Modal */}
       {showSettingsModal && (
         <div className="modal-mask" onClick={() => setShowSettingsModal(false)}>
-          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '520px' }}>
+          <div className="modal-box ledger-modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '520px' }}>
             <div className="modal-hd">
               <h3>⚙️ AI 交易复盘教练大模型配置</h3>
               <button className="modal-close" onClick={() => setShowSettingsModal(false)}>×</button>
@@ -1307,6 +1513,7 @@ export default function LedgerSection({
               <div>
                 <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>大模型接口地址 (API URL)</label>
                 <input
+                  type="text"
                   value={aiConfig.apiUrl}
                   onChange={e => setAiConfig(prev => ({ ...prev, apiUrl: e.target.value }))}
                   placeholder="https://ai.ctaigw.cn/v1/chat/completions"
@@ -1328,6 +1535,7 @@ export default function LedgerSection({
               <div>
                 <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>模型标识 (Model)</label>
                 <input
+                  type="text"
                   value={aiConfig.model}
                   onChange={e => setAiConfig(prev => ({ ...prev, model: e.target.value }))}
                   placeholder="deepseek-chat 或 qwen-plus"
@@ -1349,14 +1557,14 @@ export default function LedgerSection({
               )}
             </div>
 
-            <div className="modal-ft" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderTop: '1px solid var(--line)' }}>
+            <div className="modal-ft" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', padding: '10px 14px', borderTop: '1px solid var(--line)' }}>
               <button
                 type="button"
                 onClick={handleTestAi}
                 disabled={testingAi}
-                style={{ fontSize: '12px', padding: '4px 12px' }}
+                style={{ fontSize: '12px', padding: '5px 12px' }}
               >
-                {testingAi ? '⏳ 正在测试连接…' : '⚡ 一键测试连通性'}
+                {testingAi ? '⏳ 测试连接中…' : '⚡ 测试连通性'}
               </button>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button type="button" className="btn-cancel" onClick={() => setShowSettingsModal(false)}>取消</button>
@@ -1376,16 +1584,16 @@ export default function LedgerSection({
         </div>
       )}
 
-      {/* ＋ 新增台账 Modal */}
+      {/* ＋ 新增台账 Modal（新增自选池一键选股筹码 + SOP 价格/手数一键点填） */}
       {showAddModal && (
         <div className="modal-mask" onClick={() => setShowAddModal(false)}>
-          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '580px', width: '92%' }}>
+          <div className="modal-box ledger-modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '580px' }}>
             <div className="modal-hd">
               <h3 style={{ margin: 0 }}>＋ 手工新增交易台账记录</h3>
               <button className="modal-close" onClick={() => setShowAddModal(false)}>×</button>
             </div>
-            <form onSubmit={handleSubmit}>
-              <div className="modal-bd" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '12.5px', maxHeight: '72vh', overflowY: 'auto' }}>
+            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+              <div className="modal-bd ledger-add-bd">
                 <div className="fld" style={{ gridColumn: '1 / -1' }}>
                   <label style={{ fontWeight: 700 }}>交易轨制定位</label>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '4px' }}>
@@ -1393,7 +1601,7 @@ export default function LedgerSection({
                       type="button"
                       onClick={() => handleFormChange('track', 'long_t')}
                       style={{
-                        padding: '7px 10px',
+                        padding: '8px 10px',
                         borderRadius: '6px',
                         border: form.track === 'long_t' ? '2px solid #0369a1' : '1px solid var(--line)',
                         background: form.track === 'long_t' ? '#f0f9ff' : 'var(--surface)',
@@ -1408,7 +1616,7 @@ export default function LedgerSection({
                       type="button"
                       onClick={() => handleFormChange('track', 'short_swing')}
                       style={{
-                        padding: '7px 10px',
+                        padding: '8px 10px',
                         borderRadius: '6px',
                         border: form.track === 'short_swing' ? '2px solid #7c3aed' : '1px solid var(--line)',
                         background: form.track === 'short_swing' ? '#faf5ff' : 'var(--surface)',
@@ -1428,13 +1636,35 @@ export default function LedgerSection({
                 </div>
                 <div className="fld">
                   <label>交易标的</label>
-                  <input value={form.stock} onChange={e => handleFormChange('stock', e.target.value)} placeholder="如：上海沿浦 (605128)" required />
+                  <input type="text" value={form.stock} onChange={e => handleFormChange('stock', e.target.value)} placeholder="如：上海沿浦 (605128)" required />
                 </div>
 
+                {/* 单手快捷选股：从自选/持仓池一键填入，免去手机端切换括号与数字键盘 */}
+                {pool.length > 0 && (
+                  <div style={{ gridColumn: '1 / -1', marginTop: '-4px' }}>
+                    <div className="qt-quick-chips" style={{ flexWrap: 'nowrap', overflowX: 'auto', paddingBottom: '2px' }}>
+                      {pool.map(p => {
+                        const label = `${p.name} (${p.code})`;
+                        const isCur = form.stock === label;
+                        return (
+                          <button
+                            key={p.code}
+                            type="button"
+                            className={`qt-chip ${isCur ? 'accent' : ''}`}
+                            onClick={() => handleFormChange('stock', label)}
+                          >
+                            {p.shares > 0 ? '持·' : ''}{p.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 {matchedSysBenchmark && (
-                  <div style={{ gridColumn: '1 / -1', padding: '6px 10px', borderRadius: '5px', background: '#f0fdf4', border: '1px solid #86efac', color: '#15803d', fontSize: '11.5px', lineHeight: 1.4 }}>
-                    🎯 <b>已自动匹配【{matchedSysBenchmark.source}】量化点位</b>：
-                    推荐买价 <b>¥{f2(matchedSysBenchmark.sysBuy)}</b> ｜ 止盈1 <b>¥{f2(matchedSysBenchmark.sysSell1)}</b> ｜ 止损红线 <b>¥{f2(matchedSysBenchmark.sysStop)}</b>
+                  <div style={{ gridColumn: '1 / -1', padding: '7px 10px', borderRadius: '6px', background: '#f0fdf4', border: '1px solid #86efac', color: '#15803d', fontSize: '11.5px', lineHeight: 1.45 }}>
+                    🎯 <b>已匹配【{matchedSysBenchmark.source}】量化点位</b>：
+                    买价 <b>¥{f2(matchedSysBenchmark.sysBuy)}</b> ｜ 止盈1 <b>¥{f2(matchedSysBenchmark.sysSell1)}</b> ｜ 止损 <b>¥{f2(matchedSysBenchmark.sysStop)}</b>
                   </div>
                 )}
 
@@ -1468,15 +1698,14 @@ export default function LedgerSection({
                 </div>
                 <div className="fld">
                   <label>成交股数</label>
-                  <input type="number" step="100" value={form.qty} onChange={e => handleFormChange('qty', e.target.value)} required />
-                </div>
-                <div className="fld">
-                  <label>买入价 (元)</label>
-                  <input type="number" step="0.01" value={form.buy} onChange={e => handleFormChange('buy', e.target.value)} required />
-                </div>
-                <div className="fld">
-                  <label>卖出价 (元)</label>
-                  <input type="number" step="0.01" value={form.sell} onChange={e => handleFormChange('sell', e.target.value)} required />
+                  <input type="number" inputMode="numeric" step="100" value={form.qty} onChange={e => handleFormChange('qty', e.target.value)} required />
+                  <div className="qt-quick-chips">
+                    {[100, 300, 500, 1000].map(q => (
+                      <button key={q} type="button" className="qt-chip" onClick={() => handleFormChange('qty', String(q))}>
+                        {q}股
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 <div className="fld">
                   <label>决策依据</label>
@@ -1487,27 +1716,47 @@ export default function LedgerSection({
                     <option value="主观判断">主观盘感 / 消息驱动</option>
                   </select>
                 </div>
+                <div className="fld">
+                  <label>买入价 (元)</label>
+                  <input type="number" inputMode="decimal" step="0.01" value={form.buy} onChange={e => handleFormChange('buy', e.target.value)} required />
+                  {matchedSysBenchmark?.sysBuy > 0 && (
+                    <div className="qt-quick-chips">
+                      <button type="button" className="qt-chip buy" onClick={() => handleFormChange('buy', f2(matchedSysBenchmark.sysBuy))}>
+                        SOP买 {f2(matchedSysBenchmark.sysBuy)}
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <div className="fld">
+                  <label>卖出价 (元)</label>
+                  <input type="number" inputMode="decimal" step="0.01" value={form.sell} onChange={e => handleFormChange('sell', e.target.value)} required />
+                  {matchedSysBenchmark && (
+                    <div className="qt-quick-chips">
+                      {matchedSysBenchmark.sysSell1 > 0 && (
+                        <button type="button" className="qt-chip sell" onClick={() => handleFormChange('sell', f2(matchedSysBenchmark.sysSell1))}>
+                          止盈 {f2(matchedSysBenchmark.sysSell1)}
+                        </button>
+                      )}
+                      {matchedSysBenchmark.sysStop > 0 && (
+                        <button type="button" className="qt-chip" onClick={() => handleFormChange('sell', f2(matchedSysBenchmark.sysStop))}>
+                          止损 {f2(matchedSysBenchmark.sysStop)}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
 
                 <div className="fld" style={{ gridColumn: '1 / -1' }}>
                   <label style={{ fontWeight: 600 }}>失误归因标签（可多选，未勾选项也会按盘口点位自动审计）</label>
-                  <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', marginTop: '4px' }}>
+                  <div className="ledger-mistake-picker">
                     {MISTAKE_DICTIONARY.map(m => {
                       const selected = form.mistakeTags.includes(m.id);
                       return (
                         <button
                           key={m.id}
                           type="button"
+                          className={`ledger-mistake-btn ${selected ? 'selected' : ''}`}
                           onClick={() => toggleMistakeTag(m.id)}
-                          style={{
-                            padding: '3px 8px',
-                            fontSize: '11px',
-                            borderRadius: '4px',
-                            border: selected ? '1px solid #cf1322' : '1px solid var(--line)',
-                            background: selected ? '#fff1f0' : 'var(--surface)',
-                            color: selected ? '#cf1322' : 'var(--sub)',
-                            fontWeight: selected ? 700 : 400,
-                            cursor: 'pointer'
-                          }}
                           title={m.desc}
                         >
                           {m.icon} {m.name}
@@ -1524,11 +1773,11 @@ export default function LedgerSection({
                     value={form.reflection}
                     onChange={e => handleFormChange('reflection', e.target.value)}
                     placeholder="如：严格等缩量回踩第一买点挂单成交，冲高第一目标位果断止盈..."
-                    style={{ width: '100%', padding: '6px 8px', borderRadius: '4px', border: '1px solid var(--line)', fontSize: '12px' }}
+                    className="ledger-textarea"
                   />
                 </div>
               </div>
-              <div className="modal-ft" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', padding: '10px 14px', borderTop: '1px solid var(--line)' }}>
+              <div className="modal-ft ledger-modal-ft">
                 <button type="button" className="btn-cancel" onClick={() => setShowAddModal(false)}>取消</button>
                 <button type="submit" className="primary">确认入账</button>
               </div>

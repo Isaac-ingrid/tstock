@@ -171,6 +171,18 @@ def _detect_mystic_clusters(
                 "ztCount": zt_cnt,
                 "maxLbc": max_lbc,
                 "leader": st_list[0]["name"] if st_list else "",
+                "leaders": [
+                    {
+                        "code": x["code"],
+                        "name": x["name"],
+                        "lbc": x.get("lbc", 1),
+                        "hybk": x.get("hybk", ""),
+                        "price": x.get("price", 0.0),
+                        "chg": x.get("chg", 0.0),
+                        "statTag": f"{x.get('lbc', 1)}连板" if x.get("lbc", 1) > 1 else "首板",
+                    }
+                    for x in st_list[:12]
+                ],
                 "isAuto": info["isAuto"],
                 "codes": [x["code"] for x in st_list],
             })
@@ -1649,6 +1661,11 @@ async def build_strong_herd_and_themes(
             bk["chg"] * 3.0 + zt_cnt * 6.0 + qs_cnt * 2.5 + max(0.0, bk["netFlow"] / 2.0e8) + min(12.0, (leader["lbc"] or 0) * 3.0),
             1,
         )
+        sorted_members = sorted(
+            members,
+            key=lambda m: (1 if m["isLimitUp"] else 0, m["lbc"], m["chg"], m["amount"]),
+            reverse=True,
+        )[:12]
         theme_cards.append({
             "name": bk["name"],
             "bkCode": bk["bkCode"],
@@ -1667,6 +1684,7 @@ async def build_strong_herd_and_themes(
                 "phaseCore": phase_c,
                 "capacityCore": cap_c,
             },
+            "stocks": sorted_members,
         })
 
     # 同步从 ZTPool + QSPool 的主板行业方向补充前排实体主线（例如汽车零部 11涨停、通用设备 5涨停）
@@ -1703,6 +1721,11 @@ async def build_strong_herd_and_themes(
         tot_amt = sum(m["amount"] for m in members)
         avg_chg = round(sum(m["chg"] for m in members) / len(members), 2)
         t_score = round(zt_cnt * 7.5 + qs_cnt * 3.0 + min(15.0, tot_amt / 1.5e9) + (leader["lbc"] or 0) * 3.0, 1)
+        sorted_hy_members = sorted(
+            members,
+            key=lambda m: (1 if m["isLimitUp"] else 0, m["lbc"], m["chg"], m["amount"]),
+            reverse=True,
+        )[:12]
         theme_cards.append({
             "name": hy_name,
             "bkCode": "",
@@ -1720,6 +1743,7 @@ async def build_strong_herd_and_themes(
                 "phaseCore": phase_c,
                 "capacityCore": cap_c,
             },
+            "stocks": sorted_hy_members,
         })
 
     theme_cards.sort(key=lambda t: (-t["ztCount"], -t["themeScore"]))
