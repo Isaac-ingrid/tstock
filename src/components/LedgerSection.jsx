@@ -1,19 +1,20 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { f2, money, pct, todayStr, toast, toastOk, toastErr, copyPlain } from '../services/utils.js';
-import { fetchCoachConfig, testCoachConnection, fetchCoachReview } from '../services/api.js';
+import { f2, money, todayStr, toastOk, toastErr, copyPlain } from '../services/utils.js';
+import { fetchCoachConfig, testCoachConnection, fetchCoachReview, MKT } from '../services/api.js';
+import { resolveSystemBenchmark, auditTradeExecution, computeDisciplineScorecard } from '../services/ledger.js';
 
 /* 结构化交易失误归因基因字典 */
 export const MISTAKE_DICTIONARY = [
-  { id: 'fomo_chase', category: '买入心理', name: '追高天花板', icon: '🚀', desc: '未等缩量回踩，看到分时拉升冲动追买在全天最高位' },
-  { id: 'no_stoploss', category: '纪律执行', name: '破位死扛不认输', icon: '🛡️', desc: '触及纪律止损位或跌破均价线心存侥幸不斩仓，被动躺平' },
+  { id: 'fomo_chase', category: '买入心理', name: '追高天花板', icon: '🚀', desc: '未等缩量回踩，看到分时拉升冲动追买在全天高位或越过倒T高抛线' },
+  { id: 'no_stoploss', category: '纪律执行', name: '破位死扛不认输', icon: '🛡️', desc: '触及纪律止损位心存侥幸不斩仓，亏损扩大后才被迫割肉' },
   { id: 't_to_add', category: '定位混乱', name: '做T做反变加仓', icon: '🔄', desc: '正T买入后未冲高，尾盘舍不得平仓导致日内T仓变成隔夜加仓' },
-  { id: 'early_exit', category: '持股耐心', name: '过早卖飞大肉', icon: '🕊️', desc: '分时均线平稳未破，刚涨 1% 就恐慌抛光，错失后续大波段' },
-  { id: 'against_trend', category: '大局观', name: '逆市顶风作案', icon: '🚨', desc: '大盘环境已亮红灯 BAD（双破 MA20），仍强行开仓做多' },
-  { id: 'heavy_gamble', category: '仓位控制', name: '短线重仓单赌', icon: '💣', desc: '超过系统建议的 10% 顶格仓位，单票重仓导致心理严重变形' },
-  { id: 'impulse_t', category: '节奏失序', name: '无量冲动乱T', icon: '⚡', desc: '无关键支撑压力位、量比平平无奇时频繁开仓磨损手续费' },
-  { id: 'revenge_trade', category: '心态失衡', name: '报复性交易', icon: '💢', desc: '前一笔刚亏损，急于回本立刻盲目开新仓' },
+  { id: 'early_exit', category: '持股耐心', name: '过早卖飞大肉', icon: '🕊️', desc: '分时均线平稳未破，远低于第一止盈位就恐慌抛光，错失日内主波段' },
+  { id: 'against_trend', category: '大局观', name: '逆市顶风作案', icon: '🚨', desc: '大盘环境亮红灯 BAD（双破 MA20/60）或个股触发破位锁时强行做多' },
+  { id: 'heavy_gamble', category: '仓位控制', name: '短线重仓单赌', icon: '💣', desc: '单笔短线仓位过重，导致盘中心态严重变形' },
+  { id: 'impulse_t', category: '节奏失序', name: '无量冲动乱T', icon: '⚡', desc: '日内振幅不足 2.6 格、无量织布时强行开仓磨损手续费' },
+  { id: 'revenge_trade', category: '心态失衡', name: '报复性交易', icon: '💢', desc: '当日连续亏损后急于翻本，盲目逆向高频开新仓' },
   { id: 'lone_wolf', category: '共振失误', name: '孤狼单打一日游', icon: '🐺', desc: '板块或同字辈宗族无跟风，单兵脉冲自拉自唱，次日熄火被套' },
-  { id: 'late_chase', category: '节奏失序', name: '滞后接盘高潮棒', icon: '⏰', desc: '全网明牌高潮狂欢时才后知后觉追高，刚好接在主力分歧出货末端' },
+  { id: 'late_chase', category: '节奏失序', name: '滞后接盘高潮棒', icon: '⏰', desc: '全网明牌高潮狂欢时才后知后觉追高，接在主力分歧出货末端' },
 ];
 
 const LOCAL_AI_KEY = 'tstock_ai_coach_config';
@@ -22,8 +23,13 @@ export default function LedgerSection({
   logs = [],
   wbLatest = null,
   onAddLog,
+  onUpdateLog,
   onDeleteLog,
   pool = [],
+  totalAssets = 100000,
+  vaultStatus = null,
+  onForceSyncVault,
+  onRestoreVault,
   onExport,
   onImportClick
 }) {
@@ -32,6 +38,7 @@ export default function LedgerSection({
   const [showAddModal, setShowAddModal] = useState(false);
   const [showCoachModal, setShowCoachModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [editingLog, setEditingLog] = useState(null);
   const [selectedChartStock, setSelectedChartStock] = useState('ALL');
   const [hoverIdx, setHoverIdx] = useState(null);
 
@@ -47,15 +54,19 @@ export default function LedgerSection({
   const [testResult, setTestResult] = useState(null);
 
   // AI 复盘对话状态
-  const [coachDate, setCoachDate] = useState(todayStr());
+  const [coachDate, setCoachDate] = useState(() => {
+    const today = todayStr();
+    if ((logs || []).some(l => l.date === today)) return today;
+    return (logs && logs[0]?.date) || today;
+  });
   const [coachNotes, setCoachNotes] = useState('');
   const [coachLoading, setCoachLoading] = useState(false);
   const [coachReviewResult, setCoachReviewResult] = useState(null);
 
-  // 表单状态
+  // 手工记账表单状态
   const [form, setForm] = useState({
     date: todayStr(),
-    track: 'long_t', // 'long_t' | 'short_swing'
+    track: 'long_t',
     stock: pool.length ? `${pool[0].name} (${pool[0].code})` : '',
     dir: '正T',
     buy: '',
@@ -96,6 +107,8 @@ export default function LedgerSection({
     });
   }, []);
 
+  const hasAiKey = Boolean((aiConfig.apiKey && aiConfig.apiKey.trim()) || aiConfig.configuredInEnv);
+
   const handleSaveAiConfig = (newCfg) => {
     setAiConfig(prev => ({ ...prev, ...newCfg }));
     try {
@@ -125,17 +138,42 @@ export default function LedgerSection({
     }
   };
 
-  const handleRunCoach = async () => {
-    const targetTrades = (logs || []).filter(l => l.date === coachDate);
+  // 全量流水自动回溯补齐人机基准、偏离度与四维纪律评分
+  const fullScorecard = useMemo(
+    () => computeDisciplineScorecard(logs, pool, wbLatest),
+    [logs, pool, wbLatest]
+  );
+
+  const enrichedAllLogs = fullScorecard.enrichedLogs;
+
+  // 按轨制筛选流水
+  const filteredLogs = useMemo(() => {
+    return enrichedAllLogs.filter(lg => {
+      const track = lg.track || 'long_t';
+      if (activeTrackTab === 'long_t') return track === 'long_t';
+      if (activeTrackTab === 'short_swing') return track === 'short_swing';
+      return true;
+    });
+  }, [enrichedAllLogs, activeTrackTab]);
+
+  // 当前视图下的四维纪律评分卡
+  const scorecard = useMemo(
+    () => computeDisciplineScorecard(filteredLogs, pool, wbLatest),
+    [filteredLogs, pool, wbLatest]
+  );
+
+  const handleRunCoach = async (mode = 'auto') => {
+    const targetTrades = enrichedAllLogs.filter(l => l.date === coachDate);
     if (!targetTrades.length) {
-      toastErr(`日期 ${coachDate} 暂无任何成交流水记录，请先录入该日的交易！`);
+      toastErr(`日期 ${coachDate} 暂无任何成交流水记录，请先完成或录入该日交易！`);
       return;
     }
 
     setCoachLoading(true);
     setCoachReviewResult(null);
     try {
-      const marketEnv = wbLatest?.env || { level: 'OK', text: '大盘平稳' };
+      const liveGate = MKT?.gate ? { level: MKT.gate.level, text: String(MKT.gate.title || '').replace(/<[^>]+>/g, '') } : null;
+      const marketEnv = wbLatest?.env || liveGate || { level: 'OK', text: '大盘平稳' };
       const res = await fetchCoachReview({
         trades: targetTrades,
         date: coachDate,
@@ -143,65 +181,30 @@ export default function LedgerSection({
         userNotes: coachNotes,
         apiKey: aiConfig.apiKey,
         apiUrl: aiConfig.apiUrl,
-        model: aiConfig.model
+        model: aiConfig.model,
+        mode,
       });
       setCoachReviewResult(res);
-      toastOk('AI 复盘诊断书已生成！');
+      toastOk(res.engine === 'llm' ? '🧠 大模型深度复盘诊断书已生成！' : '⚡ 量化规则复盘诊断书已秒级生成！');
     } catch (err) {
-      toastErr(err.message || 'AI 复盘生成失败');
+      toastErr(err.message || '复盘报告生成失败');
     } finally {
       setCoachLoading(false);
     }
   };
 
-  // 标的匹配系统标准点位
+  // 手工录入表单实时匹配系统标准点位（使用统一 calc 引擎）
   const matchedSysBenchmark = useMemo(() => {
     if (!form.stock) return null;
-    const cleanStock = form.stock.replace(/[()（）\s]/g, '');
-    
-    // 1. 优先查当期做T候选池
-    const cands = wbLatest?.candidates || [];
-    const hitCand = cands.find(c => cleanStock.includes(c.code) || cleanStock.includes(c.name));
-    if (hitCand) {
-      return {
-        source: '做T短线候选',
-        sysBuy: hitCand.buy || hitCand.buyLo || hitCand.price,
-        sysSell1: hitCand.sell1 || hitCand.target || +(hitCand.price * 1.025).toFixed(2),
-        sysSell2: hitCand.sell2 || +(hitCand.price * 1.045).toFixed(2),
-        sysStop: hitCand.stop || +(hitCand.price * 0.985).toFixed(2),
-        verdict: hitCand.verdict || '可做'
-      };
-    }
-
-    // 2. 查尾盘黑马
-    const tails = wbLatest?.tail || [];
-    const hitTail = tails.find(t => cleanStock.includes(t.code) || cleanStock.includes(t.name));
-    if (hitTail) {
-      return {
-        source: '尾盘黑马',
-        sysBuy: hitTail.price,
-        sysSell1: hitTail.sell1 || +(hitTail.price * 1.025).toFixed(2),
-        sysSell2: hitTail.sell2 || +(hitTail.price * 1.045).toFixed(2),
-        sysStop: hitTail.stop || +(hitTail.price * 0.985).toFixed(2),
-        verdict: hitTail.verdict || '可挂'
-      };
-    }
-
-    // 3. 查自选池底仓参考价
-    const hitPool = pool.find(p => cleanStock.includes(p.code) || cleanStock.includes(p.name));
-    if (hitPool) {
-      return {
-        source: '自选底仓',
-        sysBuy: hitPool.bePrice || hitPool.cost || 0,
-        sysSell1: hitPool.targetPrice || +(hitPool.cost * 1.03).toFixed(2),
-        sysSell2: +(hitPool.cost * 1.05).toFixed(2),
-        sysStop: hitPool.stopLoss || +(hitPool.cost * 0.985).toFixed(2),
-        verdict: '底仓持仓'
-      };
-    }
-
-    return null;
-  }, [form.stock, wbLatest, pool]);
+    const { benchmark } = resolveSystemBenchmark({
+      stockText: form.stock,
+      dir: form.dir,
+      qty: parseInt(form.qty, 10) || 500,
+      wbLatest,
+      poolList: pool,
+    });
+    return benchmark;
+  }, [form.stock, form.dir, form.qty, wbLatest, pool]);
 
   const handleFormChange = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
 
@@ -223,7 +226,7 @@ export default function LedgerSection({
     const s = parseFloat(form.sell) || 0;
     const q = parseInt(form.qty, 10) || 0;
     if (b <= 0 || s <= 0 || q <= 0) {
-      alert('请输入正确的买卖价格与股数');
+      toastErr('请输入正确的买卖价格与股数');
       return;
     }
     const gross = (s - b) * q;
@@ -232,26 +235,28 @@ export default function LedgerSection({
     const fee = Math.round((buyFee + sellFee) * 100) / 100;
     const net = Math.round((gross - fee) * 100) / 100;
 
-    // 计算系统理论基准净收益对比
-    let sysBenchmark = null;
-    let alphaNet = 0;
-    if (matchedSysBenchmark && matchedSysBenchmark.sysBuy > 0) {
-      const sysBuyPx = matchedSysBenchmark.sysBuy;
-      const sysSellPx = matchedSysBenchmark.sysSell1;
-      const sysGross = (sysSellPx - sysBuyPx) * q;
-      const sysFee = Math.round(((Math.max(5, sysBuyPx * q * 0.00025)) + (Math.max(5, sysSellPx * q * 0.00025) + sysSellPx * q * 0.00051)) * 100) / 100;
-      const sysNet = Math.round((sysGross - sysFee) * 100) / 100;
-      sysBenchmark = {
-        ...matchedSysBenchmark,
-        sysNet
-      };
-      alphaNet = Math.round((net - sysNet) * 100) / 100; // >0 说明跑赢系统理论，<0 为主观情绪损耗
-    }
+    const audit = auditTradeExecution({
+      stockText: form.stock,
+      dir: form.dir,
+      track: form.track,
+      buy: b,
+      sell: s,
+      qty: q,
+      net,
+      plan: form.plan,
+      basis: form.basis,
+      mistakeTags: form.mistakeTags,
+      prevLogs: logs,
+      wbLatest,
+      poolList: pool,
+      totalAssets,
+      date: form.date,
+    });
 
     onAddLog({
       id: Date.now(),
       date: form.date,
-      track: form.track,
+      track: audit.track,
       stock: form.stock,
       dir: form.dir,
       buy: b,
@@ -260,14 +265,17 @@ export default function LedgerSection({
       gross,
       fee,
       net,
-      plan: form.plan,
-      basis: form.basis,
-      mistakeTags: form.mistakeTags,
+      plan: audit.plan,
+      basis: audit.basis,
+      mistakeTags: audit.mistakeTags,
       note: form.note,
       reflection: form.reflection,
       satisfaction: form.satisfaction,
-      systemBenchmark: sysBenchmark,
-      alphaNet
+      systemBenchmark: audit.systemBenchmark,
+      alphaNet: audit.alphaNet,
+      buyDevPct: audit.buyDevPct,
+      sellDevPct: audit.sellDevPct,
+      disciplineScore: audit.disciplineScore,
     });
 
     setShowAddModal(false);
@@ -281,26 +289,47 @@ export default function LedgerSection({
     }));
   };
 
-  // 僵尸股筛查
-  const zombieStocks = pool.filter(s => {
-    const amp = s.prevClose > 0 && s.high && s.low ? ((s.high - s.low) / s.prevClose) * 100 : 0;
-    return amp > 0 && amp < 3.5;
-  });
-
-  // 按轨制筛选流水
-  const filteredLogs = useMemo(() => {
-    return (logs || []).filter(lg => {
-      const track = lg.track || 'long_t';
-      if (activeTrackTab === 'long_t') return track === 'long_t';
-      if (activeTrackTab === 'short_swing') return track === 'short_swing';
-      return true;
+  // 保存已有流水的复盘打标与反思编辑
+  const handleSaveEditLog = (e) => {
+    e.preventDefault();
+    if (!editingLog || !onUpdateLog) return;
+    const audit = auditTradeExecution({
+      stockText: editingLog.stock,
+      code: editingLog.code,
+      dir: editingLog.dir,
+      track: editingLog.track,
+      buy: editingLog.buy,
+      sell: editingLog.sell,
+      qty: editingLog.qty,
+      net: editingLog.net,
+      plan: editingLog.plan,
+      basis: editingLog.basis,
+      mistakeTags: editingLog.mistakeTags || [],
+      wbLatest,
+      poolList: pool,
+      totalAssets,
+      date: editingLog.date,
     });
-  }, [logs, activeTrackTab]);
+    onUpdateLog({
+      ...editingLog,
+      plan: editingLog.plan,
+      track: editingLog.track,
+      mistakeTags: editingLog.mistakeTags || [],
+      reflection: editingLog.reflection || '',
+      note: editingLog.note || '',
+      systemBenchmark: editingLog.systemBenchmark || audit.systemBenchmark,
+      alphaNet: editingLog.alphaNet !== undefined ? editingLog.alphaNet : audit.alphaNet,
+      buyDevPct: editingLog.buyDevPct !== undefined ? editingLog.buyDevPct : audit.buyDevPct,
+      sellDevPct: editingLog.sellDevPct !== undefined ? editingLog.sellDevPct : audit.sellDevPct,
+      disciplineScore: audit.disciplineScore,
+    });
+    setEditingLog(null);
+  };
 
-  // 提取已平仓做T闭环交易记录
+  // 提取已平仓闭环交易记录
   const closedTLogs = useMemo(() => {
     return filteredLogs.filter(lg => {
-      const isPureBuy = lg.dir === '买入建仓' || lg.dir === '买入加仓' || lg.dir === '直接买入';
+      const isPureBuy = lg.dir === '买入建仓' || lg.dir === '买入加仓' || lg.dir === '直接买入' || lg.dir === '尾盘买入';
       return !isPureBuy && (lg.buy > 0 && lg.sell > 0);
     });
   }, [filteredLogs]);
@@ -312,11 +341,11 @@ export default function LedgerSection({
     const todayNet = todayLogs.reduce((acc, lg) => acc + (+lg.net || 0), 0);
     const totalNet = closedTLogs.reduce((acc, lg) => acc + (+lg.net || 0), 0);
     const winCount = closedTLogs.filter(lg => (+lg.net || 0) > 0).length;
-    const lossCount = closedTLogs.length - winCount;
+    const lossCount = closedTLogs.filter(lg => (+lg.net || 0) < 0).length;
     const winRate = closedTLogs.length > 0 ? (winCount / closedTLogs.length) * 100 : 0;
-    const plannedCount = filteredLogs.filter(lg => lg.plan === '计划内').length;
+    const plannedCount = filteredLogs.filter(lg => lg.plan !== '计划外').length;
     const disciplineRate = filteredLogs.length > 0 ? (plannedCount / filteredLogs.length) * 100 : 100;
-    
+
     // 人机对决数据统计
     let benchmarkCompareCount = 0;
     let benchmarkTotalNet = 0;
@@ -330,9 +359,9 @@ export default function LedgerSection({
     });
     const emotionFrictionCost = Math.round((benchmarkTotalNet - realMatchedNet) * 100) / 100;
 
-    // 失误标签频次与损耗金额统计
+    // 失误标签频次与损耗金额统计（含自动识别标签）
     const mistakeMap = {};
-    closedTLogs.forEach(lg => {
+    filteredLogs.forEach(lg => {
       const tags = lg.mistakeTags || [];
       tags.forEach(tId => {
         if (!mistakeMap[tId]) mistakeMap[tId] = { count: 0, lossSum: 0 };
@@ -352,7 +381,6 @@ export default function LedgerSection({
       ? closedTLogs.reduce((best, cur) => ((+cur.net || 0) > (+best.net || -Infinity) ? cur : best), closedTLogs[0])
       : null;
 
-    // 标的清单
     const stockSet = new Set();
     closedTLogs.forEach(lg => {
       if (lg.stock) stockSet.add(lg.stock);
@@ -392,7 +420,7 @@ export default function LedgerSection({
         cum += (+lg.net || 0);
         points.push({
           idx: i + 1,
-          label: `${lg.date.slice(5)} · ${lg.stock.split(' ')[0]}`,
+          label: `${(lg.date || '').slice(5)} · ${(lg.stock || '').split(' ')[0]}`,
           date: lg.date,
           val: Math.round(cum * 100) / 100,
           delta: +lg.net || 0,
@@ -426,7 +454,7 @@ export default function LedgerSection({
         const dilutedCost = Math.round((initialRefCost - (cum / baseShares)) * 100) / 100;
         points.push({
           idx: i + 1,
-          label: `${lg.date.slice(5)} (${lg.dir})`,
+          label: `${(lg.date || '').slice(5)} (${lg.dir})`,
           date: lg.date,
           val: dilutedCost,
           cumNet: Math.round(cum * 100) / 100,
@@ -452,18 +480,17 @@ export default function LedgerSection({
     }
   }, [closedTLogs, selectedChartStock, pool]);
 
-  // 渲染 SVG 折线图
   const renderCurveSvg = () => {
     const pts = chartData.points || [];
     if (pts.length < 2) {
       return (
         <div style={{ padding: '24px 16px', textAlign: 'center', color: 'var(--mute)', fontSize: '12px', background: 'var(--surface2)', borderRadius: '8px', border: '1px dashed var(--line)' }}>
-          暂无足够的闭环流水数据用于绘制曲线。点击上方「＋ 新增交易记录」录入至少 1 笔平仓记录，系统将自动生成成本摊薄与资金曲线！
+          暂无足够的闭环平仓流水绘制曲线。通过作战台「⚡ 记T」或上方「＋ 记一笔」产生平仓记录后，将自动绘制资金与成本摊薄轨迹。
         </div>
       );
     }
 
-    const W = 760, H = 190, PL = 58, PR = 26, PT = 22, PB = 28;
+    const W = 760, H = 185, PL = 58, PR = 26, PT = 22, PB = 28;
     const innerW = W - PL - PR;
     const innerH = H - PT - PB;
     const vals = pts.map(p => p.val);
@@ -533,52 +560,194 @@ export default function LedgerSection({
     );
   };
 
+  const scoreColor =
+    scorecard.totalScore >= 85 ? '#15803d' : scorecard.totalScore >= 70 ? '#0958d9' : scorecard.totalScore >= 55 ? '#d97706' : '#cf1322';
+
   return (
     <div className="ledger-wrap" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      {/* 🛡️ 本地磁盘自动双写金库防丢保护提示横幅（当检测到磁盘存在更丰富备份被防覆盖拦截时显示） */}
+      {vaultStatus?.guarded && vaultStatus?.remoteSummary && (
+        <div style={{
+          padding: '10px 14px',
+          borderRadius: '10px',
+          background: '#fffbeb',
+          border: '1.5px solid #f59e0b',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '10px',
+          fontSize: '12.5px'
+        }}>
+          <div style={{ color: '#92400e' }}>
+            <b>🛡️ 本地磁盘金库防误删保护已触发：</b>
+            检测到本机 <code>data/user_vault.json</code> 存有 <b>{vaultStatus.remoteSummary.logCount}</b> 笔成交流水与 <b>{vaultStatus.remoteSummary.snapshotCount}</b> 条净值快照（更新于 {vaultStatus.remoteSummary.updatedAt}），已阻止当前空白浏览器缓存覆盖磁盘。
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {onRestoreVault && (
+              <button
+                type="button"
+                className="primary"
+                onClick={onRestoreVault}
+                style={{ fontSize: '12px', padding: '4px 12px', background: '#d97706', border: 'none', color: '#fff', fontWeight: 700 }}
+              >
+                🔄 立即从本地磁盘恢复数据
+              </button>
+            )}
+            {onForceSyncVault && (
+              <button
+                type="button"
+                onClick={() => onForceSyncVault(true)}
+                style={{ fontSize: '12px', padding: '4px 10px' }}
+              >
+                强制以当前状态覆盖磁盘
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       <section className="card" style={{ padding: '16px' }}>
-        {/* 顶部标题栏 + 轨制切换 Tab + 功能操作区 */}
+        {/* 顶部标题栏 + 本地磁盘双写状态 + 功能操作区 */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '14px', borderBottom: '1px solid var(--line)', paddingBottom: '12px' }}>
           <div>
-            <h2 style={{ fontSize: '18px', fontWeight: 800, margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span>📒</span> 实盘交易台账与复盘系统
-              <span className="tag" style={{ fontSize: '11px', background: 'var(--surface2)', color: 'var(--sub)' }}>双轨分仓 · 闭环反思</span>
+            <h2 style={{ fontSize: '18px', fontWeight: 800, margin: 0, display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <span>📒</span> 实盘交易台账与人机对决复盘系统
+              <span className="tag" style={{ fontSize: '11px', background: 'var(--surface2)', color: 'var(--sub)' }}>全链路点位审计 · 本地磁盘双写</span>
+              {vaultStatus && (
+                <span
+                  style={{
+                    fontSize: '11px',
+                    padding: '2px 8px',
+                    borderRadius: '999px',
+                    fontWeight: 600,
+                    background: vaultStatus.connected ? '#f0fdf4' : '#f8fafc',
+                    color: vaultStatus.connected ? '#15803d' : '#64748b',
+                    border: `1px solid ${vaultStatus.connected ? '#86efac' : '#cbd5e1'}`,
+                  }}
+                  title={
+                    vaultStatus.connected
+                      ? `已开启浏览器 localStorage + 本机磁盘 data/user_vault.json 自动双写（留存 ${vaultStatus.backupCount || 1} 份按日快照）`
+                      : '后端服务未连接，当前使用浏览器本地存储（启动 FastAPI 后自动开启本地磁盘双写备份）'
+                  }
+                >
+                  {vaultStatus.syncing
+                    ? '💾 磁盘同步中…'
+                    : vaultStatus.connected
+                    ? `💾 磁盘金库已同步 ${vaultStatus.updatedAt ? vaultStatus.updatedAt.slice(11, 19) : ''}`
+                    : '💾 仅浏览器缓存(后端离线)'}
+                </span>
+              )}
             </h2>
             <div style={{ fontSize: '12px', color: 'var(--sub)', marginTop: '3px' }}>
-              物理隔离【长线底仓降本做T】与【短线攻防冲板】，量化主观情绪摩擦成本，由天翼云大模型直击操作心魔。
+              作战台快捷记T、建仓加仓与尾盘交割均自动计算【系统SOP点位偏离度%】与【主观情绪摩擦损耗】，支持免密钥秒级量化复盘与天翼云大模型深度剖析。
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '7px', flexWrap: 'wrap', alignItems: 'center' }}>
             <button
               type="button"
               className="primary"
               onClick={() => setShowCoachModal(true)}
               style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: 'linear-gradient(135deg, #1d4ed8 0%, #7c3aed 100%)', border: 'none', color: '#fff', fontWeight: 700 }}
             >
-              <span>🤖</span> 一键呼叫 AI 交易教练
+              <span>🤖</span> 呼叫复盘教练
             </button>
             <button
               type="button"
               onClick={() => setShowSettingsModal(true)}
               style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-              title="配置天翼云 OpenAI 兼容大模型秘钥与参数"
+              title="配置天翼云/DeepSeek 大模型密钥（未配置时自动使用内置量化规则教练）"
             >
-              <span>⚙️</span> AI 配置
+              <span>⚙️</span> {hasAiKey ? 'AI已就绪' : 'AI配置'}
             </button>
             <button type="button" onClick={() => setShowAddModal(true)} style={{ fontWeight: 600 }}>
               ＋ 记一笔
             </button>
+            {vaultStatus?.connected && onForceSyncVault && (
+              <button
+                type="button"
+                onClick={() => onForceSyncVault(false)}
+                title="立即将全部持仓、现金总账、风控配置与成交流水写入本地磁盘金库"
+              >
+                💾 落盘备份
+              </button>
+            )}
             <button type="button" onClick={onExport}>⬇ 导出</button>
             <button type="button" onClick={onImportClick}>⬆ 导入</button>
+          </div>
+        </div>
+
+        {/* 🏅 四维操盘纪律与计划偏离度量化评分卡 */}
+        <div style={{
+          background: 'linear-gradient(135deg, #f8fafc 0%, #f0f9ff 100%)',
+          border: '1px solid #bae6fd',
+          borderRadius: '10px',
+          padding: '12px 14px',
+          marginBottom: '14px',
+          display: 'grid',
+          gridTemplateColumns: 'minmax(185px, 220px) 1fr',
+          gap: '14px',
+          alignItems: 'center'
+        }}>
+          <div style={{ borderRight: '1px dashed #cbd5e1', paddingRight: '12px' }}>
+            <div style={{ fontSize: '11.5px', color: 'var(--sub)', fontWeight: 600 }}>🛡️ 操盘纪律与偏离度评分</div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginTop: '4px' }}>
+              <span style={{ fontSize: '28px', fontWeight: 900, fontFamily: 'monospace', color: scoreColor, lineHeight: 1 }}>
+                {scorecard.totalScore}
+              </span>
+              <span style={{ fontSize: '12px', color: 'var(--mute)' }}>/ 100</span>
+              <span style={{
+                fontSize: '11px',
+                padding: '2px 7px',
+                borderRadius: '4px',
+                fontWeight: 700,
+                background: '#fff',
+                color: scoreColor,
+                border: `1px solid ${scoreColor}`
+              }}>
+                {scorecard.grade}
+              </span>
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--sub)', marginTop: '6px' }}>
+              买点平均偏离:{' '}
+              <b style={{ fontFamily: 'monospace', color: scorecard.avgBuyDevPct != null && scorecard.avgBuyDevPct > 0.6 ? '#cf1322' : '#15803d' }}>
+                {scorecard.avgBuyDevPct != null ? `${scorecard.avgBuyDevPct >= 0 ? '+' : ''}${scorecard.avgBuyDevPct.toFixed(2)}%` : '0.00%'}
+              </b>
+              {' ｜ '}摩擦损耗:{' '}
+              <b style={{ fontFamily: 'monospace', color: scorecard.frictionLoss > 0 ? '#cf1322' : '#15803d' }}>
+                ¥{money(scorecard.frictionLoss)}
+              </b>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(145px, 1fr))', gap: '10px' }}>
+            {[
+              { label: '🎯 买点精准度', val: scorecard.buyScore, max: 25, desc: '防追高/锚定低吸区', color: '#0284c7' },
+              { label: '💰 止盈兑现度', val: scorecard.sellScore, max: 25, desc: '按目标分批锁盈', color: '#16a34a' },
+              { label: '🛡️ 止损铁律度', val: scorecard.stopScore, max: 25, desc: '破位秒砍绝不死扛', color: '#dc2626' },
+              { label: '🧭 环境与仓位', val: scorecard.envScore, max: 25, desc: '顺应大盘防报复单', color: '#7c3aed' },
+            ].map((dim) => (
+              <div key={dim.label} style={{ background: '#fff', padding: '8px 10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', fontWeight: 700 }}>
+                  <span>{dim.label}</span>
+                  <span style={{ fontFamily: 'monospace', color: dim.color }}>{dim.val}/{dim.max}</span>
+                </div>
+                <div style={{ height: '6px', background: '#f1f5f9', borderRadius: '999px', overflow: 'hidden', margin: '6px 0 4px' }}>
+                  <div style={{ width: `${(dim.val / dim.max) * 100}%`, height: '100%', background: dim.color, borderRadius: '999px' }} />
+                </div>
+                <div style={{ fontSize: '10.5px', color: 'var(--mute)' }}>{dim.desc}</div>
+              </div>
+            ))}
           </div>
         </div>
 
         {/* 🔀 双轨分仓导航切换栏 */}
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '14px' }}>
           {[
-            { id: 'ALL', label: `📊 全部流水 (${logs.length}笔)` },
-            { id: 'long_t', label: '🛡️ 长线做T轨（底仓降本专区）' },
-            { id: 'short_swing', label: '⚡ 短线攻防轨（尾盘·连板专区）' },
+            { id: 'ALL', label: `📊 全部流水 (${enrichedAllLogs.length}笔)` },
+            { id: 'long_t', label: `🛡️ 长线做T轨 (${enrichedAllLogs.filter(x => (x.track || 'long_t') === 'long_t').length}笔)` },
+            { id: 'short_swing', label: `⚡ 短线攻防轨 (${enrichedAllLogs.filter(x => x.track === 'short_swing').length}笔)` },
             { id: 'BENCHMARK', label: `⚖️ 人机对决战报 (${stats.benchmarkCompareCount}笔对照)` },
           ].map(tab => (
             <button
@@ -640,19 +809,19 @@ export default function LedgerSection({
           </div>
         </div>
 
-        {/* ⚖️ 人机对决收益对照专区（当处于 BENCHMARK tab 时突出展示） */}
+        {/* ⚖️ 人机对决收益对照专区 */}
         {activeTrackTab === 'BENCHMARK' && (
           <div style={{ background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '10px', padding: '14px', marginBottom: '16px' }}>
             <div style={{ fontSize: '14px', fontWeight: 800, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span>⚖️</span> 【人机对决战报】：交易员实操净利 vs 系统理论 SOP 基准预期
+              <span>⚖️</span> 【人机对决战报】：交易员实操净利 vs 系统量化网格 SOP 理论基准
             </div>
             <div style={{ fontSize: '12px', color: 'var(--sub)', marginBottom: '12px' }}>
-              自动对比您实际买卖点位与系统给出的建议区间（回踩挂单位、T1/T2 冲高目标位、1.5% 止损线），量化由于主观情绪犯错（追高、抢跑、死扛）吞噬的真金白银。
+              逐笔比对实盘成交价与当时系统推荐低吸买点 (`inA`)、冲高止盈位 (`tp1 / outA`) 及纪律止损线 (`slA`)，精准剥离出「主观情绪摩擦账单」。
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px', marginBottom: '14px' }}>
               <div style={{ padding: '10px 12px', background: '#fff', borderRadius: '6px', border: '1px solid var(--line)' }}>
-                <div style={{ fontSize: '11.5px', color: 'var(--mute)' }}>🤖 系统理论标杆预期收益</div>
+                <div style={{ fontSize: '11.5px', color: 'var(--mute)' }}>🤖 系统理论 SOP 预期净收益 ({stats.benchmarkCompareCount}笔)</div>
                 <div style={{ fontSize: '18px', fontWeight: 800, fontFamily: 'monospace', marginTop: '4px', color: stats.benchmarkTotalNet >= 0 ? 'var(--up)' : 'var(--down)' }}>
                   {stats.benchmarkTotalNet >= 0 ? '+' : ''}{money(stats.benchmarkTotalNet)}
                 </div>
@@ -665,7 +834,7 @@ export default function LedgerSection({
               </div>
               <div style={{ padding: '10px 12px', background: stats.emotionFrictionCost > 0 ? '#fff1f0' : '#f0fdf4', borderRadius: '6px', border: `1px solid ${stats.emotionFrictionCost > 0 ? '#ffa39e' : '#86efac'}` }}>
                 <div style={{ fontSize: '11.5px', color: stats.emotionFrictionCost > 0 ? '#cf1322' : '#15803d', fontWeight: 700 }}>
-                  {stats.emotionFrictionCost > 0 ? '🚨 主观情绪摩擦成本 (少赚/多亏)' : '🌟 超额 Alpha 认知收益'}
+                  {stats.emotionFrictionCost > 0 ? '🚨 主观情绪净摩擦损耗 (少赚/多亏)' : '🌟 交易员超额 Alpha 收益'}
                 </div>
                 <div style={{ fontSize: '18px', fontWeight: 800, fontFamily: 'monospace', marginTop: '4px', color: stats.emotionFrictionCost > 0 ? '#cf1322' : '#15803d' }}>
                   {stats.emotionFrictionCost > 0 ? '-' : '+'}{money(Math.abs(stats.emotionFrictionCost))}
@@ -675,25 +844,25 @@ export default function LedgerSection({
 
             {/* 失误归因排行 */}
             <div style={{ background: '#fff', borderRadius: '6px', padding: '10px 12px', border: '1px solid var(--line)' }}>
-              <div style={{ fontSize: '12.5px', fontWeight: 700, marginBottom: '8px' }}>🏷️ 高频失误类型损耗排行：</div>
+              <div style={{ fontSize: '12.5px', fontWeight: 700, marginBottom: '8px' }}>🏷️ 高频失误类型损耗排行（含系统盘口自动审计识别）：</div>
               {stats.mistakeRank.length ? (
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                   {stats.mistakeRank.map(m => (
                     <div key={m.id} style={{ fontSize: '11.5px', padding: '4px 10px', background: 'var(--surface2)', borderRadius: '6px', border: '1px solid var(--line)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                       <span>{m.icon}</span>
                       <b>{m.name}</b>: <span>{m.count}次</span>
-                      {m.lossSum > 0 && <span style={{ color: 'var(--up)', fontWeight: 700 }}>(亏损 ¥{money(m.lossSum)})</span>}
+                      {m.lossSum > 0 && <span style={{ color: 'var(--up)', fontWeight: 700 }}>(涉亏 ¥{money(m.lossSum)})</span>}
                     </div>
                   ))}
                 </div>
               ) : (
-                <div style={{ fontSize: '12px', color: 'var(--mute)' }}>暂无失误打标记录，录入新交易时勾选失误标签即可量化心魔！</div>
+                <div style={{ fontSize: '12px', color: 'var(--mute)' }}>当前暂无失误记录，继续保持铁血执行纪律！点击任意流水的「复盘」可随时补充归因标签。</div>
               )}
             </div>
           </div>
         )}
 
-        {/* 📈 成本摊薄曲线看板 */}
+        {/* 📈 成本摊薄与累计套利曲线看板 */}
         {activeTrackTab !== 'BENCHMARK' && (
           <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: '10px', padding: '14px', marginBottom: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
@@ -721,11 +890,11 @@ export default function LedgerSection({
         )}
 
         {/* 流水明细表格 */}
-        <div className="tbl-scroll" style={{ maxHeight: '380px' }}>
+        <div className="tbl-scroll" style={{ maxHeight: '420px' }}>
           <table>
             <thead>
               <tr>
-                <th>日期</th>
+                <th>日期/时间</th>
                 <th>轨制</th>
                 <th>标的名称</th>
                 <th>方向</th>
@@ -733,8 +902,8 @@ export default function LedgerSection({
                 <th>卖出价</th>
                 <th>股数</th>
                 <th>净落袋</th>
-                <th>失误归因标签</th>
-                <th>人机对比 (SOP)</th>
+                <th>纪律/失误归因</th>
+                <th>人机对决 & 点位偏离</th>
                 <th>反思心得</th>
                 <th>操作</th>
               </tr>
@@ -746,10 +915,14 @@ export default function LedgerSection({
                     const item = MISTAKE_DICTIONARY.find(m => m.id === id);
                     return item ? `${item.icon} ${item.name}` : id;
                   });
+                  const dScore = lg.disciplineScore ?? 100;
 
                   return (
                     <tr key={lg.id}>
-                      <td style={{ fontSize: '11.5px', color: 'var(--mute)' }}>{lg.date}</td>
+                      <td style={{ fontSize: '11.5px', color: 'var(--mute)', whiteSpace: 'nowrap' }}>
+                        <div>{lg.date}</div>
+                        {lg.time && <div style={{ fontSize: '10px', opacity: 0.8 }}>{lg.time}</div>}
+                      </td>
                       <td>
                         <span style={{
                           fontSize: '10.5px',
@@ -758,7 +931,8 @@ export default function LedgerSection({
                           background: lg.track === 'short_swing' ? '#faf5ff' : '#f0f9ff',
                           color: lg.track === 'short_swing' ? '#7c3aed' : '#0369a1',
                           border: `1px solid ${lg.track === 'short_swing' ? '#d8b4fe' : '#bae6fd'}`,
-                          fontWeight: 600
+                          fontWeight: 600,
+                          whiteSpace: 'nowrap'
                         }}>
                           {lg.track === 'short_swing' ? '⚡ 短线攻防' : '🛡️ 长线做T'}
                         </span>
@@ -766,7 +940,7 @@ export default function LedgerSection({
                       <td style={{ fontWeight: 700 }}>{lg.stock}</td>
                       <td>
                         <span className={`pill ${
-                          lg.dir.includes('买') || lg.dir.includes('正T') || lg.dir.includes('潜伏') ? 'p-buy' : 'p-sell'
+                          (lg.dir || '').includes('买') || (lg.dir || '').includes('正T') || (lg.dir || '').includes('潜伏') ? 'p-buy' : 'p-sell'
                         }`}>
                           {lg.dir}
                         </span>
@@ -775,44 +949,78 @@ export default function LedgerSection({
                       <td className="num">{lg.sell > 0 ? f2(lg.sell) : '—'}</td>
                       <td className="num">{lg.qty}</td>
                       <td className="num">
-                        {lg.dir.includes('建仓') || lg.dir.includes('加仓') ? (
-                          <span style={{ color: '#1677ff', fontSize: '11px', fontWeight: 600 }}>持仓增厚</span>
+                        {(lg.dir || '').includes('建仓') || (lg.dir || '').includes('加仓') || lg.dir === '尾盘买入' ? (
+                          <span style={{ color: '#1677ff', fontSize: '11px', fontWeight: 600 }}>开仓持仓中</span>
                         ) : (
                           <b className={lg.net >= 0 ? 'up' : 'down'}>{lg.net >= 0 ? '+' : ''}{money(lg.net)}</b>
                         )}
                       </td>
                       <td>
-                        {tagList.length ? (
-                          <div style={{ display: 'flex', gap: '3px', flexWrap: 'wrap' }}>
-                            {tagList.map((t, idx) => (
-                              <span key={idx} style={{ fontSize: '10.5px', padding: '1px 5px', borderRadius: '3px', background: '#fff1f0', color: '#cf1322', border: '1px solid #ffa39e' }}>
-                                {t}
-                              </span>
-                            ))}
+                        <div style={{ display: 'flex', gap: '3px', flexWrap: 'wrap', alignItems: 'center' }}>
+                          <span style={{
+                            fontSize: '10px',
+                            padding: '1px 5px',
+                            borderRadius: '3px',
+                            fontWeight: 700,
+                            background: dScore >= 85 ? '#f0fdf4' : dScore >= 70 ? '#eff6ff' : '#fffbeb',
+                            color: dScore >= 85 ? '#15803d' : dScore >= 70 ? '#1d4ed8' : '#b45309',
+                            border: `1px solid ${dScore >= 85 ? '#86efac' : dScore >= 70 ? '#bfdbfe' : '#fcd34d'}`
+                          }}>
+                            {dScore}分·{lg.plan || '计划内'}
+                          </span>
+                          {tagList.map((t, idx) => (
+                            <span key={idx} style={{ fontSize: '10.5px', padding: '1px 5px', borderRadius: '3px', background: '#fff1f0', color: '#cf1322', border: '1px solid #ffa39e' }}>
+                              {t}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td>
+                        {lg.systemBenchmark ? (
+                          <div style={{ fontSize: '11px', lineHeight: 1.35 }}>
+                            <div style={{ color: 'var(--sub)' }}>
+                              SOP买 <b>{f2(lg.systemBenchmark.sysBuy)}</b>
+                              {lg.buyDevPct != null && (
+                                <span style={{ marginLeft: '3px', color: lg.buyDevPct > 0.6 ? '#cf1322' : '#15803d', fontFamily: 'monospace' }}>
+                                  ({lg.buyDevPct >= 0 ? '+' : ''}{lg.buyDevPct.toFixed(1)}%)
+                                </span>
+                              )}
+                              {' ｜ '}标 <b>{f2(lg.systemBenchmark.sysSell1)}</b>
+                            </div>
+                            {lg.alphaNet != null && (
+                              <div style={{ color: lg.alphaNet >= 0 ? '#15803d' : '#cf1322', fontWeight: 700 }}>
+                                {lg.alphaNet >= 0 ? `跑赢SOP +¥${money(lg.alphaNet)}` : `情绪损耗 -¥${money(Math.abs(lg.alphaNet))}`}
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <span style={{ color: 'var(--mute)', fontSize: '11px' }}>—</span>
                         )}
                       </td>
-                      <td>
-                        {lg.systemBenchmark ? (
-                          <div style={{ fontSize: '11px', lineHeight: 1.3 }}>
-                            <div>建议买: {f2(lg.systemBenchmark.sysBuy)} ｜ 目标: {f2(lg.systemBenchmark.sysSell1)}</div>
-                            {lg.alphaNet != null && (
-                              <div style={{ color: lg.alphaNet >= 0 ? 'var(--ok)' : 'var(--up)', fontWeight: 600 }}>
-                                情绪偏差: {lg.alphaNet >= 0 ? '+' : ''}{money(lg.alphaNet)}
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <span style={{ color: 'var(--mute)', fontSize: '11px' }}>无基准</span>
-                        )}
-                      </td>
-                      <td style={{ fontSize: '11.5px', color: 'var(--sub)', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={lg.reflection || lg.note}>
+                      <td style={{ fontSize: '11.5px', color: 'var(--sub)', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={lg.reflection || lg.note}>
                         {lg.reflection || lg.note || '—'}
                       </td>
-                      <td>
-                        <button className="mini" onClick={() => onDeleteLog(lg.id)} style={{ color: 'var(--up)' }}>删除</button>
+                      <td style={{ whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'inline-flex', gap: '4px' }}>
+                          {onUpdateLog && (
+                            <button
+                              type="button"
+                              className="mini"
+                              onClick={() => setEditingLog({
+                                ...lg,
+                                mistakeTags: Array.isArray(lg.mistakeTags) ? [...lg.mistakeTags] : [],
+                                reflection: lg.reflection || '',
+                                plan: lg.plan || '计划内',
+                                track: lg.track || 'long_t',
+                              })}
+                              style={{ color: '#0958d9' }}
+                              title="补充或修改本笔成交的失误归因标签与复盘心得"
+                            >
+                              复盘
+                            </button>
+                          )}
+                          <button type="button" className="mini" onClick={() => onDeleteLog(lg.id)} style={{ color: 'var(--up)' }}>删除</button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -829,23 +1037,124 @@ export default function LedgerSection({
         </div>
       </section>
 
-      {/* 🤖 AI 复盘教练诊断弹窗 (天翼云大模型驱动) */}
+      {/* ✏️ 单笔成交复盘打标与反思编辑弹窗 */}
+      {editingLog && (
+        <div className="modal-mask" onClick={() => setEditingLog(null)}>
+          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '540px', width: '92%' }}>
+            <div className="modal-hd">
+              <h3 style={{ margin: 0 }}>✏️ 复盘归因与心得编辑 · {editingLog.stock}</h3>
+              <button className="modal-close" onClick={() => setEditingLog(null)}>×</button>
+            </div>
+            <form onSubmit={handleSaveEditLog}>
+              <div className="modal-bd" style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '12.5px' }}>
+                <div style={{ padding: '8px 10px', borderRadius: '6px', background: 'var(--surface2)', fontSize: '12px', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
+                  <span><b>{editingLog.date} {editingLog.time || ''}</b> · {editingLog.dir} {editingLog.qty}股</span>
+                  <span>买 ¥{f2(editingLog.buy)} / 卖 {editingLog.sell > 0 ? `¥${f2(editingLog.sell)}` : '—'} ｜ 净额 <b>{editingLog.net >= 0 ? '+' : ''}¥{money(editingLog.net)}</b></span>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div className="fld">
+                    <label style={{ fontWeight: 600 }}>交易轨制归属</label>
+                    <select
+                      value={editingLog.track || 'long_t'}
+                      onChange={e => setEditingLog(prev => ({ ...prev, track: e.target.value }))}
+                    >
+                      <option value="long_t">🛡️ 长线做T轨（底仓降本）</option>
+                      <option value="short_swing">⚡ 短线攻防轨（尾盘·连板）</option>
+                    </select>
+                  </div>
+                  <div className="fld">
+                    <label style={{ fontWeight: 600 }}>计划执行定性</label>
+                    <select
+                      value={editingLog.plan || '计划内'}
+                      onChange={e => setEditingLog(prev => ({ ...prev, plan: e.target.value }))}
+                    >
+                      <option value="计划内">✅ 计划内（严格按SOP信号）</option>
+                      <option value="计划外">⚠️ 计划外（盘中临时冲动）</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="fld">
+                  <label style={{ fontWeight: 600 }}>失误归因标签（点击切换勾选）</label>
+                  <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', marginTop: '6px' }}>
+                    {MISTAKE_DICTIONARY.map(m => {
+                      const selected = (editingLog.mistakeTags || []).includes(m.id);
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => {
+                            setEditingLog(prev => {
+                              const cur = prev.mistakeTags || [];
+                              return {
+                                ...prev,
+                                mistakeTags: cur.includes(m.id) ? cur.filter(x => x !== m.id) : [...cur, m.id]
+                              };
+                            });
+                          }}
+                          style={{
+                            padding: '4px 9px',
+                            fontSize: '11.5px',
+                            borderRadius: '5px',
+                            border: selected ? '1px solid #cf1322' : '1px solid var(--line)',
+                            background: selected ? '#fff1f0' : 'var(--surface)',
+                            color: selected ? '#cf1322' : 'var(--sub)',
+                            fontWeight: selected ? 700 : 400,
+                            cursor: 'pointer'
+                          }}
+                          title={m.desc}
+                        >
+                          {m.icon} {m.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="fld">
+                  <label style={{ fontWeight: 600 }}>盘后复盘反思笔记</label>
+                  <textarea
+                    rows={3}
+                    value={editingLog.reflection}
+                    onChange={e => setEditingLog(prev => ({ ...prev, reflection: e.target.value }))}
+                    placeholder="记录本笔买卖当时的心理活动、盘口观察与下次改进要点…"
+                    style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '12.5px' }}
+                  />
+                </div>
+              </div>
+              <div className="modal-ft" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', padding: '10px 14px', borderTop: '1px solid var(--line)' }}>
+                <button type="button" className="btn-cancel" onClick={() => setEditingLog(null)}>取消</button>
+                <button type="submit" className="primary">保存复盘归因</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 🤖 双模复盘教练诊断弹窗（内置零延迟量化规则教练 + 天翼云大模型） */}
       {showCoachModal && (
         <div className="modal-mask" onClick={() => setShowCoachModal(false)}>
-          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '780px', width: '92%' }}>
+          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '800px', width: '92%' }}>
             <div className="modal-hd" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '20px' }}>🤖</span>
-                <h3 style={{ margin: 0 }}>智策战情室 · AI 交易复盘教练</h3>
-                <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>
-                  天翼云 ({aiConfig.model})
+                <h3 style={{ margin: 0 }}>智策战情室 · 交易复盘教练</h3>
+                <span style={{
+                  fontSize: '11px',
+                  padding: '2px 8px',
+                  borderRadius: '4px',
+                  background: hasAiKey ? '#eff6ff' : '#f0fdf4',
+                  color: hasAiKey ? '#1d4ed8' : '#15803d',
+                  border: `1px solid ${hasAiKey ? '#bfdbfe' : '#86efac'}`
+                }}>
+                  {hasAiKey ? `双引擎就绪：大模型 (${aiConfig.model}) + 量化规则引擎` : '⚡ 内置量化规则教练就绪（免API密钥）'}
                 </span>
               </div>
               <button className="modal-close" onClick={() => setShowCoachModal(false)}>×</button>
             </div>
 
-            <div className="modal-bd" style={{ maxHeight: '70vh', overflowY: 'auto', padding: '16px' }}>
-              {/* 复盘参数栏 */}
+            <div className="modal-bd" style={{ maxHeight: '72vh', overflowY: 'auto', padding: '16px' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '10px', background: 'var(--surface2)', padding: '10px', borderRadius: '8px', marginBottom: '14px' }}>
                 <div>
                   <label style={{ fontSize: '11.5px', color: 'var(--mute)', display: 'block', marginBottom: '4px' }}>复盘日期</label>
@@ -857,46 +1166,63 @@ export default function LedgerSection({
                   />
                 </div>
                 <div>
-                  <label style={{ fontSize: '11.5px', color: 'var(--mute)', display: 'block', marginBottom: '4px' }}>交易员整体反思（可选补充）</label>
+                  <label style={{ fontSize: '11.5px', color: 'var(--mute)', display: 'block', marginBottom: '4px' }}>交易员整体心态备注（可选补充）</label>
                   <input
                     value={coachNotes}
                     onChange={e => setCoachNotes(e.target.value)}
-                    placeholder="如：今天大盘跳水时心态有点慌，没有严格执行止损线..."
+                    placeholder="如：早盘脉冲没忍住追了一笔，午后按均线做T挽回部分损耗..."
                     style={{ width: '100%', padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--line)' }}
                   />
                 </div>
               </div>
 
-              {/* 当日待诊断流水预览 */}
               <div style={{ marginBottom: '14px' }}>
                 <div style={{ fontSize: '12px', fontWeight: 700, marginBottom: '6px' }}>
-                  📋 诊断标的范围：{coachDate} 共 {(logs || []).filter(l => l.date === coachDate).length} 笔流水
+                  📋 诊断标的范围：{coachDate} 共 {enrichedAllLogs.filter(l => l.date === coachDate).length} 笔流水
                 </div>
-                {!(logs || []).filter(l => l.date === coachDate).length ? (
+                {!enrichedAllLogs.filter(l => l.date === coachDate).length ? (
                   <div style={{ fontSize: '12px', color: 'var(--warn)', padding: '8px', background: '#fffbe6', borderRadius: '4px' }}>
-                    ⚠️ {coachDate} 暂无任何成交流水记录，请先在台账录入今日的买卖记录！
+                    ⚠️ {coachDate} 暂无任何成交流水记录，请切换有交易的日期或先录入今日买卖记录！
                   </div>
                 ) : (
                   <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                    {(logs || []).filter(l => l.date === coachDate).map(t => (
+                    {enrichedAllLogs.filter(l => l.date === coachDate).map(t => (
                       <span key={t.id} style={{ fontSize: '11.5px', padding: '3px 8px', borderRadius: '4px', background: 'var(--surface)', border: '1px solid var(--line)' }}>
                         <b>{t.stock}</b> ({t.dir}): {t.net >= 0 ? '+' : ''}{f2(t.net)}元
+                        {t.buyDevPct != null && <span style={{ color: 'var(--sub)', marginLeft: '4px' }}>[买偏 {t.buyDevPct >= 0 ? '+' : ''}{t.buyDevPct}%]</span>}
                       </span>
                     ))}
                   </div>
                 )}
               </div>
 
-              {/* 生成诊断按钮 */}
-              <div style={{ textAlign: 'center', margin: '14px 0' }}>
+              {/* 双模触发按钮 */}
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', flexWrap: 'wrap', margin: '14px 0' }}>
+                <button
+                  type="button"
+                  onClick={() => handleRunCoach('rule')}
+                  disabled={coachLoading || !enrichedAllLogs.filter(l => l.date === coachDate).length}
+                  style={{
+                    padding: '8px 18px',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    borderRadius: '7px',
+                    background: '#0f766e',
+                    border: 'none',
+                    color: '#fff',
+                    cursor: coachLoading ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  ⚡ 秒级量化规则诊断（免Key本地算力）
+                </button>
                 <button
                   type="button"
                   className="primary"
-                  onClick={handleRunCoach}
-                  disabled={coachLoading || !(logs || []).filter(l => l.date === coachDate).length}
+                  onClick={() => handleRunCoach('auto')}
+                  disabled={coachLoading || !enrichedAllLogs.filter(l => l.date === coachDate).length}
                   style={{
-                    padding: '8px 24px',
-                    fontSize: '13.5px',
+                    padding: '8px 20px',
+                    fontSize: '13px',
                     fontWeight: 700,
                     borderRadius: '7px',
                     background: 'linear-gradient(135deg, #1d4ed8 0%, #7c3aed 100%)',
@@ -905,20 +1231,31 @@ export default function LedgerSection({
                     cursor: coachLoading ? 'not-allowed' : 'pointer'
                   }}
                 >
-                  {coachLoading ? '⏳ 天翼云大模型正在深度切片复盘中…（约 10~20 秒）' : '🚀 启动 AI 交易教练深度复盘诊断'}
+                  {coachLoading
+                    ? '⏳ 正在深度切片复盘中…'
+                    : hasAiKey
+                    ? `🧠 启动大模型深度复盘 (${aiConfig.model})`
+                    : '🚀 一键智能复盘（未填Key自动启用量化教练）'}
                 </button>
               </div>
 
-              {/* AI 诊断结果展示区 */}
               {coachReviewResult && (
-                <div style={{ marginTop: '16px', background: '#fdfdfe', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '16px', lineHeight: 1.6 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px dashed #cbd5e1', paddingBottom: '8px', marginBottom: '12px' }}>
+                <div style={{ marginTop: '16px', background: '#fdfdfe', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '16px', lineHeight: 1.65 }}>
+                  {coachReviewResult.fallbackReason && (
+                    <div style={{ marginBottom: '10px', padding: '6px 10px', borderRadius: '6px', background: '#fffbeb', border: '1px solid #fcd34d', color: '#92400e', fontSize: '11.5px' }}>
+                      ℹ️ {coachReviewResult.fallbackReason}
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', borderBottom: '1px dashed #cbd5e1', paddingBottom: '8px', marginBottom: '12px' }}>
                     <div style={{ fontWeight: 800, fontSize: '14px', color: '#1e3a8a' }}>
-                      📋 【AI 交易教练操盘诊断报告】· {coachReviewResult.date}
+                      📋 【交易教练操盘诊断报告】· {coachReviewResult.date}
+                      <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', marginLeft: '8px' }}>
+                        引擎: {coachReviewResult.model}
+                      </span>
                     </div>
                     <button
                       type="button"
-                      onClick={() => { copyPlain(coachReviewResult.review); toastOk('诊断书已复制到剪贴板！'); }}
+                      onClick={() => { copyPlain(coachReviewResult.review, '诊断书已复制到剪贴板！'); }}
                       style={{ padding: '3px 8px', fontSize: '11px' }}
                     >
                       📋 复制诊断书
@@ -944,11 +1281,11 @@ export default function LedgerSection({
             </div>
             <div className="modal-bd" style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '12.5px' }}>
               <div style={{ background: '#f0f9ff', padding: '10px 12px', borderRadius: '6px', border: '1px solid #bae6fd', color: '#0369a1', lineHeight: 1.5 }}>
-                💡 <b>配置提示</b>：本系统已接入天翼云 OpenAI 兼容大模型接口。您可在此填入天翼云 API 秘钥，亦可在项目根目录 <code>.env</code> 文件中持久化配置。
+                💡 <b>双模说明</b>：不配置密钥时，系统默认启用<b>内置量化规则教练 v2</b>（毫秒级精准计算四维纪律分与点位偏离）；填入天翼云或任意 OpenAI 兼容 API Key 后，可解锁大模型自然语言深度心理剖析。
               </div>
 
               <div>
-                <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>天翼云接口地址 (API URL)</label>
+                <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>大模型接口地址 (API URL)</label>
                 <input
                   value={aiConfig.apiUrl}
                   onChange={e => setAiConfig(prev => ({ ...prev, apiUrl: e.target.value }))}
@@ -958,18 +1295,18 @@ export default function LedgerSection({
               </div>
 
               <div>
-                <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>天翼云 API 密钥 (API Key)</label>
+                <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>API 密钥 (API Key)</label>
                 <input
                   type="password"
                   value={aiConfig.apiKey}
                   onChange={e => setAiConfig(prev => ({ ...prev, apiKey: e.target.value }))}
-                  placeholder={aiConfig.configuredInEnv ? `已由 .env 环境变量注入 (${aiConfig.maskedEnvKey})` : '输入天翼云 API Key'}
+                  placeholder={aiConfig.configuredInEnv ? `已由 .env 环境变量注入 (${aiConfig.maskedEnvKey})` : '输入天翼云 / DeepSeek API Key（可选）'}
                   style={{ width: '100%', padding: '6px 10px', borderRadius: '5px', border: '1px solid var(--line)' }}
                 />
               </div>
 
               <div>
-                <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>天翼云模型标识 (Model)</label>
+                <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>模型标识 (Model)</label>
                 <input
                   value={aiConfig.model}
                   onChange={e => setAiConfig(prev => ({ ...prev, model: e.target.value }))}
@@ -1019,7 +1356,7 @@ export default function LedgerSection({
         </div>
       )}
 
-      {/* ＋ 新增台账 Modal（支持双轨分流 + 失误归因 + 系统点位匹配） */}
+      {/* ＋ 新增台账 Modal */}
       {showAddModal && (
         <div className="modal-mask" onClick={() => setShowAddModal(false)}>
           <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '580px', width: '92%' }}>
@@ -1029,7 +1366,6 @@ export default function LedgerSection({
             </div>
             <form onSubmit={handleSubmit}>
               <div className="modal-bd" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '12.5px', maxHeight: '72vh', overflowY: 'auto' }}>
-                {/* 轨制选择 */}
                 <div className="fld" style={{ gridColumn: '1 / -1' }}>
                   <label style={{ fontWeight: 700 }}>交易轨制定位</label>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '4px' }}>
@@ -1072,14 +1408,13 @@ export default function LedgerSection({
                 </div>
                 <div className="fld">
                   <label>交易标的</label>
-                  <input value={form.stock} onChange={e => handleFormChange('stock', e.target.value)} placeholder="如：华锡有色 (600301)" required />
+                  <input value={form.stock} onChange={e => handleFormChange('stock', e.target.value)} placeholder="如：上海沿浦 (605128)" required />
                 </div>
 
-                {/* 系统标准SOP匹配提示 */}
                 {matchedSysBenchmark && (
                   <div style={{ gridColumn: '1 / -1', padding: '6px 10px', borderRadius: '5px', background: '#f0fdf4', border: '1px solid #86efac', color: '#15803d', fontSize: '11.5px', lineHeight: 1.4 }}>
-                    🎯 <b>已自动匹配系统【{matchedSysBenchmark.source}】策略基准</b>：
-                    建议买入参考价 <b>¥{f2(matchedSysBenchmark.sysBuy)}</b> ｜ T1止盈位 <b>¥{f2(matchedSysBenchmark.sysSell1)}</b> ｜ 纪律止损线 <b>¥{f2(matchedSysBenchmark.sysStop)}</b>
+                    🎯 <b>已自动匹配【{matchedSysBenchmark.source}】量化点位</b>：
+                    推荐买价 <b>¥{f2(matchedSysBenchmark.sysBuy)}</b> ｜ 止盈1 <b>¥{f2(matchedSysBenchmark.sysSell1)}</b> ｜ 止损红线 <b>¥{f2(matchedSysBenchmark.sysStop)}</b>
                   </div>
                 )}
 
@@ -1095,7 +1430,7 @@ export default function LedgerSection({
                       </>
                     ) : (
                       <>
-                        <option value="尾盘买入">尾盘黑马潜伏 (14:30)</option>
+                        <option value="尾盘平仓">尾盘黑马隔夜平仓</option>
                         <option value="连板追涨">连板起爆打板</option>
                         <option value="龙头抄底">超跌龙头反弹低吸</option>
                         <option value="冲高止盈">短线冲高兑现落袋</option>
@@ -1105,12 +1440,10 @@ export default function LedgerSection({
                   </select>
                 </div>
                 <div className="fld">
-                  <label>决策依据</label>
-                  <select value={form.basis} onChange={e => handleFormChange('basis', e.target.value)}>
-                    <option value="系统SOP">系统SOP推荐 (尾盘/打板/起爆)</option>
-                    <option value="客观信号">客观技术信号 (量价/分时均线)</option>
-                    <option value="情绪模因/字辈共振">🎭 情绪模因/字辈共振 (东方系/日阳/生肖等)</option>
-                    <option value="主观判断">主观盘感 / 消息驱动</option>
+                  <label>计划属性</label>
+                  <select value={form.plan} onChange={e => handleFormChange('plan', e.target.value)}>
+                    <option value="计划内">✅ 计划内（符合预案信号）</option>
+                    <option value="计划外">⚠️ 计划外（盘中主观临时下单）</option>
                   </select>
                 </div>
                 <div className="fld">
@@ -1125,10 +1458,18 @@ export default function LedgerSection({
                   <label>卖出价 (元)</label>
                   <input type="number" step="0.01" value={form.sell} onChange={e => handleFormChange('sell', e.target.value)} required />
                 </div>
+                <div className="fld">
+                  <label>决策依据</label>
+                  <select value={form.basis} onChange={e => handleFormChange('basis', e.target.value)}>
+                    <option value="客观信号">客观技术信号 (量价/分时均线)</option>
+                    <option value="系统SOP">系统SOP推荐 (尾盘/打板/起爆)</option>
+                    <option value="情绪模因/字辈共振">🎭 情绪模因/字辈共振</option>
+                    <option value="主观判断">主观盘感 / 消息驱动</option>
+                  </select>
+                </div>
 
-                {/* 结构化失误标签归因 */}
                 <div className="fld" style={{ gridColumn: '1 / -1' }}>
-                  <label style={{ fontWeight: 600 }}>失误归因标签（可多选）</label>
+                  <label style={{ fontWeight: 600 }}>失误归因标签（可多选，未勾选项也会按盘口点位自动审计）</label>
                   <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', marginTop: '4px' }}>
                     {MISTAKE_DICTIONARY.map(m => {
                       const selected = form.mistakeTags.includes(m.id);
@@ -1162,7 +1503,7 @@ export default function LedgerSection({
                     rows={2}
                     value={form.reflection}
                     onChange={e => handleFormChange('reflection', e.target.value)}
-                    placeholder="如：没有按计划等待回踩均价线，看到分时快速拉升心急追高，下次必须管住手..."
+                    placeholder="如：严格等缩量回踩第一买点挂单成交，冲高第一目标位果断止盈..."
                     style={{ width: '100%', padding: '6px 8px', borderRadius: '4px', border: '1px solid var(--line)', fontSize: '12px' }}
                   />
                 </div>

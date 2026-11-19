@@ -1,43 +1,68 @@
 import React, { useState, useEffect } from 'react';
-import { f2, money, money2, getTodayTStatus } from '../services/utils.js';
+import { f2, money, getTodayTStatus, toastWarn } from '../services/utils.js';
 import { calc } from '../services/api.js';
 
-/* 1. 快捷记T弹窗 */
-export function QuickTModal({ modalData, tradeLogs = [], onClose, onConfirm }) {
+/* 1. 快捷记T弹窗（含单日防上头熔断锁保护：锁买不锁卖） */
+export function QuickTModal({ modalData, tradeLogs = [], tiltState = null, onClose, onConfirm }) {
   if (!modalData || !modalData.open) return null;
-  return <QuickTModalInner modalData={modalData} tradeLogs={tradeLogs} onClose={onClose} onConfirm={onConfirm} />;
+  return (
+    <QuickTModalInner
+      modalData={modalData}
+      tradeLogs={tradeLogs}
+      tiltState={tiltState}
+      onClose={onClose}
+      onConfirm={onConfirm}
+    />
+  );
 }
 
-function QuickTModalInner({ modalData, tradeLogs = [], onClose, onConfirm }) {
+function QuickTModalInner({ modalData, tradeLogs = [], tiltState = null, onClose, onConfirm }) {
   const stock = modalData.stock || {};
   const todayT = getTodayTStatus(stock, tradeLogs);
   const { defaultDir, defaultPx, defaultQty } = modalData;
-  const isInitSell = defaultDir === '直接卖出' || defaultDir === '卖出';
-  const isInitBuy = defaultDir === '直接买入' || defaultDir === '买入' || defaultDir === '买入建仓' || defaultDir === '买入加仓';
-  const [dir, setDir] = useState(
-    isInitSell ? '直接卖出' : (isInitBuy ? '直接买入' : (defaultDir || '正T'))
-  );
-
   const totalHeld = stock.shares || 0;
+  const isTiltLocked = Boolean(tiltState?.isLocked);
+
+  const rawInitSell = defaultDir === '直接卖出' || defaultDir === '卖出';
+  const rawInitBuy = defaultDir === '直接买入' || defaultDir === '买入' || defaultDir === '买入建仓' || defaultDir === '买入加仓';
+
+  const resolvedInitDir = (() => {
+    if (rawInitSell) return '直接卖出';
+    if (isTiltLocked) {
+      return totalHeld > 0 ? '直接卖出' : '倒T';
+    }
+    if (rawInitBuy) return '直接买入';
+    return defaultDir || '正T';
+  })();
+
+  const [dir, setDir] = useState(resolvedInitDir);
+
+  const isInitSell = resolvedInitDir === '直接卖出';
+  const isInitBuy = resolvedInitDir === '直接买入';
+
   const initCostPx = stock.cost ? String(stock.cost) : (stock.price ? String(stock.price) : '');
   const initSellPx = defaultPx || stock.price || '';
 
   const [buyPx, setBuyPx] = useState(
     isInitSell
       ? initCostPx
-      : defaultDir === '正T' || isInitBuy
+      : resolvedInitDir === '正T' || isInitBuy
         ? (defaultPx || stock.price)
-        : (stock.price * 0.98).toFixed(2)
+        : ((+stock.price || 0) * 0.98).toFixed(2)
   );
   const [sellPx, setSellPx] = useState(
     isInitSell
       ? initSellPx
-      : defaultDir === '正T'
-        ? (stock.price * 1.02).toFixed(2)
+      : resolvedInitDir === '正T'
+        ? ((+stock.price || 0) * 1.02).toFixed(2)
         : (defaultPx || stock.price)
   );
   const [qty, setQty] = useState(
-    defaultQty !== undefined ? defaultQty : (isInitSell ? (todayT.sellableShares > 0 ? todayT.sellableShares : 0) : (isInitBuy && totalHeld > 0 ? 500 : 100))
+    defaultQty !== undefined
+      ? defaultQty
+      : isInitSell
+        ? (todayT.sellableShares > 0 ? todayT.sellableShares : 100)
+        : (isInitBuy && totalHeld > 0 ? 500 : 100)
   );
 
   let c = null;
@@ -49,6 +74,7 @@ function QuickTModalInner({ modalData, tradeLogs = [], onClose, onConfirm }) {
 
   const isDirectSell = dir === '直接卖出' || dir === '卖出';
   const isDirectBuy = dir === '直接买入' || dir === '买入' || dir === '买入建仓' || dir === '买入加仓';
+  const isLockedAction = isTiltLocked && (isDirectBuy || dir === '正T');
 
   // 正T/倒T 套利计算
   const grossDiff = (s - b) * q;
@@ -77,6 +103,11 @@ function QuickTModalInner({ modalData, tradeLogs = [], onClose, onConfirm }) {
   const remainingShares = Math.max(0, totalHeld - q);
 
   const handleConfirm = () => {
+    if (isLockedAction) {
+      toastWarn('🔒 单日防上头熔断保护中：已锁定买入与正T低吸，仅允许记录卖出减仓或倒T高抛');
+      return;
+    }
+
     if (isDirectBuy) {
       if (b <= 0 || q <= 0) {
         alert('请输入正确的买入价格与股数');
@@ -139,7 +170,7 @@ function QuickTModalInner({ modalData, tradeLogs = [], onClose, onConfirm }) {
 
   return (
     <div className="modal-mask" onClick={onClose}>
-      <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '460px' }}>
+      <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '470px' }}>
         <div className="modal-hd">
           <h3>
             {isDirectBuy ? '📥 记录买入 / 加仓' : isDirectSell ? '📤 记录直接卖出 / 减仓' : '⚡ 闪电记T'} · {stock.name} ({stock.code})
@@ -147,6 +178,23 @@ function QuickTModalInner({ modalData, tradeLogs = [], onClose, onConfirm }) {
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-bd">
+          {isTiltLocked && (
+            <div style={{
+              padding: '8px 11px',
+              marginBottom: '12px',
+              borderRadius: '7px',
+              background: '#fef2f2',
+              border: '1px solid #f87171',
+              color: '#991b1b',
+              fontSize: '11.5px',
+              lineHeight: 1.5
+            }}>
+              <b>🛑 单日防上头熔断保护中：</b>{(tiltState?.reasons || []).join('；')}。
+              <br />
+              系统已自动锁定「🟢 正T」与「📥 买入」，<b>「📤 卖出(减/清)」与「🔴 倒T高抛」保持畅通</b>。
+            </div>
+          )}
+
           {/* 四向操作选项卡 */}
           <div className="modal-dir-tabs" style={{ display: 'flex', gap: '6px', marginBottom: '14px' }}>
             <button
@@ -156,15 +204,16 @@ function QuickTModalInner({ modalData, tradeLogs = [], onClose, onConfirm }) {
                 flex: 1, padding: '7px 0', borderRadius: '7px', fontWeight: 700, fontSize: '12px',
                 border: '1px solid', borderColor: dir === '正T' ? 'var(--down)' : 'var(--line)',
                 background: dir === '正T' ? 'var(--down-bg)' : '#fff',
-                color: dir === '正T' ? 'var(--down)' : 'var(--sub)'
+                color: dir === '正T' ? 'var(--down)' : 'var(--sub)',
+                opacity: isTiltLocked ? 0.55 : 1
               }}
               onClick={() => {
                 setDir('正T');
                 setBuyPx(stock.price ? String(stock.price) : '');
-                setSellPx((stock.price * 1.02).toFixed(2));
+                setSellPx(((+stock.price || 0) * 1.02).toFixed(2));
               }}
             >
-              🟢 正T
+              {isTiltLocked ? '🔒 正T' : '🟢 正T'}
             </button>
             <button
               type="button"
@@ -178,7 +227,7 @@ function QuickTModalInner({ modalData, tradeLogs = [], onClose, onConfirm }) {
               onClick={() => {
                 setDir('倒T');
                 setSellPx(stock.price ? String(stock.price) : '');
-                setBuyPx((stock.price * 0.98).toFixed(2));
+                setBuyPx(((+stock.price || 0) * 0.98).toFixed(2));
               }}
             >
               🔴 倒T
@@ -190,7 +239,8 @@ function QuickTModalInner({ modalData, tradeLogs = [], onClose, onConfirm }) {
                 flex: 1.15, padding: '7px 0', borderRadius: '7px', fontWeight: 700, fontSize: '12px',
                 border: '1px solid', borderColor: isDirectBuy ? '#1677ff' : 'var(--line)',
                 background: isDirectBuy ? '#e6f4ff' : '#fff',
-                color: isDirectBuy ? '#1677ff' : 'var(--sub)'
+                color: isDirectBuy ? '#1677ff' : 'var(--sub)',
+                opacity: isTiltLocked ? 0.55 : 1
               }}
               onClick={() => {
                 setDir('直接买入');
@@ -198,7 +248,7 @@ function QuickTModalInner({ modalData, tradeLogs = [], onClose, onConfirm }) {
                 if (!qty || qty <= 0) setQty(totalHeld > 0 ? 500 : 1000);
               }}
             >
-              📥 买入 (建/加)
+              {isTiltLocked ? '🔒 禁买' : '📥 买入 (建/加)'}
             </button>
             <button
               type="button"
@@ -231,14 +281,14 @@ function QuickTModalInner({ modalData, tradeLogs = [], onClose, onConfirm }) {
                   <>
                     💼 当前持仓: <b>{totalHeld} 股</b> ｜ 成本均价: <b>¥{f2(stock.cost || 0)}</b> ｜ 市值: <b>¥{money(totalHeld * (+stock.price || 0))}</b>
                     <div style={{ fontSize: '11px', color: 'var(--mute)', marginTop: '2px' }}>
-                      💡 买入后系统将自动进行加权平均计算，实时更新持仓均价与底仓规模。
+                      💡 买入后系统将自动进行加权平均计算，扣减可用现金并实时更新持仓均价。
                     </div>
                   </>
                 ) : (
                   <>
                     💼 当前持仓: <b>0 股（空仓待建仓）</b>
                     <div style={{ fontSize: '11px', color: 'var(--mute)', marginTop: '2px' }}>
-                      🎯 录入首次买入成交价与买入股数，确认后直接生成该标的的初始底仓。
+                      🎯 录入首次买入成交价与买入股数，确认后直接生成该标的初始底仓并扣减现金。
                     </div>
                   </>
                 )}
@@ -256,7 +306,7 @@ function QuickTModalInner({ modalData, tradeLogs = [], onClose, onConfirm }) {
                     style={{ width: '100%', minHeight: '32px', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--line)' }}
                   />
                   <div style={{ display: 'flex', gap: '4px', marginTop: '4px', flexWrap: 'wrap' }}>
-                    {stock.price && (
+                    {stock.price ? (
                       <button
                         type="button"
                         onClick={() => setBuyPx(String(stock.price))}
@@ -264,17 +314,17 @@ function QuickTModalInner({ modalData, tradeLogs = [], onClose, onConfirm }) {
                       >
                         现价 {f2(stock.price)}
                       </button>
-                    )}
-                    {c && c.buy1 && (
+                    ) : null}
+                    {c && c.inA > 0 ? (
                       <button
                         type="button"
-                        onClick={() => setBuyPx(f2(c.buy1))}
+                        onClick={() => setBuyPx(f2(c.inA))}
                         style={{ fontSize: '10.5px', padding: '1px 5px', borderRadius: '3px', border: '1px solid var(--line)', background: '#fff', cursor: 'pointer' }}
                       >
-                        低吸 {f2(c.buy1)}
+                        低吸 {f2(c.inA)}
                       </button>
-                    )}
-                    {stock.prevClose && (
+                    ) : null}
+                    {stock.prevClose ? (
                       <button
                         type="button"
                         onClick={() => setBuyPx(f2(stock.prevClose))}
@@ -282,7 +332,7 @@ function QuickTModalInner({ modalData, tradeLogs = [], onClose, onConfirm }) {
                       >
                         昨收 {f2(stock.prevClose)}
                       </button>
-                    )}
+                    ) : null}
                   </div>
                 </div>
 
@@ -324,7 +374,7 @@ function QuickTModalInner({ modalData, tradeLogs = [], onClose, onConfirm }) {
               {/* 实时买入/加仓试算面板 */}
               <div style={{
                 padding: '10px 14px', background: '#f0f5ff', border: '1px solid #adc6ff',
-                borderRadius: '8px', marginBottom: '14px', fontSize: '12.5px'
+                borderRadius: '8px', fontSize: '12.5px'
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
                   <span style={{ color: 'var(--sub)' }}>动用成交金额:</span>
@@ -353,22 +403,6 @@ function QuickTModalInner({ modalData, tradeLogs = [], onClose, onConfirm }) {
                   </div>
                 </div>
               </div>
-
-              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                <button type="button" onClick={onClose} style={{ padding: '6px 14px', borderRadius: '6px', border: '1px solid var(--line)', background: '#fff', cursor: 'pointer' }}>
-                  取消
-                </button>
-                <button
-                  type="button"
-                  onClick={handleConfirm}
-                  style={{
-                    padding: '6px 18px', borderRadius: '6px', border: 'none',
-                    background: '#1677ff', color: '#fff', fontWeight: 700, cursor: 'pointer'
-                  }}
-                >
-                  {totalHeld > 0 ? '📥 确认买入加仓' : '📥 确认买入建仓'}
-                </button>
-              </div>
             </div>
           ) : isDirectSell ? (
             /* ===== 直接卖出界面 ===== */
@@ -385,7 +419,7 @@ function QuickTModalInner({ modalData, tradeLogs = [], onClose, onConfirm }) {
                 <div style={{ fontSize: '11px', color: todayT.sellableShares <= 0 && totalHeld > 0 ? '#cf1322' : 'var(--mute)', marginTop: '2px', fontWeight: todayT.sellableShares <= 0 && totalHeld > 0 ? 700 : 400 }}>
                   {todayT.sellableShares <= 0 && totalHeld > 0
                     ? '🔒 受 A 股 T+1 制度限制：今日新买入股份当日无法卖出，需待明日开盘解锁！'
-                    : '确认卖出后将直接扣减可用底仓并计入台账。若全卖则自动完成清仓。'}
+                    : '确认卖出后将直接扣减可用底仓并回笼现金。若全卖则自动完成清仓。'}
                 </div>
               </div>
 
@@ -401,7 +435,7 @@ function QuickTModalInner({ modalData, tradeLogs = [], onClose, onConfirm }) {
                     style={{ width: '100%', minHeight: '32px', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--line)' }}
                   />
                   <div style={{ display: 'flex', gap: '4px', marginTop: '4px', flexWrap: 'wrap' }}>
-                    {stock.price && (
+                    {stock.price ? (
                       <button
                         type="button"
                         onClick={() => setSellPx(String(stock.price))}
@@ -409,8 +443,8 @@ function QuickTModalInner({ modalData, tradeLogs = [], onClose, onConfirm }) {
                       >
                         现价 {f2(stock.price)}
                       </button>
-                    )}
-                    {+stock.cost > 0 && (
+                    ) : null}
+                    {+stock.cost > 0 ? (
                       <button
                         type="button"
                         onClick={() => setSellPx(String(stock.cost))}
@@ -418,8 +452,8 @@ function QuickTModalInner({ modalData, tradeLogs = [], onClose, onConfirm }) {
                       >
                         保本价 {f2(stock.cost)}
                       </button>
-                    )}
-                    {c && c.tp1 && (
+                    ) : null}
+                    {c && c.tp1 ? (
                       <button
                         type="button"
                         onClick={() => setSellPx(f2(c.tp1))}
@@ -427,7 +461,7 @@ function QuickTModalInner({ modalData, tradeLogs = [], onClose, onConfirm }) {
                       >
                         T1 {f2(c.tp1)}
                       </button>
-                    )}
+                    ) : null}
                   </div>
                 </div>
 
@@ -587,21 +621,34 @@ function QuickTModalInner({ modalData, tradeLogs = [], onClose, onConfirm }) {
           )}
         </div>
         <div className="modal-ft" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', padding: '10px 14px', borderTop: '1px solid var(--line)' }}>
-          <button className="btn-cancel" onClick={onClose} style={{ padding: '6px 14px', borderRadius: '6px', border: '1px solid var(--line)', background: '#fff', cursor: 'pointer' }}>取消</button>
+          <button className="btn-cancel" onClick={onClose} style={{ padding: '6px 14px', borderRadius: '6px', border: '1px solid var(--line)', background: '#fff', cursor: 'pointer' }}>
+            取消
+          </button>
           <button
             className="primary"
             onClick={handleConfirm}
+            disabled={isLockedAction}
             style={{
               padding: '6px 18px',
               borderRadius: '6px',
-              background: isDirectSell ? '#cf1322' : 'var(--accent)',
-              color: '#fff',
-              border: 'none',
+              background: isLockedAction
+                ? '#fee2e2'
+                : isDirectBuy
+                ? '#1677ff'
+                : isDirectSell
+                ? '#cf1322'
+                : 'var(--accent)',
+              color: isLockedAction ? '#991b1b' : '#fff',
+              border: isLockedAction ? '1px solid #fca5a5' : 'none',
               fontWeight: 700,
-              cursor: 'pointer'
+              cursor: isLockedAction ? 'not-allowed' : 'pointer'
             }}
           >
-            {isDirectSell
+            {isLockedAction
+              ? '🔒 熔断期已锁定买单'
+              : isDirectBuy
+              ? (totalHeld > 0 ? '📥 确认买入加仓' : '📥 确认买入建仓')
+              : isDirectSell
               ? (totalHeld > 0 && q >= totalHeld ? '🔴 确认全部清仓卖出' : '🔴 确认直接卖出')
               : '确认记入台账'}
           </button>
@@ -945,7 +992,7 @@ export function OvernightBanner({
   );
 }
 
-/* 6. 盘中到价与买卖提醒中心弹窗 */
+/* 6. 盘中到价与分时异动提醒中心弹窗 */
 export function AlertCenterModal({
   open,
   onClose,
@@ -957,6 +1004,7 @@ export function AlertCenterModal({
   onToggleAlertEnabled,
   simTailAlert = false,
   onToggleSimTailAlert,
+  onSimulateAnomaly,
   unclosedCount = 0
 }) {
   if (!open) return null;
@@ -971,6 +1019,7 @@ export function AlertCenterModal({
       onToggleAlertEnabled={onToggleAlertEnabled}
       simTailAlert={simTailAlert}
       onToggleSimTailAlert={onToggleSimTailAlert}
+      onSimulateAnomaly={onSimulateAnomaly}
       unclosedCount={unclosedCount}
     />
   );
@@ -986,6 +1035,7 @@ function AlertCenterModalInner({
   onToggleAlertEnabled,
   simTailAlert,
   onToggleSimTailAlert,
+  onSimulateAnomaly,
   unclosedCount = 0
 }) {
   const [alertList, setAlertList] = useState(() => {
@@ -995,6 +1045,7 @@ function AlertCenterModalInner({
       return [];
     }
   });
+  const [filterCat, setFilterCat] = useState('all'); // 'all' | 'anomaly' | 'price'
 
   useEffect(() => {
     const handleAlerts = (e) => {
@@ -1009,6 +1060,14 @@ function AlertCenterModalInner({
     setAlertList([]);
   };
 
+  const anomalyCount = alertList.filter((a) => a.category === 'anomaly').length;
+  const priceCount = alertList.filter((a) => a.category !== 'anomaly').length;
+  const filteredAlerts = alertList.filter((a) => {
+    if (filterCat === 'anomaly') return a.category === 'anomaly';
+    if (filterCat === 'price') return a.category !== 'anomaly';
+    return true;
+  });
+
   // 实时扫描自选池股票到买卖点的距离
   const poolNearList = (pool || []).map(s => {
     const p = +s.price || +s.prevClose || 0;
@@ -1020,7 +1079,8 @@ function AlertCenterModalInner({
       { label: '正T买点', lv: +c.inA, dir: 'buy' },
       { label: '第二买点', lv: +c.inB, dir: 'buy' },
       { label: '倒T卖点', lv: +c.outA, dir: 'sell' },
-      { label: '卖飞线', lv: +c.fly, dir: 'fly' }
+      { label: '卖飞线', lv: +c.fly, dir: 'fly' },
+      ...(+s.shares > 0 && c.slA > 0 ? [{ label: '止损线', lv: +c.slA, dir: 'stop' }] : []),
     ].filter(t => t.lv > 0);
 
     const nearest = targets.map(t => {
@@ -1032,28 +1092,29 @@ function AlertCenterModalInner({
       name: s.name,
       code: s.code,
       price: p,
-      nearest
+      nearest,
+      anomaly: s._anomaly,
     };
   }).filter(Boolean);
 
   return (
     <div className="modal-mask" onClick={onClose}>
-      <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '620px' }}>
+      <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '640px' }}>
         <div className="modal-hd">
-          <h3>🔔 盘中买卖与到价提醒中心</h3>
+          <h3>🔔 盘中分时异动与到价提醒中心</h3>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-bd" style={{ fontSize: '13px', lineHeight: 1.6 }}>
-          {/* 1. 上班免打扰模式与提醒主开关（一键静音、止震、关闭桌面弹窗与标题闪烁） */}
+          {/* 1. 上班免打扰模式与提醒主开关 */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            padding: '12px 14px',
+            padding: '11px 14px',
             background: alertEnabled ? '#f0f5ff' : '#fff1f0',
             border: alertEnabled ? '1px solid #adc6ff' : '1px solid #ffa39e',
             borderRadius: '8px',
-            marginBottom: '14px',
+            marginBottom: '12px',
             gap: '12px'
           }}>
             <div style={{ flex: 1 }}>
@@ -1065,12 +1126,12 @@ function AlertCenterModalInner({
                 alignItems: 'center',
                 gap: '6px'
               }}>
-                <span>{alertEnabled ? '🔔 实时买卖提醒：运行中' : '🔕 上班免打扰模式：已开启（全部提醒已关闭）'}</span>
+                <span>{alertEnabled ? '🔔 实时到价与分时异动雷达：运行中' : '🔕 上班免打扰模式：已开启（全部静音）'}</span>
               </div>
-              <div style={{ fontSize: '11.5px', color: 'var(--sub)', marginTop: '3px', lineHeight: 1.5 }}>
+              <div style={{ fontSize: '11.5px', color: 'var(--sub)', marginTop: '2px', lineHeight: 1.5 }}>
                 {alertEnabled
-                  ? '触及买卖点时将触发声音蜂鸣、网页标签标题变动、桌面弹窗及预警气泡。'
-                  : '已全面静音所有蜂鸣、禁止网页标签页标题闪烁、屏蔽所有桌面弹窗与预警，适合在办公室安心工作。'}
+                  ? '同时监控「买卖/止损到价」与「分时5分钟放量急拉/放量跳水/冲板回落/大盘急杀」。'
+                  : '已静音所有提示音、标题闪烁与桌面弹窗，适合在办公室安心工作。'}
               </div>
             </div>
             {onToggleAlertEnabled && (
@@ -1078,7 +1139,7 @@ function AlertCenterModalInner({
                 type="button"
                 onClick={onToggleAlertEnabled}
                 style={{
-                  padding: '7px 15px',
+                  padding: '7px 14px',
                   fontSize: '12px',
                   fontWeight: 700,
                   whiteSpace: 'nowrap',
@@ -1086,99 +1147,130 @@ function AlertCenterModalInner({
                   borderRadius: '6px',
                   border: 'none',
                   background: alertEnabled ? '#ff4d4f' : '#52c41a',
-                  color: '#fff',
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                  color: '#fff'
                 }}
               >
-                {alertEnabled ? '🔕 立即关闭提醒（上班免打扰）' : '🔔 恢复开启提醒'}
-              </button>
-            )}
-          </div>
-          {/* 桌面通知授权与开关横幅 */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '10px 14px',
-            background: notifyActive ? '#f6ffed' : '#fffbe6',
-            border: notifyActive ? '1px solid #b7eb8f' : '1px solid #ffe58f',
-            borderRadius: '8px',
-            marginBottom: '14px'
-          }}>
-            <div>
-              <div style={{ fontWeight: 700, color: notifyActive ? '#389e0d' : '#d48806', fontSize: '13px' }}>
-                {notifyActive ? '🟢 桌面弹窗通知已开启' : '🟡 桌面弹窗通知未授权'}
-              </div>
-              <div style={{ fontSize: '11.5px', color: 'var(--sub)', marginTop: '2px' }}>
-                {notifyActive
-                  ? '触及买卖点时系统将自动弹出桌面窗口（即使切到微信或行情软件也能收到）。'
-                  : '建议开启桌面通知，当股票触及做T买点或卖点时系统第一时间弹窗提醒。'}
-              </div>
-            </div>
-            {!notifyActive && onToggleNotify && (
-              <button
-                type="button"
-                className="primary"
-                onClick={onToggleNotify}
-                style={{ padding: '5px 12px', fontSize: '12px', fontWeight: 700, whiteSpace: 'nowrap', cursor: 'pointer' }}
-              >
-                开启桌面通知
+                {alertEnabled ? '🔕 开启免打扰' : '🔔 恢复提醒'}
               </button>
             )}
           </div>
 
-          {/* 14:40 尾盘清T日内风控预警状态与演练模拟 */}
+          {/* 2. 分时放量急拉 / 跳水异动雷达与一键演练 */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '10px 14px',
-            background: simTailAlert ? '#fff1f0' : 'var(--surface2)',
-            border: simTailAlert ? '1px solid #ffa39e' : '1px solid var(--line)',
+            background: 'linear-gradient(90deg, #faf5ff, #f8fafc)',
+            border: '1px solid #d8b4fe',
             borderRadius: '8px',
-            marginBottom: '14px',
+            marginBottom: '12px',
             gap: '12px'
           }}>
             <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 700, color: simTailAlert ? '#cf1322' : 'var(--text)', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span>🚨 14:40 尾盘清T日内风控预警: {simTailAlert ? '模拟激活中' : '盘中自动监听 (14:40~14:55)'}</span>
-                {unclosedCount > 0 && (
-                  <span style={{ fontSize: '11px', background: '#cf1322', color: '#fff', padding: '1px 6px', borderRadius: '4px' }}>
-                    今日 {unclosedCount} 只待平仓
-                  </span>
-                )}
+              <div style={{ fontWeight: 700, color: '#6b21a8', fontSize: '13px' }}>
+                ⚡ 分时放量急拉 / 跳水 / 冲板炸板雷达（10分钟冷却防刷屏）
               </div>
               <div style={{ fontSize: '11.5px', color: 'var(--sub)', marginTop: '2px' }}>
-                交易日 14:40 之后若存在日内做T未平仓单，顶部将触发醒目红警提醒平仓，绝不过夜变加仓。
+                自动捕获 5 分钟急涨/急跌 ≥1.8%（20cm ≥2.5%）且分钟量能脉冲 ≥1.8×、涨停炸板回落及大盘 5 分钟急杀，并在作战卡片顶部亮起警示条。
               </div>
             </div>
-            {onToggleSimTailAlert && (
+            {onSimulateAnomaly && (
               <button
                 type="button"
-                onClick={onToggleSimTailAlert}
+                onClick={() => onSimulateAnomaly()}
                 style={{
-                  padding: '5px 12px',
+                  padding: '6px 12px',
                   fontSize: '11.5px',
                   fontWeight: 700,
                   whiteSpace: 'nowrap',
                   cursor: 'pointer',
                   borderRadius: '6px',
-                  border: '1px solid',
-                  background: simTailAlert ? '#cf1322' : '#fff',
-                  color: simTailAlert ? '#fff' : 'var(--text)',
-                  borderColor: simTailAlert ? '#cf1322' : 'var(--line)'
+                  border: '1px solid #a855f7',
+                  background: '#fff',
+                  color: '#7e22ce'
                 }}
+                title="交替模拟放量急拉与放量跳水，立即测试蜂鸣声、气泡、卡片警示条与下方流水"
               >
-                {simTailAlert ? '退出模拟' : '🧪 模拟 14:40 预警'}
+                🧪 演练分时异动
               </button>
             )}
           </div>
 
-          {/* 自选池实时临界买卖点监测 */}
+          {/* 3. 桌面通知与 14:40 尾盘风控演练双栏 */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '10px', marginBottom: '14px' }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '9px 12px',
+              background: notifyActive ? '#f6ffed' : '#fffbe6',
+              border: notifyActive ? '1px solid #b7eb8f' : '1px solid #ffe58f',
+              borderRadius: '8px',
+              gap: '8px'
+            }}>
+              <div>
+                <div style={{ fontWeight: 700, color: notifyActive ? '#389e0d' : '#d48806', fontSize: '12.5px' }}>
+                  {notifyActive ? '🟢 桌面弹窗已授权' : '🟡 桌面通知未授权'}
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--sub)' }}>切到后台也能收到异动弹窗</div>
+              </div>
+              {!notifyActive && onToggleNotify && (
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={onToggleNotify}
+                  style={{ padding: '4px 10px', fontSize: '11.5px', fontWeight: 700, whiteSpace: 'nowrap', cursor: 'pointer' }}
+                >
+                  授权开启
+                </button>
+              )}
+            </div>
+
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '9px 12px',
+              background: simTailAlert ? '#fff1f0' : 'var(--surface2)',
+              border: simTailAlert ? '1px solid #ffa39e' : '1px solid var(--line)',
+              borderRadius: '8px',
+              gap: '8px'
+            }}>
+              <div>
+                <div style={{ fontWeight: 700, color: simTailAlert ? '#cf1322' : 'var(--text)', fontSize: '12.5px' }}>
+                  🚨 14:40 清T警报 {unclosedCount > 0 ? `(${unclosedCount}只待平)` : ''}
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--sub)' }}>防日内T仓被动过夜变套牢</div>
+              </div>
+              {onToggleSimTailAlert && (
+                <button
+                  type="button"
+                  onClick={onToggleSimTailAlert}
+                  style={{
+                    padding: '4px 10px',
+                    fontSize: '11.5px',
+                    fontWeight: 700,
+                    whiteSpace: 'nowrap',
+                    cursor: 'pointer',
+                    borderRadius: '6px',
+                    border: '1px solid',
+                    background: simTailAlert ? '#cf1322' : '#fff',
+                    color: simTailAlert ? '#fff' : 'var(--text)',
+                    borderColor: simTailAlert ? '#cf1322' : 'var(--line)'
+                  }}
+                >
+                  {simTailAlert ? '退出模拟' : '模拟14:40'}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* 4. 自选池实时临界买卖点监测 */}
           <div style={{ marginBottom: '16px' }}>
             <h4 style={{ fontSize: '13px', marginBottom: '8px', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span>🎯 自选股近邻做T买卖点距现价一览</span>
-              <span style={{ fontSize: '11px', color: 'var(--mute)', fontWeight: 400 }}>（现价距买卖位偏差 ≤ 0.4% 时自动报警）</span>
+              <span>🎯 自选股近邻关键价位距离一览</span>
+              <span style={{ fontSize: '11px', color: 'var(--mute)', fontWeight: 400 }}>（偏差 ≤ 0.4% 自动报警，点击直达卡片）</span>
             </h4>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '8px' }}>
               {poolNearList.map(item => {
@@ -1206,8 +1298,13 @@ function AlertCenterModalInner({
                   >
                     <div>
                       <b style={{ color: 'var(--text)' }}>{item.name}</b> <span style={{ fontSize: '11.5px', color: 'var(--mute)' }}>{item.code}</span>
+                      {item.anomaly && (
+                        <span style={{ marginLeft: 6, fontSize: '10.5px', fontWeight: 700, color: item.anomaly.level === 'surge' ? '#cf1322' : '#15803d' }}>
+                          {item.anomaly.label}
+                        </span>
+                      )}
                       <div style={{ fontSize: '11.5px', color: 'var(--sub)', marginTop: '2px' }}>
-                        现价 ¥{f2(item.price)} ➔ 目标【{n.label}】¥{f2(n.lv)}
+                        现价 ¥{f2(item.price)} ➔ 【{n.label}】¥{f2(n.lv)}
                       </div>
                     </div>
                     <span style={{
@@ -1224,12 +1321,29 @@ function AlertCenterModalInner({
             </div>
           </div>
 
-          {/* 今日已触发提醒流水记录 */}
+          {/* 5. 今日已触发异动与到价流水记录（支持分类筛选） */}
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-              <h4 style={{ fontSize: '13px', margin: 0, color: 'var(--text)' }}>
-                📋 今日买卖到价提醒历史流水 ({alertList.length}条)
-              </h4>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                <h4 style={{ fontSize: '13px', margin: 0, color: 'var(--text)' }}>
+                  📋 今日预警流水
+                </h4>
+                {[
+                  { key: 'all', label: `全部 (${alertList.length})` },
+                  { key: 'anomaly', label: `⚡ 盘中异动 (${anomalyCount})` },
+                  { key: 'price', label: `🎯 到价提醒 (${priceCount})` },
+                ].map((tab) => (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    className={`mini ${filterCat === tab.key ? 'primary' : ''}`}
+                    style={{ marginLeft: 0, fontSize: '11px', padding: '2px 8px' }}
+                    onClick={() => setFilterCat(tab.key)}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
               {alertList.length > 0 && (
                 <button
                   type="button"
@@ -1242,23 +1356,41 @@ function AlertCenterModalInner({
               )}
             </div>
 
-            {alertList.length > 0 ? (
-              <div className="alert-list" style={{ maxHeight: '180px', overflowY: 'auto', border: '1px solid var(--line)', borderRadius: '8px', background: '#fff' }}>
-                {alertList.map(a => (
-                  <div key={a.id} className="alert-row">
-                    <span className="ah">{a.time}</span>
-                    <span className="ak k-price">{a.label}</span>
-                    <span className="ad">
-                      <b>{a.name}</b> 现价 ¥{f2(a.price)} 已触及【{a.label} ¥{f2(a.target)}】（偏差 {(a.dev * 100).toFixed(2)}%）
-                    </span>
-                  </div>
-                ))}
+            {filteredAlerts.length > 0 ? (
+              <div className="alert-list" style={{ maxHeight: '190px', overflowY: 'auto', border: '1px solid var(--line)', borderRadius: '8px', background: '#fff' }}>
+                {filteredAlerts.map(a => {
+                  const isAnom = a.category === 'anomaly';
+                  const tagStyle = isAnom
+                    ? a.anomalyType === 'rocket_up'
+                      ? { background: '#fef2f2', color: '#cf1322', border: '1px solid #fca5a5' }
+                      : a.anomalyType === 'waterfall_down'
+                      ? { background: '#ecfdf5', color: '#15803d', border: '1px solid #86efac' }
+                      : { background: '#fff7ed', color: '#c2410c', border: '1px solid #fdba74' }
+                    : undefined;
+
+                  return (
+                    <div key={a.id} className="alert-row">
+                      <span className="ah">{a.time}</span>
+                      <span className="ak k-price" style={tagStyle}>{a.label}</span>
+                      <span className="ad">
+                        {isAnom ? (
+                          <>
+                            <b>{a.name}</b> 现价 ¥{f2(a.price)} · {a.summary || `${a.deltaPct > 0 ? '+' : ''}${a.deltaPct}%`}
+                          </>
+                        ) : (
+                          <>
+                            <b>{a.name}</b> 现价 ¥{f2(a.price)} 触及【{a.label} ¥{f2(a.target)}】（差 {((a.dev || 0) * 100).toFixed(2)}%）
+                          </>
+                        )}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <div style={{ padding: '16px', textAlign: 'center', color: 'var(--mute)', background: 'var(--surface2)', borderRadius: '8px', fontSize: '12.5px' }}>
-                今天尚未触发到价提醒。<br />
-                系统会在盘中自动拉取腾讯实时行情（每分钟/30秒自动轮询）；<br />
-                当自选股现价触及正T买点、倒T卖点或止损位时，将第一时间在此处与桌面弹窗报警！
+                当前分类暂无预警记录。<br />
+                可点击上方「🧪 演练分时异动」立即体验放量急拉与跳水预警全链路闭环。
               </div>
             )}
           </div>

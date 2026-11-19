@@ -2,8 +2,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import StockCard from './StockCard.jsx';
 import BattleCardGrid from './BattleCardGrid.jsx';
 import PositionRiskBar, {
-  POS_RULES_KEY,
   loadPosRules,
+  savePosRules,
   getAllowedPosCap,
 } from './PositionRiskBar.jsx';
 import { posCalc } from '../services/api.js';
@@ -11,8 +11,14 @@ import { money } from '../services/utils.js';
 
 export default function ConsoleSection({
   pool = [],
+  tailActives = [],
   sentiment = null,
   noticeRisks = {},
+  posRules: externalPosRules = null,
+  tiltState = null,
+  onUpdatePosRules,
+  onUnlockTilt,
+  onRelockTilt,
   activeStockCode,
   totalAssets = 100000,
   tradeLogs = [],
@@ -39,13 +45,17 @@ export default function ConsoleSection({
   const [tierFilter, setTierFilter] = useState('all'); // 'all' | 'long' | 'short'
   const [expandedCode, setExpandedCode] = useState(''); // 点击卡片才展开对应完整做T详情面板
   const [expandAll, setExpandAll] = useState(false);
-  const [posRules, setPosRules] = useState(() => loadPosRules());
+  const [internalPosRules, setInternalPosRules] = useState(() => loadPosRules());
+
+  const posRules = externalPosRules || internalPosRules;
 
   const handleUpdatePosRules = (next) => {
-    setPosRules(next);
-    try {
-      localStorage.setItem(POS_RULES_KEY, JSON.stringify(next));
-    } catch (_) {}
+    if (onUpdatePosRules) {
+      onUpdatePosRules(next);
+    } else {
+      setInternalPosRules(next);
+      savePosRules(next);
+    }
   };
 
   // 当外部（如 TopNav 胶囊、起爆/连板跳转）明确选中某只标的时，同步展开其详情面板
@@ -58,7 +68,7 @@ export default function ConsoleSection({
     }
   }, [activeStockCode, pool]);
 
-  // 资金隔离测算 (70% 底仓做T池 vs 30% 超短打板机动池)
+  // 资金隔离测算 (70% 底仓做T池 vs 30% 超短打板/尾盘机动池)
   const totalAssetsNum = +totalAssets || 100000;
   const baseCapital = totalAssetsNum * 0.7;
   const tacticalCapital = totalAssetsNum * 0.3;
@@ -66,7 +76,12 @@ export default function ConsoleSection({
   const baseStocks = useMemo(() => pool.filter((s) => s.tier === 'long' || s.poolTag === '稳健'), [pool]);
   const tacticalStocks = useMemo(() => pool.filter((s) => s.tier === 'short' || s.poolTag === '短线'), [pool]);
   const baseMktVal = useMemo(() => baseStocks.reduce((acc, s) => acc + (s.shares || 0) * (s.price || s.cost || 0), 0), [baseStocks]);
-  const tacticalMktVal = useMemo(() => tacticalStocks.reduce((acc, s) => acc + (s.shares || 0) * (s.price || s.cost || 0), 0), [tacticalStocks]);
+  const shortPoolMktVal = useMemo(() => tacticalStocks.reduce((acc, s) => acc + (s.shares || 0) * (s.price || s.cost || 0), 0), [tacticalStocks]);
+  const tailMktVal = useMemo(
+    () => (tailActives || []).reduce((acc, t) => acc + (t.status === 'closed' ? 0 : (t.shares || 0) * (t.price || t.cost || 0)), 0),
+    [tailActives]
+  );
+  const tacticalMktVal = shortPoolMktVal + tailMktVal;
   const totalMktVal = baseMktVal + tacticalMktVal;
   const { capPct: allowedCapPct } = getAllowedPosCap(sentiment, posRules);
   const baseCash = Math.max(0, baseCapital - baseMktVal);
@@ -156,7 +171,7 @@ export default function ConsoleSection({
         >
           <span className="fp-title">⚡ 短线机动池 (30%)</span>
           <span className="fp-meta">
-            {tacticalStocks.length}只 · 持仓 <b>¥{money(tacticalMktVal)}</b> · 可用 <b>¥{money(tacticalCash)}</b>
+            {tacticalStocks.length}只{tailMktVal > 0 ? '+尾盘' : ''} · 持仓 <b>¥{money(tacticalMktVal)}</b> · 可用 <b>¥{money(tacticalCash)}</b>
           </span>
         </div>
 
@@ -170,13 +185,17 @@ export default function ConsoleSection({
         )}
       </div>
 
-      {/* ⚖️ 动态仓位风控条（情绪总阀联动总仓上限 + 单票集中度红线） */}
+      {/* ⚖️ 动态仓位风控条 & 单日防上头熔断锁 */}
       <PositionRiskBar
         pool={pool}
+        tailActives={tailActives}
         totalAssets={totalAssetsNum}
         sentiment={sentiment}
         posRules={posRules}
+        tiltState={tiltState}
         onUpdateRules={handleUpdatePosRules}
+        onUnlockTilt={onUnlockTilt}
+        onRelockTilt={onRelockTilt}
         onSelectStock={handleToggleExpand}
       />
 
@@ -265,6 +284,7 @@ export default function ConsoleSection({
             sentiment={sentiment}
             noticeRisks={noticeRisks}
             posRules={posRules}
+            tiltState={tiltState}
             totalMktVal={totalMktVal}
             allowedCapPct={allowedCapPct}
             expandedCode={expandAll ? '' : expandedCode}
@@ -297,6 +317,7 @@ export default function ConsoleSection({
             sentiment={sentiment}
             noticeRisks={noticeRisks}
             posRules={posRules}
+            tiltState={tiltState}
             totalMktVal={totalMktVal}
             allowedCapPct={allowedCapPct}
             expandedCode={expandAll ? '' : expandedCode}

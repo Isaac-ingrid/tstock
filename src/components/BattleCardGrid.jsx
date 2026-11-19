@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
 import { calc, posCalc } from '../services/api.js';
-import { f2, money, getTodayTStatus, copyPlain } from '../services/utils.js';
+import { f2, money, getTodayTStatus, copyPlain, toastWarn } from '../services/utils.js';
 
 /**
  * 根据「自选观察」vs「实盘持仓」分别生成清晰、直白的买卖点判定结论：
  * - 自选（shares === 0）：明确回答「现在是不是买点？」+ 目标低吸价/止损价
  * - 持仓（shares > 0）：明确回答「现在是卖点、买点、止损还是持股观望？」+ 浮盈与触发价
- * - 统一联动全市场情绪红灯总阀（sentiment.riskValve === 'RED'）与盘前公告高危排雷（noticeRisk.riskLevel === '高风险'）
+ * - 统一联动全市场情绪红灯总阀、盘前公告高危排雷、盘中分时异动（急拉/跳水/冲板回落）及单日防上头熔断锁
  */
-export function buildActionSignal(stock, { sentiment = null, noticeRisk = null } = {}) {
+export function buildActionSignal(stock, { sentiment = null, noticeRisk = null, tiltState = null } = {}) {
   const pc = +stock.prevClose || 0;
   const px = +stock.price || pc;
   const chg = pc > 0 ? ((px - pc) / pc) * 100 : 0;
@@ -19,6 +19,13 @@ export function buildActionSignal(stock, { sentiment = null, noticeRisk = null }
   const hasRedNotice = noticeRisk?.riskLevel === '高风险' && (noticeRisk.redFlags || []).length > 0;
   const redNoticeTag = hasRedNotice ? (noticeRisk.redFlags[0]?.tag || '高危公告') : '';
   const isRedSentiment = sentiment?.riskValve === 'RED';
+  const isTiltLocked = Boolean(tiltState?.isLocked);
+
+  const now = Date.now();
+  const activeAnomaly =
+    stock._anomaly && (!stock._anomaly.at || now - stock._anomaly.at <= 12 * 60 * 1000)
+      ? stock._anomaly
+      : null;
 
   const distBuyPct = px > 0 && c.inA > 0 ? ((px - c.inA) / px) * 100 : null;
   const distSellPct = px > 0 && c.outA > 0 ? ((c.outA - px) / px) * 100 : null;
@@ -34,6 +41,16 @@ export function buildActionSignal(stock, { sentiment = null, noticeRisk = null }
       badge = `🚨 非买点 · 公告雷(${redNoticeTag})`;
       headline = `近35天检出高危利空【${redNoticeTag}】，一票否决买入`;
       triggerText = '点击下方「🩺 诊股」核查公告明细，排除前严禁建仓';
+    } else if (activeAnomaly?.type === 'limit_broken' || activeAnomaly?.type === 'waterfall_down') {
+      kind = 'stop';
+      badge = activeAnomaly.type === 'limit_broken' ? '💥 非买点 · 冲板炸板' : '🌊 非买点 · 分时跳水';
+      headline = activeAnomaly.summary;
+      triggerText = `等分时缩量走平后再评估低吸位 ¥${f2(c.inA)}`;
+    } else if (isTiltLocked) {
+      kind = 'stop';
+      badge = '🔒 熔断期 · 暂停新开仓';
+      headline = '已触发单日防上头熔断锁，禁止情绪化追单换股，管住手保本金';
+      triggerText = `参考观察位 ¥${f2(c.inA)} · 今日仅复盘不新买`;
     } else if (c.brokenLock || c.bear) {
       kind = 'stop';
       badge = '🚫 非买点 · 禁接飞刀';
@@ -46,6 +63,11 @@ export function buildActionSignal(stock, { sentiment = null, noticeRisk = null }
         ? `全市场红灯退潮（炸板率 ${sentiment.brokenRate ?? '—'}%），暂停新开仓`
         : '指数破位日暂停新开仓，管住手';
       triggerText = `等情绪转黄/绿灯或指数收回 MA20 后再看 ¥${f2(c.inA)}`;
+    } else if (activeAnomaly?.type === 'rocket_up' && chg >= 4.0) {
+      kind = 'warn';
+      badge = '🚀 放量急拉 · 切忌半路追高';
+      headline = `分时5分钟爆量急拉 +${activeAnomaly.deltaPct}%，追高易吃日内回落面`;
+      triggerText = `等回踩分时均线 ¥${f2(+stock.avg || c.inA)} 不破再接`;
     } else if (c.ignitionActive) {
       kind = 'buy';
       badge = '🚀 爆发买点 · 可跟随';
@@ -86,10 +108,17 @@ export function buildActionSignal(stock, { sentiment = null, noticeRisk = null }
         ? `形态已破位（${c.breakDesc || '失守生命线'}），反抽即减仓`
         : `触及止损参考线 ¥${f2(c.slA)}，严防深套`;
       triggerText = `反抽 ¥${f2(c.outA)} 优先减仓 · 严禁向下补仓`;
-    } else if (c.mode === 'CUT' || c.sellFlyTriggered) {
+    } else if (activeAnomaly?.type === 'limit_broken') {
       kind = 'sell';
-      badge = '🔴 当前卖点 · 高抛兑现';
-      headline = c.sellFlyTriggered
+      badge = '💥 卖点 · 炸板回落锁盈';
+      headline = activeAnomaly.summary;
+      triggerText = `优先减仓锁住利润，严禁在炸板回落途中补仓`;
+    } else if (c.mode === 'CUT' || c.sellFlyTriggered || (activeAnomaly?.type === 'rocket_up' && px >= c.outA * 0.995)) {
+      kind = 'sell';
+      badge = activeAnomaly?.type === 'rocket_up' ? '🚀 急拉卖点 · 分批高抛' : '🔴 当前卖点 · 高抛兑现';
+      headline = activeAnomaly?.type === 'rocket_up'
+        ? `分时爆量急拉 +${activeAnomaly.deltaPct}% 逼近压力区，顺势分批倒T高抛`
+        : c.sellFlyTriggered
         ? '已逼近/越过卖飞线，冲高分批锁盈（不追回）'
         : `进入 6 格以上亢奋区（${chg >= 0 ? '+' : ''}${chg.toFixed(1)}%），逢高只减不接`;
       triggerText = `第一卖点 ¥${f2(c.outA)} / 第二卖点 ¥${f2(c.outB)}`;
@@ -101,12 +130,22 @@ export function buildActionSignal(stock, { sentiment = null, noticeRisk = null }
         ? '日线空头压制，反弹到压力区先倒T降仓'
         : '无量拉升/分时顶背离，先高抛再等回落接回';
       triggerText = `高抛 ¥${f2(c.outA)} / ¥${f2(c.outB)} → 接回 ¥${f2(c.bkA)}`;
+    } else if (activeAnomaly?.type === 'waterfall_down') {
+      kind = 'warn';
+      badge = '🌊 分时跳水 · 暂禁接飞刀';
+      headline = activeAnomaly.summary;
+      triggerText = `严禁急跌中补仓，等5分钟缩量止跌后再看 ¥${f2(c.inA)}`;
     } else if (c.mode === 'BUY' || c.ignitionActive) {
       if (hasRedNotice) {
         kind = 'stop';
         badge = `🚨 公告雷(${redNoticeTag}) · 禁正T补仓`;
         headline = `近35天有【${redNoticeTag}】利空，锁定正T买入，逢反抽优先减仓`;
         triggerText = `反抽 ¥${f2(c.outA)} 减仓避险 · 勿向下补仓`;
+      } else if (isTiltLocked) {
+        kind = 'warn';
+        badge = '🛑 熔断期 · 禁正T仅可减仓';
+        headline = '已触发单日防上头熔断锁，锁定正T低吸加仓，仅允许减仓或倒T高抛';
+        triggerText = `反抽压力 ¥${f2(c.outA)} · 止损防守 ¥${f2(c.slA)}`;
       } else if (isRedSentiment) {
         kind = 'warn';
         badge = '🔴 情绪红灯 · 禁正T仅倒T';
@@ -124,10 +163,16 @@ export function buildActionSignal(stock, { sentiment = null, noticeRisk = null }
         triggerText = `低吸 ¥${f2(c.inA)} → T出目标 ¥${f2(c.tp1)} · 止损 ¥${f2(c.slA)}`;
       }
     } else {
-      kind = hasRedNotice ? 'warn' : 'wait';
-      badge = hasRedNotice ? `⚠️ 持仓预警 · 公告(${redNoticeTag})` : '⏳ 持股观望 · 区间震荡';
+      kind = hasRedNotice || isTiltLocked ? 'warn' : 'wait';
+      badge = hasRedNotice
+        ? `⚠️ 持仓预警 · 公告(${redNoticeTag})`
+        : isTiltLocked
+        ? '🔒 熔断观察 · 禁买可卖'
+        : '⏳ 持股观望 · 区间震荡';
       headline = hasRedNotice
         ? `近35天检出【${redNoticeTag}】，切勿加仓，反抽择机减仓`
+        : isTiltLocked
+        ? '单日防上头熔断保护中，底仓只设止损/止盈不加仓'
         : (c.grid < 3
           ? `振幅仅 ${c.amp.toFixed(1)}%，差价难覆盖税费，底仓不动`
           : '未触发买卖阈值，持仓等待触及上下格位');
@@ -135,7 +180,21 @@ export function buildActionSignal(stock, { sentiment = null, noticeRisk = null }
     }
   }
 
-  return { kind, badge, headline, triggerText, c, pos, chg, px, hasPos, hasRedNotice, redNoticeTag };
+  return {
+    kind,
+    badge,
+    headline,
+    triggerText,
+    c,
+    pos,
+    chg,
+    px,
+    hasPos,
+    hasRedNotice,
+    redNoticeTag,
+    activeAnomaly,
+    isTiltLocked,
+  };
 }
 
 /** 卡片内置：一键下单手数 / 以损定仓 / 盈亏比计算器 */
@@ -266,8 +325,11 @@ function OrderSizingCalc({ stock, sig, totalAssets, posRules, totalMktVal = 0, a
         </div>
       </div>
 
-      {(overSingle || overTotal) && (
+      {(overSingle || overTotal || sig.isTiltLocked) && (
         <div className="bcc-risk-warn">
+          {sig.isTiltLocked && (
+            <div>🔒 当前处于「单日防上头熔断期」，仅可试算参考，系统已锁定新开仓买入</div>
+          )}
           {overSingle && (
             <div>⚠️ 买入后该股仓位将达 <b>{afterSinglePct.toFixed(1)}%</b>，超过单票红线 {singleMaxPct}%</div>
           )}
@@ -294,6 +356,7 @@ export default function BattleCardGrid({
   sentiment = null,
   noticeRisks = {},
   posRules = null,
+  tiltState = null,
   totalMktVal = 0,
   allowedCapPct = 80,
   expandedCode = '',
@@ -332,8 +395,8 @@ export default function BattleCardGrid({
         const isExpanded = expandedCode === code6;
         const isShort = s.tier === 'short' || s.poolTag === '短线';
         const noticeRisk = noticeRisks?.[code6] || null;
-        const sig = buildActionSignal(s, { sentiment, noticeRisk });
-        const { c, pos, chg, px, hasPos } = sig;
+        const sig = buildActionSignal(s, { sentiment, noticeRisk, tiltState });
+        const { c, pos, chg, px, hasPos, activeAnomaly, isTiltLocked } = sig;
         const chgCls = chg > 0 ? 'up' : chg < 0 ? 'down' : '';
         const tStatus = hasPos ? getTodayTStatus(s, tradeLogs) : null;
         const isEditingMemo = editingMemoCode === code6;
@@ -391,6 +454,18 @@ export default function BattleCardGrid({
                 {tStatus.t1LockedShares > 0 && !tStatus.isFirstDayLocked && (
                   <span className="bc-t1-lock">今日新买锁定 {tStatus.t1LockedShares} 股</span>
                 )}
+              </div>
+            )}
+
+            {/* 盘中分时放量急拉 / 跳水 / 冲板回落实时异动雷达条 */}
+            {activeAnomaly && (
+              <div className={`bc-anomaly-bar ${activeAnomaly.level === 'surge' ? 'surge' : 'danger'}`}>
+                <span className="bc-anomaly-badge">{activeAnomaly.badge}</span>
+                <span className="bc-anomaly-txt">
+                  {activeAnomaly.deltaPct > 0 ? '+' : ''}{activeAnomaly.deltaPct}%
+                  {activeAnomaly.volBurst ? ` · 量能${activeAnomaly.volBurst}×` : ''}
+                  {activeAnomaly.time ? ` (${activeAnomaly.time.slice(0, 5)})` : ''}
+                </span>
               </div>
             )}
 
@@ -523,11 +598,27 @@ export default function BattleCardGrid({
                 </button>
                 <button
                   type="button"
-                  className="bc-act-btn"
-                  onClick={() => onOpenQuickT && onOpenQuickT(s, hasPos ? '正T' : '买入建仓', px)}
-                  title={hasPos ? '快捷记录做T或买卖流水' : '记录首次买入建仓（自动转入实盘持仓）'}
+                  className={`bc-act-btn ${!hasPos && isTiltLocked ? 'is-locked' : ''}`}
+                  onClick={() => {
+                    if (!hasPos && isTiltLocked) {
+                      toastWarn('🔒 单日防上头熔断保护中：已暂停新开仓买入，请先在上方风控条冷静复盘');
+                      return;
+                    }
+                    if (onOpenQuickT) {
+                      onOpenQuickT(s, hasPos ? (isTiltLocked ? '倒T' : '正T') : '买入建仓', px);
+                    }
+                  }}
+                  title={
+                    !hasPos && isTiltLocked
+                      ? '防上头熔断保护中，暂禁新开仓'
+                      : hasPos
+                      ? isTiltLocked
+                        ? '熔断期仅允许记录减仓卖出或倒T高抛'
+                        : '快捷记录做T或买卖流水'
+                      : '记录首次买入建仓（自动转入实盘持仓）'
+                  }
                 >
-                  {hasPos ? '⚡ 记T' : '＋ 建仓'}
+                  {hasPos ? (isTiltLocked ? '⚡ 减仓/倒T' : '⚡ 记T') : (isTiltLocked ? '🔒 熔断禁买' : '＋ 建仓')}
                 </button>
               </div>
               <button

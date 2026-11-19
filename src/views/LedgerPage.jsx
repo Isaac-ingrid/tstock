@@ -8,8 +8,13 @@ export default function LedgerPage({
   logs,
   wbLatest,
   onAddLog,
+  onUpdateLog,
   onDeleteLog,
   pool,
+  totalAssets,
+  vaultStatus,
+  onForceSyncVault,
+  onRestoreVault,
   onExport,
   onImportClick
 }) {
@@ -19,8 +24,13 @@ export default function LedgerPage({
         logs={logs}
         wbLatest={wbLatest}
         onAddLog={onAddLog}
+        onUpdateLog={onUpdateLog}
         onDeleteLog={onDeleteLog}
         pool={pool}
+        totalAssets={totalAssets}
+        vaultStatus={vaultStatus}
+        onForceSyncVault={onForceSyncVault}
+        onRestoreVault={onRestoreVault}
         onExport={onExport}
         onImportClick={onImportClick}
       />

@@ -3,7 +3,7 @@
    ============================================================ */
 
 import { f2, f3, pct, money, money$, fmtIn, fvol, GRID, STOP, FLY, toast, toastOk, toastWarn, toastErr, soundChime, AUTO_FIELDS } from './utils.js';
-import { ALERT_CENTER, saveAlerts, stampData, pool, SNAP } from './state.js';
+import { ALERT_CENTER, saveAlerts, stampData, pool, LOG, SNAP } from './state.js';
 import { chartInd, chartEntry, chartMeta } from './chart.js';
 import { APP_PAGE_TITLE } from '../data/site.js';
 
@@ -270,7 +270,7 @@ export async function testCoachConnection(params = {}) {
   }
 }
 
-/* 提交实盘交易流水至天翼云大模型进行专业级复盘诊断 */
+/* 提交实盘交易流水至天翼云大模型或内置量化规则教练进行复盘诊断 */
 export async function fetchCoachReview(payload = {}) {
   const url = `${STOCK_API_BASE}/api/coach/review`;
   const ctl = new AbortController();
@@ -284,6 +284,40 @@ export async function fetchCoachReview(payload = {}) {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.detail || `AI复盘诊断生成失败 (${res.status})`);
+    return data;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+/* 读取本机磁盘持久化金库 (data/user_vault.json) */
+export async function fetchUserVault() {
+  const url = `${STOCK_API_BASE}/api/user/vault`;
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 5000);
+  try {
+    const res = await fetch(url, { cache: 'no-store', signal: ctl.signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+/* 原子双写用户金库至本机磁盘 (data/user_vault.json + 每日滚动快照备份) */
+export async function saveUserVault(payload = {}) {
+  const url = `${STOCK_API_BASE}/api/user/vault`;
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 8000);
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: ctl.signal,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
     return data;
   } finally {
     clearTimeout(t);
@@ -612,6 +646,10 @@ export async function refreshSingleFastRt(s){
       price: px,
       avg: q.avg || px,
       vr: q.vr || 1,
+      ceiling: q.ceiling || s.ceiling || 0,
+      floor: q.floor || s.floor || 0,
+      vol: q.vol || s.vol || 0,
+      amt: q.amt || s.amt || 0,
       _t: nowStr(),
     };
     AUTO_FIELDS.forEach((k) => { if (man[k]) delete upd[k]; });
@@ -620,6 +658,8 @@ export async function refreshSingleFastRt(s){
   if (minRes.status === 'fulfilled' && minRes.value && Array.isArray(minRes.value.pts)) {
     s._k = s._k || {};
     s._k['rt'] = chartEntry('line', { min: minRes.value });
+    const mnDate = String(minRes.value.date || '').replace(/\D/g, '').slice(0, 8);
+    s._rtPts = mnDate === todayStr().replace(/-/g, '') ? minRes.value.pts : [];
   }
   return s;
 }
@@ -792,6 +832,7 @@ export async function loadVolMin(s, force){
        完全是假象。所以日期不匹配时一律当作"今日还没有分时"。 */
     const mnDate = String((mn && mn.date) || '').replace(/\D/g,'').slice(0,8);
     const pts = (mnDate === today) ? ((mn && mn.pts) || []) : [];
+    s._rtPts = pts;
     if (pts.length){
       const acc = {};
       pts.forEach(p=>{
@@ -1634,23 +1675,27 @@ export async function selfTest(){
                          + '指数/估值/板块三条是新链路，若失败则第四条闸门、估值分位、板块归属会显示"数据不足"，不影响三闸门与做T价位计算。');
 }
 
-/* 添加自选：能本地解析的代码，绝不依赖检索接口 */
-export async function addByQuery(q){
-  const st  = document.getElementById('dbStatus');
-  const box = document.getElementById('dbCands');
+/* 添加自选：能本地解析的代码，绝不依赖检索接口；传入 currentPool 时先同步 React 最新持仓防止覆盖丢失 */
+export async function addByQuery(q, currentPool = null){
+  if (Array.isArray(currentPool)) {
+    pool.splice(0, pool.length, ...currentPool);
+  }
+  const st  = typeof document !== 'undefined' ? document.getElementById('dbStatus') : null;
+  const box = typeof document !== 'undefined' ? document.getElementById('dbCands') : null;
   if (box) box.innerHTML = '';
 
   /* 快路径：纯 6 位代码 / sh605128 形式 —— 本地算 tcode，零网络检索 */
   const direct = tcodeFromInput(q);
   if (direct){
     const code = codeOf(direct);
-    if (pool.some(s => s.code === code)){
+    if (pool.some(s => String(s.code).padStart(6, '0') === String(code).padStart(6, '0'))){
       if (st) { st.className='db-status err'; st.textContent = code + ' 已经在自选池里了。'; }
-      return;
+      toastWarn(code + ' 已经在自选池里了');
+      return { status: 'exists', code };
     }
     if (st) { st.className='db-status'; st.textContent = '按代码直接添加 ' + direct + ' …'; }
-    await adoptCandidate({ name:'', code, tcode:direct });
-    return;
+    const added = await adoptCandidate({ name:'', code, tcode:direct });
+    return { status: added ? 'added' : 'exists', stock: added };
   }
 
   /* 常规路径：名称 / 拼音首字母 / 部分代码 → 走检索 */
@@ -1662,11 +1707,11 @@ export async function addByQuery(q){
       st.className='db-status err';
       st.innerHTML = '检索接口连不上（' + e.message + '）。<br>不必等它 —— 直接输 <b>6 位代码</b>（如 605128）即可添加，<b>这条路径不走检索，一定可用</b>。';
     }
-    return;
+    throw new Error('检索接口不可用（' + e.message + '），请直接输入6位股票代码');
   }
   if (!list.length){
     if (st) { st.className='db-status err'; st.textContent = '没找到匹配的 A 股「' + q + '」，可换名称、拼音首字母（如 shyp），或直接输 6 位代码。'; }
-    return;
+    throw new Error('未找到匹配的 A 股「' + q + '」');
   }
   if (list.length > 1){
     if (box) {
@@ -1676,22 +1721,41 @@ export async function addByQuery(q){
       });
     }
     if (st) st.textContent = '找到 ' + list.length + ' 个结果，点一个加入自选：';
-    return;
+    const exact = list.find(x => x.name === String(q).trim() || x.code === String(q).trim());
+    if (exact) {
+      const added = await adoptCandidate(exact);
+      return { status: added ? 'added' : 'exists', stock: added };
+    }
+    if (!box) {
+      const added = await adoptCandidate(list[0]);
+      return { status: added ? 'added' : 'exists', stock: added, candidates: list };
+    }
+    return { status: 'multiple', candidates: list };
   }
-  await adoptCandidate(list[0]);
+  const added = await adoptCandidate(list[0]);
+  return { status: added ? 'added' : 'exists', stock: added };
 }
 
-export async function adoptCandidate(c){
-  const st = document.getElementById('dbStatus');
-  if (pool.some(s => s.code === c.code)){
-    if (st) { st.className='db-status err'; st.textContent = (c.name||c.code) + ' 已经在自选池里了。'; }
-    return;
+export async function adoptCandidate(c, currentPool = null){
+  if (Array.isArray(currentPool)) {
+    pool.splice(0, pool.length, ...currentPool);
   }
-  const box = document.getElementById('dbCands');
+  const st = typeof document !== 'undefined' ? document.getElementById('dbStatus') : null;
+  if (pool.some(s => String(s.code).padStart(6, '0') === String(c.code).padStart(6, '0'))){
+    if (st) { st.className='db-status err'; st.textContent = (c.name||c.code) + ' 已经在自选池里了。'; }
+    return null;
+  }
+  const box = typeof document !== 'undefined' ? document.getElementById('dbCands') : null;
   if (box) box.innerHTML = '';
-  pool.push({ name:c.name || c.code, code:c.code, tcode:c.tcode,
-              prevClose:0, open:0, high:0, low:0, price:0, avg:0, vr:1,
-              ma5:null, ma10:null, ma20:null, shares:0, cost:0, cap:0 });
+  const newStock = {
+    name: c.name || c.code,
+    code: String(c.code).padStart(6, '0'),
+    tcode: c.tcode || tcodeFromCode(String(c.code).padStart(6, '0')),
+    prevClose: 0, open: 0, high: 0, low: 0, price: 0, avg: 0, vr: 1,
+    ma5: null, ma10: null, ma20: null, shares: 0, cost: 0, cap: 0,
+    tier: 'short', p: 'day'
+  };
+  pool.push(newStock);
   const s = pool[pool.length-1];
   try{
     await loadStock(s);
@@ -1704,6 +1768,7 @@ export async function adoptCandidate(c){
   if (typeof render === 'function') render(pool);
   else if (typeof window !== 'undefined' && window.render) window.render(pool);
   savePool();
+  return s;
 }
 
 /* 交易时段自动刷新 */
@@ -2164,26 +2229,62 @@ export async function loadResearch(s, force){
 }
 
 
-/* ===================== 价格到位提醒 ===================== */
+/* ===================== 价格到位提醒 & 盘中分时异动雷达 ===================== */
 const NEAR_PCT = 0.004;
 const _hitSeen = {};
-export function checkPriceAlerts(){
+const _anomCooldown = {};
+const _quoteRing = {};
+let _quoteRingDay = '';
+const _mktSnapRing = {};
+const _mktAlertCd = {};
+
+function isAlertMuted(){
   try {
     const raw = localStorage.getItem('t-alert-enabled');
-    if (raw !== null && JSON.parse(raw) === false) {
-      if (typeof document !== 'undefined' && document.title !== APP_PAGE_TITLE) {
-        document.title = APP_PAGE_TITLE;
-      }
-      return; // 上班免打扰模式：关闭声音、弹窗、气泡及标题闪烁
+    return raw !== null && JSON.parse(raw) === false;
+  } catch (_) {
+    return false;
+  }
+}
+
+function pushSystemAlertRecord(entry){
+  try {
+    const hist = JSON.parse(localStorage.getItem('t-system-alerts') || '[]');
+    const updated = [entry, ...(Array.isArray(hist) ? hist : [])].slice(0, 60);
+    localStorage.setItem('t-system-alerts', JSON.stringify(updated));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('t-alert-triggered', { detail: updated }));
     }
-  } catch (_) {}
-  if (!Array.isArray(pool) || !pool.length) return;
+    return updated;
+  } catch (_) {
+    return [];
+  }
+}
+
+export function checkPriceAlerts(targetPool = null){
+  if (isAlertMuted()) {
+    if (typeof document !== 'undefined' && document.title !== APP_PAGE_TITLE) {
+      document.title = APP_PAGE_TITLE;
+    }
+    return; // 上班免打扰模式：关闭声音、弹窗、气泡及标题闪烁
+  }
+  const list = Array.isArray(targetPool) ? targetPool : pool;
+  if (!Array.isArray(list) || !list.length) return;
   const hits = [];
-  pool.forEach(s=>{
+  list.forEach(s=>{
     const p = +s.price;
     if (!p) return;
     let c; try{ c = calc(s); }catch(_){ return; }
-    [['买点', c.inA], ['第二买点', c.inB], ['卖点', c.outA], ['卖飞线', c.fly]].forEach(pair=>{
+    const levels = [
+      ['买点', c.inA],
+      ['第二买点', c.inB],
+      ['卖点', c.outA],
+      ['卖飞线', c.fly],
+    ];
+    if (+s.shares > 0 && c.slA > 0) {
+      levels.push(['止损线', c.slA]);
+    }
+    levels.forEach(pair=>{
       const label = pair[0], lv = +pair[1];
       if (!lv) return;
       const dev = Math.abs(p - lv) / lv;
@@ -2191,48 +2292,368 @@ export function checkPriceAlerts(){
     });
   });
   hits.sort((a,b)=>a.dev - b.dev);
-  document.title = hits.length
-    ? '⚡' + hits[0].name + ' ' + hits[0].p.toFixed(2) + ' 触及' + hits[0].label
-    : APP_PAGE_TITLE;
-  hits.filter(h=>!_hitSeen[h.key]).forEach(h=>{
+  if (typeof document !== 'undefined') {
+    document.title = hits.length
+      ? '⚡' + hits[0].name + ' ' + hits[0].p.toFixed(2) + ' 触及' + hits[0].label
+      : APP_PAGE_TITLE;
+  }
+  const freshHits = hits.filter(h=>!_hitSeen[h.key]);
+  if (freshHits.length > 0) {
+    try { soundChime(); } catch (_) {}
+  }
+  freshHits.forEach(h=>{
     _hitSeen[h.key] = 1;
     const msg = h.name + ' ' + h.p.toFixed(2) + ' 已到「' + h.label + ' ' + h.lv.toFixed(2) + '」（差 ' + (h.dev*100).toFixed(2) + '%）';
     toastWarn(msg);
+    pushSystemAlertRecord({
+      id: Date.now() + Math.random(),
+      category: 'price',
+      time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
+      name: h.name,
+      code: h.key.split('|')[0],
+      label: h.label,
+      price: h.p,
+      target: h.lv,
+      dev: h.dev,
+    });
     try {
-      const hist = JSON.parse(localStorage.getItem('t-system-alerts') || '[]');
-      const newAlert = {
-        id: Date.now() + Math.random(),
-        time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
-        name: h.name,
-        code: h.key.split('|')[0],
-        label: h.label,
-        price: h.p,
-        target: h.lv,
-        dev: h.dev
-      };
-      const updated = [newAlert, ...hist].slice(0, 50);
-      localStorage.setItem('t-system-alerts', JSON.stringify(updated));
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('t-alert-triggered', { detail: updated }));
-        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-          new Notification(`⚡ 做T到价提醒: ${h.name} 触及${h.label}`, {
-            body: `现价 ¥${h.p.toFixed(2)}，目标位 ¥${h.lv.toFixed(2)}，偏差 ${(h.dev*100).toFixed(2)}%`
-          });
-        }
+      if (typeof window !== 'undefined' && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        new Notification(`⚡ 做T到价提醒: ${h.name} 触及${h.label}`, {
+          body: `现价 ¥${h.p.toFixed(2)}，目标位 ¥${h.lv.toFixed(2)}，偏差 ${(h.dev*100).toFixed(2)}%`
+        });
       }
     } catch (_) {}
   });
   Object.keys(_hitSeen).forEach(k=>{ if (!hits.some(h=>h.key === k)) delete _hitSeen[k]; });
 }
 
-export function checkMarketAlerts(){
-  if (!MKT || !Array.isArray(MKT.idx) || !MKT.idx.length) return;
+/**
+ * 盘中分时异动雷达：零额外网络请求复用 s._rtPts（当日1分钟分时序列）+ 报价环形缓冲兜底
+ * 自动捕获三类高危/高优短线异动：
+ *   1. 🚀 放量急拉（4~5分钟急涨 ≥1.8%/2.5% 且分钟量能脉冲 ≥1.8× 均量，站上分时均线）
+ *   2. 🌊 放量跳水（4~5分钟急跌 ≤-1.8%/-2.5% 且放量宣泄或跌穿分时均线 ≥0.8%）
+ *   3. 💥 冲板回落（日内最高触及涨停板后炸板回落 ≥2.0%/3.2%）
+ */
+export function checkIntradayAnomalies(targetPool = null){
+  const list = Array.isArray(targetPool) ? targetPool : pool;
+  if (!Array.isArray(list) || !list.length) return [];
+
+  const now = Date.now();
+  const today = todayStr();
+  if (_quoteRingDay !== today) {
+    Object.keys(_quoteRing).forEach((k) => delete _quoteRing[k]);
+    Object.keys(_anomCooldown).forEach((k) => delete _anomCooldown[k]);
+    _quoteRingDay = today;
+  }
+
+  const triggered = [];
+  const muted = isAlertMuted();
+
+  list.forEach((s) => {
+    if (!s) return;
+    const code6 = String(s.code || '').replace(/\D/g, '').padStart(6, '0');
+    const px = +s.price || 0;
+    const pc = +s.prevClose || 0;
+    const hi = +s.high || px;
+    const avgPx = +s.avg || px;
+    if (!code6 || !(px > 0) || !(pc > 0)) return;
+
+    // 清理超过 12 分钟的过期异动角标
+    if (s._anomaly && s._anomaly.at && now - s._anomaly.at > 12 * 60 * 1000) {
+      delete s._anomaly;
+    }
+
+    // 维护轻量级实时报价环形窗口（保留近 8 分钟快照，供无 _rtPts 时兜底计算）
+    const ring = _quoteRing[code6] || (_quoteRing[code6] = []);
+    if (!ring.length || now - ring[ring.length - 1].at >= 6000) {
+      ring.push({ at: now, price: px, vol: +s.vol || 0, avg: avgPx });
+      while (ring.length > 0 && now - ring[0].at > 8 * 60 * 1000) {
+        ring.shift();
+      }
+    }
+
+    const is20cm = code6.startsWith('30') || code6.startsWith('68');
+    const upFastPct = is20cm ? 2.5 : 1.8;
+    const dnFastPct = is20cm ? -2.5 : -1.8;
+    const brokenDropPct = is20cm ? -3.2 : -2.0;
+
+    let deltaPct = 0;
+    let volBurst = +s.vr || 1;
+    let refPrice = px;
+    let hasWindow = false;
+
+    const pts = Array.isArray(s._rtPts) ? s._rtPts : [];
+    if (pts.length >= 6) {
+      const refIdx = Math.max(0, pts.length - 5);
+      const refPt = pts[refIdx];
+      if (refPt && +refPt.price > 0) {
+        refPrice = +refPt.price;
+        deltaPct = ((px - refPrice) / refPrice) * 100;
+        hasWindow = true;
+      }
+      // 剔除 09:30~09:31 集合竞价脉冲，计算盘中常态分钟均量与最新 2 分钟爆发倍数
+      const normVols = pts
+        .slice(0, -2)
+        .filter((p) => p && String(p.t) > '0931' && +p.vol >= 0)
+        .map((p) => +p.vol || 0);
+      if (normVols.length >= 4) {
+        const baseMinVol = normVols.reduce((a, b) => a + b, 0) / normVols.length;
+        const vLast1 = +pts[pts.length - 1]?.vol || 0;
+        const vLast2 = +pts[pts.length - 2]?.vol || 0;
+        const recentPeak = Math.max(vLast1, (vLast1 + vLast2) / 2);
+        if (baseMinVol > 0) {
+          volBurst = recentPeak / baseMinVol;
+        }
+      } else if (s._vm && s._vm.ok && +s._vm.curR > 0) {
+        volBurst = +s._vm.curR;
+      }
+    } else if (ring.length >= 2) {
+      const cand = ring.find((pt) => now - pt.at >= 60 * 1000 && now - pt.at <= 360 * 1000) || ring[0];
+      if (cand && now - cand.at >= 45 * 1000 && cand.price > 0) {
+        refPrice = cand.price;
+        deltaPct = ((px - refPrice) / refPrice) * 100;
+        hasWindow = true;
+      }
+    }
+
+    const ceilPx = +s.ceiling > 0 ? +s.ceiling : +(pc * (is20cm ? 1.2 : 1.1)).toFixed(2);
+    const touchedLimit = ceilPx > 0 && hi >= ceilPx - 0.01;
+    const dropFromHiPct = hi > 0 ? ((px - hi) / hi) * 100 : 0;
+    const vsAvgPct = avgPx > 0 ? ((px - avgPx) / avgPx) * 100 : 0;
+
+    let anom = null;
+    if (touchedLimit && dropFromHiPct <= brokenDropPct) {
+      anom = {
+        type: 'limit_broken',
+        label: '冲板回落',
+        badge: '💥 冲板炸板回落',
+        level: 'danger',
+        deltaPct: +dropFromHiPct.toFixed(2),
+        volBurst: +volBurst.toFixed(1),
+        refPrice: hi,
+        time: nowStr(),
+        summary: `日内触及涨停 ¥${hi.toFixed(2)} 后炸板回落 ${dropFromHiPct.toFixed(2)}%，严防大面，禁追高/禁正T`,
+      };
+    } else if (hasWindow && deltaPct <= dnFastPct && (volBurst >= 1.6 || vsAvgPct <= -0.8)) {
+      anom = {
+        type: 'waterfall_down',
+        label: '放量跳水',
+        badge: '🌊 分时放量跳水',
+        level: 'danger',
+        deltaPct: +deltaPct.toFixed(2),
+        volBurst: +volBurst.toFixed(1),
+        refPrice,
+        time: nowStr(),
+        summary: `近5分钟急跌 ${deltaPct.toFixed(2)}%（分钟量能 ${volBurst.toFixed(1)}×），抛压宣泄中严禁接飞刀`,
+      };
+    } else if (hasWindow && deltaPct >= upFastPct && volBurst >= 1.8 && (avgPx <= 0 || px >= avgPx * 0.998)) {
+      anom = {
+        type: 'rocket_up',
+        label: '放量急拉',
+        badge: '🚀 分时放量急拉',
+        level: 'surge',
+        deltaPct: +deltaPct.toFixed(2),
+        volBurst: +volBurst.toFixed(1),
+        refPrice,
+        time: nowStr(),
+        summary: `近5分钟爆量拉升 +${deltaPct.toFixed(2)}%（分钟量能 ${volBurst.toFixed(1)}×），持仓盯紧压力位锁盈，勿盲目追高`,
+      };
+    }
+
+    if (!anom) return;
+
+    s._anomaly = { ...anom, at: now };
+    const cdKey = `${code6}|${anom.type}`;
+    if (_anomCooldown[cdKey] && now - _anomCooldown[cdKey] < 10 * 60 * 1000) {
+      return; // 10 分钟同向去重冷却
+    }
+    _anomCooldown[cdKey] = now;
+    triggered.push({ stock: s, anom });
+
+    if (!muted) {
+      const toastMsg = `${anom.badge} · ${s.name || code6} 现价 ¥${px.toFixed(2)}（${anom.summary}）`;
+      if (anom.type === 'rocket_up') toastOk(toastMsg);
+      else toastErr(toastMsg);
+
+      pushSystemAlertRecord({
+        id: now + Math.random(),
+        category: 'anomaly',
+        anomalyType: anom.type,
+        time: anom.time,
+        name: s.name || code6,
+        code: code6,
+        label: anom.label,
+        price: px,
+        target: anom.refPrice,
+        deltaPct: anom.deltaPct,
+        volBurst: anom.volBurst,
+        summary: anom.summary,
+      });
+
+      if (typeof document !== 'undefined') {
+        document.title = `${anom.type === 'rocket_up' ? '🚀' : '🚨'}${s.name || code6} ${anom.label} ${anom.deltaPct > 0 ? '+' : ''}${anom.deltaPct}%`;
+      }
+      try {
+        if (typeof window !== 'undefined' && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          new Notification(`${anom.badge}: ${s.name || code6} (¥${px.toFixed(2)})`, {
+            body: anom.summary,
+          });
+        }
+      } catch (_) {}
+    }
+  });
+
+  if (triggered.length > 0 && !muted) {
+    try { soundChime(); } catch (_) {}
+  }
+  return triggered;
 }
 
-/* 持仓与成本核算 */
-export function tRealOf(code){
+/* 大盘指数 5 分钟急杀/异动监测（上证 5 分钟跌 ≥0.45% / 创业板 5 分钟跌 ≥0.80%） */
+export function checkMarketAlerts(){
+  if (!MKT || !Array.isArray(MKT.idx) || !MKT.idx.length) return;
+  const now = Date.now();
+  const muted = isAlertMuted();
+  const rules = {
+    sh000001: { dropThr: -0.45 },
+    sz399006: { dropThr: -0.80 },
+  };
+
+  MKT.idx.forEach((item) => {
+    const rule = rules[item.tc];
+    if (!rule || !(item.price > 0)) return;
+    const ring = _mktSnapRing[item.tc] || (_mktSnapRing[item.tc] = []);
+    if (!ring.length || now - ring[ring.length - 1].at >= 10000) {
+      ring.push({ at: now, price: +item.price, chg: +item.chg || 0 });
+      while (ring.length > 0 && now - ring[0].at > 8 * 60 * 1000) {
+        ring.shift();
+      }
+    }
+    if (ring.length < 2) return;
+    const ref = ring.find((pt) => now - pt.at >= 90 * 1000 && now - pt.at <= 360 * 1000) || ring[0];
+    if (!ref || now - ref.at < 45 * 1000 || !(ref.price > 0)) return;
+
+    const dPct = ((item.price - ref.price) / ref.price) * 100;
+    if (dPct <= rule.dropThr) {
+      const cdKey = `${item.tc}|plunge`;
+      if (_mktAlertCd[cdKey] && now - _mktAlertCd[cdKey] < 15 * 60 * 1000) return;
+      _mktAlertCd[cdKey] = now;
+      if (!muted) {
+        const summary = `${item.label} 5分钟急挫 ${dPct.toFixed(2)}%（现报 ${item.price.toFixed(2)}），谨防泥沙俱下，暂停正T低吸`;
+        toastErr(`🚨 大盘急杀预警 · ${summary}`);
+        try { soundChime(); } catch (_) {}
+        pushSystemAlertRecord({
+          id: now + Math.random(),
+          category: 'anomaly',
+          anomalyType: 'market_plunge',
+          time: nowStr(),
+          name: item.label,
+          code: item.tc.replace(/^[a-z]+/, ''),
+          label: '大盘急杀',
+          price: +item.price,
+          target: +ref.price,
+          deltaPct: +dPct.toFixed(2),
+          summary,
+        });
+      }
+    }
+  });
+}
+
+/* 盘后/非交易时段一键演练分时异动提醒（交替模拟放量急拉与放量跳水，验证卡片横幅+声音+通知中心闭环） */
+let _simToggle = 0;
+export function simulateIntradayAnomaly(targetPool = null){
+  const list = Array.isArray(targetPool) && targetPool.length ? targetPool : pool;
+  const target = (list || []).find((s) => +s.shares > 0) || (list || [])[0];
+  const now = Date.now();
+  const isUp = (_simToggle++ % 2) === 0;
+  const code6 = target ? String(target.code || '').padStart(6, '0') : '605128';
+  const name = target ? (target.name || code6) : '示例标的';
+  const px = target && +target.price > 0 ? +target.price : 25.60;
+  const deltaPct = isUp ? 2.46 : -2.35;
+  const volBurst = isUp ? 3.2 : 2.7;
+  const refPrice = +(px / (1 + deltaPct / 100)).toFixed(2);
+  const anom = isUp
+    ? {
+        type: 'rocket_up',
+        label: '放量急拉',
+        badge: '🚀 分时放量急拉(演练)',
+        level: 'surge',
+        deltaPct,
+        volBurst,
+        refPrice,
+        time: nowStr(),
+        at: now,
+        isDrill: true,
+        summary: `[演练] 近5分钟爆量拉升 +${deltaPct}%（分钟量能 ${volBurst}×），持仓盯紧压力位锁盈`,
+      }
+    : {
+        type: 'waterfall_down',
+        label: '放量跳水',
+        badge: '🌊 分时放量跳水(演练)',
+        level: 'danger',
+        deltaPct,
+        volBurst,
+        refPrice,
+        time: nowStr(),
+        at: now,
+        isDrill: true,
+        summary: `[演练] 近5分钟放量急跌 ${deltaPct}%（分钟量能 ${volBurst}×），抛压宣泄中严禁接飞刀`,
+      };
+
+  if (target) {
+    target._anomaly = anom;
+  }
+  try { soundChime(); } catch (_) {}
+  if (isUp) toastOk(`${anom.badge} · ${name} ¥${px.toFixed(2)}`);
+  else toastErr(`${anom.badge} · ${name} ¥${px.toFixed(2)}`);
+
+  pushSystemAlertRecord({
+    id: now + Math.random(),
+    category: 'anomaly',
+    anomalyType: anom.type,
+    time: anom.time,
+    name,
+    code: code6,
+    label: anom.label,
+    price: px,
+    target: refPrice,
+    deltaPct,
+    volBurst,
+    summary: anom.summary,
+  });
+  return { code6, name, anom };
+}
+
+/* 持仓与做T降本核算：从台账 LOG 真实聚合该标的累计已实现做T净收益与笔数 */
+export function tRealOf(code, logsOverride = null){
+  const code6 = String(code || '').replace(/\D/g, '').padStart(6, '0');
+  if (!code6 || code6 === '000000') return { sum: 0, n: 0 };
+  const logs = Array.isArray(logsOverride) ? logsOverride : LOG;
+  if (!Array.isArray(logs) || !logs.length) return { sum: 0, n: 0 };
+
+  const nonTDirs = new Set(['买入建仓', '买入加仓', '直接买入', '直接卖出', '清仓卖出', '尾盘买入', '尾盘平仓']);
   let sum = 0, n = 0;
-  return { sum, n };
+  logs.forEach(r => {
+    if (!r) return;
+    const rCode = String(r.code || '').replace(/\D/g, '').padStart(6, '0');
+    const matched = (rCode && rCode !== '000000' && rCode === code6) || String(r.stock || '').includes(code6);
+    if (!matched) return;
+
+    const dir = String(r.dir || '');
+    const isT = dir === '正T' || dir === '倒T' || dir === '做T' ||
+      (+r.buy > 0 && +r.sell > 0 && !nonTDirs.has(dir));
+    if (!isT) return;
+
+    const netVal = (r.net !== undefined && r.net !== null && r.net !== '')
+      ? Number(r.net)
+      : ((+r.sell - +r.buy) * (+r.qty || 0) - ((+r.sell + +r.buy) * (+r.qty || 0) * 0.0011));
+    if (Number.isFinite(netVal)) {
+      sum += netVal;
+      n += 1;
+    }
+  });
+  return { sum: Math.round(sum * 100) / 100, n };
 }
 
 export function posCalc(s){

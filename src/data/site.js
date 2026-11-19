@@ -109,6 +109,7 @@ export const STORAGE_KEYS = {
   POOL: 't-system-pool',
   ACTIVE_TAB: 't-active-tab',
   ACCOUNT_TOTAL: 't-account-total',
+  ACCOUNT_CASH: 't-account-cash',
   TRADE_LOG: 't-system-log',
   TAIL_ACTIVE: 't-tail-buy-active',
   SNAPSHOTS: 't-system-snap'

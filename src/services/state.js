@@ -151,6 +151,25 @@ export function setAccountTotalAssets(val) {
   } catch (_) {}
 }
 
-/* 8. 行情刷新时间戳 */
+/* 8. 行情刷新时间戳与 React 运行时同步桥接 */
 export let STAMP = 0;
 export function stampData() { STAMP = Date.now(); }
+
+/**
+ * 将 React 组件中的最新状态原位同步至旧服务层导出引用（pool / LOG / SNAP / TAIL_ACTIVES），
+ * 彻底消除 checkPriceAlerts、tRealOf、addByQuery 等模块读取陈旧快照的脱钩问题。
+ */
+export function syncRuntimeState({ pool: nextPool, logs: nextLogs, snapshots: nextSnaps, tailActives: nextTail } = {}) {
+  if (Array.isArray(nextPool)) {
+    pool.splice(0, pool.length, ...nextPool);
+  }
+  if (Array.isArray(nextLogs)) {
+    LOG.splice(0, LOG.length, ...nextLogs);
+  }
+  if (Array.isArray(nextSnaps)) {
+    SNAP.splice(0, SNAP.length, ...nextSnaps);
+  }
+  if (Array.isArray(nextTail)) {
+    TAIL_ACTIVES.splice(0, TAIL_ACTIVES.length, ...nextTail);
+  }
+}

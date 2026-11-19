@@ -6,8 +6,10 @@ import TailSection from '../components/TailSection.jsx';
  */
 export default function TailPage({
   totalAssets,
+  cash,
   actives,
   wbLatest,
+  tiltState = null,
   onExecTailBuy,
   onExecTailExit,
   onRefreshContract
@@ -16,8 +18,10 @@ export default function TailPage({
     <div className="page-tail">
       <TailSection
         totalAssets={totalAssets}
+        cash={cash}
         actives={actives}
         wbLatest={wbLatest}
+        tiltState={tiltState}
         onExecTailBuy={onExecTailBuy}
         onExecTailExit={onExecTailExit}
         onRefreshContract={onRefreshContract}

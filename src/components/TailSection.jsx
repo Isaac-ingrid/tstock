@@ -1,21 +1,25 @@
 import React, { useState } from 'react';
-import { f2, pct, money } from '../services/utils.js';
+import { f2, pct, money, toastWarn } from '../services/utils.js';
 import { getTailBuyCandidates } from '../services/tail.js';
 import { runTailScan } from '../services/api.js';
 
 export default function TailSection({
   totalAssets,
+  cash = null,
   actives,
   wbLatest,
+  tiltState = null,
   onExecTailBuy,
   onExecTailExit,
   onRefreshContract
 }) {
   const tenPctBudget = totalAssets * 0.10;
   const candidates = getTailBuyCandidates(wbLatest);
+  const isTiltLocked = Boolean(tiltState?.isLocked);
 
   const [inputPrices, setInputPrices] = useState({});
   const [inputQtys, setInputQtys] = useState({});
+  const [exitPrices, setExitPrices] = useState({});
   const [scanning, setScanning] = useState(false);
   const [scanStatus, setScanStatus] = useState(null);
 
@@ -33,6 +37,10 @@ export default function TailSection({
   };
 
   const handleBuy = (cand) => {
+    if (isTiltLocked) {
+      toastWarn('🔒 单日防上头熔断保护中：今日已锁定尾盘新开仓，防止亏损日尾盘博弈加码');
+      return;
+    }
     const px = parseFloat(inputPrices[cand.code]) || cand.price;
     const qty = parseInt(inputQtys[cand.code], 10) || cand.recShares;
     onExecTailBuy(cand, px, qty);
@@ -117,6 +125,15 @@ export default function TailSection({
         </div>
       </div>
 
+      {isTiltLocked && (
+        <div className="tilt-lock-banner" style={{ marginBottom: '12px' }}>
+          <div className="tilt-lock-txt">
+            <b>🛑 单日防上头熔断锁已激活：</b>{(tiltState?.reasons || []).join('；')}。
+            已自动锁定「尾盘新开潜伏仓」，严防日内连亏后尾盘重仓博傻；上方已有隔夜持仓的<b>「⚡ 平仓回笼现金」不受影响</b>。
+          </div>
+        </div>
+      )}
+
       {scanStatus && (
         <div style={{
           marginTop: '8px',
@@ -145,6 +162,12 @@ export default function TailSection({
       <div className="tail-budget-strip">
         <span>当前总资产: <b>¥{Math.round(totalAssets).toLocaleString('zh-CN')}</b></span>
         <span>·</span>
+        {cash != null && (
+          <>
+            <span>可用现金: <b style={{ color: cash >= tenPctBudget ? 'var(--down)' : 'var(--up)' }}>¥{Math.round(cash).toLocaleString('zh-CN')}</b></span>
+            <span>·</span>
+          </>
+        )}
         <span>10% 顶格潜伏预算: <b style={{ color: 'var(--accent)' }}>¥{Math.round(tenPctBudget).toLocaleString('zh-CN')}</b></span>
         <span>·</span>
         <span>策略纪律: <b>单票上限 10% ｜ 绝不过夜加仓，次日 10:00 前必平</b></span>
@@ -154,11 +177,12 @@ export default function TailSection({
       {actives && actives.length > 0 && (
         <div style={{ marginBottom: '16px' }}>
           <h4 style={{ fontSize: '13.5px', marginBottom: '8px', color: 'var(--up)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span>🚨</span> 当前已有已建仓的隔夜标的（次日 09:30~10:00 必须平仓）：
+            <span>🚨</span> 当前已有已建仓的隔夜标的（已纳入总资产与仓位风控，次日 09:30~10:00 必须平仓）：
           </h4>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '12px' }}>
             {actives.map(act => {
-              const livePx = act.price || act.cost;
+              const livePx = +act.price > 0 ? +act.price : +act.cost;
+              const exitVal = exitPrices[act.id] !== undefined ? exitPrices[act.id] : livePx;
               const chg = act.cost > 0 ? ((livePx - act.cost) / act.cost) * 100 : 0;
               const pnl = (livePx - act.cost) * act.shares;
 
@@ -166,22 +190,32 @@ export default function TailSection({
                 <div key={act.id} className="card" style={{ padding: '12px 14px', borderLeft: '4px solid var(--accent)', background: 'var(--surface2)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                     <span style={{ fontWeight: 700, fontSize: '15px' }}>{act.name} ({act.code})</span>
-                    <span className="tag" style={{ background: '#fff' }}>隔夜持仓中</span>
+                    <span className="tag" style={{ background: '#fff' }}>隔夜持仓中 · 现价 ¥{f2(livePx)}</span>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', fontSize: '12px', marginBottom: '8px' }}>
-                    <div>买入成本: <b>{f2(act.cost)}</b></div>
+                    <div>买入成本: <b>¥{f2(act.cost)}</b></div>
                     <div>持仓股数: <b>{act.shares}</b> 股</div>
-                    <div>浮动盈亏: <b className={pnl >= 0 ? 'up' : 'down'}>{pnl >= 0 ? '+' : ''}{money(pnl)} ({pct(chg)})</b></div>
+                    <div>浮动盈亏: <b className={pnl >= 0 ? 'up' : 'down'}>{pnl >= 0 ? '+' : ''}¥{money(pnl)} ({pct(chg)})</b></div>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px dashed var(--line)', paddingTop: '8px' }}>
-                    <span style={{ fontSize: '11.5px', color: 'var(--sub)' }}>目标冲高位: {act.tp1 ? `${f2(act.tp1)} (+2.5%)` : '冲高 +2.5%'}</span>
-                    <button
-                      className="primary"
-                      onClick={() => onExecTailExit(act, livePx)}
-                      style={{ padding: '4px 12px', fontSize: '12px', borderRadius: '5px' }}
-                    >
-                      ⚡ 一键平仓出局
-                    </button>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexWrap: 'wrap', borderTop: '1px dashed var(--line)', paddingTop: '8px' }}>
+                    <span style={{ fontSize: '11.5px', color: 'var(--sub)' }}>目标冲高位: {act.tp1 ? `¥${f2(act.tp1)} (+2.5%)` : '冲高 +2.5%'}</span>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={exitVal}
+                        onChange={e => setExitPrices(prev => ({ ...prev, [act.id]: e.target.value }))}
+                        title="卖出成交价"
+                        style={{ width: '74px', padding: '3px 6px', fontSize: '12px', borderRadius: '4px', border: '1px solid var(--line)' }}
+                      />
+                      <button
+                        className="primary"
+                        onClick={() => onExecTailExit(act, parseFloat(exitVal) || livePx)}
+                        style={{ padding: '4px 12px', fontSize: '12px', borderRadius: '5px' }}
+                      >
+                        ⚡ 平仓回笼现金
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -230,7 +264,7 @@ export default function TailSection({
             </button>
           </div>
         ) : (
-          candidates.map((cand, idx) => {
+          candidates.map((cand) => {
             const defaultPrice = inputPrices[cand.code] !== undefined ? inputPrices[cand.code] : cand.price;
             const defaultQty = inputQtys[cand.code] !== undefined ? inputQtys[cand.code] : cand.recShares;
 
@@ -320,8 +354,13 @@ export default function TailSection({
                     type="button"
                     className="btn-tb-buy"
                     onClick={() => handleBuy(cand)}
+                    style={
+                      isTiltLocked
+                        ? { background: '#fef2f2', color: '#b91c1c', border: '1px solid #fca5a5', cursor: 'not-allowed' }
+                        : undefined
+                    }
                   >
-                    🚀 一键执行尾盘潜伏建仓
+                    {isTiltLocked ? '🔒 熔断期禁开尾盘仓' : '🚀 一键执行尾盘潜伏建仓'}
                   </button>
                 </div>
               </div>

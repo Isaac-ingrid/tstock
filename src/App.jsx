@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import Header from './components/Header.jsx';
 import TopNav from './components/TopNav.jsx';
 import TradePage from './views/TradePage.jsx';
@@ -16,10 +16,37 @@ import { QuickTModal, StockReasonModal, TradingClockModal, ToastHost, OvernightB
 
 import { SITE_META, APP_PAGE_TITLE, STORAGE_KEYS, DEFAULT_POOL } from './data/site.js';
 import useRoute from './router/useRoute.js';
-import { todayStr, nowTimeHHMM, f2, toast, toastOk, toastWarn, toastErr, setToastListener, copyPlain, getTodayTStatus } from './services/utils.js';
-import { loadStock, loadChart, loadResearch, loadMarket, addByQuery, selfTest, checkPriceAlerts, refreshSingleFastRt, isAShareTradingNow } from './services/api.js';
+import { todayStr, nowTimeHHMM, f2, money, toast, toastOk, toastWarn, toastErr, setToastListener, copyPlain, getTodayTStatus } from './services/utils.js';
+import {
+  loadStock,
+  loadChart,
+  loadResearch,
+  loadMarket,
+  fetchQuotes,
+  tcodeFromCode,
+  calc,
+  addByQuery,
+  selfTest,
+  checkPriceAlerts,
+  checkIntradayAnomalies,
+  checkMarketAlerts,
+  simulateIntradayAnomaly,
+  refreshSingleFastRt,
+  isAShareTradingNow,
+  fetchUserVault,
+  saveUserVault,
+} from './services/api.js';
+import { syncRuntimeState } from './services/state.js';
 import { registerChartLoader } from './services/chart.js';
 import { getTailBuyCandidates } from './services/tail.js';
+import { auditTradeExecution } from './services/ledger.js';
+import {
+  loadPosRules,
+  savePosRules,
+  loadTiltOverride,
+  saveTiltOverride,
+  computeDailyTiltState,
+} from './services/risk.js';
 
 export default function App() {
   /* ================= 1. 响应式 URL 路由与核心状态 ================= */
@@ -33,7 +60,8 @@ export default function App() {
     return JSON.parse(JSON.stringify(DEFAULT_POOL));
   });
 
-  const [totalAssets, setTotalAssets] = useState(() => {
+  // 初始本金基准（用于核算账户总收益率与本金水位线）
+  const [initialCapital, setInitialCapital] = useState(() => {
     try {
       const v = localStorage.getItem(STORAGE_KEYS.ACCOUNT_TOTAL);
       if (v && +v > 0) return +v;
@@ -52,9 +80,45 @@ export default function App() {
   const [tailActives, setTailActives] = useState(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEYS.TAIL_ACTIVE);
-      if (raw) return JSON.parse(raw);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+      }
     } catch (_) {}
     return [];
+  });
+
+  // 真实可用现金（独立持久化记账；首次升级自动由「历史总资产 − 当前持仓成本」平滑迁移）
+  const [availableCash, setAvailableCash] = useState(() => {
+    try {
+      const savedCash = localStorage.getItem(STORAGE_KEYS.ACCOUNT_CASH);
+      if (savedCash !== null && savedCash !== '' && Number.isFinite(+savedCash) && +savedCash >= 0) {
+        return Math.round(+savedCash * 100) / 100;
+      }
+      const savedTotal = (() => {
+        const v = localStorage.getItem(STORAGE_KEYS.ACCOUNT_TOTAL);
+        return v && +v > 0 ? +v : 100000;
+      })();
+      let initPool = DEFAULT_POOL;
+      try {
+        const rawP = localStorage.getItem(STORAGE_KEYS.POOL);
+        if (rawP) initPool = JSON.parse(rawP);
+      } catch (_) {}
+      let initTail = [];
+      try {
+        const rawT = localStorage.getItem(STORAGE_KEYS.TAIL_ACTIVE);
+        if (rawT) {
+          const pT = JSON.parse(rawT);
+          if (Array.isArray(pT)) initTail = pT;
+        }
+      } catch (_) {}
+      const costBasis =
+        (initPool || []).reduce((acc, s) => acc + (+s.shares || 0) * (+s.cost || +s.price || 0), 0) +
+        (initTail || []).reduce((acc, t) => acc + (t.status === 'closed' ? 0 : (+t.shares || 0) * (+t.cost || 0)), 0);
+      return Math.max(0, Math.round((savedTotal - costBasis) * 100) / 100);
+    } catch (_) {
+      return 19900;
+    }
   });
 
   const [snapshots, setSnapshots] = useState(() => {
@@ -64,6 +128,30 @@ export default function App() {
     } catch (_) {}
     return [];
   });
+
+  // 全局仓位风控与单日防上头熔断锁配置
+  const [posRules, setPosRules] = useState(() => loadPosRules());
+  const [tiltOverride, setTiltOverride] = useState(() => loadTiltOverride());
+
+  // 本机磁盘自动双写金库状态
+  const [vaultStatus, setVaultStatus] = useState({
+    connected: false,
+    syncing: false,
+    updatedAt: '',
+    backupCount: 0,
+    guarded: false,
+    remoteSummary: null,
+    remoteVault: null,
+  });
+  const vaultReadyRef = useRef(false);
+
+  const handleUpdatePosRules = useCallback((next) => {
+    setPosRules(next);
+    savePosRules(next);
+  }, []);
+
+  // 保持 state.js 导出引用与 React 最新状态实时同步（供 posCalc/tRealOf/checkPriceAlerts 等直接读取）
+  syncRuntimeState({ pool, logs: tradeLogs, snapshots, tailActives });
 
   const [clockPhase, setClockPhase] = useState('盘中时钟');
   const [quoteStamp, setQuoteStamp] = useState('—');
@@ -110,13 +198,12 @@ export default function App() {
   const [clockModalOpen, setClockModalOpen] = useState(false);
   const [alertModalOpen, setAlertModalOpen] = useState(false);
   const [overnightBannerOpen, setOvernightBannerOpen] = useState(false);
-  const [simTailAlert, setSimTailAlert] = useState(false); // 14:40 尾盘未平仓预警模拟演练开关
+  const [simTailAlert, setSimTailAlert] = useState(false);
   const [toasts, setToasts] = useState([]);
 
   /* 当前选中的聚焦做T股票代码 */
   const [activeStockCode, setActiveStockCode] = useState(() => (pool[0]?.code || ''));
 
-  // 保证 activeStockCode 在 pool 变更时始终有效
   useEffect(() => {
     if (pool && pool.length > 0) {
       const code6 = String(activeStockCode).padStart(6, '0');
@@ -126,7 +213,6 @@ export default function App() {
     }
   }, [pool, activeStockCode]);
 
-  /* 点击已选股票胶囊或卡片直达跳转：自动切路由 + 平滑滚动 + 脉冲聚焦动效 */
   const handleSelectStock = useCallback((code) => {
     const code6 = String(code).padStart(6, '0');
     setActiveStockCode(code6);
@@ -138,13 +224,12 @@ export default function App() {
       if (cardEl) {
         cardEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
         cardEl.classList.remove('card-highlight-pulse');
-        void cardEl.offsetWidth; // 触发 reflow 重置动画
+        void cardEl.offsetWidth;
         cardEl.classList.add('card-highlight-pulse');
       }
     }, 120);
   }, [activeTab, navigate]);
 
-  /* 跨板块直达：任意标的跳转至「全景诊股」或「起爆六维体检」 */
   const handleJumpDiagnosis = useCallback((code) => {
     const code6 = String(code || '').trim().padStart(6, '0');
     if (!code6 || code6 === '000000') return;
@@ -162,7 +247,7 @@ export default function App() {
   const lastSuccessStamp = useRef(Date.now());
   const importInputRef = useRef(null);
 
-  /* 状态落盘持久化 */
+  /* 状态落盘浏览器持久化 */
   useEffect(() => {
     try {
       const slim = pool.map(s => {
@@ -175,26 +260,213 @@ export default function App() {
   }, [pool]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.ACTIVE_TAB, activeTab);
+    try { localStorage.setItem(STORAGE_KEYS.ACTIVE_TAB, activeTab); } catch (_) {}
   }, [activeTab]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.ACCOUNT_TOTAL, String(totalAssets));
-  }, [totalAssets]);
+    try { localStorage.setItem(STORAGE_KEYS.ACCOUNT_TOTAL, String(initialCapital)); } catch (_) {}
+  }, [initialCapital]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.TRADE_LOG, JSON.stringify(tradeLogs));
+    try { localStorage.setItem(STORAGE_KEYS.ACCOUNT_CASH, String(availableCash)); } catch (_) {}
+  }, [availableCash]);
+
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEYS.TRADE_LOG, JSON.stringify(tradeLogs)); } catch (_) {}
   }, [tradeLogs]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.TAIL_ACTIVE, JSON.stringify(tailActives));
+    try { localStorage.setItem(STORAGE_KEYS.TAIL_ACTIVE, JSON.stringify(tailActives)); } catch (_) {}
   }, [tailActives]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.SNAPSHOTS, JSON.stringify(snapshots));
+    try { localStorage.setItem(STORAGE_KEYS.SNAPSHOTS, JSON.stringify(snapshots)); } catch (_) {}
   }, [snapshots]);
 
-  /* 读取选股引擎统一数据契约。使用 JSON fetch，避免外部 script 与 React 水合时序竞争。 */
+  /* 将磁盘金库对象应用到 React 全站状态 */
+  const applyVaultData = useCallback((v) => {
+    if (!v || typeof v !== 'object') return;
+    if (Array.isArray(v.pool) && v.pool.length > 0) setPool(v.pool);
+    if (Array.isArray(v.logs)) setTradeLogs(v.logs);
+    if (Array.isArray(v.tailActives)) setTailActives(v.tailActives);
+    if (Array.isArray(v.snapshots)) setSnapshots(v.snapshots);
+    if (v.posRules && typeof v.posRules === 'object') {
+      const mergedRules = { ...loadPosRules(), ...v.posRules };
+      setPosRules(mergedRules);
+      savePosRules(mergedRules);
+    }
+    if (Number.isFinite(+v.initialCapital) && +v.initialCapital > 0) {
+      setInitialCapital(+v.initialCapital);
+    }
+    if (v.availableCash !== undefined && Number.isFinite(+v.availableCash)) {
+      setAvailableCash(Math.max(0, +v.availableCash));
+    }
+  }, []);
+
+  /* 启动时握手本机磁盘金库：若浏览器缓存被清空但本地磁盘存有实盘记录，自动无缝找回！ */
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetchUserVault();
+        if (cancelled) return;
+        const localEmpty =
+          (tradeLogsRef.current || []).length === 0 &&
+          (tailActivesRef.current || []).length === 0 &&
+          (snapshotsRef.current || []).length === 0;
+        const remoteHasRecords =
+          res?.exists &&
+          res?.vault &&
+          ((res.summary?.logCount || 0) > 0 || (res.summary?.snapshotCount || 0) > 0 || (res.summary?.tailCount || 0) > 0);
+
+        if (localEmpty && remoteHasRecords) {
+          applyVaultData(res.vault);
+          setVaultStatus({
+            connected: true,
+            syncing: false,
+            updatedAt: res.summary?.updatedAt || '',
+            backupCount: (res.backups || []).length,
+            guarded: false,
+            remoteSummary: res.summary,
+            remoteVault: res.vault,
+          });
+          toastOk(`💾 已从本地磁盘金库自动找回 ${res.summary?.logCount || 0} 笔实盘台账与持仓配置！`);
+          setTimeout(() => handleRefreshRef.current?.(true), 250);
+        } else {
+          setVaultStatus({
+            connected: true,
+            syncing: false,
+            updatedAt: res?.summary?.updatedAt || '',
+            backupCount: (res?.backups || []).length,
+            guarded: false,
+            remoteSummary: res?.summary || null,
+            remoteVault: res?.vault || null,
+          });
+        }
+        vaultReadyRef.current = true;
+      } catch (_) {
+        // 后端未启动时静默降级为纯浏览器本地模式
+        if (!cancelled) {
+          setVaultStatus(prev => ({ ...prev, connected: false, syncing: false }));
+          vaultReadyRef.current = false;
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [applyVaultData]);
+
+  /* 执行一次本地磁盘金库双写（支持自动防抖触发与手动强制触发） */
+  const performVaultSync = useCallback(async (force = false, showSuccessToast = false) => {
+    const slimPool = (poolRef.current || []).map(s => {
+      const o = {};
+      Object.keys(s).forEach(k => { if (k.charAt(0) !== '_') o[k] = s[k]; });
+      return o;
+    });
+    setVaultStatus(prev => ({ ...prev, syncing: true }));
+    try {
+      const res = await saveUserVault({
+        pool: slimPool,
+        logs: tradeLogsRef.current || [],
+        tailActives: tailActivesRef.current || [],
+        snapshots: snapshotsRef.current || [],
+        posRules: posRulesRef.current || {},
+        initialCapital: initCapRef.current || 100000,
+        availableCash: cashRef.current || 0,
+        force,
+      });
+      if (res.guarded) {
+        setVaultStatus(prev => ({
+          ...prev,
+          connected: true,
+          syncing: false,
+          guarded: true,
+          remoteSummary: res.existingSummary || prev.remoteSummary,
+          remoteVault: res.vault || prev.remoteVault,
+        }));
+        if (showSuccessToast) {
+          toastWarn(res.reason || '已触发磁盘金库防误覆盖保护');
+        }
+        return res;
+      }
+      setVaultStatus({
+        connected: true,
+        syncing: false,
+        updatedAt: res.updatedAt || '',
+        backupCount: (res.backups || []).length,
+        guarded: false,
+        remoteSummary: res.summary || null,
+        remoteVault: null,
+      });
+      vaultReadyRef.current = true;
+      if (showSuccessToast) {
+        toastOk(`💾 已双写保存至本地磁盘 data/user_vault.json（含按日快照备份）`);
+      }
+      return res;
+    } catch (_) {
+      setVaultStatus(prev => ({ ...prev, connected: false, syncing: false }));
+      if (showSuccessToast) {
+        toastWarn('当前未检测到本地 FastAPI 后端，数据已保存在浏览器本地存储（也可点导出 JSON）');
+      }
+      return null;
+    }
+  }, []);
+
+  const handleRestoreFromVault = useCallback(async () => {
+    try {
+      const res = await fetchUserVault();
+      if (res?.exists && res?.vault) {
+        applyVaultData(res.vault);
+        setVaultStatus(prev => ({
+          ...prev,
+          connected: true,
+          guarded: false,
+          updatedAt: res.summary?.updatedAt || prev.updatedAt,
+          backupCount: (res.backups || []).length,
+        }));
+        toastOk(`✓ 已从本地磁盘金库恢复全部持仓与 ${res.summary?.logCount || 0} 笔成交流水！`);
+        setTimeout(() => handleRefreshRef.current?.(true), 200);
+      } else {
+        toastWarn('本地磁盘尚未生成金库备份文件');
+      }
+    } catch (err) {
+      toastErr('读取本地磁盘金库失败：' + err.message);
+    }
+  }, [applyVaultData]);
+
+  /* 构建可比较的精简状态签名，仅在用户真实持仓/现金/流水/快照/风控规则变化时防抖双写磁盘（忽略 8 秒高频现价跳动） */
+  const vaultPersistSig = useMemo(() => {
+    const slimP = (pool || []).map(s => ({
+      code: s.code,
+      name: s.name,
+      shares: s.shares || 0,
+      cost: s.cost || 0,
+      tier: s.tier || 'short',
+      memo: s.memo || '',
+      strategyTag: s.strategyTag || '',
+      unclosedTQty: s.unclosedTQty || 0,
+    }));
+    return JSON.stringify({
+      p: slimP,
+      lLen: tradeLogs.length,
+      lTop: tradeLogs[0]?.id || 0,
+      lRef: (tradeLogs || []).map(x => `${x.id}:${(x.mistakeTags || []).join(',')}:${x.reflection || ''}`).join('|'),
+      t: (tailActives || []).map(x => `${x.id}:${x.shares}:${x.cost}`),
+      s: (snapshots || []).map(x => `${x.date}:${x.total}`),
+      r: posRules,
+      ic: initialCapital,
+      ac: Math.round(availableCash * 100) / 100,
+    });
+  }, [pool, tradeLogs, tailActives, snapshots, posRules, initialCapital, availableCash]);
+
+  useEffect(() => {
+    if (!vaultReadyRef.current) return undefined;
+    const timer = setTimeout(() => {
+      performVaultSync(false, false);
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [vaultPersistSig, performVaultSync]);
+
+  /* 读取选股引擎统一数据契约 */
   const fetchContract = useCallback(async () => {
     try {
       const r = await fetch('/data/latest.json?ts=' + Date.now(), { cache: 'no-store' });
@@ -212,7 +484,6 @@ export default function App() {
 
   useEffect(() => {
     fetchContract();
-    // 盘中每 30 秒轮询更新最新契约
     const timer = setInterval(fetchContract, 30000);
     return () => clearInterval(timer);
   }, [fetchContract]);
@@ -234,12 +505,55 @@ export default function App() {
     };
   }, []);
 
-  /* 计算资产与市值 */
-  const marketValue = pool.reduce((acc, s) => acc + (s.shares || 0) * (s.price || s.cost || 0), 0);
+  /* 计算真实资产、主池市值、尾盘隔夜市值与实时总仓位 */
+  const poolMarketValue = pool.reduce((acc, s) => acc + (+s.shares || 0) * (+s.price || +s.cost || 0), 0);
+  const tailMarketValue = tailActives.reduce(
+    (acc, t) => acc + (t.status === 'closed' ? 0 : (+t.shares || 0) * (+t.price || +t.cost || 0)),
+    0
+  );
+  const marketValue = Math.round((poolMarketValue + tailMarketValue) * 100) / 100;
+  const cash = Math.max(0, Math.round(availableCash * 100) / 100);
+  const totalAssets = Math.round((cash + marketValue) * 100) / 100;
   const posRate = totalAssets > 0 ? (marketValue / totalAssets) * 100 : 0;
-  const cash = Math.max(0, totalAssets - marketValue);
 
-  // 统计自选池中今日存在未平仓T仓的标的列表
+  /* 实时计算单日防上头熔断状态 */
+  const tiltState = useMemo(
+    () =>
+      computeDailyTiltState({
+        tradeLogs,
+        pool,
+        tailActives,
+        totalAssets,
+        posRules,
+        tiltOverride,
+      }),
+    [tradeLogs, pool, tailActives, totalAssets, posRules, tiltOverride]
+  );
+
+  const handleUnlockTilt = useCallback(() => {
+    const ov = {
+      date: todayStr(),
+      unlockedAt: Date.now(),
+      lossCountAtUnlock: tiltState.todayLossCount,
+      lossPctAtUnlock: tiltState.effectiveLossPct,
+    };
+    setTiltOverride(ov);
+    saveTiltOverride(ov);
+    toastWarn('🧘 已进入熔断冷静观察期：若今日再新增 1 笔亏损或回撤扩大 ≥0.5%，将触发全天二次硬锁死');
+  }, [tiltState]);
+
+  const handleRelockTilt = useCallback(() => {
+    setTiltOverride(null);
+    saveTiltOverride(null);
+    toastOk('🔒 已重新开启单日防上头熔断锁，管住手保住本金');
+  }, []);
+
+  const handleSimulateAnomaly = useCallback(() => {
+    const res = simulateIntradayAnomaly(poolRef.current);
+    setPool([...(poolRef.current || [])]);
+    return res;
+  }, []);
+
   const unclosedStocks = pool.map(s => {
     const t = getTodayTStatus(s, tradeLogs);
     return t.hasUnclosed ? { stock: s, ...t } : null;
@@ -249,7 +563,48 @@ export default function App() {
   const currentMins = nowTime.getHours() * 60 + nowTime.getMinutes();
   const currentWd = nowTime.getDay();
   const isWeekendNow = (currentWd === 0 || currentWd === 6);
-  const isTailAlertTime = (!isWeekendNow && currentMins >= 880 && currentMins < 900); // 14:40 - 15:00
+  const isTailAlertTime = (!isWeekendNow && currentMins >= 880 && currentMins < 900);
+
+  const poolRef = useRef(pool);
+  poolRef.current = pool;
+  const tailActivesRef = useRef(tailActives);
+  tailActivesRef.current = tailActives;
+  const cashRef = useRef(cash);
+  cashRef.current = cash;
+  const tradeLogsRef = useRef(tradeLogs);
+  tradeLogsRef.current = tradeLogs;
+  const snapshotsRef = useRef(snapshots);
+  snapshotsRef.current = snapshots;
+  const posRulesRef = useRef(posRules);
+  posRulesRef.current = posRules;
+  const initCapRef = useRef(initialCapital);
+  initCapRef.current = initialCapital;
+
+  /* 收盘后（工作日 15:05+）自动归档今日收盘净值快照 */
+  const maybeAutoSnapshot = useCallback((nextPool, nextTail) => {
+    const now = new Date();
+    const wd = now.getDay();
+    const mins = now.getHours() * 60 + now.getMinutes();
+    if (wd < 1 || wd > 5 || mins < 15 * 60 + 5) return;
+
+    const pList = nextPool || poolRef.current || [];
+    const tList = nextTail || tailActivesRef.current || [];
+    const pMkt = pList.reduce((acc, s) => acc + (+s.shares || 0) * (+s.price || +s.cost || 0), 0);
+    const tMkt = tList.reduce((acc, t) => acc + (t.status === 'closed' ? 0 : (+t.shares || 0) * (+t.price || +t.cost || 0)), 0);
+    const mkt = Math.round((pMkt + tMkt) * 100) / 100;
+    const curCash = Math.max(0, Math.round((cashRef.current || 0) * 100) / 100);
+    const tot = Math.round((curCash + mkt) * 100) / 100;
+    if (mkt <= 0 && (tradeLogsRef.current || []).length === 0) return;
+
+    const today = todayStr();
+    const rateStr = tot > 0 ? ((mkt / tot) * 100).toFixed(1) : '0.0';
+    setSnapshots(prev => {
+      const existing = prev.find(x => x.date === today);
+      if (existing && Math.abs((+existing.total || 0) - tot) < 1) return prev;
+      const snap = { date: today, total: tot, mkt, cash: curCash, rate: rateStr };
+      return [snap, ...prev.filter(x => x.date !== today)];
+    });
+  }, []);
 
   /* 时钟与盘中时段更新 */
   const updateClock = useCallback(() => {
@@ -275,21 +630,19 @@ export default function App() {
     }
     setClockPhase(`${timeStr} ${phase}`);
 
-    // 14:40-14:55 尾盘未平仓报警触发
     if (!isWeekend && mins >= 880 && mins < 895) {
-      const hasUnclosed = (poolRef.current || []).some(s => getTodayTStatus(s, tradeLogs).hasUnclosed);
+      const hasUnclosed = (poolRef.current || []).some(st => getTodayTStatus(st, tradeLogs).hasUnclosed);
       if (hasUnclosed) setOvernightBannerOpen(true);
     }
   }, [tradeLogs]);
 
-  const poolRef = useRef(pool);
-  poolRef.current = pool;
-
   /* 行情全量刷新 */
   const handleRefresh = useCallback(async (silent = false) => {
     fetchContract();
-    const currentPool = poolRef.current;
-    if (!currentPool || !currentPool.length) {
+    const currentPool = poolRef.current || [];
+    const currentTail = tailActivesRef.current || [];
+
+    if (!currentPool.length && !currentTail.length) {
       setDbStatus('自选池是空的 —— 在上方输入 6 位代码或股票名称加入池。');
       return;
     }
@@ -297,6 +650,8 @@ export default function App() {
     if (!silent) setDbStatus('正在获取全市场实时行情与前复权K线…');
 
     const errs = [];
+    const mktTask = loadMarket(false).catch(() => null);
+
     const stockTasks = currentPool.map(async s => {
       try {
         await loadStock(s);
@@ -308,25 +663,57 @@ export default function App() {
       }
     });
 
-    const results = await Promise.all(stockTasks);
+    const tailTask = (async () => {
+      if (!currentTail.length) return null;
+      const tcodes = Array.from(
+        new Set(
+          currentTail
+            .map(t => t.tcode || tcodeFromCode(String(t.code || '').padStart(6, '0')))
+            .filter(Boolean)
+        )
+      );
+      if (!tcodes.length) return null;
+      try {
+        const qMap = await fetchQuotes(tcodes);
+        const nextTail = currentTail.map(t => {
+          const tc = t.tcode || tcodeFromCode(String(t.code || '').padStart(6, '0'));
+          const q = tc ? qMap[tc] : null;
+          if (q && (+q.price > 0 || +q.prevClose > 0)) {
+            return { ...t, tcode: tc, price: +q.price > 0 ? +q.price : +q.prevClose, prevClose: +q.prevClose || t.prevClose };
+          }
+          return t;
+        });
+        setTailActives(nextTail);
+        return nextTail;
+      } catch (_) {
+        return null;
+      }
+    })();
+
+    const [, updatedTail, ...results] = await Promise.all([mktTask, tailTask, ...stockTasks]);
     results.forEach(x => { if (x) errs.push(x); });
 
-    setPool([...currentPool]);
+    checkPriceAlerts(currentPool);
+    checkIntradayAnomalies(currentPool);
+    checkMarketAlerts();
+
+    const nextPool = [...currentPool];
+    setPool(nextPool);
     lastSuccessStamp.current = Date.now();
     const d = new Date();
-    const timeStr = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+    const timeStr = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
     setQuoteStamp(timeStr);
     setIsStale(false);
 
     if (errs.length) {
       setDbStatus('部分标的行情未更新 → ' + errs.join('；'));
     } else {
-      setDbStatus(`行情已更新 ${timeStr} · 来源：腾讯实时行情 + 腾讯前复权K线 + 逐笔大单`);
+      setDbStatus(`行情已更新 ${timeStr} · 来源：腾讯实时行情 + 腾讯前复权K线 + 指数环境闸门`);
     }
 
     if (!silent) toastOk('✓ 全市场实时行情与前复权K线已同步！');
-    checkPriceAlerts();
-  }, [fetchContract]);
+    maybeAutoSnapshot(nextPool, updatedTail || currentTail);
+  }, [fetchContract, maybeAutoSnapshot]);
 
   const activeStockCodeRef = useRef(activeStockCode);
   activeStockCodeRef.current = activeStockCode;
@@ -337,7 +724,7 @@ export default function App() {
   const updateClockRef = useRef(updateClock);
   updateClockRef.current = updateClock;
 
-  /* 聚焦个股 8 秒极速增量轮询（交易时段且位于作战台分时视图时，仅拉单股现价+分时） */
+  /* 聚焦个股 8 秒极速增量轮询 */
   useEffect(() => {
     if (!fastRefresh) return undefined;
     let inFlight = false;
@@ -348,21 +735,22 @@ export default function App() {
       const currentPool = poolRef.current;
       if (!currentPool || !currentPool.length) return;
       const focusCode = activeStockCodeRef.current;
-      const target = (focusCode && currentPool.find(s => s.code === focusCode)) || currentPool[0];
+      const target = (focusCode && currentPool.find(s => String(s.code).padStart(6, '0') === String(focusCode).padStart(6, '0'))) || currentPool[0];
       if (!target || (target.p || 'rt') !== 'rt') return;
 
       inFlight = true;
       try {
         await refreshSingleFastRt(target);
-        setPool(prev => prev.map(item => (item.code === target.code ? { ...target } : item)));
+        checkPriceAlerts(currentPool);
+        checkIntradayAnomalies([target]);
+        const nextPool = currentPool.map(item => (item.code === target.code ? { ...target } : item));
+        setPool(nextPool);
         lastSuccessStamp.current = Date.now();
         const d = new Date();
         const timeStr = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
         setQuoteStamp(timeStr);
         setIsStale(false);
-        checkPriceAlerts();
       } catch (_) {
-        // 静默跳过单次极速超时，等待下个 8 秒周期或 60 秒全量刷新兜底
       } finally {
         inFlight = false;
       }
@@ -370,7 +758,7 @@ export default function App() {
     return () => clearInterval(timer);
   }, [fastRefresh]);
 
-  /* 定时任务与生命周期：仅在组件挂载时初始化一次，避免无限重置定时器引发界面闪烁 */
+  /* 定时任务与生命周期 */
   useEffect(() => {
     updateClockRef.current();
     const clockTimer = setInterval(() => updateClockRef.current(), 1000);
@@ -379,12 +767,13 @@ export default function App() {
       setIsStale(diffMin > 3);
     }, 5000);
 
-    // 首屏静默刷新（仅在首次加载时触发一次）
     const initialTimer = setTimeout(() => handleRefreshRef.current(true), 300);
 
-    // 交易时间每分钟自动刷新
     const autoRefreshTimer = setInterval(() => {
-      if (isAShareTradingNow()) {
+      const now = new Date();
+      const wd = now.getDay();
+      const mins = now.getHours() * 60 + now.getMinutes();
+      if (isAShareTradingNow(now) || (wd >= 1 && wd <= 5 && mins >= 905 && mins <= 920)) {
         handleRefreshRef.current(true);
       }
     }, 60000);
@@ -424,28 +813,35 @@ export default function App() {
   };
 
   const handleResetDefault = () => {
-    if (window.confirm('确定要恢复默认股票数据吗？这将覆盖当前自选。')) {
-      setPool(JSON.parse(JSON.stringify(DEFAULT)));
-      toastOk('已恢复默认自选数据');
+    if (window.confirm('确定要恢复默认股票数据吗？这将覆盖当前自选池。')) {
+      const resetPool = JSON.parse(JSON.stringify(DEFAULT_POOL));
+      const defaultCost = resetPool.reduce((acc, s) => acc + (+s.shares || 0) * (+s.cost || 0), 0);
+      setPool(resetPool);
+      setAvailableCash(Math.max(0, Math.round((initialCapital - defaultCost) * 100) / 100));
+      toastOk('已恢复默认自选持仓数据并同步可用现金');
+      setTimeout(() => handleRefreshRef.current(true), 120);
     }
   };
 
   const handleSaveLocal = () => {
-    toastOk('✓ 所有做T参数与自选持仓已成功保存至本地！');
+    performVaultSync(false, true);
   };
 
-  const handleAddStockByQuery = async (query, meta = null) => {
+  const handleAddStockByQuery = async (qStr, meta = null) => {
     toast('正在全市场检索标的…', 'info');
     try {
-      await addByQuery(query);
-      // addByQuery 内部直接更新了 state.pool，重新同步到组件
-      const raw = localStorage.getItem('t-system-pool');
+      const res = await addByQuery(qStr, poolRef.current);
+      if (res && res.status === 'exists') {
+        if (res.code) handleSelectStock(res.code);
+        return;
+      }
+      const raw = localStorage.getItem(STORAGE_KEYS.POOL);
       if (raw) {
         let parsed = JSON.parse(raw);
         if (meta && parsed.length > 0) {
-          const c6 = String(query).trim().padStart(6, '0');
+          const c6 = String(res?.stock?.code || qStr).trim().padStart(6, '0');
           parsed = parsed.map(st => {
-            if (st.code === c6 || st.name === query) {
+            if (String(st.code).padStart(6, '0') === c6 || st.name === qStr) {
               return {
                 ...st,
                 strategyTag: meta.strategyTag || '起爆',
@@ -456,16 +852,16 @@ export default function App() {
             return st;
           });
           try {
-            localStorage.setItem('t-system-pool', JSON.stringify(parsed));
+            localStorage.setItem(STORAGE_KEYS.POOL, JSON.stringify(parsed));
           } catch (_) {}
         }
         setPool(parsed);
-        const lastCode = parsed[parsed.length - 1]?.code;
-        if (lastCode) {
-          handleSelectStock(lastCode);
+        const targetCode = res?.stock?.code || parsed[parsed.length - 1]?.code;
+        if (targetCode) {
+          handleSelectStock(targetCode);
         }
       }
-      toastOk(`✓ 标的 ${query} 已成功加入自选做T台！`);
+      toastOk(`✓ 标的 ${res?.stock?.name || qStr} 已成功加入自选做T台！`);
     } catch (e) {
       toastErr('添加标的失败：' + e.message);
     }
@@ -511,7 +907,7 @@ export default function App() {
     }
   };
 
-  /* 买入建仓 / 买入加仓 / 底仓校准 */
+  /* 买入建仓 / 买入加仓 / 底仓校准（真实扣减可用现金 + 单日熔断硬拦截 + 自动人机点位审计） */
   const handleBuyStock = ({ stock, qty, buy, isCalibration = false, newCostOverride, newSharesOverride }) => {
     if (!stock) return;
 
@@ -521,7 +917,12 @@ export default function App() {
       const newShares = isNaN(sVal) || sVal < 0 ? 0 : sVal;
       const newCost = isNaN(cVal) || cVal < 0 ? 0 : Math.round(cVal * 100) / 100;
       handleUpdateStock({ ...stock, shares: newShares, cost: newCost });
-      toastOk(`✅ 已成功校准【${stock.name}】底仓：${newShares} 股，成本均价 ¥${f2(newCost)}`);
+      toastOk(`✅ 已成功校准【${stock.name}】底仓：${newShares} 股，成本均价 ¥${f2(newCost)}（底仓校准不扣减可用现金）`);
+      return;
+    }
+
+    if (tiltState?.isLocked) {
+      toastErr('🔒 单日防上头熔断保护中：已拦截新开仓/加仓买单（卖出止损与倒T不受影响）');
       return;
     }
 
@@ -535,11 +936,33 @@ export default function App() {
       return;
     }
 
+    const fee = Math.round(buyQty * buyPx * 0.0003 * 100) / 100;
+    const totalOutflow = Math.round((buyQty * buyPx + fee) * 100) / 100;
+    if (totalOutflow > cash + 0.01) {
+      toastWarn(`⚠️ 买入金额 ¥${money(totalOutflow)} 超出当前可用现金 ¥${money(cash)}，已将可用现金扣至 ¥0（可在账户页校准本金）`);
+    }
+    setAvailableCash(prev => Math.max(0, Math.round((prev - totalOutflow) * 100) / 100));
+
     const newShares = oldShares + buyQty;
-    const totalCapital = oldShares * oldCost + buyQty * buyPx;
+    const totalCapital = oldShares * oldCost + buyQty * buyPx + fee;
     const newCost = Math.round((totalCapital / newShares) * 100) / 100;
     const isInitial = oldShares === 0;
-    const fee = Math.round(buyQty * buyPx * 0.0003 * 100) / 100; // 佣金万3
+    const dirName = isInitial ? '买入建仓' : '买入加仓';
+
+    const audit = auditTradeExecution({
+      stock,
+      code: stock.code,
+      dir: dirName,
+      buy: buyPx,
+      sell: 0,
+      qty: buyQty,
+      net: 0,
+      plan: '自动判定',
+      prevLogs: tradeLogs,
+      wbLatest,
+      poolList: pool,
+      totalAssets,
+    });
 
     const newLog = {
       id: Date.now(),
@@ -547,31 +970,38 @@ export default function App() {
       time: nowTimeHHMM(),
       code: String(stock.code || '').padStart(6, '0'),
       stock: `${stock.name} (${stock.code})`,
-      dir: isInitial ? '买入建仓' : '买入加仓',
+      track: audit.track,
+      dir: dirName,
       buy: buyPx,
       sell: 0,
       qty: buyQty,
       gross: 0,
       fee,
       net: 0,
-      plan: '计划内',
-      basis: '客观买点',
+      plan: audit.plan,
+      basis: audit.basis,
+      mistakeTags: audit.mistakeTags,
+      systemBenchmark: audit.systemBenchmark,
+      alphaNet: audit.alphaNet,
+      buyDevPct: audit.buyDevPct,
+      sellDevPct: audit.sellDevPct,
+      disciplineScore: audit.disciplineScore,
       note: isInitial
-        ? `首次建仓 ${buyQty} 股，成本价 ¥${buyPx.toFixed(2)}，动用资金 ¥${(buyQty * buyPx).toLocaleString()}`
-        : `买入加仓 ${buyQty} 股（价格 ¥${buyPx.toFixed(2)}），持仓由 ${oldShares} 增至 ${newShares} 股，均价变动为 ¥${newCost.toFixed(2)}`
+        ? `首次建仓 ${buyQty} 股，成交价 ¥${buyPx.toFixed(2)}，扣减现金 ¥${money(totalOutflow)}`
+        : `买入加仓 ${buyQty} 股（成交价 ¥${buyPx.toFixed(2)}），持仓增至 ${newShares} 股，均价 ¥${newCost.toFixed(2)}`
     };
 
     setTradeLogs(prev => [newLog, ...prev]);
     handleUpdateStock({ ...stock, shares: newShares, cost: newCost });
 
     if (isInitial) {
-      toastOk(`🎯 【${stock.name}】建仓成功！买入 ${buyQty} 股，成本 ¥${f2(newCost)}`);
+      toastOk(`🎯 【${stock.name}】建仓成功！买入 ${buyQty} 股，扣减现金 ¥${money(totalOutflow)}`);
     } else {
-      toastOk(`🚀 【${stock.name}】加仓成功！加仓 ${buyQty} 股，总持仓 ${newShares} 股，最新均价 ¥${f2(newCost)}`);
+      toastOk(`🚀 【${stock.name}】加仓成功！总持仓 ${newShares} 股，最新均价 ¥${f2(newCost)}`);
     }
   };
 
-  /* 快捷记T提交 */
+  /* 快捷记T提交（卖出回笼现金 / 日内做T净差额实时入账现金 + 熔断保护 + 自动人机点位审计） */
   const handleConfirmQuickT = ({ stock, dir, action, buy, sell, qty, netDiff, newCost, remainingShares }) => {
     const isDirectSell = action === 'sell' || dir === '直接卖出' || dir === '清仓卖出';
     const isDirectBuy = action === 'buy' || dir === '直接买入' || dir === '买入建仓' || dir === '买入加仓';
@@ -582,54 +1012,108 @@ export default function App() {
       return;
     }
 
+    if (!isDirectSell && dir === '正T' && tiltState?.isLocked) {
+      toastErr('🔒 单日防上头熔断保护中：已拦截正T低吸，熔断期仅允许直接卖出减仓或倒T高抛');
+      return;
+    }
+
+    const sellFee = Math.round((sell * qty) * 0.0008 * 100) / 100;
+    const roundFee = Math.round(((buy || 0) * qty + sell * qty) * 0.00055 * 100) / 100;
+
+    const audit = auditTradeExecution({
+      stock,
+      code: stock.code,
+      dir,
+      buy: buy || 0,
+      sell: sell || 0,
+      qty,
+      net: netDiff,
+      plan: '自动判定',
+      prevLogs: tradeLogs,
+      wbLatest,
+      poolList: pool,
+      totalAssets,
+    });
+
     const newLog = {
       id: Date.now(),
       date: todayStr(),
       time: nowTimeHHMM(),
       code: String(stock.code || '').padStart(6, '0'),
       stock: `${stock.name} (${stock.code})`,
-      dir: isDirectSell ? dir : dir,
+      track: audit.track,
+      dir,
       buy: buy || 0,
       sell: sell || 0,
       qty,
       gross: (sell - (buy || 0)) * qty,
-      fee: isDirectSell ? (sell * qty) * 0.0011 : ((buy || 0) * qty + sell * qty) * 0.0011,
+      fee: isDirectSell ? sellFee : roundFee,
       net: netDiff,
-      plan: '计划内',
-      basis: '客观信号',
+      plan: audit.plan,
+      basis: audit.basis,
+      mistakeTags: audit.mistakeTags,
+      systemBenchmark: audit.systemBenchmark,
+      alphaNet: audit.alphaNet,
+      buyDevPct: audit.buyDevPct,
+      sellDevPct: audit.sellDevPct,
+      disciplineScore: audit.disciplineScore,
       note: isDirectSell
         ? `${dir} ${qty} 股（卖出价 ¥${sell.toFixed(2)}，成本 ¥${(buy || 0).toFixed(2)}），净落袋 ¥${netDiff >= 0 ? '+' : ''}${netDiff.toFixed(2)}`
-        : `快捷做T记入，净套利 ¥${netDiff.toFixed(2)}`
+        : `快捷做T记入（纪律 ${audit.disciplineScore}分），净套利 ¥${netDiff >= 0 ? '+' : ''}${netDiff.toFixed(2)}`
     };
 
     setTradeLogs(prev => [newLog, ...prev]);
 
     if (isDirectSell) {
-      // 扣减持仓与清仓处理
+      const proceeds = Math.round((sell * qty - sellFee) * 100) / 100;
+      setAvailableCash(prev => Math.round((prev + proceeds) * 100) / 100);
+
       const rem = remainingShares !== undefined ? remainingShares : Math.max(0, (stock.shares || 0) - qty);
       const updatedCost = rem === 0 ? 0 : stock.cost;
       handleUpdateStock({ ...stock, shares: rem, cost: updatedCost });
-      toastOk(`✓ 已成功记录卖出：${stock.name} 卖出 ${qty} 股，净盈亏 ${netDiff >= 0 ? '+' : ''}¥${netDiff.toFixed(2)}，剩余持仓 ${rem} 股！`);
+      toastOk(`✓ 卖出成功：回笼现金 ¥${money(proceeds)}，净盈亏 ${netDiff >= 0 ? '+' : ''}¥${netDiff.toFixed(2)}，剩余 ${rem} 股`);
     } else {
-      // 冲减底仓成本，股数不变
+      setAvailableCash(prev => Math.max(0, Math.round((prev + (Number(netDiff) || 0)) * 100) / 100));
       if (stock.shares > 0 && newCost > 0) {
         handleUpdateStock({ ...stock, cost: newCost });
       }
-      toastOk(`✓ 做T记录已入账！净套利 ¥${netDiff.toFixed(2)}`);
+      toastOk(`✓ 做T记录已入账（纪律 ${audit.disciplineScore}分）！净套利 ${netDiff >= 0 ? '+' : ''}¥${netDiff.toFixed(2)} 已计入可用现金`);
     }
 
     setQuickTModal({ open: false, stock: null });
   };
 
-  /* 尾盘潜伏建仓 */
+  /* 尾盘潜伏建仓（扣减真实可用现金 + 熔断拦截 + 自动人机点位审计） */
   const handleExecTailBuy = (cand, buyPx, buyQty) => {
+    if (tiltState?.isLocked) {
+      toastErr('🔒 单日防上头熔断保护中：已拦截尾盘新开仓买入，防止亏损日尾盘博弈加码');
+      return;
+    }
+
+    const px = Math.max(0, +buyPx || +cand.price || 0);
+    const qty = Math.max(0, parseInt(buyQty, 10) || 0);
+    if (px <= 0 || qty <= 0) {
+      toastErr('请输入有效的尾盘买入价与股数');
+      return;
+    }
+
+    const buyFee = Math.round(px * qty * 0.0003 * 100) / 100;
+    const totalOutflow = Math.round((px * qty + buyFee) * 100) / 100;
+    if (totalOutflow > cash + 0.01) {
+      toastWarn(`⚠️ 尾盘建仓需 ¥${money(totalOutflow)}，超出可用现金 ¥${money(cash)}，已将现金扣至 ¥0`);
+    }
+    setAvailableCash(prev => Math.max(0, Math.round((prev - totalOutflow) * 100) / 100));
+
+    const code6 = String(cand.code || '').padStart(6, '0');
     const activeItem = {
       id: Date.now(),
-      code: cand.code,
+      code: code6,
       name: cand.name,
-      tcode: cand.tcode,
-      cost: buyPx,
-      shares: buyQty,
+      tcode: cand.tcode || tcodeFromCode(code6),
+      cost: px,
+      price: +cand.price || px,
+      shares: qty,
+      buyFee,
       status: 'active',
       date: todayStr(),
       tp1: cand.tp1,
@@ -639,68 +1123,124 @@ export default function App() {
 
     setTailActives(prev => [...prev, activeItem]);
 
+    const audit = auditTradeExecution({
+      stock: { ...cand, code: code6, tier: 'short' },
+      code: code6,
+      dir: '尾盘买入',
+      track: 'short_swing',
+      buy: px,
+      sell: 0,
+      qty,
+      net: -buyFee,
+      plan: '计划内',
+      prevLogs: tradeLogs,
+      wbLatest,
+      poolList: pool,
+      totalAssets,
+    });
+
     const newLog = {
       id: Date.now(),
       date: todayStr(),
       time: nowTimeHHMM(),
-      code: String(cand.code || '').padStart(6, '0'),
-      stock: `${cand.name} (${cand.code})`,
+      code: code6,
+      stock: `${cand.name} (${code6})`,
+      track: 'short_swing',
       dir: '尾盘买入',
-      buy: buyPx,
+      buy: px,
       sell: 0,
-      qty: buyQty,
+      qty,
       gross: 0,
-      fee: buyPx * buyQty * 0.0003,
-      net: -(buyPx * buyQty * 0.0003),
-      plan: '计划内',
-      basis: '客观信号',
-      note: `尾盘黑马潜伏建仓，次日早盘冲高 ${cand.tp1} 止盈`
+      fee: buyFee,
+      net: -buyFee,
+      plan: audit.plan,
+      basis: '尾盘SOP信号',
+      mistakeTags: audit.mistakeTags,
+      systemBenchmark: audit.systemBenchmark,
+      alphaNet: null,
+      buyDevPct: audit.buyDevPct,
+      sellDevPct: null,
+      disciplineScore: audit.disciplineScore,
+      note: `尾盘黑马潜伏建仓 ${qty} 股，扣减现金 ¥${money(totalOutflow)}，次日冲高 ¥${f2(cand.tp1)} 止盈`
     };
 
     setTradeLogs(prev => [newLog, ...prev]);
-    toastOk(`🚀 【${cand.name}】已成功执行尾盘潜伏挂单！次日早盘 09:30~10:00 冲高兑现`);
+    toastOk(`🚀 【${cand.name}】尾盘建仓 ${qty} 股（扣减现金 ¥${money(totalOutflow)}），次日 09:30~10:00 冲高兑现`);
   };
 
-  /* 尾盘平仓出局 */
+  /* 尾盘平仓出局（回笼真实可用现金 + 结清隔夜人机 Alpha） */
   const handleExecTailExit = (act, sellPx) => {
-    const pnl = (sellPx - act.cost) * act.shares;
-    const fee = (act.cost * act.shares + sellPx * act.shares) * 0.0011;
-    const net = pnl - fee;
+    const px = Math.max(0, +sellPx || +act.price || +act.cost || 0);
+    const sh = Math.max(0, +act.shares || 0);
+    const sellFee = Math.round(px * sh * 0.0008 * 100) / 100;
+    const buyFee = act.buyFee != null ? +act.buyFee : Math.round((+act.cost || 0) * sh * 0.0003 * 100) / 100;
+    const proceeds = Math.round((px * sh - sellFee) * 100) / 100;
+    const pnl = (px - act.cost) * sh;
+    const totalFee = Math.round((buyFee + sellFee) * 100) / 100;
+    const net = Math.round((pnl - totalFee) * 100) / 100;
 
+    setAvailableCash(prev => Math.round((prev + proceeds) * 100) / 100);
     setTailActives(prev => prev.filter(x => x.id !== act.id));
+
+    const code6 = String(act.code || '').padStart(6, '0');
+    const audit = auditTradeExecution({
+      stock: { ...act, code: code6, tier: 'short' },
+      code: code6,
+      dir: '尾盘平仓',
+      track: 'short_swing',
+      buy: act.cost,
+      sell: px,
+      qty: sh,
+      net,
+      plan: '自动判定',
+      prevLogs: tradeLogs,
+      wbLatest,
+      poolList: pool,
+      totalAssets,
+    });
 
     const newLog = {
       id: Date.now(),
       date: todayStr(),
       time: nowTimeHHMM(),
-      code: String(act.code || '').padStart(6, '0'),
-      stock: `${act.name} (${act.code})`,
+      code: code6,
+      stock: `${act.name} (${code6})`,
+      track: 'short_swing',
       dir: '尾盘平仓',
       buy: act.cost,
-      sell: sellPx,
-      qty: act.shares,
+      sell: px,
+      qty: sh,
       gross: pnl,
-      fee,
+      fee: totalFee,
       net,
-      plan: '计划内',
-      basis: '客观信号',
-      note: `隔夜黑马次日兑现，收益 ¥${net.toFixed(2)}`
+      plan: audit.plan,
+      basis: '尾盘次日交割',
+      mistakeTags: audit.mistakeTags,
+      systemBenchmark: audit.systemBenchmark,
+      alphaNet: audit.alphaNet,
+      buyDevPct: audit.buyDevPct,
+      sellDevPct: audit.sellDevPct,
+      disciplineScore: audit.disciplineScore,
+      note: `隔夜黑马平仓回笼 ¥${money(proceeds)}，闭环净收益 ${net >= 0 ? '+' : ''}¥${net.toFixed(2)}`
     };
 
     setTradeLogs(prev => [newLog, ...prev]);
-    toastOk(`✓ 【${act.name}】已平仓出局，本次隔夜净收益 ¥${net.toFixed(2)}`);
+    toastOk(`✓ 【${act.name}】平仓回笼现金 ¥${money(proceeds)}，隔夜净收益 ${net >= 0 ? '+' : ''}¥${net.toFixed(2)}`);
   };
 
   /* 导出与备份 */
   const handleExport = () => {
     const data = {
-      version: 1,
+      version: 2,
       exportedAt: new Date().toISOString(),
       pool,
       logs: tradeLogs,
       tailActives,
       snapshots,
-      totalAssets
+      posRules,
+      totalAssets,
+      initialCapital,
+      availableCash: cash,
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -709,7 +1249,7 @@ export default function App() {
     a.download = `tstock-backup-${todayStr()}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    toastOk('✓ 全部自选与台账数据已成功导出为 JSON 文件！');
+    toastOk('✓ 全部自选、风控参数、现金总账与台账数据已成功导出为 JSON 文件！');
   };
 
   /* 导入数据 */
@@ -720,13 +1260,28 @@ export default function App() {
     reader.onload = (evt) => {
       try {
         const d = JSON.parse(evt.target.result);
-        if (d.pool) setPool(d.pool);
-        if (d.logs) setTradeLogs(d.logs);
-        if (d.tailActives) setTailActives(d.tailActives);
-        if (d.snapshots) setSnapshots(d.snapshots);
-        if (d.totalAssets) setTotalAssets(d.totalAssets);
+        if (Array.isArray(d.pool)) setPool(d.pool);
+        if (Array.isArray(d.logs)) setTradeLogs(d.logs);
+        if (Array.isArray(d.tailActives)) setTailActives(d.tailActives);
+        if (Array.isArray(d.snapshots)) setSnapshots(d.snapshots);
+        if (d.posRules && typeof d.posRules === 'object') {
+          handleUpdatePosRules({ ...loadPosRules(), ...d.posRules });
+        }
+        if (d.initialCapital > 0) {
+          setInitialCapital(+d.initialCapital);
+        } else if (d.totalAssets > 0) {
+          setInitialCapital(+d.totalAssets);
+        }
+        if (d.availableCash !== undefined && Number.isFinite(+d.availableCash)) {
+          setAvailableCash(Math.max(0, +d.availableCash));
+        } else if (d.totalAssets > 0) {
+          const importedMkt =
+            (d.pool || []).reduce((acc, s) => acc + (+s.shares || 0) * (+s.price || +s.cost || 0), 0) +
+            (d.tailActives || []).reduce((acc, t) => acc + (t.status === 'closed' ? 0 : (+t.shares || 0) * (+t.price || +t.cost || 0)), 0);
+          setAvailableCash(Math.max(0, Math.round((+d.totalAssets - importedMkt) * 100) / 100));
+        }
         toastOk('✓ 数据已成功从备份中恢复！');
-      } catch (err) {
+      } catch (_) {
         toastErr('导入失败：无效的 JSON 备份格式');
       }
     };
@@ -735,21 +1290,55 @@ export default function App() {
 
   /* 复制今日作战计划 */
   const handleCopyPlan = () => {
-    const lines = [`【今日做T作战计划】${todayStr()}`];
+    const lines = [
+      `【今日做T作战计划】${todayStr()}`,
+      `账户总资产: ¥${money(totalAssets)} ｜ 可用现金: ¥${money(cash)} ｜ 总仓位: ${posRate.toFixed(1)}%${tiltState?.isLocked ? ' ｜ 🔒 防上头熔断保护中' : ''}`,
+    ];
     pool.forEach(s => {
+      let c = null;
+      try { c = calc(s); } catch (_) {}
+      const posTag = (+s.shares || 0) > 0 ? `持仓 ${s.shares}股(成本 ¥${f2(s.cost)})` : '自选观察';
       lines.push('');
-      lines.push(`${s.name} (${s.code}) 现价: ${f2(s.price)}`);
-      lines.push(`  建议买入点: ${f2(s.price * 0.98)} ｜ 止盈目标: ${f2(s.price * 1.02)}`);
+      lines.push(`■ ${s.name} (${String(s.code).padStart(6, '0')}) [${posTag}] 现价: ¥${f2(s.price)}`);
+      if (c) {
+        const cleanTitle = String(c.title || '').replace(/<[^>]+>/g, '');
+        lines.push(`  结论: ${cleanTitle}`);
+        lines.push(`  正T低吸: ¥${f2(c.inA)} / ¥${f2(c.inB)} ｜ 倒T高抛: ¥${f2(c.outA)} / ¥${f2(c.outB)}`);
+        lines.push(`  止盈目标: ¥${f2(c.tp1)} / ¥${f2(c.tp2)} ｜ 止损红线: ¥${f2(c.slA)} (-${(c.effStop * 100).toFixed(2)}%)`);
+      }
+      if (s.memo && String(s.memo).trim()) {
+        lines.push(`  作战备注: ${String(s.memo).trim()}`);
+      }
     });
+    if (tailActives.length > 0) {
+      lines.push('');
+      lines.push(`⚡ 隔夜尾盘持仓（09:30~10:00 必平）: ${tailActives.map(t => `${t.name}(${t.shares}股 成本¥${f2(t.cost)})`).join('、')}`);
+    }
     lines.push('');
-    lines.push('—— 纪律：T仓浮亏 1.5% 无条件砍；14:55 前必须平掉，绝不隔夜。');
-    copyPlain(lines.join('\n'), '今日作战计划文本已复制到剪贴板，可直接粘贴！');
+    lines.push('—— 铁律：破止损线无条件砍；做T仓 14:55 前必须平掉，绝不硬扛过夜。');
+    copyPlain(lines.join('\n'), '今日真实量化作战计划已复制到剪贴板！');
   };
 
   /* 复制单只股票计划 */
   const handleCopySinglePlan = (stock) => {
-    const text = `【做T执行预案】${stock.name} (${stock.code})\n现价: ${f2(stock.price)} 昨收: ${f2(stock.prevClose)}\n买入区间: ${f2(stock.price * 0.985)} ~ ${f2(stock.price * 0.975)}\n止盈目标: ${f2(stock.price * 1.025)}\n止损红线: ${f2(stock.price * 0.985 * 0.985)} (-1.5%)`;
-    copyPlain(text, `${stock.name} 做T计划已复制到剪贴板！`);
+    let c = null;
+    try { c = calc(stock); } catch (_) {}
+    const posTag = (+stock.shares || 0) > 0 ? `持仓 ${stock.shares}股（成本 ¥${f2(stock.cost)}）` : '自选观察';
+    const lines = [
+      `【做T执行预案】${stock.name} (${String(stock.code).padStart(6, '0')}) · ${posTag}`,
+      `现价: ¥${f2(stock.price)} ｜ 昨收: ¥${f2(stock.prevClose)} ｜ 分时均价: ¥${f2(stock.avg || stock.price)}`,
+    ];
+    if (c) {
+      lines.push(`策略结论: ${String(c.title || '').replace(/<[^>]+>/g, '')}`);
+      lines.push(`正T低吸区: ¥${f2(c.inA)}（首份）~ ¥${f2(c.inB)}（二份）`);
+      lines.push(`倒T高抛区: ¥${f2(c.outA)}（首份）~ ¥${f2(c.outB)}（二份）｜ 卖飞线: ¥${f2(c.fly)}`);
+      lines.push(`止盈目标位: ¥${f2(c.tp1)} (+${c.gain1.toFixed(1)}%) / ¥${f2(c.tp2)} (+${c.gain2.toFixed(1)}%)`);
+      lines.push(`止损硬红线: ¥${f2(c.slA)} (-${(c.effStop * 100).toFixed(2)}%)`);
+    }
+    if (stock.memo && String(stock.memo).trim()) {
+      lines.push(`盘前备注: ${String(stock.memo).trim()}`);
+    }
+    copyPlain(lines.join('\n'), `${stock.name} 真实做T预案已复制到剪贴板！`);
   };
 
   /* 切换桌面通知 */
@@ -784,7 +1373,7 @@ export default function App() {
         }
       } catch (_) {}
       if (next) {
-        toastOk('🔔 已开启盘中买卖到价提醒');
+        toastOk('🔔 已开启盘中分时异动与到价提醒');
       } else {
         toastWarn('🔕 已开启上班免打扰：提示音、桌面弹窗及网页标题变动已全部关闭');
       }
@@ -792,7 +1381,6 @@ export default function App() {
     });
   };
 
-  /* 切换页面路由 */
   const handleTabChange = (target) => {
     navigate(target);
   };
@@ -801,10 +1389,8 @@ export default function App() {
 
   return (
     <div className="wrap">
-      {/* 顶部标题区 */}
       <Header />
 
-      {/* 吸顶导航栏（绑定 URL 路由） */}
       <TopNav
         activeTab={activeTab}
         onTabChange={handleTabChange}
@@ -830,7 +1416,6 @@ export default function App() {
         alertEnabled={alertEnabled}
       />
 
-      {/* 隐藏的导入文件 input */}
       <input
         ref={importInputRef}
         type="file"
@@ -839,7 +1424,6 @@ export default function App() {
         onChange={handleImportFile}
       />
 
-      {/* 尾盘过夜风控横幅 */}
       <OvernightBanner
         visible={overnightBannerOpen || ((isTailAlertTime || simTailAlert) && unclosedStocks.length > 0)}
         unclosedList={unclosedStocks}
@@ -855,12 +1439,16 @@ export default function App() {
         }}
       />
 
-      {/* 页面主体区：基于 URL 路由解耦展示 */}
       <main className="main-content">
-        {/* 今日作战（选股池 + 做T决策台） */}
         {(activeTab === 'tabConsole' || activeTab === 'tabAll') && (
           <TradePage
             pool={pool}
+            tailActives={tailActives}
+            posRules={posRules}
+            tiltState={tiltState}
+            onUpdatePosRules={handleUpdatePosRules}
+            onUnlockTilt={handleUnlockTilt}
+            onRelockTilt={handleRelockTilt}
             activeStockCode={activeStockCode}
             totalAssets={totalAssets}
             tradeLogs={tradeLogs}
@@ -887,7 +1475,10 @@ export default function App() {
             onRefreshSingle={async (stock) => {
               await loadStock(stock);
               await loadChart(stock, true);
-              setPool([...pool]);
+              checkPriceAlerts(pool);
+              checkIntradayAnomalies([stock]);
+              const nextPool = [...pool];
+              setPool(nextPool);
               toastOk(`✓ ${stock.name} 行情与K线已更新！`);
             }}
             onCopySinglePlan={handleCopySinglePlan}
@@ -896,7 +1487,6 @@ export default function App() {
           />
         )}
 
-        {/* 🚀 起爆点挖掘专栏（多周期试盘潜伏 + 板块深跌抗跌抄底） */}
         {(activeTab === 'tabIgnition' || activeTab === 'tabAll') && (
           <IgnitionPage
             pool={pool}
@@ -907,7 +1497,6 @@ export default function App() {
           />
         )}
 
-        {/* 🔥 连板打板天梯与题材风口专栏 */}
         {(activeTab === 'tabBoard' || activeTab === 'tabAll') && (
           <BoardPage
             pool={pool}
@@ -918,19 +1507,19 @@ export default function App() {
           />
         )}
 
-        {/* ⚡ 尾盘黑马 T+0 看板 */}
         {(activeTab === 'tabTail' || activeTab === 'tabAll') && (
           <TailPage
             totalAssets={totalAssets}
+            cash={cash}
             actives={tailActives}
             wbLatest={wbLatest}
+            tiltState={tiltState}
             onExecTailBuy={handleExecTailBuy}
             onExecTailExit={handleExecTailExit}
             onRefreshContract={fetchContract}
           />
         )}
 
-        {/* 🩺 个股全景体检报告 */}
         {(activeTab === 'tabDiagnosis' || activeTab === 'tabAll') && (
           <DiagnosisPage
             pool={pool}
@@ -944,7 +1533,6 @@ export default function App() {
           />
         )}
 
-        {/* 📊 四维策略推荐胜率与战绩透视 */}
         {(activeTab === 'tabPerf' || activeTab === 'tabAll') && (
           <PerfPage
             tradeLogs={tradeLogs}
@@ -954,14 +1542,18 @@ export default function App() {
           />
         )}
 
-        {/* 账户资产与收盘快照 */}
         {(activeTab === 'tabAccount' || activeTab === 'tabAll') && (
           <AccountPage
             totalAssets={totalAssets}
+            initialCapital={initialCapital}
             marketValue={marketValue}
+            poolMarketValue={poolMarketValue}
+            tailMarketValue={tailMarketValue}
             posRate={posRate}
             cash={cash}
             pool={pool}
+            tailActives={tailActives}
+            tradeLogs={tradeLogs}
             snapshots={snapshots}
             onTakeSnapshot={() => {
               const today = todayStr();
@@ -976,20 +1568,35 @@ export default function App() {
               }
             }}
             onUpdateTotalAssets={(val) => {
-              setTotalAssets(val);
-              toastOk(`✓ 账户总资产已更新为 ¥${f2(val)}`);
+              const targetTotal = Math.max(0, Math.round(+val * 100) / 100);
+              const nextCash = Math.max(0, Math.round((targetTotal - marketValue) * 100) / 100);
+              setInitialCapital(targetTotal);
+              setAvailableCash(nextCash);
+              toastOk(`✓ 已校准账户总本金 ¥${money(targetTotal)}，当前可用现金已对齐为 ¥${money(nextCash)}`);
+            }}
+            onUpdateCash={(val) => {
+              const nextCash = Math.max(0, Math.round(+val * 100) / 100);
+              setAvailableCash(nextCash);
+              toastOk(`✓ 可用现金已更新为 ¥${money(nextCash)}，实时总资产同步为 ¥${money(nextCash + marketValue)}`);
             }}
           />
         )}
 
-        {/* 台账与体检 */}
         {(activeTab === 'tabLedger' || activeTab === 'tabAll') && (
           <LedgerPage
             logs={tradeLogs}
             wbLatest={wbLatest}
+            totalAssets={totalAssets}
+            vaultStatus={vaultStatus}
+            onForceSyncVault={(force = false) => performVaultSync(force, true)}
+            onRestoreVault={handleRestoreFromVault}
             onAddLog={(log) => {
               setTradeLogs(prev => [log, ...prev]);
               toastOk('✓ 交易记录已成功录入台账！');
+            }}
+            onUpdateLog={(updatedLog) => {
+              setTradeLogs(prev => prev.map(x => (x.id === updatedLog.id ? updatedLog : x)));
+              toastOk('✓ 已保存该笔成交的复盘归因与纪律评分！');
             }}
             onDeleteLog={(id) => {
               setTradeLogs(prev => prev.filter(x => x.id !== id));
@@ -1001,22 +1608,20 @@ export default function App() {
           />
         )}
 
-        {/* 作战纪律与时钟 */}
         {(activeTab === 'tabRules' || activeTab === 'tabAll') && (
           <RulesPage />
         )}
       </main>
 
-      {/* 底部语录 */}
       <footer>
         {SITE_META.footer}
       </footer>
 
-      {/* ================= 3. 模态弹窗系统 ================= */}
       {quickTModal.open && (
         <QuickTModal
           modalData={quickTModal}
           tradeLogs={tradeLogs}
+          tiltState={tiltState}
           onClose={() => setQuickTModal({ open: false, stock: null })}
           onConfirm={handleConfirmQuickT}
         />
@@ -1056,6 +1661,7 @@ export default function App() {
               return next;
             });
           }}
+          onSimulateAnomaly={handleSimulateAnomaly}
           unclosedCount={unclosedStocks.length}
         />
       )}

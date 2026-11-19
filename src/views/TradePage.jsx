@@ -10,6 +10,12 @@ import PreMarketPanel from '../components/PreMarketPanel.jsx';
  */
 export default function TradePage({
   pool,
+  tailActives = [],
+  posRules = null,
+  tiltState = null,
+  onUpdatePosRules,
+  onUnlockTilt,
+  onRelockTilt,
   activeStockCode: externalActiveCode,
   onSelectStock: externalSelectStock,
   totalAssets = 100000,
@@ -71,8 +77,14 @@ export default function TradePage({
       {/* 决策引擎（分「实盘持仓」与「自选观察」紧凑买卖点卡片，点击再展开完整做T详情） */}
       <ConsoleSection
         pool={pool}
+        tailActives={tailActives}
         sentiment={sentiment}
         noticeRisks={noticeRisks}
+        posRules={posRules}
+        tiltState={tiltState}
+        onUpdatePosRules={onUpdatePosRules}
+        onUnlockTilt={onUnlockTilt}
+        onRelockTilt={onRelockTilt}
         activeStockCode={activeStockCode}
         totalAssets={totalAssets}
         tradeLogs={tradeLogs}
