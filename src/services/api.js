@@ -19,6 +19,138 @@ const T_K = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get';          // 前复
    未配置时默认请求同域 /stock-api，便于 nginx 反向代理到 FastAPI。 */
 const STOCK_API_BASE = (process.env.NEXT_PUBLIC_STOCK_API_BASE || '/stock-api').replace(/\/$/, '');
 
+const AUTH_TOKEN_KEY = 't-auth-token';
+export const AUTH_LAST_USER_KEY = 't-auth-last-user';
+
+export function getAuthToken() {
+  try {
+    return typeof localStorage !== 'undefined' ? (localStorage.getItem(AUTH_TOKEN_KEY) || '') : '';
+  } catch (_) {
+    return '';
+  }
+}
+
+export function setAuthToken(token) {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      if (token) localStorage.setItem(AUTH_TOKEN_KEY, String(token));
+      else localStorage.removeItem(AUTH_TOKEN_KEY);
+    }
+  } catch (_) {}
+}
+
+export function clearAuthToken() {
+  setAuthToken('');
+}
+
+export function authHeaders(extra = {}) {
+  const tok = getAuthToken();
+  return tok ? { ...extra, Authorization: `Bearer ${tok}` } : { ...extra };
+}
+
+/* ===================== 多账号登录、邀请码注册与成员管理接口 ===================== */
+
+async function authJsonFetch(path, options = {}, timeoutMs = 10000) {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${STOCK_API_BASE}${path}`, {
+      cache: 'no-store',
+      ...options,
+      headers: authHeaders({
+        ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+        ...(options.headers || {}),
+      }),
+      signal: ctl.signal,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new Error(data.detail || `请求异常 (${res.status})`);
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+export async function fetchAuthStatus() {
+  return authJsonFetch('/api/auth/status', { method: 'GET' }, 7000);
+}
+
+export async function fetchAuthChallenge(username) {
+  const u = encodeURIComponent(String(username || '').trim().toLowerCase());
+  return authJsonFetch(`/api/auth/challenge?username=${u}`, { method: 'GET' }, 8000);
+}
+
+export async function postSetupOwner({ username, displayName = '', salt, storedKey }) {
+  const data = await authJsonFetch('/api/auth/setup_owner', {
+    method: 'POST',
+    body: JSON.stringify({ username, displayName, salt, storedKey }),
+  });
+  if (data?.token) setAuthToken(data.token);
+  return data;
+}
+
+export async function postRegisterWithInvite({ username, displayName = '', inviteCode, salt, storedKey }) {
+  const data = await authJsonFetch('/api/auth/register', {
+    method: 'POST',
+    body: JSON.stringify({ username, displayName, inviteCode, salt, storedKey }),
+  });
+  if (data?.token) setAuthToken(data.token);
+  return data;
+}
+
+export async function postLoginWithProof({ username, nonce, clientProof }) {
+  const data = await authJsonFetch('/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ username, nonce, clientProof }),
+  });
+  if (data?.token) setAuthToken(data.token);
+  return data;
+}
+
+export async function postLogout() {
+  try {
+    await authJsonFetch('/api/auth/logout', { method: 'POST' }, 5000);
+  } catch (_) {
+    // 离线或已过期时静默清理本地令牌即可
+  }
+  clearAuthToken();
+}
+
+export async function postChangePassword({ nonce, currentProof, newSalt, newStoredKey }) {
+  const data = await authJsonFetch('/api/auth/change_password', {
+    method: 'POST',
+    body: JSON.stringify({ nonce, currentProof, newSalt, newStoredKey }),
+  });
+  if (data?.token) setAuthToken(data.token);
+  return data;
+}
+
+export async function fetchAuthInvites() {
+  return authJsonFetch('/api/auth/invites', { method: 'GET' });
+}
+
+export async function postMutateInvite({ action, code = '', note = '', maxUses = 5 }) {
+  return authJsonFetch('/api/auth/invites', {
+    method: 'POST',
+    body: JSON.stringify({ action, code, note, maxUses }),
+  });
+}
+
+export async function fetchAuthUsers() {
+  return authJsonFetch('/api/auth/users', { method: 'GET' });
+}
+
+export async function postMutateAuthUser({ action, username, newSalt = '', newStoredKey = '' }) {
+  return authJsonFetch('/api/auth/users', {
+    method: 'POST',
+    body: JSON.stringify({ action, username, newSalt, newStoredKey }),
+  });
+}
+
 function resolveUrl(url) {
   return STOCK_API_BASE + '/api/proxy?url=' + encodeURIComponent(url);
 }
@@ -109,7 +241,7 @@ export async function postHerdAction({ action, code, name = '', hybk = '', price
   const url = `${STOCK_API_BASE}/api/stock/herd_action`;
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ action, code: String(code).padStart(6, '0'), name, hybk, price: +price || 0, reason }),
   });
   if (!res.ok) {
@@ -125,7 +257,7 @@ export async function fetchStrategyPerf(refresh = false) {
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), 25000);
   try {
-    const res = await fetch(url, { cache: 'no-store', signal: ctl.signal });
+    const res = await fetch(url, { cache: 'no-store', headers: authHeaders(), signal: ctl.signal });
     if (!res.ok) {
       const errJson = await res.json().catch(() => ({}));
       throw new Error(errJson.detail || `战绩接口异常 (${res.status})`);
@@ -139,7 +271,7 @@ export async function fetchStrategyPerf(refresh = false) {
 /* 手动触发策略战绩当日建档快照 */
 export async function triggerStrategySnapshot() {
   const url = `${STOCK_API_BASE}/api/stock/strategy_snapshot`;
-  const res = await fetch(url, { method: 'POST' });
+  const res = await fetch(url, { method: 'POST', headers: authHeaders() });
   if (!res.ok) {
     const errJson = await res.json().catch(() => ({}));
     throw new Error(errJson.detail || `策略建档异常 (${res.status})`);
@@ -169,7 +301,7 @@ export async function fetchIgnitionPool({
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), 35000);
   try {
-    const res = await fetch(url, { cache: 'no-store', signal: ctl.signal });
+    const res = await fetch(url, { cache: 'no-store', headers: authHeaders(), signal: ctl.signal });
     if (!res.ok) {
       const errJson = await res.json().catch(() => ({}));
       throw new Error(errJson.detail || `起爆挖掘接口异常 (${res.status})`);
@@ -241,7 +373,7 @@ export async function postIgnitionTrackingAction({
   try {
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         action,
         code: c6,
@@ -310,6 +442,7 @@ export async function runTailScan(force = true) {
   try {
     const res = await fetch(url, {
       method: 'POST',
+      headers: authHeaders(),
       cache: 'no-store',
       signal: ctl.signal,
     });
@@ -329,7 +462,7 @@ export async function fetchCoachConfig() {
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), 6000);
   try {
-    const res = await fetch(url, { cache: 'no-store', signal: ctl.signal });
+    const res = await fetch(url, { cache: 'no-store', headers: authHeaders(), signal: ctl.signal });
     if (!res.ok) throw new Error(`获取AI配置失败 (${res.status})`);
     return await res.json();
   } finally {
@@ -345,7 +478,7 @@ export async function testCoachConnection(params = {}) {
   try {
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(params),
       signal: ctl.signal,
     });
@@ -365,7 +498,7 @@ export async function fetchCoachReview(payload = {}) {
   try {
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(payload),
       signal: ctl.signal,
     });
@@ -377,21 +510,25 @@ export async function fetchCoachReview(payload = {}) {
   }
 }
 
-/* 读取本机磁盘持久化金库 (data/user_vault.json) */
+/* 读取当前登录账号的独立持久化金库 */
 export async function fetchUserVault() {
   const url = `${STOCK_API_BASE}/api/user/vault`;
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), 5000);
   try {
-    const res = await fetch(url, { cache: 'no-store', signal: ctl.signal });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const res = await fetch(url, { cache: 'no-store', headers: authHeaders(), signal: ctl.signal });
+    if (!res.ok) {
+      const err = new Error(`HTTP ${res.status}`);
+      err.status = res.status;
+      throw err;
+    }
     return await res.json();
   } finally {
     clearTimeout(t);
   }
 }
 
-/* 原子双写用户金库至本机磁盘 (data/user_vault.json + 每日滚动快照备份) */
+/* 原子双写当前登录账号专属金库至服务器磁盘（含每日滚动快照备份） */
 export async function saveUserVault(payload = {}) {
   const url = `${STOCK_API_BASE}/api/user/vault`;
   const ctl = new AbortController();
@@ -399,12 +536,16 @@ export async function saveUserVault(payload = {}) {
   try {
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(payload),
       signal: ctl.signal,
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+    if (!res.ok) {
+      const err = new Error(data.detail || `HTTP ${res.status}`);
+      err.status = res.status;
+      throw err;
+    }
     return data;
   } finally {
     clearTimeout(t);

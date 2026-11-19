@@ -3,6 +3,8 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import Header from './components/Header.jsx';
 import TopNav from './components/TopNav.jsx';
+import AuthScreen from './components/AuthScreen.jsx';
+import AccountManageModal from './components/AccountManageModal.jsx';
 import TradePage from './views/TradePage.jsx';
 import TailPage from './views/TailPage.jsx';
 import AccountPage from './views/AccountPage.jsx';
@@ -20,6 +22,11 @@ import { SITE_META, APP_PAGE_TITLE, STORAGE_KEYS, DEFAULT_POOL } from './data/si
 import useRoute from './router/useRoute.js';
 import { todayStr, nowTimeHHMM, f2, money, toast, toastOk, toastWarn, toastErr, setToastListener, copyPlain, getTodayTStatus } from './services/utils.js';
 import {
+  AUTH_LAST_USER_KEY,
+  fetchAuthStatus,
+  postLogout,
+  clearAuthToken,
+  saveLocalTrackedCodes,
   loadStock,
   loadChart,
   loadResearch,
@@ -61,9 +68,31 @@ import {
   computeDailyTiltState,
 } from './services/risk.js';
 
+function isLocalDevHost() {
+  if (typeof window === 'undefined') return false;
+  const h = window.location.hostname || '';
+  return h === 'localhost' || h === '127.0.0.1' || window.location.protocol === 'file:';
+}
+
 export default function App() {
+  /* ================= 0. 多账号会话鉴权状态 ================= */
+  const [authState, setAuthState] = useState({
+    checking: true,
+    authenticated: false,
+    needsSetup: false,
+    user: null,
+    hasLegacyVault: false,
+    legacySummary: null,
+    offlineLocal: false,
+    backendError: '',
+  });
+  const [accountModalOpen, setAccountModalOpen] = useState(false);
+
+  const canEnterWorkbench = authState.authenticated || authState.offlineLocal;
+  const currentUser = authState.user;
+
   /* ================= 1. 响应式 URL 路由与核心状态 ================= */
-  const { path, activeTab, navigate, query } = useRoute();
+  const { activeTab, navigate, query } = useRoute();
   const pwa = usePwaManager();
   const eodShortcutHandledRef = useRef(false);
 
@@ -225,6 +254,8 @@ export default function App() {
       if (!pool.some(s => String(s.code).padStart(6, '0') === code6)) {
         setActiveStockCode(String(pool[0].code).padStart(6, '0'));
       }
+    } else if (pool && pool.length === 0 && activeStockCode) {
+      setActiveStockCode('');
     }
   }, [pool, activeStockCode]);
 
@@ -306,83 +337,81 @@ export default function App() {
     saveEodArchives(eodArchives);
   }, [eodArchives]);
 
-  /* 将磁盘金库对象应用到 React 全站状态 */
+  /* 彻底清空本地工作区状态（用于同浏览器切换不同账号时严防数据串号） */
+  const resetLocalWorkspaceClean = useCallback(() => {
+    vaultReadyRef.current = false;
+    setPool([]);
+    poolRef.current = [];
+    setTradeLogs([]);
+    tradeLogsRef.current = [];
+    setTailActives([]);
+    tailActivesRef.current = [];
+    setSnapshots([]);
+    snapshotsRef.current = [];
+    setEodArchives([]);
+    eodArchivesRef.current = [];
+    setInitialCapital(100000);
+    initCapRef.current = 100000;
+    setAvailableCash(100000);
+    cashRef.current = 100000;
+    setTiltOverride(null);
+    saveTiltOverride(null);
+    saveLocalTrackedCodes([]);
+    try {
+      localStorage.setItem(STORAGE_KEYS.POOL, '[]');
+      localStorage.setItem(STORAGE_KEYS.TRADE_LOG, '[]');
+      localStorage.setItem(STORAGE_KEYS.TAIL_ACTIVE, '[]');
+      localStorage.setItem(STORAGE_KEYS.SNAPSHOTS, '[]');
+      localStorage.setItem(STORAGE_KEYS.EOD_ARCHIVE, '[]');
+      localStorage.setItem(STORAGE_KEYS.ACCOUNT_TOTAL, '100000');
+      localStorage.setItem(STORAGE_KEYS.ACCOUNT_CASH, '100000');
+    } catch (_) {}
+  }, []);
+
+  /* 将云端独立金库对象完整应用到 React 全站状态（支持空自选池 [] 不残留上一任账号数据） */
   const applyVaultData = useCallback((v) => {
     if (!v || typeof v !== 'object') return;
-    if (Array.isArray(v.pool) && v.pool.length > 0) setPool(v.pool);
-    if (Array.isArray(v.logs)) setTradeLogs(v.logs);
-    if (Array.isArray(v.tailActives)) setTailActives(v.tailActives);
-    if (Array.isArray(v.snapshots)) setSnapshots(v.snapshots);
-    if (Array.isArray(v.eodArchives) && v.eodArchives.length > 0) {
+    if (Array.isArray(v.pool)) {
+      setPool(v.pool);
+      poolRef.current = v.pool;
+    }
+    if (Array.isArray(v.logs)) {
+      setTradeLogs(v.logs);
+      tradeLogsRef.current = v.logs;
+    }
+    if (Array.isArray(v.tailActives)) {
+      setTailActives(v.tailActives);
+      tailActivesRef.current = v.tailActives;
+    }
+    if (Array.isArray(v.snapshots)) {
+      setSnapshots(v.snapshots);
+      snapshotsRef.current = v.snapshots;
+    }
+    if (Array.isArray(v.eodArchives)) {
       setEodArchives(v.eodArchives);
+      eodArchivesRef.current = v.eodArchives;
     }
     if (v.posRules && typeof v.posRules === 'object') {
       const mergedRules = { ...loadPosRules(), ...v.posRules };
       setPosRules(mergedRules);
+      posRulesRef.current = mergedRules;
       savePosRules(mergedRules);
     }
     if (Number.isFinite(+v.initialCapital) && +v.initialCapital > 0) {
       setInitialCapital(+v.initialCapital);
+      initCapRef.current = +v.initialCapital;
     }
     if (v.availableCash !== undefined && Number.isFinite(+v.availableCash)) {
-      setAvailableCash(Math.max(0, +v.availableCash));
+      const nextC = Math.max(0, +v.availableCash);
+      setAvailableCash(nextC);
+      cashRef.current = nextC;
     }
   }, []);
 
-  /* 启动时握手本机磁盘金库 */
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetchUserVault();
-        if (cancelled) return;
-        const localEmpty =
-          (tradeLogsRef.current || []).length === 0 &&
-          (tailActivesRef.current || []).length === 0 &&
-          (snapshotsRef.current || []).length === 0 &&
-          (eodArchivesRef.current || []).length === 0;
-        const remoteHasRecords =
-          res?.exists &&
-          res?.vault &&
-          ((res.summary?.logCount || 0) > 0 || (res.summary?.snapshotCount || 0) > 0 || (res.summary?.tailCount || 0) > 0);
-
-        if (localEmpty && remoteHasRecords) {
-          applyVaultData(res.vault);
-          setVaultStatus({
-            connected: true,
-            syncing: false,
-            updatedAt: res.summary?.updatedAt || '',
-            backupCount: (res.backups || []).length,
-            guarded: false,
-            remoteSummary: res.summary,
-            remoteVault: res.vault,
-          });
-          toastOk(`💾 已从本地磁盘金库自动找回 ${res.summary?.logCount || 0} 笔实盘台账与持仓配置！`);
-          setTimeout(() => handleRefreshRef.current?.(true), 250);
-        } else {
-          setVaultStatus({
-            connected: true,
-            syncing: false,
-            updatedAt: res?.summary?.updatedAt || '',
-            backupCount: (res?.backups || []).length,
-            guarded: false,
-            remoteSummary: res?.summary || null,
-            remoteVault: res?.vault || null,
-          });
-        }
-        vaultReadyRef.current = true;
-      } catch (_) {
-        if (!cancelled) {
-          setVaultStatus(prev => ({ ...prev, connected: false, syncing: false }));
-          vaultReadyRef.current = false;
-        }
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [applyVaultData]);
-
-  /* 执行一次本地磁盘金库双写 */
+  /* 执行一次当前账号专属云金库双写 */
   const performVaultSync = useCallback(async (force = false, showSuccessToast = false, overrides = {}) => {
+    if (!authStateRef.current.authenticated) return null;
+    const uname = authStateRef.current.user?.username || '';
     const srcPool = overrides.pool || poolRef.current || [];
     const slimPool = srcPool.map(s => {
       const o = {};
@@ -412,9 +441,14 @@ export default function App() {
           remoteVault: res.vault || prev.remoteVault,
         }));
         if (showSuccessToast) {
-          toastWarn(res.reason || '已触发磁盘金库防误覆盖保护');
+          toastWarn(res.reason || '已触发云金库防误覆盖保护');
         }
         return res;
+      }
+      if (uname && res.updatedTs) {
+        try {
+          localStorage.setItem(`t-vault-ts:${uname}`, String(res.updatedTs));
+        } catch (_) {}
       }
       setVaultStatus({
         connected: true,
@@ -427,23 +461,233 @@ export default function App() {
       });
       vaultReadyRef.current = true;
       if (showSuccessToast) {
-        toastOk(`💾 已双写保存至本地磁盘 data/user_vault.json（含按日快照备份）`);
+        toastOk(`☁️ 已同步至独立云金库 data/vaults/${uname || 'user'}.json（含按日快照备份）`);
       }
       return res;
-    } catch (_) {
+    } catch (err) {
       setVaultStatus(prev => ({ ...prev, connected: false, syncing: false }));
+      if (err?.status === 401) {
+        vaultReadyRef.current = false;
+        clearAuthToken();
+        setAuthState(prev => ({ ...prev, authenticated: false, user: null }));
+        toastWarn('登录会话已过期，请重新登录');
+        return null;
+      }
       if (showSuccessToast) {
-        toastWarn('当前未检测到本地 FastAPI 后端，数据已保存在浏览器本地存储（也可点导出 JSON）');
+        toastWarn('云金库暂未连通，数据已保存在当前浏览器本地');
       }
       return null;
     }
   }, []);
+
+  /* 按当前登录账号加载并对齐专属金库（支持跨手机/电脑自动拉取最新云端状态 + 账号切换零串号） */
+  const hydrateAuthenticatedVault = useCallback(async (user, mode = 'resume') => {
+    if (!user?.username) return;
+    vaultReadyRef.current = false;
+
+    let prevUser = '';
+    try {
+      prevUser = localStorage.getItem(AUTH_LAST_USER_KEY) || '';
+    } catch (_) {}
+    const isAccountSwitch = Boolean((prevUser && prevUser !== user.username) || mode === 'register');
+    if (isAccountSwitch) {
+      resetLocalWorkspaceClean();
+    }
+    try {
+      localStorage.setItem(AUTH_LAST_USER_KEY, user.username);
+    } catch (_) {}
+
+    try {
+      const res = await fetchUserVault();
+      const remoteTs = Number(res?.summary?.updatedTs || 0);
+      let localTs = 0;
+      try {
+        localTs = Number(localStorage.getItem(`t-vault-ts:${user.username}`) || 0);
+      } catch (_) {}
+
+      const localEmpty =
+        (tradeLogsRef.current || []).length === 0 &&
+        (tailActivesRef.current || []).length === 0 &&
+        (snapshotsRef.current || []).length === 0 &&
+        (eodArchivesRef.current || []).length === 0;
+
+      if (res?.exists && res?.vault) {
+        const shouldApplyRemote =
+          isAccountSwitch ||
+          mode === 'login' ||
+          mode === 'setup_owner' ||
+          mode === 'register' ||
+          localEmpty ||
+          remoteTs > localTs;
+
+        if (shouldApplyRemote) {
+          applyVaultData(res.vault);
+          if (remoteTs > 0) {
+            try {
+              localStorage.setItem(`t-vault-ts:${user.username}`, String(remoteTs));
+            } catch (_) {}
+          }
+          if (mode === 'setup_owner') {
+            toastOk(`👑 主账号 @${user.username} 已就绪，原实盘金库已无缝接管迁移！`);
+          } else if (mode === 'register') {
+            toastOk(`🎉 欢迎 @${user.username}！已为你开启独立专属金库（初始资金 ¥100,000）`);
+          } else if (remoteTs > localTs && localTs > 0) {
+            toastOk(`☁️ 已从云端同步 @${user.username} 在其他设备上的最新持仓与台账`);
+          }
+        }
+        setVaultStatus({
+          connected: true,
+          syncing: false,
+          updatedAt: res.summary?.updatedAt || '',
+          backupCount: (res.backups || []).length,
+          guarded: false,
+          remoteSummary: res.summary,
+          remoteVault: res.vault,
+        });
+        vaultReadyRef.current = true;
+        setTimeout(() => handleRefreshRef.current?.(true), 200);
+      } else {
+        // 服务器尚无该主理人的旧 user_vault.json 时，主动将当前浏览器的实盘数据上传建档
+        setVaultStatus({
+          connected: true,
+          syncing: false,
+          updatedAt: '',
+          backupCount: 0,
+          guarded: false,
+          remoteSummary: null,
+          remoteVault: null,
+        });
+        vaultReadyRef.current = true;
+        setTimeout(() => performVaultSync(true, false), 150);
+        setTimeout(() => handleRefreshRef.current?.(true), 250);
+      }
+    } catch (err) {
+      if (err?.status === 401) {
+        clearAuthToken();
+        setAuthState(prev => ({ ...prev, authenticated: false, user: null }));
+        return;
+      }
+      setVaultStatus(prev => ({ ...prev, connected: false, syncing: false }));
+      vaultReadyRef.current = false;
+    }
+  }, [applyVaultData, performVaultSync, resetLocalWorkspaceClean]);
+
+  /* 启动时检查多账号登录状态 */
+  const checkInitialAuth = useCallback(async () => {
+    setAuthState(prev => ({ ...prev, checking: true, backendError: '' }));
+    try {
+      const st = await fetchAuthStatus();
+      if (st?.authenticated && st?.user) {
+        setAuthState({
+          checking: false,
+          authenticated: true,
+          needsSetup: false,
+          user: st.user,
+          hasLegacyVault: false,
+          legacySummary: null,
+          offlineLocal: false,
+          backendError: '',
+        });
+        hydrateAuthenticatedVault(st.user, 'resume');
+      } else {
+        vaultReadyRef.current = false;
+        setAuthState({
+          checking: false,
+          authenticated: false,
+          needsSetup: Boolean(st?.needsSetup),
+          user: null,
+          hasLegacyVault: Boolean(st?.hasLegacyVault),
+          legacySummary: st?.legacySummary || null,
+          offlineLocal: false,
+          backendError: '',
+        });
+      }
+    } catch (err) {
+      vaultReadyRef.current = false;
+      // 仅在本机 localhost 开发且未启动 Python 后端时允许进入离线调式模式；线上公网一律严格门禁拦截
+      if (isLocalDevHost()) {
+        setAuthState({
+          checking: false,
+          authenticated: false,
+          needsSetup: false,
+          user: null,
+          hasLegacyVault: false,
+          legacySummary: null,
+          offlineLocal: true,
+          backendError: '',
+        });
+        setTimeout(() => handleRefreshRef.current?.(true), 250);
+      } else {
+        setAuthState({
+          checking: false,
+          authenticated: false,
+          needsSetup: false,
+          user: null,
+          hasLegacyVault: false,
+          legacySummary: null,
+          offlineLocal: false,
+          backendError: err?.message || '后端鉴权服务未响应，请确认 tstock-api 正在运行',
+        });
+      }
+    }
+  }, [hydrateAuthenticatedVault]);
+
+  useEffect(() => {
+    checkInitialAuth();
+  }, [checkInitialAuth]);
+
+  const handleAuthSuccess = useCallback((res) => {
+    const user = res?.user;
+    if (!user) return;
+    setAuthState({
+      checking: false,
+      authenticated: true,
+      needsSetup: false,
+      user,
+      hasLegacyVault: false,
+      legacySummary: null,
+      offlineLocal: false,
+      backendError: '',
+    });
+    if (res?.mode === 'setup_owner' && res?.defaultInviteCode) {
+      toastOk(`🎟️ 已为你生成初始好友邀请码 ${res.defaultInviteCode}（可在右上角「👑 ${user.displayName}」随时查看或新建）`, 5500);
+    }
+    hydrateAuthenticatedVault(user, res?.mode || 'login');
+  }, [hydrateAuthenticatedVault]);
+
+  const handleLogout = useCallback(async () => {
+    setAccountModalOpen(false);
+    if (vaultReadyRef.current && authStateRef.current.authenticated) {
+      try {
+        await performVaultSync(false, false);
+      } catch (_) {}
+    }
+    vaultReadyRef.current = false;
+    await postLogout();
+    setAuthState({
+      checking: false,
+      authenticated: false,
+      needsSetup: false,
+      user: null,
+      hasLegacyVault: false,
+      legacySummary: null,
+      offlineLocal: false,
+      backendError: '',
+    });
+    toast('已安全退出当前账号', 'info');
+  }, [performVaultSync]);
 
   const handleRestoreFromVault = useCallback(async () => {
     try {
       const res = await fetchUserVault();
       if (res?.exists && res?.vault) {
         applyVaultData(res.vault);
+        const uname = authStateRef.current.user?.username || '';
+        if (uname && res.summary?.updatedTs) {
+          try {
+            localStorage.setItem(`t-vault-ts:${uname}`, String(res.summary.updatedTs));
+          } catch (_) {}
+        }
         setVaultStatus(prev => ({
           ...prev,
           connected: true,
@@ -451,13 +695,13 @@ export default function App() {
           updatedAt: res.summary?.updatedAt || prev.updatedAt,
           backupCount: (res.backups || []).length,
         }));
-        toastOk(`✓ 已从本地磁盘金库恢复全部持仓与 ${res.summary?.logCount || 0} 笔成交流水！`);
+        toastOk(`✓ 已从专属云金库恢复全部持仓与 ${res.summary?.logCount || 0} 笔成交流水！`);
         setTimeout(() => handleRefreshRef.current?.(true), 200);
       } else {
-        toastWarn('本地磁盘尚未生成金库备份文件');
+        toastWarn('云端尚未生成金库备份文件');
       }
     } catch (err) {
-      toastErr('读取本地磁盘金库失败：' + err.message);
+      toastErr('读取专属云金库失败：' + err.message);
     }
   }, [applyVaultData]);
 
@@ -487,12 +731,12 @@ export default function App() {
   }, [pool, tradeLogs, tailActives, snapshots, eodArchives, posRules, initialCapital, availableCash]);
 
   useEffect(() => {
-    if (!vaultReadyRef.current) return undefined;
+    if (!vaultReadyRef.current || !authState.authenticated) return undefined;
     const timer = setTimeout(() => {
       performVaultSync(false, false);
     }, 1200);
     return () => clearTimeout(timer);
-  }, [vaultPersistSig, performVaultSync]);
+  }, [vaultPersistSig, authState.authenticated, performVaultSync]);
 
   /* 读取选股引擎统一数据契约 */
   const fetchContract = useCallback(async () => {
@@ -511,10 +755,11 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!canEnterWorkbench) return undefined;
     fetchContract();
     const timer = setInterval(fetchContract, 30000);
     return () => clearInterval(timer);
-  }, [fetchContract]);
+  }, [canEnterWorkbench, fetchContract]);
 
   /* 注册全局图表自愈装载器与 Toast 分发器 */
   useEffect(() => {
@@ -604,6 +849,8 @@ export default function App() {
   const isTailAlertTime = (!isWeekendNow && currentMins >= 880 && currentMins < 900);
   const isPostMarketWindow = isPostMarketWindowNow(nowTime);
 
+  const authStateRef = useRef(authState);
+  authStateRef.current = authState;
   const poolRef = useRef(pool);
   poolRef.current = pool;
   const tailActivesRef = useRef(tailActives);
@@ -784,7 +1031,6 @@ export default function App() {
       vault: { status: 'idle', note: '待执行' },
     });
 
-    // Step 1: 同步收盘行情与策略建档快照
     try {
       await Promise.allSettled([
         handleRefreshRef.current(true),
@@ -803,7 +1049,6 @@ export default function App() {
       }));
     }
 
-    // Step 2: 排查未平做T仓与尾盘隔夜仓
     const posCheck = inspectPostMarketPositions({
       pool: poolRef.current || [],
       tailActives: tailActivesRef.current || [],
@@ -819,7 +1064,6 @@ export default function App() {
       snapshot: { status: 'running', note: '正在写入收盘净值快照…' },
     }));
 
-    // Step 3: 归档今日收盘资产净值快照
     const snapRes = buildPostMarketSnapshot({
       date: today,
       pool: poolRef.current || [],
@@ -836,7 +1080,6 @@ export default function App() {
       brief: { status: 'running', note: '正在生成复盘与明日预案…' },
     }));
 
-    // Step 4: 生成今日量化复盘与明日挂单简报
     const todayLogs = (tradeLogsRef.current || []).filter(l => l && l.date === today);
     const liveGate = MKT?.gate
       ? { level: MKT.gate.level, text: String(MKT.gate.title || '').replace(/<[^>]+>/g, '') }
@@ -895,10 +1138,9 @@ export default function App() {
     setEodSteps(prev => ({
       ...prev,
       brief: { status: 'done', note: `纪律 ${briefRes.disciplineScore}分 · 简报已出炉` },
-      vault: { status: 'running', note: '正在落盘本地磁盘金库…' },
+      vault: { status: 'running', note: '正在落盘独立云金库…' },
     }));
 
-    // Step 5: 双写落盘本地磁盘金库
     const vaultRes = await performVaultSync(false, false, {
       snapshots: snapRes.nextSnapshots,
       eodArchives: prelimArchives,
@@ -916,8 +1158,8 @@ export default function App() {
     setEodSteps(prev => ({
       ...prev,
       vault: syncedOk
-        ? { status: 'done', note: '已双写 user_vault.json' }
-        : { status: 'warn', note: '已存浏览器(后端未启动)' },
+        ? { status: 'done', note: '已同步专属云金库' }
+        : { status: 'warn', note: '已存浏览器本地' },
     }));
 
     setEodRunning(false);
@@ -939,7 +1181,6 @@ export default function App() {
     setPool(nextPool);
     poolRef.current = nextPool;
 
-    // 在今日对应开仓买单上自动打上 t_to_add（做T做反变加仓）归因标签
     let tagged = false;
     const nextLogs = (tradeLogsRef.current || []).map(lg => {
       if (
@@ -972,7 +1213,7 @@ export default function App() {
 
   /* 聚焦个股 8 秒极速增量轮询 */
   useEffect(() => {
-    if (!fastRefresh) return undefined;
+    if (!canEnterWorkbench || !fastRefresh) return undefined;
     let inFlight = false;
     const timer = setInterval(async () => {
       if (inFlight || !isAShareTradingNow()) return;
@@ -1002,18 +1243,17 @@ export default function App() {
       }
     }, 8000);
     return () => clearInterval(timer);
-  }, [fastRefresh]);
+  }, [canEnterWorkbench, fastRefresh]);
 
   /* 定时任务与生命周期（含手机主屏 App 从后台切回前台秒级自动同步行情） */
   useEffect(() => {
+    if (!canEnterWorkbench) return undefined;
     updateClockRef.current();
     const clockTimer = setInterval(() => updateClockRef.current(), 1000);
     const staleTimer = setInterval(() => {
       const diffMin = (Date.now() - lastSuccessStamp.current) / 60000;
       setIsStale(diffMin > 3);
     }, 5000);
-
-    const initialTimer = setTimeout(() => handleRefreshRef.current(true), 300);
 
     const autoRefreshTimer = setInterval(() => {
       const now = new Date();
@@ -1024,7 +1264,6 @@ export default function App() {
       }
     }, 60000);
 
-    // 手机 PWA 全屏盯盘增强：从券商软件切回战情室前台时（距上次更新超过 15 秒），立即静默拉取最新分时与现价
     const handleVisibilityResume = () => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
         updateClockRef.current();
@@ -1039,20 +1278,19 @@ export default function App() {
     return () => {
       clearInterval(clockTimer);
       clearInterval(staleTimer);
-      clearTimeout(initialTimer);
       clearInterval(autoRefreshTimer);
       document.removeEventListener('visibilitychange', handleVisibilityResume);
       window.removeEventListener('pageshow', handleVisibilityResume);
     };
-  }, []);
+  }, [canEnterWorkbench]);
 
   /* 支持手机桌面图标长按「15:05 收盘归档」快捷方式直达并自动拉起归档弹窗 */
   useEffect(() => {
-    if (!eodShortcutHandledRef.current && query?.eod === '1') {
+    if (canEnterWorkbench && !eodShortcutHandledRef.current && query?.eod === '1') {
       eodShortcutHandledRef.current = true;
       setEodModalOpen(true);
     }
-  }, [query]);
+  }, [canEnterWorkbench, query]);
 
   /* ================= 2. 用户操作交互 ================= */
   const handleUpdateStock = (updated) => {
@@ -1150,7 +1388,10 @@ export default function App() {
   };
 
   const handleBatchAdd = (list, poolTag) => {
-    const currentCodes = new Set(pool.map(s => String(s.code).padStart(6, '0')));
+    const currentCodes = new Set(pool.map(s => String(rCodeOf(s))));
+    function rCodeOf(item) {
+      return String(item?.code || '').padStart(6, '0');
+    }
     const toAdd = list.filter(r => !currentCodes.has(String(r.code).padStart(6, '0')));
     if (!toAdd.length) {
       toastWarn('所选标的均已在自选池中');
@@ -1341,7 +1582,7 @@ export default function App() {
       disciplineScore: audit.disciplineScore,
       note: isDirectSell
         ? `${dir} ${qty} 股（卖出价 ¥${sell.toFixed(2)}，成本 ¥${(buy || 0).toFixed(2)}），净落袋 ¥${netDiff >= 0 ? '+' : ''}${netDiff.toFixed(2)}`
-        : `快捷做T记入（纪律 ${audit.disciplineScore}分），净套利 ¥${netDiff >= 0 ? '+' : ''}${netDiff.toFixed(2)}`
+        : `快捷做T记入（纪律 ${audit.disciplineScore}分），净套利 ¥${netDiff >= 0 ? '+' : ''}¥${netDiff.toFixed(2)}`
     };
 
     setTradeLogs(prev => [newLog, ...prev]);
@@ -1512,8 +1753,10 @@ export default function App() {
 
   /* 导出与备份 */
   const handleExport = () => {
+    const uTag = currentUser?.username ? `${currentUser.username}-` : '';
     const data = {
       version: 2,
+      owner: currentUser?.username || undefined,
       exportedAt: new Date().toISOString(),
       pool,
       logs: tradeLogs,
@@ -1529,7 +1772,7 @@ export default function App() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `tstock-backup-${todayStr()}.json`;
+    a.download = `tstock-backup-${uTag}${todayStr()}.json`;
     a.click();
     URL.revokeObjectURL(url);
     toastOk('✓ 全部自选、风控参数、现金总账、台账与盘后归档已成功导出为 JSON！');
@@ -1669,6 +1912,36 @@ export default function App() {
     navigate(target);
   };
 
+  /* ================= 3. 登录门禁拦截视图 ================= */
+  if (authState.checking) {
+    return (
+      <div className="wrap">
+        <div className="auth-gate-wrap">
+          <div style={{ fontSize: '13.5px', color: 'var(--sub)', fontWeight: 600 }}>
+            正在校验战情室登录会话…
+          </div>
+        </div>
+        <ToastHost toasts={toasts} onDismiss={(id) => setToasts(prev => prev.filter(t => t.id !== id))} />
+      </div>
+    );
+  }
+
+  if (!canEnterWorkbench) {
+    return (
+      <div className="wrap">
+        <AuthScreen
+          needsSetup={authState.needsSetup}
+          hasLegacyVault={authState.hasLegacyVault}
+          legacySummary={authState.legacySummary}
+          backendError={authState.backendError}
+          onRetryCheck={checkInitialAuth}
+          onAuthSuccess={handleAuthSuccess}
+        />
+        <ToastHost toasts={toasts} onDismiss={(id) => setToasts(prev => prev.filter(t => t.id !== id))} />
+      </div>
+    );
+  }
+
   const tailCount = tailActives.length > 0 ? tailActives.length : getTailBuyCandidates(wbLatest).length;
 
   return (
@@ -1710,6 +1983,8 @@ export default function App() {
         onToggleNotify={handleToggleNotify}
         notifyActive={notifyActive}
         alertEnabled={alertEnabled}
+        currentUser={currentUser}
+        onOpenAccountModal={() => setAccountModalOpen(true)}
       />
 
       <input
@@ -1999,6 +2274,21 @@ export default function App() {
         canNativePrompt={pwa.canNativePrompt}
         platform={pwa.platform}
         onTriggerNative={pwa.triggerInstall}
+      />
+
+      <AccountManageModal
+        open={accountModalOpen}
+        onClose={() => setAccountModalOpen(false)}
+        currentUser={currentUser}
+        vaultStatus={vaultStatus}
+        onSyncVaultNow={() => performVaultSync(true, true)}
+        onPullVaultNow={handleRestoreFromVault}
+        onPasswordChanged={(res) => {
+          if (res?.user) {
+            setAuthState(prev => ({ ...prev, user: res.user }));
+          }
+        }}
+        onLogout={handleLogout}
       />
 
       <ToastHost

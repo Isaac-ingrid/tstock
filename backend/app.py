@@ -12,9 +12,24 @@ from urllib.parse import urlsplit
 import httpx
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
+from backend.auth import (
+    COOKIE_NAME,
+    SESSION_TTL_SECONDS,
+    change_user_password,
+    create_login_challenge,
+    get_auth_status,
+    list_invites,
+    list_users_with_vault_stats,
+    login_with_challenge,
+    mutate_invite,
+    owner_mutate_user,
+    register_with_invite,
+    setup_initial_owner,
+    verify_session_token,
+)
 from backend.coach import get_coach_config, test_coach_connection, generate_coach_review
 from backend.diagnosis import get_stock_diagnosis
 from backend.ignition import (
@@ -93,7 +108,7 @@ async def lifespan(app: FastAPI):
     await app.state.http.aclose()
 
 
-app = FastAPI(title="TStock Data API", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="TStock Data API", version="1.1.0", lifespan=lifespan)
 origins = _cors_origins()
 app.add_middleware(
     CORSMiddleware,
@@ -102,6 +117,254 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+
+
+def _extract_token(request: Request) -> Optional[str]:
+    auth_hdr = request.headers.get("authorization") or ""
+    if auth_hdr.lower().startswith("bearer "):
+        tok = auth_hdr[7:].strip()
+        if tok:
+            return tok
+    cookie_tok = request.cookies.get(COOKIE_NAME)
+    if cookie_tok:
+        return cookie_tok.strip()
+    return None
+
+
+def _client_ip(request: Request) -> str:
+    real_ip = request.headers.get("x-real-ip")
+    if real_ip:
+        return real_ip.strip()
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _require_user(request: Request) -> dict[str, Any]:
+    user = verify_session_token(_extract_token(request))
+    if not user:
+        raise HTTPException(status_code=401, detail="登录状态已失效或尚未登录，请先登录账号")
+    return user
+
+
+def _require_owner(request: Request) -> dict[str, Any]:
+    user = _require_user(request)
+    if user.get("role") != "owner":
+        raise HTTPException(status_code=403, detail="仅主理人主账号可执行该管理操作")
+    return user
+
+
+def _json_with_session_cookie(payload: dict[str, Any], token: str) -> JSONResponse:
+    resp = JSONResponse(content=payload)
+    resp.set_cookie(
+        key=COOKIE_NAME,
+        value=token,
+        max_age=SESSION_TTL_SECONDS,
+        path="/",
+        httponly=True,
+        samesite="lax",
+    )
+    return resp
+
+
+# ==================== 多账号鉴权与邀请码管理接口 ====================
+
+
+class AuthSetupOwnerReq(BaseModel):
+    username: str = Field(..., min_length=2, max_length=24)
+    displayName: str = ""
+    salt: Optional[str] = None
+    storedKey: Optional[str] = None
+    password: Optional[str] = None
+
+
+class AuthRegisterReq(BaseModel):
+    username: str = Field(..., min_length=2, max_length=24)
+    displayName: str = ""
+    inviteCode: str = Field(..., min_length=2, max_length=40)
+    salt: Optional[str] = None
+    storedKey: Optional[str] = None
+    password: Optional[str] = None
+
+
+class AuthLoginReq(BaseModel):
+    username: str = Field(..., min_length=2, max_length=24)
+    nonce: str = Field(..., min_length=16, max_length=128)
+    clientProof: str = Field(..., min_length=64, max_length=64)
+
+
+class AuthChangePwdReq(BaseModel):
+    nonce: str = Field(..., min_length=16, max_length=128)
+    currentProof: str = Field(..., min_length=64, max_length=64)
+    newSalt: Optional[str] = None
+    newStoredKey: Optional[str] = None
+    newPassword: Optional[str] = None
+
+
+class AuthInviteMutateReq(BaseModel):
+    action: str = Field(..., pattern="^(create|revoke|delete)$")
+    code: str = ""
+    note: str = ""
+    maxUses: int = 5
+
+
+class AuthUserMutateReq(BaseModel):
+    action: str = Field(..., pattern="^(reset_password|delete)$")
+    username: str = Field(..., min_length=2, max_length=24)
+    newSalt: Optional[str] = None
+    newStoredKey: Optional[str] = None
+    newPassword: Optional[str] = None
+
+
+@app.get("/api/auth/status")
+async def auth_status_api(request: Request) -> dict[str, Any]:
+    """查询当前会话登录态、是否处于首次主账号初始化阶段及脱敏旧版金库摘要"""
+    return get_auth_status(token=_extract_token(request))
+
+
+@app.get("/api/auth/challenge")
+async def auth_challenge_api(username: str = Query(..., min_length=2, max_length=24)) -> dict[str, Any]:
+    """获取单次 90 秒有效的随机登录挑战 Nonce 与账号盐值（HTTP 防嗅探重放）"""
+    try:
+        return create_login_challenge(username=username)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/auth/setup_owner")
+async def auth_setup_owner_api(req: AuthSetupOwnerReq) -> JSONResponse:
+    """首次初始化主理人主账号，并自动将原有 data/user_vault.json 绑定迁移至该主账号"""
+    try:
+        res = setup_initial_owner(
+            username=req.username,
+            display_name=req.displayName,
+            salt=req.salt,
+            stored_key=req.storedKey,
+            password=req.password,
+        )
+        return _json_with_session_cookie(res, res["token"])
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/auth/register")
+async def auth_register_api(request: Request, req: AuthRegisterReq) -> JSONResponse:
+    """凭有效邀请码注册独立子账号，并自动创建干净物理隔离的专属金库"""
+    try:
+        res = register_with_invite(
+            username=req.username,
+            invite_code=req.inviteCode,
+            display_name=req.displayName,
+            salt=req.salt,
+            stored_key=req.storedKey,
+            password=req.password,
+            client_ip=_client_ip(request),
+        )
+        return _json_with_session_cookie(res, res["token"])
+    except PermissionError as exc:
+        msg = str(exc)
+        code = 429 if "频繁" in msg else 403
+        raise HTTPException(status_code=code, detail=msg) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/auth/login")
+async def auth_login_api(request: Request, req: AuthLoginReq) -> JSONResponse:
+    """校验挑战证明并签发 30 天长效会话"""
+    try:
+        res = login_with_challenge(
+            username=req.username,
+            nonce=req.nonce,
+            client_proof=req.clientProof,
+            client_ip=_client_ip(request),
+        )
+        return _json_with_session_cookie(res, res["token"])
+    except PermissionError as exc:
+        msg = str(exc)
+        code = 429 if "频繁" in msg else 401
+        raise HTTPException(status_code=code, detail=msg) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/auth/logout")
+async def auth_logout_api() -> JSONResponse:
+    """退出当前会话并清除 Cookie"""
+    resp = JSONResponse(content={"ok": True})
+    resp.delete_cookie(key=COOKIE_NAME, path="/")
+    return resp
+
+
+@app.post("/api/auth/change_password")
+async def auth_change_password_api(request: Request, req: AuthChangePwdReq) -> JSONResponse:
+    """修改当前登录账号的密码并立即吊销该账号旧会话"""
+    user = _require_user(request)
+    try:
+        res = change_user_password(
+            username=user["username"],
+            nonce=req.nonce,
+            current_proof=req.currentProof,
+            new_salt=req.newSalt,
+            new_stored_key=req.newStoredKey,
+            new_password=req.newPassword,
+        )
+        return _json_with_session_cookie(res, res["token"])
+    except PermissionError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/auth/invites")
+async def auth_list_invites_api(request: Request) -> dict[str, Any]:
+    """主理人查看全部邀请码与使用明细"""
+    _require_owner(request)
+    return {"ok": True, "invites": list_invites()}
+
+
+@app.post("/api/auth/invites")
+async def auth_mutate_invite_api(request: Request, req: AuthInviteMutateReq) -> dict[str, Any]:
+    """主理人生成新邀请码、作废或删除邀请码"""
+    _require_owner(request)
+    try:
+        return mutate_invite(
+            action=req.action,
+            code=req.code,
+            note=req.note,
+            max_uses=req.maxUses,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/auth/users")
+async def auth_list_users_api(request: Request) -> dict[str, Any]:
+    """主理人查看全部注册账号及各自金库持仓/流水概览（不含他人私密明细）"""
+    _require_owner(request)
+    return {"ok": True, "users": list_users_with_vault_stats()}
+
+
+@app.post("/api/auth/users")
+async def auth_mutate_users_api(request: Request, req: AuthUserMutateReq) -> dict[str, Any]:
+    """主理人重置成员密码或移除成员账号"""
+    owner = _require_owner(request)
+    try:
+        res = owner_mutate_user(
+            owner_username=owner["username"],
+            action=req.action,
+            target_username=req.username,
+            new_salt=req.newSalt,
+            new_stored_key=req.newStoredKey,
+            new_password=req.newPassword,
+        )
+        return {**res, "users": list_users_with_vault_stats()}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+# ==================== 股票数据与业务接口 ====================
 
 
 class HerdActionReq(BaseModel):
@@ -228,8 +491,9 @@ async def stock_limitup_pool(
 
 
 @app.post("/api/stock/herd_action")
-async def stock_herd_action(payload: HerdActionReq) -> dict[str, object]:
-    """抱团自动跟踪池的手动干预接口（固定pin / 加池add / 移出remove / 恢复restore）"""
+async def stock_herd_action(request: Request, payload: HerdActionReq) -> dict[str, object]:
+    """抱团自动跟踪池的手动干预接口（需登录权限）"""
+    _require_user(request)
     try:
         res = await mutate_herd_pool(
             action=payload.action,
@@ -252,7 +516,9 @@ async def stock_strategy_perf(
     request: Request,
     refresh: bool = Query(False),
 ) -> dict[str, object]:
-    """四维策略推荐战绩与胜率统计（稳健长线 / 短线双列 / 尾盘黑马 / 连板打板已剔除一字与14:30+尾盘）"""
+    """四维策略推荐战绩与胜率统计"""
+    if refresh:
+        _require_user(request)
     try:
         http_client = getattr(request.app.state, "http", None)
         return await get_strategy_performance(http_client=http_client, force_snapshot=refresh)
@@ -262,7 +528,8 @@ async def stock_strategy_perf(
 
 @app.post("/api/stock/strategy_snapshot")
 async def stock_strategy_snapshot(request: Request) -> dict[str, object]:
-    """触发一次全策略建档快照并更新 data/strategy_ledger.json"""
+    """触发一次全策略建档快照并更新 data/strategy_ledger.json（需登录权限）"""
+    _require_user(request)
     try:
         http_client = getattr(request.app.state, "http", None)
         return await snapshot_strategies(http_client=http_client)
@@ -281,6 +548,8 @@ async def stock_ignition_pool(
     refresh: bool = Query(False),
 ) -> dict[str, object]:
     """起爆点挖掘双方向扫描：横盘多周期试盘起爆 + 板块深跌腰斩龙头抗跌抄底"""
+    if refresh:
+        _require_user(request)
     parsed_custom = None
     if custom_mappings and custom_mappings.strip():
         try:
@@ -306,7 +575,7 @@ async def stock_ignition_pool(
 
 @app.get("/api/stock/ignition_tracking")
 async def stock_ignition_tracking(request: Request) -> dict[str, object]:
-    """获取起爆挖掘与抗跌抄底在轨生命周期跟踪池（毫秒级拉取最新现价与SOP建议）"""
+    """获取起爆挖掘与抗跌抄底在轨生命周期跟踪池"""
     try:
         http_client = getattr(request.app.state, "http", None)
         return await get_ignition_tracking_pool(http_client=http_client)
@@ -315,8 +584,9 @@ async def stock_ignition_tracking(request: Request) -> dict[str, object]:
 
 
 @app.post("/api/stock/ignition_tracking_action")
-async def stock_ignition_tracking_action(payload: IgnitionTrackActionReq) -> dict[str, object]:
-    """手动加入或移出在轨生命周期跟踪池（全市场支持 00/60/30/688）"""
+async def stock_ignition_tracking_action(request: Request, payload: IgnitionTrackActionReq) -> dict[str, object]:
+    """手动加入或移出在轨生命周期跟踪池（需登录权限）"""
+    _require_user(request)
     try:
         return await mutate_ignition_tracking(
             action=payload.action,
@@ -336,7 +606,7 @@ async def stock_ignition_tracking_action(payload: IgnitionTrackActionReq) -> dic
 
 @app.get("/api/stock/ignition_diagnose")
 async def stock_ignition_diagnose(request: Request, query: str = Query(..., min_length=1, max_length=50)) -> dict[str, object]:
-    """诊断自选横盘标的的起爆成色（试盘涨停 + 月放量 + 周向上 + 日缩量 + 均线粘合震仓 + 底座防守）"""
+    """诊断自选横盘标的的起爆成色"""
     try:
         http_client = getattr(request.app.state, "http", None)
         return await diagnose_ignition_stock(query=query, http_client=http_client)
@@ -346,7 +616,7 @@ async def stock_ignition_diagnose(request: Request, query: str = Query(..., min_
 
 @app.get("/api/stock/meme_radar")
 async def stock_meme_radar() -> dict[str, Any]:
-    """获取全市场玄学字辈共振全景榜单（东方系、日/阳字辈、华字辈、龙蛇生肖、中字头等）"""
+    """获取全市场玄学字辈共振全景榜单"""
     try:
         return get_meme_radar_overview()
     except Exception as exc:
@@ -366,8 +636,9 @@ _tail_scan_lock = asyncio.Lock()
 
 
 @app.post("/api/stock/run_tail_scan")
-async def run_tail_scan_api(force: bool = Query(default=True)) -> dict[str, object]:
-    """一键触发全市场尾盘黑马实时选股扫描并更新契约与前端缓存"""
+async def run_tail_scan_api(request: Request, force: bool = Query(default=True)) -> dict[str, object]:
+    """一键触发全市场尾盘黑马实时选股扫描并更新契约（需登录权限）"""
+    _require_user(request)
     if _tail_scan_lock.locked():
         return {
             "ok": False,
@@ -458,32 +729,39 @@ class UserVaultSaveReq(BaseModel):
 
 
 @app.get("/api/user/vault")
-async def get_user_vault_api() -> dict[str, Any]:
-    """读取本地磁盘持久化金库（持仓池、成交流水、尾盘持仓、收盘快照、风控配置与现金总账）"""
-    return load_user_vault()
+async def get_user_vault_api(request: Request) -> dict[str, Any]:
+    """读取当前登录账号的独立持久化金库（不同账号物理隔离）"""
+    user = _require_user(request)
+    res = load_user_vault(username=user["username"])
+    return {**res, "user": user}
 
 
 @app.post("/api/user/vault")
-async def save_user_vault_api(req: UserVaultSaveReq) -> dict[str, Any]:
-    """原子双写用户金库至本地磁盘，并自动生成按日滚动快照备份"""
+async def save_user_vault_api(request: Request, req: UserVaultSaveReq) -> dict[str, Any]:
+    """原子双写当前登录账号的专属金库至磁盘，并自动生成按账号隔离的每日备份"""
+    user = _require_user(request)
     try:
-        return save_user_vault(
+        res = save_user_vault(
             payload=req.model_dump(),
             force=bool(req.force),
+            username=user["username"],
         )
+        return {**res, "user": user}
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"本地磁盘金库写入失败: {exc}") from exc
+        raise HTTPException(status_code=500, detail=f"云端金库写入失败: {exc}") from exc
 
 
 @app.get("/api/coach/config")
-async def coach_config_api() -> dict[str, Any]:
-    """获取天翼云大模型配置状态与可用参数"""
+async def coach_config_api(request: Request) -> dict[str, Any]:
+    """获取天翼云大模型配置状态与可用参数（需登录权限）"""
+    _require_user(request)
     return get_coach_config()
 
 
 @app.post("/api/coach/test")
-async def coach_test_api(req: CoachTestReq) -> dict[str, Any]:
-    """测试天翼云 / OpenAI 兼容接口连接性与模型延迟"""
+async def coach_test_api(request: Request, req: CoachTestReq) -> dict[str, Any]:
+    """测试天翼云 / OpenAI 兼容接口连接性与模型延迟（需登录权限）"""
+    _require_user(request)
     try:
         return await test_coach_connection(
             api_key=req.apiKey,
@@ -495,8 +773,9 @@ async def coach_test_api(req: CoachTestReq) -> dict[str, Any]:
 
 
 @app.post("/api/coach/review")
-async def coach_review_api(req: CoachReviewReq) -> dict[str, Any]:
-    """调用大模型或内置量化规则教练执行今日操盘与做T实战复盘诊断"""
+async def coach_review_api(request: Request, req: CoachReviewReq) -> dict[str, Any]:
+    """调用大模型或内置量化规则教练执行今日操盘与做T实战复盘诊断（需登录权限）"""
+    _require_user(request)
     try:
         return await generate_coach_review(
             trades=req.trades,

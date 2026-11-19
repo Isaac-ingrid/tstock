@@ -28,6 +28,8 @@ export default function TopNav({
   onToggleNotify,
   notifyActive,
   alertEnabled = true,
+  currentUser = null,
+  onOpenAccountModal = null,
 }) {
   const navRef = useRef(null);
   const moreRef = useRef(null);
@@ -105,6 +107,17 @@ export default function TopNav({
         </nav>
 
         <div className="tb-actions">
+          {currentUser && onOpenAccountModal && (
+            <button
+              type="button"
+              className="tb-btn tb-user-btn"
+              onClick={onOpenAccountModal}
+              title={`当前账号：${currentUser.displayName || currentUser.username}（点击管理独立云金库、密码${currentUser.role === 'owner' ? '与好友邀请码' : ''}）`}
+            >
+              <span>{currentUser.role === 'owner' ? '👑' : '👤'}</span>
+              <span className="tb-btn-txt">{currentUser.displayName || currentUser.username}</span>
+            </button>
+          )}
           <button
             type="button"
             className={`tb-btn ${!alertEnabled ? 'tb-btn-muted' : notifyActive ? 'tb-btn-active' : ''}`}
@@ -147,8 +160,19 @@ export default function TopNav({
             <span className="tb-btn-txt">刷新</span>
           </button>
           <details className="tb-more" ref={moreRef}>
-            <summary className="tb-btn" title="更多工具（添加到手机主屏 / 计划复制 / 收盘归档 / 导入导出）">⋯</summary>
+            <summary className="tb-btn" title="更多工具（账号金库 / 添加到手机主屏 / 计划复制 / 收盘归档 / 导入导出）">⋯</summary>
             <div className="tb-more-menu">
+              {currentUser && onOpenAccountModal && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeMore();
+                    onOpenAccountModal();
+                  }}
+                >
+                  {currentUser.role === 'owner' ? '👑 账号与邀请码管理' : '👤 个人账号与云金库'}
+                </button>
+              )}
               {onOpenPwaModal && (
                 <button
                   type="button"
