@@ -418,6 +418,7 @@ class UserVaultSaveReq(BaseModel):
     logs: list[dict[str, Any]] = Field(default_factory=list)
     tailActives: list[dict[str, Any]] = Field(default_factory=list)
     snapshots: list[dict[str, Any]] = Field(default_factory=list)
+    eodArchives: list[dict[str, Any]] = Field(default_factory=list)
     posRules: dict[str, Any] = Field(default_factory=dict)
     initialCapital: float = 100000.0
     availableCash: float = 0.0

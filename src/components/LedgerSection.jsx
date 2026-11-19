@@ -30,6 +30,8 @@ export default function LedgerSection({
   vaultStatus = null,
   onForceSyncVault,
   onRestoreVault,
+  onOpenEodModal,
+  todayArchived = false,
   onExport,
   onImportClick
 }) {
@@ -645,6 +647,24 @@ export default function LedgerSection({
           </div>
 
           <div style={{ display: 'flex', gap: '7px', flexWrap: 'wrap', alignItems: 'center' }}>
+            {onOpenEodModal && (
+              <button
+                type="button"
+                onClick={onOpenEodModal}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  background: todayArchived ? '#f0fdf4' : '#0f766e',
+                  color: todayArchived ? '#15803d' : '#fff',
+                  border: todayArchived ? '1px solid #86efac' : 'none',
+                  fontWeight: 700,
+                }}
+                title="15:05 盘后一键收盘归档（同步收盘价 · 排查未平T · 净值快照 · 复盘简报 · 本地金库落盘）"
+              >
+                <span>{todayArchived ? '✅' : '🏁'}</span> {todayArchived ? '今日已归档' : '15:05 收盘归档'}
+              </button>
+            )}
             <button
               type="button"
               className="primary"

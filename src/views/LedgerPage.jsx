@@ -15,6 +15,8 @@ export default function LedgerPage({
   vaultStatus,
   onForceSyncVault,
   onRestoreVault,
+  onOpenEodModal,
+  todayArchived,
   onExport,
   onImportClick
 }) {
@@ -31,6 +33,8 @@ export default function LedgerPage({
         vaultStatus={vaultStatus}
         onForceSyncVault={onForceSyncVault}
         onRestoreVault={onRestoreVault}
+        onOpenEodModal={onOpenEodModal}
+        todayArchived={todayArchived}
         onExport={onExport}
         onImportClick={onImportClick}
       />

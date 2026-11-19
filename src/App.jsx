@@ -13,6 +13,7 @@ import BoardPage from './views/BoardPage.jsx';
 import IgnitionPage from './views/IgnitionPage.jsx';
 import PerfPage from './views/PerfPage.jsx';
 import { QuickTModal, StockReasonModal, TradingClockModal, ToastHost, OvernightBanner, AlertCenterModal } from './components/Modals.jsx';
+import PostMarketModal from './components/PostMarketModal.jsx';
 
 import { SITE_META, APP_PAGE_TITLE, STORAGE_KEYS, DEFAULT_POOL } from './data/site.js';
 import useRoute from './router/useRoute.js';
@@ -35,11 +36,22 @@ import {
   isAShareTradingNow,
   fetchUserVault,
   saveUserVault,
+  fetchCoachReview,
+  triggerStrategySnapshot,
+  MKT,
 } from './services/api.js';
 import { syncRuntimeState } from './services/state.js';
 import { registerChartLoader } from './services/chart.js';
 import { getTailBuyCandidates } from './services/tail.js';
 import { auditTradeExecution } from './services/ledger.js';
+import {
+  loadEodArchives,
+  saveEodArchives,
+  isPostMarketWindowNow,
+  inspectPostMarketPositions,
+  buildPostMarketSnapshot,
+  buildEodBriefMarkdown,
+} from './services/eod.js';
 import {
   loadPosRules,
   savePosRules,
@@ -60,7 +72,6 @@ export default function App() {
     return JSON.parse(JSON.stringify(DEFAULT_POOL));
   });
 
-  // 初始本金基准（用于核算账户总收益率与本金水位线）
   const [initialCapital, setInitialCapital] = useState(() => {
     try {
       const v = localStorage.getItem(STORAGE_KEYS.ACCOUNT_TOTAL);
@@ -88,7 +99,6 @@ export default function App() {
     return [];
   });
 
-  // 真实可用现金（独立持久化记账；首次升级自动由「历史总资产 − 当前持仓成本」平滑迁移）
   const [availableCash, setAvailableCash] = useState(() => {
     try {
       const savedCash = localStorage.getItem(STORAGE_KEYS.ACCOUNT_CASH);
@@ -129,11 +139,15 @@ export default function App() {
     return [];
   });
 
-  // 全局仓位风控与单日防上头熔断锁配置
+  // 15:05 盘后归档简报记录（留存近30个交易日）
+  const [eodArchives, setEodArchives] = useState(() => loadEodArchives());
+  const [eodModalOpen, setEodModalOpen] = useState(false);
+  const [eodRunning, setEodRunning] = useState(false);
+  const [eodSteps, setEodSteps] = useState({});
+
   const [posRules, setPosRules] = useState(() => loadPosRules());
   const [tiltOverride, setTiltOverride] = useState(() => loadTiltOverride());
 
-  // 本机磁盘自动双写金库状态
   const [vaultStatus, setVaultStatus] = useState({
     connected: false,
     syncing: false,
@@ -150,7 +164,6 @@ export default function App() {
     savePosRules(next);
   }, []);
 
-  // 保持 state.js 导出引用与 React 最新状态实时同步（供 posCalc/tRealOf/checkPriceAlerts 等直接读取）
   syncRuntimeState({ pool, logs: tradeLogs, snapshots, tailActives });
 
   const [clockPhase, setClockPhase] = useState('盘中时钟');
@@ -201,7 +214,6 @@ export default function App() {
   const [simTailAlert, setSimTailAlert] = useState(false);
   const [toasts, setToasts] = useState([]);
 
-  /* 当前选中的聚焦做T股票代码 */
   const [activeStockCode, setActiveStockCode] = useState(() => (pool[0]?.code || ''));
 
   useEffect(() => {
@@ -283,6 +295,10 @@ export default function App() {
     try { localStorage.setItem(STORAGE_KEYS.SNAPSHOTS, JSON.stringify(snapshots)); } catch (_) {}
   }, [snapshots]);
 
+  useEffect(() => {
+    saveEodArchives(eodArchives);
+  }, [eodArchives]);
+
   /* 将磁盘金库对象应用到 React 全站状态 */
   const applyVaultData = useCallback((v) => {
     if (!v || typeof v !== 'object') return;
@@ -290,6 +306,9 @@ export default function App() {
     if (Array.isArray(v.logs)) setTradeLogs(v.logs);
     if (Array.isArray(v.tailActives)) setTailActives(v.tailActives);
     if (Array.isArray(v.snapshots)) setSnapshots(v.snapshots);
+    if (Array.isArray(v.eodArchives) && v.eodArchives.length > 0) {
+      setEodArchives(v.eodArchives);
+    }
     if (v.posRules && typeof v.posRules === 'object') {
       const mergedRules = { ...loadPosRules(), ...v.posRules };
       setPosRules(mergedRules);
@@ -303,7 +322,7 @@ export default function App() {
     }
   }, []);
 
-  /* 启动时握手本机磁盘金库：若浏览器缓存被清空但本地磁盘存有实盘记录，自动无缝找回！ */
+  /* 启动时握手本机磁盘金库 */
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -313,7 +332,8 @@ export default function App() {
         const localEmpty =
           (tradeLogsRef.current || []).length === 0 &&
           (tailActivesRef.current || []).length === 0 &&
-          (snapshotsRef.current || []).length === 0;
+          (snapshotsRef.current || []).length === 0 &&
+          (eodArchivesRef.current || []).length === 0;
         const remoteHasRecords =
           res?.exists &&
           res?.vault &&
@@ -345,7 +365,6 @@ export default function App() {
         }
         vaultReadyRef.current = true;
       } catch (_) {
-        // 后端未启动时静默降级为纯浏览器本地模式
         if (!cancelled) {
           setVaultStatus(prev => ({ ...prev, connected: false, syncing: false }));
           vaultReadyRef.current = false;
@@ -355,9 +374,10 @@ export default function App() {
     return () => { cancelled = true; };
   }, [applyVaultData]);
 
-  /* 执行一次本地磁盘金库双写（支持自动防抖触发与手动强制触发） */
-  const performVaultSync = useCallback(async (force = false, showSuccessToast = false) => {
-    const slimPool = (poolRef.current || []).map(s => {
+  /* 执行一次本地磁盘金库双写 */
+  const performVaultSync = useCallback(async (force = false, showSuccessToast = false, overrides = {}) => {
+    const srcPool = overrides.pool || poolRef.current || [];
+    const slimPool = srcPool.map(s => {
       const o = {};
       Object.keys(s).forEach(k => { if (k.charAt(0) !== '_') o[k] = s[k]; });
       return o;
@@ -366,9 +386,10 @@ export default function App() {
     try {
       const res = await saveUserVault({
         pool: slimPool,
-        logs: tradeLogsRef.current || [],
-        tailActives: tailActivesRef.current || [],
-        snapshots: snapshotsRef.current || [],
+        logs: overrides.logs || tradeLogsRef.current || [],
+        tailActives: overrides.tailActives || tailActivesRef.current || [],
+        snapshots: overrides.snapshots || snapshotsRef.current || [],
+        eodArchives: overrides.eodArchives || eodArchivesRef.current || [],
         posRules: posRulesRef.current || {},
         initialCapital: initCapRef.current || 100000,
         availableCash: cashRef.current || 0,
@@ -433,7 +454,6 @@ export default function App() {
     }
   }, [applyVaultData]);
 
-  /* 构建可比较的精简状态签名，仅在用户真实持仓/现金/流水/快照/风控规则变化时防抖双写磁盘（忽略 8 秒高频现价跳动） */
   const vaultPersistSig = useMemo(() => {
     const slimP = (pool || []).map(s => ({
       code: s.code,
@@ -452,11 +472,12 @@ export default function App() {
       lRef: (tradeLogs || []).map(x => `${x.id}:${(x.mistakeTags || []).join(',')}:${x.reflection || ''}`).join('|'),
       t: (tailActives || []).map(x => `${x.id}:${x.shares}:${x.cost}`),
       s: (snapshots || []).map(x => `${x.date}:${x.total}`),
+      eod: (eodArchives || []).map(x => `${x.date}:${x.archivedAt}`),
       r: posRules,
       ic: initialCapital,
       ac: Math.round(availableCash * 100) / 100,
     });
-  }, [pool, tradeLogs, tailActives, snapshots, posRules, initialCapital, availableCash]);
+  }, [pool, tradeLogs, tailActives, snapshots, eodArchives, posRules, initialCapital, availableCash]);
 
   useEffect(() => {
     if (!vaultReadyRef.current) return undefined;
@@ -559,11 +580,22 @@ export default function App() {
     return t.hasUnclosed ? { stock: s, ...t } : null;
   }).filter(Boolean);
 
+  const liveEodPositionCheck = useMemo(
+    () => inspectPostMarketPositions({ pool, tailActives, tradeLogs }),
+    [pool, tailActives, tradeLogs]
+  );
+
+  const todayArchived = useMemo(
+    () => (eodArchives || []).some(a => a && a.date === todayStr()),
+    [eodArchives]
+  );
+
   const nowTime = new Date();
   const currentMins = nowTime.getHours() * 60 + nowTime.getMinutes();
   const currentWd = nowTime.getDay();
   const isWeekendNow = (currentWd === 0 || currentWd === 6);
   const isTailAlertTime = (!isWeekendNow && currentMins >= 880 && currentMins < 900);
+  const isPostMarketWindow = isPostMarketWindowNow(nowTime);
 
   const poolRef = useRef(pool);
   poolRef.current = pool;
@@ -575,10 +607,14 @@ export default function App() {
   tradeLogsRef.current = tradeLogs;
   const snapshotsRef = useRef(snapshots);
   snapshotsRef.current = snapshots;
+  const eodArchivesRef = useRef(eodArchives);
+  eodArchivesRef.current = eodArchives;
   const posRulesRef = useRef(posRules);
   posRulesRef.current = posRules;
   const initCapRef = useRef(initialCapital);
   initCapRef.current = initialCapital;
+  const wbLatestRef = useRef(wbLatest);
+  wbLatestRef.current = wbLatest;
 
   /* 收盘后（工作日 15:05+）自动归档今日收盘净值快照 */
   const maybeAutoSnapshot = useCallback((nextPool, nextTail) => {
@@ -627,6 +663,7 @@ export default function App() {
       else if (mins >= 840 && mins < 880) phase = '变盘预警 (14:00-14:40 警惕跳水)';
       else if (mins >= 880 && mins < 895) phase = '🚨 14:40 尾盘清T平仓 (14:40-14:55 绝不过夜)';
       else if (mins >= 895 && mins < 900) phase = '尾盘定盘 (14:55-15:00)';
+      else if (mins >= 900 && mins < 960) phase = '🏁 15:05 收盘复盘归档窗口';
     }
     setClockPhase(`${timeStr} ${phase}`);
 
@@ -684,6 +721,7 @@ export default function App() {
           return t;
         });
         setTailActives(nextTail);
+        tailActivesRef.current = nextTail;
         return nextTail;
       } catch (_) {
         return null;
@@ -699,6 +737,7 @@ export default function App() {
 
     const nextPool = [...currentPool];
     setPool(nextPool);
+    poolRef.current = nextPool;
     lastSuccessStamp.current = Date.now();
     const d = new Date();
     const timeStr = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
@@ -723,6 +762,206 @@ export default function App() {
   handleRefreshRef.current = handleRefresh;
   const updateClockRef = useRef(updateClock);
   updateClockRef.current = updateClock;
+
+  /* 🏁 15:05 盘后五步一键收盘归档工作流 */
+  const handleRunEodWorkflow = useCallback(async () => {
+    if (eodRunning) return;
+    setEodRunning(true);
+    const today = todayStr();
+
+    setEodSteps({
+      quotes: { status: 'running', note: '正在拉取最新收盘价…' },
+      audit: { status: 'idle', note: '待执行' },
+      snapshot: { status: 'idle', note: '待执行' },
+      brief: { status: 'idle', note: '待执行' },
+      vault: { status: 'idle', note: '待执行' },
+    });
+
+    // Step 1: 同步收盘行情与策略建档快照
+    try {
+      await Promise.allSettled([
+        handleRefreshRef.current(true),
+        triggerStrategySnapshot(),
+      ]);
+      setEodSteps(prev => ({
+        ...prev,
+        quotes: { status: 'done', note: '收盘价与前复权K线已同步' },
+        audit: { status: 'running', note: '正在核查未平T与隔夜仓…' },
+      }));
+    } catch (_) {
+      setEodSteps(prev => ({
+        ...prev,
+        quotes: { status: 'warn', note: '使用本地最新缓存价格继续' },
+        audit: { status: 'running', note: '正在核查未平T与隔夜仓…' },
+      }));
+    }
+
+    // Step 2: 排查未平做T仓与尾盘隔夜仓
+    const posCheck = inspectPostMarketPositions({
+      pool: poolRef.current || [],
+      tailActives: tailActivesRef.current || [],
+      tradeLogs: tradeLogsRef.current || [],
+    });
+    const unclosedCnt = posCheck.unclosedTList.length;
+    const tailCnt = posCheck.overnightTailList.length;
+    setEodSteps(prev => ({
+      ...prev,
+      audit: unclosedCnt > 0
+        ? { status: 'warn', note: `发现 ${unclosedCnt} 只未平T仓需确认` }
+        : { status: 'done', note: tailCnt > 0 ? `T仓清零 · 尾盘隔夜${tailCnt}只` : '全部T仓已清零无滞留' },
+      snapshot: { status: 'running', note: '正在写入收盘净值快照…' },
+    }));
+
+    // Step 3: 归档今日收盘资产净值快照
+    const snapRes = buildPostMarketSnapshot({
+      date: today,
+      pool: poolRef.current || [],
+      tailActives: tailActivesRef.current || [],
+      availableCash: cashRef.current || 0,
+      initialCapital: initCapRef.current || 100000,
+      prevSnapshots: snapshotsRef.current || [],
+    });
+    setSnapshots(snapRes.nextSnapshots);
+    snapshotsRef.current = snapRes.nextSnapshots;
+    setEodSteps(prev => ({
+      ...prev,
+      snapshot: { status: 'done', note: `总资产 ¥${money(snapRes.snapshot.total)} (${snapRes.snapshot.rate}%)` },
+      brief: { status: 'running', note: '正在生成复盘与明日预案…' },
+    }));
+
+    // Step 4: 生成今日量化复盘与明日挂单简报
+    const todayLogs = (tradeLogsRef.current || []).filter(l => l && l.date === today);
+    const liveGate = MKT?.gate
+      ? { level: MKT.gate.level, text: String(MKT.gate.title || '').replace(/<[^>]+>/g, '') }
+      : null;
+    const marketEnv = wbLatestRef.current?.env || liveGate || { level: 'OK', text: '大盘常态震荡' };
+
+    let coachRes = null;
+    if (todayLogs.length > 0) {
+      try {
+        coachRes = await fetchCoachReview({
+          trades: todayLogs,
+          date: today,
+          marketEnv,
+          mode: 'rule',
+        });
+      } catch (_) {
+        coachRes = null;
+      }
+    }
+
+    const briefRes = buildEodBriefMarkdown({
+      date: today,
+      snapshot: snapRes.snapshot,
+      deltaInfo: snapRes.deltaInfo,
+      todayLogs,
+      pool: poolRef.current || [],
+      wbLatest: wbLatestRef.current,
+      positionCheck: posCheck,
+      marketEnv,
+      coachReview: coachRes,
+    });
+
+    const draftArchive = {
+      date: today,
+      archivedAt: nowTimeHHMM(),
+      snapshot: snapRes.snapshot,
+      deltaInfo: snapRes.deltaInfo,
+      tradeCount: todayLogs.length,
+      unclosedCount: unclosedCnt,
+      overnightTailCount: tailCnt,
+      disciplineScore: briefRes.disciplineScore,
+      grade: briefRes.grade,
+      todayRealizedNet: briefRes.todayRealizedNet,
+      frictionLoss: briefRes.frictionLoss,
+      briefMarkdown: briefRes.briefMarkdown,
+      vaultSynced: false,
+    };
+
+    const prelimArchives = [
+      draftArchive,
+      ...(eodArchivesRef.current || []).filter(a => a && a.date !== today),
+    ].slice(0, 30);
+    setEodArchives(prelimArchives);
+    eodArchivesRef.current = prelimArchives;
+
+    setEodSteps(prev => ({
+      ...prev,
+      brief: { status: 'done', note: `纪律 ${briefRes.disciplineScore}分 · 简报已出炉` },
+      vault: { status: 'running', note: '正在落盘本地磁盘金库…' },
+    }));
+
+    // Step 5: 双写落盘本地磁盘金库
+    const vaultRes = await performVaultSync(false, false, {
+      snapshots: snapRes.nextSnapshots,
+      eodArchives: prelimArchives,
+    });
+    const syncedOk = Boolean(vaultRes && vaultRes.ok);
+    const finalArchive = { ...draftArchive, vaultSynced: syncedOk };
+    const finalArchives = [
+      finalArchive,
+      ...(eodArchivesRef.current || []).filter(a => a && a.date !== today),
+    ].slice(0, 30);
+    setEodArchives(finalArchives);
+    eodArchivesRef.current = finalArchives;
+    saveEodArchives(finalArchives);
+
+    setEodSteps(prev => ({
+      ...prev,
+      vault: syncedOk
+        ? { status: 'done', note: '已双写 user_vault.json' }
+        : { status: 'warn', note: '已存浏览器(后端未启动)' },
+    }));
+
+    setEodRunning(false);
+    toastOk(`🏁 今日 15:05 收盘归档完成！净值 ¥${money(snapRes.snapshot.total)}，纪律评分 ${briefRes.disciplineScore}/100`);
+  }, [eodRunning, performVaultSync]);
+
+  /* 一键将收盘未平T仓确认为「做T做反变加仓」并结转隔夜持仓 */
+  const handleMarkOvernightT = useCallback((unclosedItem) => {
+    if (!unclosedItem) return;
+    const today = todayStr();
+    const code6 = String(unclosedItem.code || '').padStart(6, '0');
+
+    const nextPool = (poolRef.current || []).map(s => {
+      if (String(s.code).padStart(6, '0') === code6) {
+        return { ...s, unclosedTQty: 0, ignoreTailTDate: today };
+      }
+      return s;
+    });
+    setPool(nextPool);
+    poolRef.current = nextPool;
+
+    // 在今日对应开仓买单上自动打上 t_to_add（做T做反变加仓）归因标签
+    let tagged = false;
+    const nextLogs = (tradeLogsRef.current || []).map(lg => {
+      if (
+        !tagged &&
+        lg &&
+        lg.date === today &&
+        (String(lg.code || '').padStart(6, '0') === code6 || String(lg.stock || '').includes(code6)) &&
+        (+lg.buy > 0 && !(+lg.sell > 0))
+      ) {
+        tagged = true;
+        const tags = Array.from(new Set([...(lg.mistakeTags || []), 't_to_add']));
+        return {
+          ...lg,
+          plan: '计划外',
+          mistakeTags: tags,
+          disciplineScore: Math.max(20, (lg.disciplineScore || 90) - 20),
+          reflection: lg.reflection
+            ? `${lg.reflection}；[收盘核查] 日内T仓未平被动过夜变加仓`
+            : '[15:05收盘核查] 正T买入后未在收盘前卖出，构成做T变加仓，明日早盘冲高优先减出',
+        };
+      }
+      return lg;
+    });
+    setTradeLogs(nextLogs);
+    tradeLogsRef.current = nextLogs;
+
+    toastWarn(`🏷️ 已将【${unclosedItem.name}】记入「做T做反变加仓」并结转隔夜持仓，正在刷新收盘简报…`);
+    setTimeout(() => handleRunEodWorkflow(), 80);
+  }, [handleRunEodWorkflow]);
 
   /* 聚焦个股 8 秒极速增量轮询 */
   useEffect(() => {
@@ -907,7 +1146,7 @@ export default function App() {
     }
   };
 
-  /* 买入建仓 / 买入加仓 / 底仓校准（真实扣减可用现金 + 单日熔断硬拦截 + 自动人机点位审计） */
+  /* 买入建仓 / 买入加仓 / 底仓校准 */
   const handleBuyStock = ({ stock, qty, buy, isCalibration = false, newCostOverride, newSharesOverride }) => {
     if (!stock) return;
 
@@ -1001,7 +1240,7 @@ export default function App() {
     }
   };
 
-  /* 快捷记T提交（卖出回笼现金 / 日内做T净差额实时入账现金 + 熔断保护 + 自动人机点位审计） */
+  /* 快捷记T提交 */
   const handleConfirmQuickT = ({ stock, dir, action, buy, sell, qty, netDiff, newCost, remainingShares }) => {
     const isDirectSell = action === 'sell' || dir === '直接卖出' || dir === '清仓卖出';
     const isDirectBuy = action === 'buy' || dir === '直接买入' || dir === '买入建仓' || dir === '买入加仓';
@@ -1083,7 +1322,7 @@ export default function App() {
     setQuickTModal({ open: false, stock: null });
   };
 
-  /* 尾盘潜伏建仓（扣减真实可用现金 + 熔断拦截 + 自动人机点位审计） */
+  /* 尾盘潜伏建仓 */
   const handleExecTailBuy = (cand, buyPx, buyQty) => {
     if (tiltState?.isLocked) {
       toastErr('🔒 单日防上头熔断保护中：已拦截尾盘新开仓买入，防止亏损日尾盘博弈加码');
@@ -1168,7 +1407,7 @@ export default function App() {
     toastOk(`🚀 【${cand.name}】尾盘建仓 ${qty} 股（扣减现金 ¥${money(totalOutflow)}），次日 09:30~10:00 冲高兑现`);
   };
 
-  /* 尾盘平仓出局（回笼真实可用现金 + 结清隔夜人机 Alpha） */
+  /* 尾盘平仓出局 */
   const handleExecTailExit = (act, sellPx) => {
     const px = Math.max(0, +sellPx || +act.price || +act.cost || 0);
     const sh = Math.max(0, +act.shares || 0);
@@ -1237,6 +1476,7 @@ export default function App() {
       logs: tradeLogs,
       tailActives,
       snapshots,
+      eodArchives,
       posRules,
       totalAssets,
       initialCapital,
@@ -1249,7 +1489,7 @@ export default function App() {
     a.download = `tstock-backup-${todayStr()}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    toastOk('✓ 全部自选、风控参数、现金总账与台账数据已成功导出为 JSON 文件！');
+    toastOk('✓ 全部自选、风控参数、现金总账、台账与盘后归档已成功导出为 JSON！');
   };
 
   /* 导入数据 */
@@ -1264,6 +1504,7 @@ export default function App() {
         if (Array.isArray(d.logs)) setTradeLogs(d.logs);
         if (Array.isArray(d.tailActives)) setTailActives(d.tailActives);
         if (Array.isArray(d.snapshots)) setSnapshots(d.snapshots);
+        if (Array.isArray(d.eodArchives)) setEodArchives(d.eodArchives);
         if (d.posRules && typeof d.posRules === 'object') {
           handleUpdatePosRules({ ...loadPosRules(), ...d.posRules });
         }
@@ -1407,6 +1648,9 @@ export default function App() {
         isStale={isStale}
         onOpenClock={() => setClockModalOpen(true)}
         onOpenAlertModal={() => setAlertModalOpen(true)}
+        onOpenEodModal={() => setEodModalOpen(true)}
+        todayArchived={todayArchived}
+        isPostMarketWindow={isPostMarketWindow}
         onCopyPlan={handleCopyPlan}
         onExport={handleExport}
         onImportClick={() => importInputRef.current && importInputRef.current.click()}
@@ -1590,6 +1834,8 @@ export default function App() {
             vaultStatus={vaultStatus}
             onForceSyncVault={(force = false) => performVaultSync(force, true)}
             onRestoreVault={handleRestoreFromVault}
+            onOpenEodModal={() => setEodModalOpen(true)}
+            todayArchived={todayArchived}
             onAddLog={(log) => {
               setTradeLogs(prev => [log, ...prev]);
               toastOk('✓ 交易记录已成功录入台账！');
@@ -1665,6 +1911,18 @@ export default function App() {
           unclosedCount={unclosedStocks.length}
         />
       )}
+
+      <PostMarketModal
+        open={eodModalOpen}
+        onClose={() => setEodModalOpen(false)}
+        eodArchives={eodArchives}
+        isRunning={eodRunning}
+        stepStates={eodSteps}
+        livePositionCheck={liveEodPositionCheck}
+        onRunWorkflow={handleRunEodWorkflow}
+        onOpenQuickT={(stock, dir, px, qty) => setQuickTModal({ open: true, stock, defaultDir: dir, defaultPx: px, defaultQty: qty })}
+        onMarkOvernightT={handleMarkOvernightT}
+      />
 
       <ToastHost
         toasts={toasts}

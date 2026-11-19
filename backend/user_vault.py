@@ -19,7 +19,7 @@ _VAULT_LOCK = threading.Lock()
 MAX_DAILY_BACKUPS = 15
 
 # 默认示例自选池代码集合（用于识别全新未初始化的浏览器默认状态，防误覆盖真实磁盘记录）
-DEFAULT_DEMO_CODES = {"605128", "002384", "300308"}
+DEFAULT_DEMO_CODES = {"605128", "002050", "002384", "300308"}
 
 
 def _default_data_dir() -> str:
@@ -166,6 +166,7 @@ def save_user_vault(
     logs = payload.get("logs") if isinstance(payload.get("logs"), list) else []
     tail_actives = payload.get("tailActives") if isinstance(payload.get("tailActives"), list) else []
     snapshots = payload.get("snapshots") if isinstance(payload.get("snapshots"), list) else []
+    eod_archives = payload.get("eodArchives") if isinstance(payload.get("eodArchives"), list) else []
     pos_rules = payload.get("posRules") if isinstance(payload.get("posRules"), dict) else {}
 
     initial_capital = max(0.0, round(float(payload.get("initialCapital") or 100000.0), 2))
@@ -183,6 +184,7 @@ def save_user_vault(
         "logs": logs,
         "tailActives": tail_actives,
         "snapshots": snapshots,
+        "eodArchives": eod_archives[:30],
         "posRules": pos_rules,
         "initialCapital": initial_capital,
         "availableCash": available_cash,

@@ -112,7 +112,8 @@ export const STORAGE_KEYS = {
   ACCOUNT_CASH: 't-account-cash',
   TRADE_LOG: 't-system-log',
   TAIL_ACTIVE: 't-tail-buy-active',
-  SNAPSHOTS: 't-system-snap'
+  SNAPSHOTS: 't-system-snap',
+  EOD_ARCHIVE: 't-eod-archives',
 };
 
 // 预设默认持仓股池配置

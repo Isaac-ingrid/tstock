@@ -16,6 +16,9 @@ export default function TopNav({
   isStale,
   onOpenClock,
   onOpenAlertModal,
+  onOpenEodModal,
+  todayArchived = false,
+  isPostMarketWindow = false,
   onCopyPlan,
   onExport,
   onImportClick,
@@ -82,6 +85,24 @@ export default function TopNav({
           >
             {alertEnabled ? '🔔 提醒' : '🔕 静音'}
           </button>
+          {onOpenEodModal && (
+            <button
+              type="button"
+              className="tb-btn"
+              id="btnEodArchive"
+              onClick={onOpenEodModal}
+              title="15:05 盘后一键五步收盘归档（同步收盘价 · 排查未平T · 净值快照 · 复盘简报 · 本地金库落盘）"
+              style={
+                todayArchived
+                  ? { background: '#f0fdf4', borderColor: '#86efac', color: '#15803d', fontWeight: 700 }
+                  : isPostMarketWindow
+                  ? { background: '#fffbeb', borderColor: '#f59e0b', color: '#b45309', fontWeight: 800 }
+                  : undefined
+              }
+            >
+              {todayArchived ? '✅ 已归档' : isPostMarketWindow ? '🏁 待归档' : '🏁 归档'}
+            </button>
+          )}
           <button
             type="button"
             className="tb-btn tb-btn-refresh"
@@ -92,8 +113,11 @@ export default function TopNav({
             ↻ 刷新
           </button>
           <details className="tb-more">
-            <summary className="tb-btn" title="更多工具（计划复制 / 导入导出）">⋯</summary>
+            <summary className="tb-btn" title="更多工具（计划复制 / 收盘归档 / 导入导出）">⋯</summary>
             <div className="tb-more-menu">
+              {onOpenEodModal && (
+                <button type="button" onClick={onOpenEodModal}>🏁 15:05 盘后一键收盘归档</button>
+              )}
               <button type="button" onClick={onCopyPlan}>📋 复制今日作战计划</button>
               <button type="button" onClick={onExport}>⬇ 导出 JSON 备份</button>
               <button type="button" onClick={onImportClick}>⬆ 导入 JSON 恢复</button>
