@@ -51,17 +51,26 @@ def calc_macd(closes: List[float]) -> Dict[str, Any]:
 
 
 def calc_rsi(closes: List[float], period: int = 6) -> float:
-    if len(closes) < period + 1:
+    """标准 Wilder 平滑 RSI（与前端 api.js rsiArr 及同花顺/东方财富口径一致）。"""
+    if len(closes) <= period:
         return 50.0
-    deltas = [closes[i] - closes[i - 1] for i in range(1, len(closes))]
-    recent = deltas[-period:]
-    gains = [d for d in recent if d > 0]
-    losses = [-d for d in recent if d < 0]
-    avg_gain = sum(gains) / period
-    avg_loss = sum(losses) / period
-    if avg_loss == 0:
-        return 100.0 if avg_gain > 0 else 50.0
-    rs = avg_gain / avg_loss
+    g = 0.0
+    l = 0.0
+    for i in range(1, period + 1):
+        d = closes[i] - closes[i - 1]
+        if d > 0:
+            g += d
+        else:
+            l -= d
+    ag = g / period
+    al = l / period
+    for i in range(period + 1, len(closes)):
+        d = closes[i] - closes[i - 1]
+        ag = (ag * (period - 1) + (d if d > 0 else 0.0)) / period
+        al = (al * (period - 1) + (-d if d < 0 else 0.0)) / period
+    if al == 0:
+        return 100.0 if ag > 0 else 50.0
+    rs = ag / al
     return round(100.0 - (100.0 / (1.0 + rs)), 1)
 
 

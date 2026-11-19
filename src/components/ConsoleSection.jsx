@@ -12,6 +12,7 @@ import { money } from '../services/utils.js';
 export default function ConsoleSection({
   pool = [],
   sentiment = null,
+  noticeRisks = {},
   activeStockCode,
   totalAssets = 100000,
   tradeLogs = [],
@@ -261,6 +262,8 @@ export default function ConsoleSection({
             stocks={holdingList}
             tradeLogs={tradeLogs}
             totalAssets={totalAssetsNum}
+            sentiment={sentiment}
+            noticeRisks={noticeRisks}
             posRules={posRules}
             totalMktVal={totalMktVal}
             allowedCapPct={allowedCapPct}
@@ -291,6 +294,8 @@ export default function ConsoleSection({
             stocks={watchList}
             tradeLogs={tradeLogs}
             totalAssets={totalAssetsNum}
+            sentiment={sentiment}
+            noticeRisks={noticeRisks}
             posRules={posRules}
             totalMktVal={totalMktVal}
             allowedCapPct={allowedCapPct}

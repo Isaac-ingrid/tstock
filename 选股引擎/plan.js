@@ -128,6 +128,17 @@ const ma = (b, n) => { const w = b.slice(-n); return w.reduce((a, c) => a + c.cl
   }
 
   rows.sort((a, b) => b.score - a.score || b.pos - a.pos);
+
+  // 总仓位归一：严格遵循环境总仓上限（OK 80% / WARN 50% / BAD 0%），单票上限 30%，杜绝多只标的合计超 100%
+  const maxTotalPos = envLevel === 'OK' ? 80 : envLevel === 'WARN' ? 50 : 0;
+  const activeRows = rows.filter((r) => r.pos > 0 && r.action === '按计划挂单');
+  const rawTotalPos = activeRows.reduce((acc, r) => acc + r.pos, 0);
+  if (rawTotalPos > maxTotalPos && maxTotalPos > 0) {
+    const scale = maxTotalPos / rawTotalPos;
+    activeRows.forEach((r) => {
+      r.pos = Math.min(30, Math.max(5, Math.floor((r.pos * scale) / 5) * 5));
+    });
+  }
   const active = rows.filter((r) => r.pos > 0 && r.action === '按计划挂单');
 
   for (const x of envIdx) {

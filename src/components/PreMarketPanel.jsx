@@ -15,6 +15,7 @@ export default function PreMarketPanel({
   pool = [],
   onSelectStock,
   onJumpDiagnosis,
+  onNoticeRisksChange,
 }) {
   const [auctionWindow, setAuctionWindow] = useState(() => isAuctionClockNow());
   const [expanded, setExpanded] = useState(() => isAuctionClockNow());
@@ -52,13 +53,14 @@ export default function PreMarketPanel({
       const res = await fetchBatchNoticeRisk(codesKey.split(','));
       if (res && res.ok) {
         setNoticeData(res);
+        if (onNoticeRisksChange) onNoticeRisksChange(res.items || {});
       }
     } catch (err) {
       setNoticeErr(err?.message || '盘前公告排雷暂不可用');
     } finally {
       setNoticeLoading(false);
     }
-  }, [codesKey]);
+  }, [codesKey, onNoticeRisksChange]);
 
   useEffect(() => {
     loadNotices();

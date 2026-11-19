@@ -13,9 +13,9 @@ function scoreStock(s) {
   const c = s.chgPct;
   p.chg = c >= 3 && c <= 5 ? 20 : c >= 2.5 && c < 3 ? 12 : c > 5 && c <= 6 ? 10 : 0;
 
-  /* ② 30 日内涨停史 20：涨停后未破涨停日低点且回落≤50% 给满 */
-  if (s.kl?.ok) {
-    p.limitUp = s.kl.brokeLow ? 6 : s.kl.pullback <= 50 ? 20 : 12;
+  /* ② 30 日内涨停史 20：跌破涨停日低点直接 0 分并一票否决；未破且回落≤50% 给满 */
+  if (s.kl?.ok && !s.kl.brokeLow) {
+    p.limitUp = s.kl.pullback <= 50 ? 20 : 12;
   } else p.limitUp = 0;
 
   /* ③ 量能 20（含量价联动修正） */
@@ -40,7 +40,9 @@ function scoreStock(s) {
   } else p.vwap = 0;
 
   const total = Object.values(p).reduce((a, b) => a + b, 0);
-  const verdict = total >= 80 ? '可做' : total >= 70 ? '小做' : total >= 60 ? '观察' : '放弃';
+  const verdict = (s.kl?.brokeLow || s.kl?.isBear || s.kl?.klineRisk?.risky)
+    ? '放弃'
+    : (total >= 80 ? '可做' : total >= 70 ? '小做' : total >= 60 ? '观察' : '放弃');
   return { parts: p, total, verdict };
 }
 

@@ -50,10 +50,8 @@ const CFG = {
      拿它当闸门会把整市场一天全部筛空（实测 28 只里淘汰 19 只）。 */
   scoreMin: 70,              // 低于此分不进推送名单，宁缺毋滥
   prefilterN: 70,            // 进分时复核的数量上限（控速，防限流）
-  /* 排除板块（2026-11-09 用户口径）：不要创业板。
-     创业板 300/301/302 开头，20% 涨跌幅，隔夜 T+0 回撤弹性过大，故整类剔除。
-     可用 --exclude=创业板,科创板 追加，或 --exclude=none 关闭排除。 */
-  excludeBoards: ['创业板'],
+  /* 排除板块（统一 10cm 主板口径，剔除 20cm 创业板与科创板） */
+  excludeBoards: ['创业板', '科创板'],
 };
 
 /* --exclude=创业板,科创板 覆盖默认排除项；--exclude=none 关闭排除 */
@@ -217,29 +215,34 @@ async function fetchSnapshot({ force = true } = {}) {
   return rows;
 }
 
-/* ---------------- 日K：30 日内涨停史（只做加分项，失败不淘汰） ---------------- */
+/* ---------------- 日K：30 日内涨停史 + 顶部见顶 K 线风控 ---------------- */
+const { detectBearishKlineRisk } = require('./backtest');
+
 async function klineCheck(code, board, name) {
   const url = `https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=${code},day,,,90,qfq`;
   let j;
-  try { j = await getJson(url); } catch { return { ok: false, reason: 'K线请求失败' }; }
+  try { j = await getJson(url); } catch { return { ok: false, reason: 'K线请求失败', klineRisk: { risky: false, reasons: [] } }; }
   const d = j?.data?.[code];
   const arr = d?.qfqday || d?.day;
-  if (!Array.isArray(arr) || arr.length < 10) return { ok: false, reason: 'K线不足' };
-  const bars = arr.map((r) => ({ date: r[0], close: +r[2], high: +r[3], low: +r[4] }));
-  /* 末根若是今天（盘中未收盘），剔除，只用已收盘的历史算涨停史 */
+  if (!Array.isArray(arr) || arr.length < 10) return { ok: false, reason: 'K线不足', klineRisk: { risky: false, reasons: [] } };
+  const bars = arr.map((r) => ({ date: r[0], open: +r[1], close: +r[2], high: +r[3], low: +r[4], vol: +r[5] || 0 }));
+  /* 末根若是今天（盘中未收盘），剔除，只用已收盘的历史算涨停史与风控 */
   const hist = bars.at(-1).date === TODAY ? bars.slice(0, -1) : bars;
   const effLimit = /ST/i.test(name) ? 5 : LIMIT_OF[board];
+  const klineRisk = hist.length >= 12 ? detectBearishKlineRisk(hist, hist.length - 1, effLimit) : { risky: false, reasons: [] };
+
   let hit = null;
   const scan = hist.slice(-31);
   for (let i = 1; i < scan.length; i++) {
-    const chg = (scan[i].close / scan[i - 1].close - 1) * 100;
-    if (chg >= effLimit - 0.35 && Math.abs(scan[i].close - scan[i].high) < 0.005) {
+    const prev = scan[i - 1].close;
+    const chg = (scan[i].close / prev - 1) * 100;
+    if (chg >= effLimit - 0.35 && Math.abs(scan[i].close - scan[i].high) < Math.max(0.005, prev * 0.001)) {
       hit = { date: scan[i].date, low: scan[i].low, close: scan[i].close, chg: +chg.toFixed(2) };
     }
   }
-  if (!hit) return { ok: false, reason: '30日内无涨停' };
+  if (!hit) return { ok: false, reason: '30日内无涨停', klineRisk };
   const last = hist.at(-1).close;
-  return { ok: true, hit, pullback: +(((hit.close - last) / hit.close) * 100).toFixed(2), brokeLow: last < hit.low };
+  return { ok: true, hit, pullback: +(((hit.close - last) / hit.close) * 100).toFixed(2), brokeLow: last < hit.low, klineRisk };
 }
 
 const { vwapCheck } = require('./vwap');
@@ -272,10 +275,10 @@ function scoreTail(c, vw, kl, medianTI) {
   const tr = c.turnover;
   p.turn = tr >= 5 && tr <= 10 ? 10 : tr >= 3 && tr <= 15 ? 7 : 4;
 
-  p.limitUp = kl?.ok ? (kl.brokeLow ? 1 : 5) : 0;
+  p.limitUp = kl?.ok ? (kl.brokeLow ? 0 : 5) : 0;
 
   const total = Object.values(p).reduce((a, b) => a + b, 0);
-  const verdict = total >= 80 ? '可挂' : total >= 70 ? '观察' : '放弃';
+  const verdict = kl?.klineRisk?.risky ? '放弃' : (total >= 80 ? '可挂' : total >= 70 ? '观察' : '放弃');
   return { parts: p, total, verdict, tailRel: rel == null ? null : +rel.toFixed(2) };
 }
 
@@ -287,6 +290,20 @@ function scoreTail(c, vw, kl, medianTI) {
   const mins = +HHMM.slice(0, 2) * 60 + +HHMM.slice(2);
   if (mins < 845 && !DRY) console.log('  ⚠ 当前早于 14:05，尾盘量能尚未成形，结果仅供参考');
   if (mins >= 900 && !DRY) console.log('  ⚠ 已收盘，尾盘战法请改用 engine.js 的收盘候选');
+
+  /* 0.5 环境闸门前置读取（BAD 环境提高门槛至 85+ 且强制降级为仅观察，避免熊市盲推 TOP 2） */
+  let env = { level: 'UNKNOWN', text: '缺少 plan-*.json，未做环境判定', posFactor: 0.5 };
+  try {
+    const files = fs.readdirSync(OUT_DIR).filter((f) => /^plan-\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort();
+    if (files.length) {
+      const pl = JSON.parse(fs.readFileSync(path.join(OUT_DIR, files.at(-1)), 'utf8'));
+      if (pl?.env) env = { level: pl.env.level, text: pl.env.text, posFactor: pl.env.level === 'OK' ? 1 : pl.env.level === 'WARN' ? 0.5 : 0 };
+    }
+  } catch { /* 保留中性 */ }
+  const effScoreMin = env.level === 'BAD' ? 85 : CFG.scoreMin;
+  if (env.level === 'BAD') {
+    console.log('  ⛔ 环境闸门 BAD（指数跌破 MA20/MA60），尾盘入池门槛已自动提高至 85 分，且仅作观察不建议重仓潜伏！');
+  }
 
   /* 1. 实时全市场快照 */
   console.log('① 拉取全市场实时快照…');
@@ -304,7 +321,7 @@ function scoreTail(c, vw, kl, medianTI) {
   const pre = all.filter((s) => {
     if (/ST/i.test(s.name)) return false;
     if (/^(bj)/.test(s.code)) return false;                        // 北交所 30% 涨跌幅，隔夜风险不成比例
-    if (EXCLUDE.includes(boardOf(s.code))) return false;           // 用户口径：排除创业板等
+    if (EXCLUDE.includes(boardOf(s.code))) return false;           // 用户口径：排除创业板/科创板
     if (s.totalCap < CFG.capMin || s.totalCap > CFG.capMax) return false;
     if (s.chgPct < CFG.chgMin || s.chgPct > CFG.chgMax) return false;
     if (!(s.volRatio >= CFG.volRatioMin)) return false;
@@ -323,16 +340,14 @@ function scoreTail(c, vw, kl, medianTI) {
     console.log('  今日无标的通过预筛 —— 尾盘不勉强，空仓是最优操作。');
   }
 
-  /* 3. 排序后取前 N 做分时 + 日K 复核。
-      预排序把「收在高位」当主权重：尾盘黑马的核心特征是收盘价贴着当日最高，
-      而不是涨幅最大。涨幅只是入场门槛，已由预筛管住。 */
+  /* 3. 排序后取前 N 做分时 + 日K 复核 */
   const preRank = pre
     .map((s) => ({
       ...s,
-      _pre: (s.high > 0 ? (s.price / s.high) * 100 : 0) * 1.2   // 收在高位：主权重
-        + Math.min(s.volRatio, 4) * 3                            // 有量
-        + Math.min(s.turnover, 12) * 0.6                         // 换手别太死
-        + Math.min(s.chgPct, 7) * 1.5,                           // 涨幅（已过门槛）
+      _pre: (s.high > 0 ? (s.price / s.high) * 100 : 0) * 1.2
+        + Math.min(s.volRatio, 4) * 3
+        + Math.min(s.turnover, 12) * 0.6
+        + Math.min(s.chgPct, 7) * 1.5,
     }))
     .sort((a, b) => b._pre - a._pre)
     .slice(0, CFG.prefilterN);
@@ -341,7 +356,6 @@ function scoreTail(c, vw, kl, medianTI) {
   for (const s of preRank) {
     const board = boardOf(s.code);
     const vw = await vwapCheck(s.code);
-    /* 日期守卫：不是今天的分时一律判无效 */
     if (vw && vw.date && vw.date !== TODAY) {
       console.log(`  ! ${s.name} 分时日期为 ${vw.date}，非今日，丢弃`);
       pool.push({ ...s, board, vw: null, kl: null, dropped: '分时非今日' });
@@ -351,14 +365,12 @@ function scoreTail(c, vw, kl, medianTI) {
     await new Promise((r) => setTimeout(r, 80));
   }
 
-  /* 尾盘量能密度的当日基准：取所有取到分时的样本的中位数 */
   const tis = pool.map((r) => r.vw?.tailIntensity).filter((x) => Number.isFinite(x)).sort((a, b) => a - b);
   const medianTI = tis.length ? tis[Math.floor(tis.length / 2)] : 0;
   if (tis.length) {
     console.log(`  尾盘量能密度中位 ${medianTI.toFixed(2)}（样本 ${tis.length} 只，区间 ${tis[0].toFixed(2)}–${tis.at(-1).toFixed(2)}）`);
   }
 
-  /* 涨停史只对已过分时硬闸门的做，省请求 */
   const survivors = pool.filter((r) => {
     if (!r.vw || r.dropped) return false;
     if (r.vw.onlineRatio < CFG.vwapOnlineMin) return false;
@@ -373,10 +385,10 @@ function scoreTail(c, vw, kl, medianTI) {
   }
 
   const passed = survivors
-    .filter((r) => r.total >= CFG.scoreMin && r.verdict !== '放弃')
+    .filter((r) => r.total >= effScoreMin && r.verdict !== '放弃' && !r.kl?.klineRisk?.risky)
     .sort((a, b) => b.total - a.total);
 
-  console.log(`③ 分时+涨停史复核后合格 ${passed.length} 只，取 TOP ${Math.min(TOPN, passed.length)}`);
+  console.log(`③ 分时+涨停史+K线风控复核后合格 ${passed.length} 只（门槛 ${effScoreMin} 分），取 TOP ${Math.min(TOPN, passed.length)}`);
 
   const picks = passed.slice(0, Math.max(TOPN, 2)).map((r, i) => {
     const px = +r.price;
@@ -395,7 +407,7 @@ function scoreTail(c, vw, kl, medianTI) {
       turnover: +r.turnover.toFixed(2),
       totalCap: +r.totalCap.toFixed(1),
       score: r.total,
-      verdict: r.verdict,
+      verdict: env.level === 'BAD' ? '环境否决(观望)' : r.verdict,
       parts: r.parts,
       high: +(r.high || 0).toFixed(2),
       low: +(r.low || 0).toFixed(2),
@@ -406,9 +418,9 @@ function scoreTail(c, vw, kl, medianTI) {
       tailIntensity: r.vw.tailIntensity,
       tailRel: r.tailRel,
       tailVolShare: r.vw.tailVolShare == null ? null : +(r.vw.tailVolShare * 100).toFixed(1),
-      limitRoom: room,                                // 距涨停还有多少空间 %
+      limitRoom: room,
       limitUpDate: r.kl?.ok ? r.kl.hit.date : null,
-      retOpen: +r.chgPct.toFixed(2),                  // 供页面沿用「日内涨幅」字段
+      retOpen: +r.chgPct.toFixed(2),
       whyReasons: [
         `📈 现价 ${px.toFixed(2)}，日内 +${r.chgPct.toFixed(2)}%，距涨停还有 ${room}% 空间（未封板，买得进）`,
         `🛡️ 分时均价线上方运行 ${r.vw.onlineRatio}%，现价站在当日最高价 ${r.vw.closeStrength}% 的位置`,
@@ -421,19 +433,6 @@ function scoreTail(c, vw, kl, medianTI) {
       ],
     };
   });
-
-  /* 5. 环境闸门（读最近一次的 plan-*.json，没有就退回中性） */
-  let env = { level: 'UNKNOWN', text: '缺少 plan-*.json，未做环境判定', posFactor: 0.5 };
-  try {
-    const files = fs.readdirSync(OUT_DIR).filter((f) => /^plan-\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort();
-    if (files.length) {
-      const pl = JSON.parse(fs.readFileSync(path.join(OUT_DIR, files.at(-1)), 'utf8'));
-      if (pl?.env) env = { level: pl.env.level, text: pl.env.text, posFactor: pl.env.level === 'OK' ? 1 : pl.env.level === 'WARN' ? 0.5 : 0 };
-    }
-  } catch { /* 保留中性 */ }
-  if (env.level === 'BAD') {
-    console.log('  ⚠ 环境闸门 BAD（指数跌破 MA20/MA60），尾盘潜伏建议直接放弃，或只用 1/4 仓位试单');
-  }
 
   /* 6. 落盘 */
   const payload = {

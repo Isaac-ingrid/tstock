@@ -528,6 +528,13 @@ async def get_limitup_pool(
     if risk_valve == "RED":
         do_action = "保留现金、逢反抽高抛减仓或做T降本"
         dont_action = "严禁新开打板、禁止高位连板接力、不接飞刀"
+        # 红灯熔断日对冲板临界池强制降级，严禁诱导扫板追高
+        for r_item in rushing_items:
+            r_item["verdict"] = "🔴 红灯禁扫板(仅观察)"
+            r_item["buyTag"] = "⛔ 情绪红灯熔断 · 严禁扫板"
+            r_item["buyAction"] = (
+                f"全市场情绪总阀亮红灯（炸板率 {broken_rate:.1f}%），虽距涨停仅差 {r_item['distCeiling']:.1f}%，但严禁扫板追高，仅作情绪风向观察！"
+            )
     elif risk_valve == "YELLOW":
         do_action = "聚焦抱团高横活口与前排核心，均线低吸做T"
         dont_action = "回避中后排跟风首板、禁止高开无承接硬顶"

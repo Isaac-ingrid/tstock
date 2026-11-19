@@ -6,14 +6,19 @@ import { f2, money, getTodayTStatus, copyPlain } from '../services/utils.js';
  * 根据「自选观察」vs「实盘持仓」分别生成清晰、直白的买卖点判定结论：
  * - 自选（shares === 0）：明确回答「现在是不是买点？」+ 目标低吸价/止损价
  * - 持仓（shares > 0）：明确回答「现在是卖点、买点、止损还是持股观望？」+ 浮盈与触发价
+ * - 统一联动全市场情绪红灯总阀（sentiment.riskValve === 'RED'）与盘前公告高危排雷（noticeRisk.riskLevel === '高风险'）
  */
-export function buildActionSignal(stock) {
+export function buildActionSignal(stock, { sentiment = null, noticeRisk = null } = {}) {
   const pc = +stock.prevClose || 0;
   const px = +stock.price || pc;
   const chg = pc > 0 ? ((px - pc) / pc) * 100 : 0;
   const pos = posCalc(stock);
   const c = calc(stock);
   const hasPos = pos.sh > 0;
+
+  const hasRedNotice = noticeRisk?.riskLevel === '高风险' && (noticeRisk.redFlags || []).length > 0;
+  const redNoticeTag = hasRedNotice ? (noticeRisk.redFlags[0]?.tag || '高危公告') : '';
+  const isRedSentiment = sentiment?.riskValve === 'RED';
 
   const distBuyPct = px > 0 && c.inA > 0 ? ((px - c.inA) / px) * 100 : null;
   const distSellPct = px > 0 && c.outA > 0 ? ((c.outA - px) / px) * 100 : null;
@@ -24,20 +29,27 @@ export function buildActionSignal(stock) {
   let triggerText = c.inA > 0 ? `参考低吸 ¥${f2(c.inA)} · 压力 ¥${f2(c.outA)}` : '等待行情同步';
 
   if (!hasPos) {
-    if (c.brokenLock || c.bear) {
+    if (hasRedNotice) {
+      kind = 'stop';
+      badge = `🚨 非买点 · 公告雷(${redNoticeTag})`;
+      headline = `近35天检出高危利空【${redNoticeTag}】，一票否决买入`;
+      triggerText = '点击下方「🩺 诊股」核查公告明细，排除前严禁建仓';
+    } else if (c.brokenLock || c.bear) {
       kind = 'stop';
       badge = '🚫 非买点 · 禁接飞刀';
       headline = c.brokenLock ? `形态破位（${c.breakDesc || '失守支撑'}），严禁抄底` : '日线空头反压，暂不建仓';
       triggerText = `观望等重新站稳均线，上方压力 ¥${f2(c.outA)}`;
-    } else if (c.mktLevel === 'BAD') {
+    } else if (isRedSentiment || c.mktLevel === 'BAD') {
       kind = 'warn';
-      badge = '⛔ 非买点 · 大盘否决';
-      headline = '指数破位日暂停新开仓，管住手';
-      triggerText = `等指数收回 MA20 后再看 ¥${f2(c.inA)} 附近`;
+      badge = isRedSentiment ? '🔴 非买点 · 情绪红灯熔断' : '⛔ 非买点 · 大盘否决';
+      headline = isRedSentiment
+        ? `全市场红灯退潮（炸板率 ${sentiment.brokenRate ?? '—'}%），暂停新开仓`
+        : '指数破位日暂停新开仓，管住手';
+      triggerText = `等情绪转黄/绿灯或指数收回 MA20 后再看 ¥${f2(c.inA)}`;
     } else if (c.ignitionActive) {
       kind = 'buy';
       badge = '🚀 爆发买点 · 可跟随';
-      headline = '放量突破关键均线，主升拐点确立';
+      headline = '放量站稳 MA20 突破均线，主升拐点确立';
       triggerText = `回踩 ¥${f2(c.inA)} 附近低吸 · 止损 ¥${f2(c.slA)}`;
     } else if (c.mode === 'BUY') {
       const isNearBuy = distBuyPct != null && distBuyPct <= 1.2;
@@ -87,29 +99,43 @@ export function buildActionSignal(stock) {
       badge = isNearSell ? '🔴 当前卖点 · 倒T高抛' : '🟠 偏卖点 · 反弹先卖';
       headline = c.bear
         ? '日线空头压制，反弹到压力区先倒T降仓'
-        : '无量拉升滞涨，先高抛再等回落接回';
+        : '无量拉升/分时顶背离，先高抛再等回落接回';
       triggerText = `高抛 ¥${f2(c.outA)} / ¥${f2(c.outB)} → 接回 ¥${f2(c.bkA)}`;
     } else if (c.mode === 'BUY' || c.ignitionActive) {
-      const isNearBuy = distBuyPct != null && distBuyPct <= 1.2;
-      kind = 'buy';
-      badge = c.ignitionActive
-        ? '🚀 强攻买点 · 顺势正T'
-        : (isNearBuy ? '🟢 当前买点 · 低吸正T' : '🟢 偏买点 · 挂单正T');
-      headline = c.ignitionActive
-        ? '放量爆发确立，底仓拿稳并顺势做正T'
-        : '缩量回踩支撑，可低吸做正T摊薄成本';
-      triggerText = `低吸 ¥${f2(c.inA)} → T出目标 ¥${f2(c.tp1)} · 止损 ¥${f2(c.slA)}`;
+      if (hasRedNotice) {
+        kind = 'stop';
+        badge = `🚨 公告雷(${redNoticeTag}) · 禁正T补仓`;
+        headline = `近35天有【${redNoticeTag}】利空，锁定正T买入，逢反抽优先减仓`;
+        triggerText = `反抽 ¥${f2(c.outA)} 减仓避险 · 勿向下补仓`;
+      } else if (isRedSentiment) {
+        kind = 'warn';
+        badge = '🔴 情绪红灯 · 禁正T仅倒T';
+        headline = `全市场红灯退潮（炸板率 ${sentiment.brokenRate ?? '—'}%），暂停正T低吸`;
+        triggerText = `逢反抽 ¥${f2(c.outA)} 先倒T降仓`;
+      } else {
+        const isNearBuy = distBuyPct != null && distBuyPct <= 1.2;
+        kind = 'buy';
+        badge = c.ignitionActive
+          ? '🚀 强攻买点 · 顺势正T'
+          : (isNearBuy ? '🟢 当前买点 · 低吸正T' : '🟢 偏买点 · 挂单正T');
+        headline = c.ignitionActive
+          ? '放量站稳 MA20 突破，底仓拿稳并顺势做正T'
+          : '缩量回踩支撑，可低吸做正T摊薄成本';
+        triggerText = `低吸 ¥${f2(c.inA)} → T出目标 ¥${f2(c.tp1)} · 止损 ¥${f2(c.slA)}`;
+      }
     } else {
-      kind = 'wait';
-      badge = '⏳ 持股观望 · 区间震荡';
-      headline = c.grid < 3
-        ? `振幅仅 ${c.amp.toFixed(1)}%，差价难覆盖税费，底仓不动`
-        : '未触发买卖阈值，持仓等待触及上下格位';
+      kind = hasRedNotice ? 'warn' : 'wait';
+      badge = hasRedNotice ? `⚠️ 持仓预警 · 公告(${redNoticeTag})` : '⏳ 持股观望 · 区间震荡';
+      headline = hasRedNotice
+        ? `近35天检出【${redNoticeTag}】，切勿加仓，反抽择机减仓`
+        : (c.grid < 3
+          ? `振幅仅 ${c.amp.toFixed(1)}%，差价难覆盖税费，底仓不动`
+          : '未触发买卖阈值，持仓等待触及上下格位');
       triggerText = `低吸 ¥${f2(c.inA)} ｜ 高抛 ¥${f2(c.outA)}`;
     }
   }
 
-  return { kind, badge, headline, triggerText, c, pos, chg, px, hasPos };
+  return { kind, badge, headline, triggerText, c, pos, chg, px, hasPos, hasRedNotice, redNoticeTag };
 }
 
 /** 卡片内置：一键下单手数 / 以损定仓 / 盈亏比计算器 */
@@ -265,6 +291,8 @@ export default function BattleCardGrid({
   stocks = [],
   tradeLogs = [],
   totalAssets = 100000,
+  sentiment = null,
+  noticeRisks = {},
   posRules = null,
   totalMktVal = 0,
   allowedCapPct = 80,
@@ -303,7 +331,8 @@ export default function BattleCardGrid({
         const code6 = String(s.code || '').padStart(6, '0');
         const isExpanded = expandedCode === code6;
         const isShort = s.tier === 'short' || s.poolTag === '短线';
-        const sig = buildActionSignal(s);
+        const noticeRisk = noticeRisks?.[code6] || null;
+        const sig = buildActionSignal(s, { sentiment, noticeRisk });
         const { c, pos, chg, px, hasPos } = sig;
         const chgCls = chg > 0 ? 'up' : chg < 0 ? 'down' : '';
         const tStatus = hasPos ? getTodayTStatus(s, tradeLogs) : null;

@@ -31,7 +31,7 @@ const CFG = {
   capMin: 30, capMax: 200,
   volRatioMin: 1,
   turnoverMin: 5, turnoverMax: 10,
-  excludeBoard: ['创业板', '北交所'],   // 原始需求：排除创业板
+  excludeBoard: ['创业板', '科创板', '北交所'],   // 统一 10cm 主板口径（剔除 20cm 创业/科创与 30cm 北交所）
   // 打分版放宽
   looseChgMin: 2.5, looseChgMax: 6,
   looseTurnoverMin: 3,
@@ -214,16 +214,18 @@ async function fetchAll({ force = false } = {}) {
   return { rows, isFallback, fallbackFile };
 }
 
-/* ---------------- 日K：30 日涨停 ---------------- */
+/* ---------------- 日K：30 日涨停 + 空头趋势与顶部 K 线风控 ---------------- */
+const { detectBearishKlineRisk } = require('./backtest');
+
 async function klineCheck(code, board, name) {
   const url = `https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=${code},day,,,90,qfq`;
   let j;
   try { j = await getJson(url); } catch { return { ok: false, reason: 'K线请求失败' }; }
   const d = j?.data?.[code];
   const arr = d?.qfqday || d?.day;
-  if (!Array.isArray(arr) || arr.length < 10) return { ok: false, reason: 'K线不足' };
+  if (!Array.isArray(arr) || arr.length < 20) return { ok: false, reason: 'K线不足' };
 
-  const bars = arr.map((r) => ({ date: r[0], close: +r[2], high: +r[3], low: +r[4] }));
+  const bars = arr.map((r) => ({ date: r[0], open: +r[1], close: +r[2], high: +r[3], low: +r[4], vol: +r[5] || 0 }));
   const effLimit = /ST/i.test(name) ? 5 : LIMIT_OF[board];
   let hit = null;
   const scan = bars.slice(-31, -1); // 近 30 个交易日，不含今日
@@ -231,18 +233,30 @@ async function klineCheck(code, board, name) {
     const prev = scan[i - 1].close;
     const cur = scan[i];
     const chg = (cur.close / prev - 1) * 100;
-    if (chg >= effLimit - 0.35 && Math.abs(cur.close - cur.high) < 0.005) {
+    if (chg >= effLimit - 0.35 && Math.abs(cur.close - cur.high) < Math.max(0.005, prev * 0.001)) {
       hit = { date: cur.date, low: cur.low, close: cur.close, chg: +chg.toFixed(2) };
     }
   }
   if (!hit) return { ok: false, reason: '30日内无涨停' };
 
   const last = bars[bars.length - 1].close;
+  const brokeLow = last < hit.low;
+  const ma = (n) => bars.slice(-n).reduce((acc, b) => acc + b.close, 0) / n;
+  const ma5 = ma(5), ma10 = ma(10), ma20 = ma(20);
+  const isBear = ma5 < ma10 && ma10 < ma20 && last < ma5;
+  const klineRisk = detectBearishKlineRisk(bars, bars.length - 1, effLimit);
+
+  if (brokeLow) return { ok: false, reason: '已跌破涨停日低点', hit, brokeLow: true, isBear, klineRisk };
+  if (isBear) return { ok: false, reason: '日线空头排列反压', hit, brokeLow: false, isBear: true, klineRisk };
+  if (klineRisk.risky) return { ok: false, reason: `顶部见顶K线(${klineRisk.reasons.join('/')})`, hit, brokeLow: false, isBear: false, klineRisk };
+
   return {
     ok: true,
     hit,
     pullback: +(((hit.close - last) / hit.close) * 100).toFixed(2), // 正=涨停后回落
-    brokeLow: last < hit.low,
+    brokeLow: false,
+    isBear: false,
+    klineRisk,
   };
 }
 
@@ -280,7 +294,7 @@ const { scoreStock } = require('./score');
   cur = cur.filter((s) => known(s) && !/ST/i.test(s.name));
   funnel['② 非 ST/新股'] = cur.length;
   cur = cur.filter((s) => !CFG.excludeBoard.includes(boardOf(s.code)));
-  funnel['③ 剔除创业板/北交所'] = cur.length;
+  funnel['③ 剔除创业板/科创板/北交所'] = cur.length;
   cur = cur.filter((s) => s.totalCap >= CFG.capMin && s.totalCap <= CFG.capMax);
   funnel[`④ 市值 ${CFG.capMin}–${CFG.capMax} 亿`] = cur.length;
   cur = cur.filter((s) => s.chgPct >= CFG.chgMin && s.chgPct <= CFG.chgMax);
@@ -291,16 +305,22 @@ const { scoreStock } = require('./score');
   funnel[`⑦ 换手 ${CFG.turnoverMin}–${CFG.turnoverMax}%`] = cur.length;
   const hardPass = cur.slice();
 
-  /* 打分版放宽集 */
-  const loose = all.filter((s) => {
-    if (!known(s) || /ST/i.test(s.name)) return false;
-    if (CFG.excludeBoard.includes(boardOf(s.code))) return false;
-    if (s.totalCap < CFG.capMin || s.totalCap > CFG.capMax) return false;
-    if (s.chgPct < CFG.looseChgMin || s.chgPct > CFG.looseChgMax) return false;
-    if (s.volRatio <= CFG.looseVolRatioMin) return false;
-    if (s.turnover < CFG.looseTurnoverMin) return false;
-    return true;
-  });
+  /* 打分版放宽集（按贴近黄金区间 4% 涨幅 & 7.5% 换手排序，防截断丢失 3%~4% 优质股） */
+  const loose = all
+    .filter((s) => {
+      if (!known(s) || /ST/i.test(s.name)) return false;
+      if (CFG.excludeBoard.includes(boardOf(s.code))) return false;
+      if (s.totalCap < CFG.capMin || s.totalCap > CFG.capMax) return false;
+      if (s.chgPct < CFG.looseChgMin || s.chgPct > CFG.looseChgMax) return false;
+      if (s.volRatio <= CFG.looseVolRatioMin) return false;
+      if (s.turnover < CFG.looseTurnoverMin) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      const distA = Math.abs(a.chgPct - 4.0) * 1.5 + Math.abs(a.turnover - 7.5) * 0.4;
+      const distB = Math.abs(b.chgPct - 4.0) * 1.5 + Math.abs(b.turnover - 7.5) * 0.4;
+      return distA - distB;
+    });
 
   console.log('═'.repeat(70));
   console.log('漏斗（严格六步法，逐级累计）');

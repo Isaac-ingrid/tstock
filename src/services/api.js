@@ -1504,14 +1504,16 @@ export function computeTA(s){
       };
     }
 
-    // 2) 主升爆发点（放量长阳突破 / 均线反包）
-    const isBigYang = kPrev.close > 0 ? (cl - kPrev.close) / kPrev.close * 100 >= 1.8 && cl > op : false;
+    // 2) 主升爆发点（放量长阳突破 / 均线反包：必须站稳 MA20、非空头排列且未跌破20日箱底，严防空头死猫跳误判）
+    const isBigYang = kPrev.close > 0 ? (cl - kPrev.close) / kPrev.close * 100 >= 2.0 && cl > op : false;
     const isHeavyVol = (volRatio != null && volRatio >= 1.4) || (+s.vr >= 1.4);
     const reclaimMA = v5 != null && price > v5 && (v10 == null || price >= v10 * 0.995);
-    if (isBigYang && isHeavyVol && reclaimMA) {
+    const aboveMA20 = v20 == null || price >= v20 * 0.995;
+    const notBrokenBox = !(box20 && box20.down);
+    if (isBigYang && isHeavyVol && reclaimMA && aboveMA20 && notBrokenBox && arrange !== '空头排列') {
       ignition = {
         tag: '🚀 放量爆发点 · 主升拐点',
-        desc: `放量长阳突破 5日/10日关键均线，成交量达 5日均量 ${(volRatio||+s.vr).toFixed(1)} 倍，主力抄底做多确立，转入主升做T进攻模式！`,
+        desc: `放量长阳站稳 MA20 并突破 5日/10日均线，成交量达 5日均量 ${(volRatio||+s.vr).toFixed(1)} 倍，多头做多确立！`,
         breakthroughPrice: cl
       };
     }
@@ -1724,10 +1726,20 @@ export function setupTimer(){
 export function calc(s){
   const pc   = +s.prevClose;
   const amp  = pc ? (+s.high - +s.low) / pc * 100 : 0;   // 日内振幅%
-  const grid = amp / GRID;                                // 折合格数
+  const codeStr = String(s.code || '');
+  const is20cm = codeStr.startsWith('30') || codeStr.startsWith('68');
+  // 动态格距与止损：优先采用近14日ATR适配步长；无日K时 20cm(创业/科创) 自动放宽步长，防正常震荡扫止损
+  const atrGridInfo = computeExperimentalATRGrid(s);
+  const effGrid = atrGridInfo ? atrGridInfo.adaptiveGrid : (is20cm ? +(GRID * 1.45).toFixed(2) : GRID);
+  const effStop = Math.max(STOP, Math.min(0.035, (effGrid * 1.15) / 100));
+
+  const grid = amp / effGrid;                             // 折合格数
   const chg  = pc ? (+s.price - pc) / pc * 100 : 0;       // 现价涨跌幅%
   const vsAvg= (+s.avg) ? (+s.price - +s.avg) / +s.avg * 100 : null;
   const vr   = +s.vr || 0;
+
+  // 5 分钟同时段精准量能（优先于粗粒度全天累计量比 vr，解决早盘量比失真问题）
+  const vm = (s._vm && s._vm.ok && s._vm.nBars >= 3) ? s._vm : null;
 
   // 日线趋势
   const ma5=+s.ma5||0, ma10=+s.ma10||0, ma20=+s.ma20||0;
@@ -1736,46 +1748,74 @@ export function calc(s){
   const bull  = hasMA && ma5>ma10 && ma10>ma20 && +s.price>ma5;   // 多头排列
   const trend = !hasMA ? '未知' : (bull ? '多头' : (bear ? '空头' : '震荡'));
 
-  // 七格价格阶梯（以昨收为基准的预案挂单价）
-  const L = k => pc * (1 + k*GRID/100);
+  // 涨跌停边界钳位，防止算出的挂单/止盈价越过当日涨跌停板
+  const ceilPx = +s.ceiling > 0 ? +s.ceiling : 0;
+  const floorPx = +s.floor > 0 ? +s.floor : 0;
+  const clampPx = (v) => {
+    let x = v;
+    if (ceilPx > 0 && x > ceilPx) x = ceilPx;
+    if (floorPx > 0 && x < floorPx) x = floorPx;
+    return x;
+  };
+
+  // 七格价格阶梯（以昨收与动态格距为基准）
+  const L = k => clampPx(pc * (1 + k * effGrid / 100));
 
   // ---- 闸门1：格位 ----
   let gate1, g1cls;
-  if (grid < 3)       { gate1 = `振幅 ${amp.toFixed(2)}%（${grid.toFixed(1)}格）不足3格 → 波段空间不够，扣手续费后无利润`; g1cls='wait'; }
-  else if (grid < 6)  { gate1 = `振幅 ${amp.toFixed(2)}%（${grid.toFixed(1)}格）落在黄金做T区间 3–6格`; g1cls='ok'; }
-  else                { gate1 = `振幅 ${amp.toFixed(2)}%（${grid.toFixed(1)}格）超过6格 → 情绪透支，只减不新开`; g1cls='warn'; }
+  if (grid < 3)       { gate1 = `振幅 ${amp.toFixed(2)}%（${grid.toFixed(1)}格，步长${effGrid.toFixed(2)}%）不足3格 → 波段空间不够，扣手续费后无利润`; g1cls='wait'; }
+  else if (grid < 6)  { gate1 = `振幅 ${amp.toFixed(2)}%（${grid.toFixed(1)}格，步长${effGrid.toFixed(2)}%）落在黄金做T区间 3–6格`; g1cls='ok'; }
+  else                { gate1 = `振幅 ${amp.toFixed(2)}%（${grid.toFixed(1)}格，步长${effGrid.toFixed(2)}%）超过6格 → 情绪透支，只减不新开`; g1cls='warn'; }
 
   // ---- 闸门2：趋势 ----
   let gate2 = `日线${trend}（MA5 ${f2(ma5)} / MA10 ${f2(ma10)} / MA20 ${f2(ma20)}）`;
 
-  // ---- 闸门3：量能 ----
+  // ---- 闸门3：量能（融合 5 分钟同时段基准） ----
   const heavy = vr >= 1.5, light = vr < 1.0;
   let gate3 = `量比 ${f2(vr)} → ` + (heavy ? '放量' : (light ? '缩量' : '中性'));
+  if (vm) {
+    gate3 += ` · 5分${vm.label}(${vm.r3 != null ? vm.r3.toFixed(2) : '—'}×)`;
+  }
 
   // ---- 确定价位：以"现价所处格位"为锚，上下各取两格（每日自动跟随，无需手调） ----
-  const gNow = chg / GRID;
+  const gNow = chg / effGrid;
   const kUp1 = Math.floor(gNow) + 1, kUp2 = kUp1 + 1;   // 现价上方两格 = 压力位
   const kDn1 = Math.ceil(gNow)  - 1, kDn2 = kDn1 - 1;   // 现价下方两格 = 支撑位
   const inA  = L(kDn1), inB = L(kDn2);                  // 正T买入区
   const outA = L(kUp1), outB = L(kUp2);                 // 倒T卖出区
   const bkA  = inA, bkB = inB;                          // 倒T接回位
-  const tp1  = inA * 1.03;                              // 正T第一止盈 +3%
-  const tp2  = Math.max(tp1, Math.min(inA * 1.06, pc * (1 + GRID/100)));// 正T第二止盈，不越过 +1.33% 格
-  const slA  = inA * (1 - STOP), slB = inB * (1 - STOP);// 正T止损 -1.5%
-  const fly  = outA * (1 + FLY);                        // 卖飞线
-  const gain1 = (tp1 - inA)/inA*100, gain2 = (tp2 - inA)/inA*100;
+  const tp1Pct = Math.max(0.025, (effGrid * 2.0) / 100);
+  const tp2Pct = Math.max(0.045, (effGrid * 3.5) / 100);
+  const tp1  = clampPx(inA * (1 + tp1Pct));             // 正T第一止盈（按动态步长 2 格起）
+  const tp2  = clampPx(inA * (1 + tp2Pct));             // 正T第二止盈（按动态步长 3.5 格起，恒高于 tp1）
+  const slA  = clampPx(inA * (1 - effStop)), slB = clampPx(inB * (1 - effStop));
+  const fly  = clampPx(outA * (1 + FLY));               // 卖飞线
+  const gain1 = inA > 0 ? (tp1 - inA) / inA * 100 : 0;
+  const gain2 = inA > 0 ? (tp2 - inA) / inA * 100 : 0;
 
-  // ---- 综合结论 ----
+  // ---- 综合结论（优先融合 5 分钟精准量能状态 vm.state） ----
   const below = vsAvg !== null && vsAvg < 0;
   let mode, vcls, title, detail;
   if (grid < 3){
     mode='WAIT'; vcls='v-wait';
     title = '⛔ 今日不做T —— 观望';
-    detail = `日内振幅只有 ${amp.toFixed(2)}%，不够 4%（3格）的门槛。这个波动里做T赚的差价还不够手续费，强行操作只会踏错节奏。`;
+    detail = `日内振幅只有 ${amp.toFixed(2)}%，不够 ${(3 * effGrid).toFixed(1)}%（3格）的门槛。这个波动里做T赚的差价还不够手续费，强行操作只会踏错节奏。`;
   } else if (bear){
     mode='REV'; vcls='v-warn';
     title = '⚠️ 日线空头，只允许「倒T」（反弹减仓），禁止低吸接飞刀';
     detail = `价格 ${f2(+s.price)} 位于 MA5(${f2(ma5)}) / MA10(${f2(ma10)}) / MA20(${f2(ma20)}) 之下且均线空头发散，正踩在铁律第一条「趋势优先，逆势不伸手」上。今天唯一可做：反弹到 <b>${f2(outA)} ~ ${f2(outB)}</b> 无量滞涨时先减T仓，回落到 <b>${f2(bkA)} / ${f2(bkB)}</b> 缩量企稳再接回；<b>不主动在下跌途中低吸</b>。`;
+  } else if (vm && vm.state === 'breakdown'){
+    mode='WAIT'; vcls='v-warn';
+    title = '⛔ 5分钟放量破位，严禁接飞刀 —— 等缩量企稳';
+    detail = `分时 5 分钟量能放大至同时段常态的 <b>${vm.curR ? vm.curR.toFixed(2) : '2.0'} 倍</b>且贴着日内低点下破，属真抛压出逃，严禁盲目低吸！等 5 分钟量能萎缩、分时不再创新低再看 <b>${f2(inA)}</b>。`;
+  } else if (vm && vm.state === 'diverge'){
+    mode='REV'; vcls='v-go';
+    title = '✅ 倒T信号 —— 5分钟高位量价顶背离，先卖后买';
+    detail = `价格贴近当日高点但近 3 根 5 分钟量能萎缩至常态 <b>${vm.r3 ? vm.r3.toFixed(2) : '0.8'} 倍</b>，拉高无人跟风。建议在 <b>${f2(outA)}</b> 附近先倒T减仓，回落均价线 <b>${f2(+s.avg || bkA)}</b> 再看接回。`;
+  } else if (vm && vm.state === 'pullback'){
+    mode='BUY'; vcls='v-buy';
+    title = '✅ 正T信号 —— 5分钟缩量回踩均价线，分批低吸';
+    detail = `虽全天量比 ${f2(vr)}，但近 3 根 5 分钟量能已萎缩至同时段常态的 <b>${vm.r3 ? vm.r3.toFixed(2) : '0.6'} 倍</b>且回踩分时均线附近，抛压衰减明显。第一份挂 <b>${f2(inA)}</b>、第二份挂 <b>${f2(inB)}</b>，目标 <b>${f2(tp1)}</b>（+${gain1.toFixed(1)}%），跌破 ${f2(slA)} 止损。`;
   } else if (below && heavy){
     mode='WAIT'; vcls='v-warn';
     title = '⛔ 放量下行，暂不接 —— 等缩量企稳';
@@ -1788,7 +1828,7 @@ export function calc(s){
     mode='REV'; vcls='v-go';
     title = '✅ 倒T信号 —— 无量拉升，先卖后买';
     detail = `现价站在分时均线 ${f2(+s.avg)} 上方，量比仅 ${f2(vr)}，「无量拉升全是耍流氓」。在 <b>${f2(outA)}</b> 减第一份、<b>${f2(outB)}</b> 减第二份，回落 <b>${f2(bkA)}</b> 分批接回；若放量突破 ${f2(fly)} 即认卖飞，不追。`;
-  } else if (chg >= 6*GRID){
+  } else if (chg >= 6 * effGrid){
     mode='CUT'; vcls='v-go';
     title = '🔻 已进入6格以上亢奋区 —— 只减不接';
     detail = `涨幅已达 ${chg.toFixed(2)}%，多头力量透支，随时可能冲高回落。这个位置只做减仓，<b>不新开正T</b>，避免接在日内最高点。`;
@@ -1799,68 +1839,59 @@ export function calc(s){
   }
 
   // ---- 闸门4：市场环境（外生约束，可一票否决正T） ----
-  /* 前三闸门全部只看个股内部，这条是唯一的外生闸门。
-     为什么给它否决权：个股技术面再漂亮，指数放量破位日照样系统性挨打，
-     这是做T最高频的亏损来源，所以在"正T低吸"这个动作上给硬约束。 */
   const me = (MKT && MKT.gate) ? MKT.gate : null;
   let gate4 = '数据未加载（点上方「刷新全部」或等待自动取数）';
   let g4cls = 'wait', mktLevel = me ? me.level : 'NA';
   if (me){
     if (me.level === 'OK')        { gate4 = '市场环境中性偏多，不构成额外约束'; g4cls='ok'; }
-    else if (me.level === 'WARN') { gate4 = '指数在 MA20 下方 → 做T仓位减半、止损收紧到 −1.0%'; g4cls='warn'; }
+    else if (me.level === 'WARN') { gate4 = '指数在 MA20 下方 → 做T仓位减半、止损从紧'; g4cls='warn'; }
     else if (me.level === 'BAD')  { gate4 = '指数破 MA20/MA60 → 禁止新开正T（一票否决）'; g4cls='bad'; }
     else                          { gate4 = '指数日K数据不足，本闸门不参与决策'; g4cls='wait'; }
   }
   if (me && me.level === 'BAD' && mode === 'BUY'){
     mode = 'WAIT'; vcls = 'v-warn';
     title = '⛔ 正T信号被「市场环境」一票否决 —— 指数破位日不低吸';
-    detail = `个股层面本已满足正T条件（现价在分时均线下方且量比未放大），但指数已同时跌破 MA20 与 MA60，属系统性走弱而非情绪回踩。这种日子里"个股技术面看对了、却被大盘一刀砍下来"是高频事故，所以此信号不予执行。今天只保留倒T：反弹到 <b>${f2(outA)} ~ ${f2(outB)}</b> 无量滞涨时减T仓，回落到 <b>${f2(bkA)}</b> 缩量再接回；<b>空仓等指数收回 MA20 更稳</b>。`;
+    detail = `个股层面本已满足正T条件，但指数已同时跌破 MA20 与 MA60，属系统性走弱而非情绪回踩。今天只保留倒T：反弹到 <b>${f2(outA)} ~ ${f2(outB)}</b> 无量滞涨时减T仓，回落到 <b>${f2(bkA)}</b> 缩量再接回；<b>空仓等指数收回 MA20 更稳</b>。`;
   }
 
-  // ---- 闸门5：技术破位硬熔断 vs 止跌十字星 & 主升爆发点 ----
-  /* 解决做T系统最容易害死人的盲区：
-     如果个股已跌破 20日箱底或 MA20 趋势走坏，但在单边阴跌中量比不大(vr<1.0)，
-     前序逻辑很容易误判为「缩量急跌是机会，建议正T低吸」，导致天天补仓深套！
-     因此在此设立硬熔断：严重破位一票否决正T；反之若出现「放量突破爆发点」则解除防守全面进攻。 */
+  // ---- 闸门5：技术破位硬熔断（最高风控优先级） vs 止跌十字星 & 主升爆发点 ----
   const ta = s._ta || computeTA(s);
   let brokenLock = false, breakDesc = '';
   let reversalActive = false, reversalTag = '';
   let ignitionActive = false, ignitionTag = '';
 
   if (ta) {
-    // 1) 爆发点判定（放量反包突破具有最高优先级，解除一切空头警报）
-    if (ta.ignition) {
+    const isSevereBreak = (ta.box20 && ta.box20.down) ||
+      (ta.v20 != null && +s.price < ta.v20 && ta.ma20Rising === false && ta.arrange === '空头排列') ||
+      (ta.breaks && ta.breaks.some(b => b.lv === '严重' && b.t.includes('跌破20日箱底')));
+
+    // 1) 严重破位硬熔断优先检查，绝不允许被“爆发点”绕过
+    if (isSevereBreak) {
+      brokenLock = true;
+      breakDesc = (ta.breaks && ta.breaks.find(b => b.lv === '严重')?.t) || '跌破20日箱底或MA20生命线';
+      if (mode === 'BUY') {
+        mode = 'REV'; // 强制转为倒T
+        vcls = 'v-warn';
+        title = '⛔ 技术形态破位走坏 —— 触发防套锁，严禁正T低吸！';
+        detail = `现价已【${breakDesc}】，下方支撑彻底失效并转化为上方沉重阻力。在此单边阴跌途中严禁盲目接飞刀做正T！已锁定买入建议，仅允许反弹抽到 <b>${f2(outA)} ~ ${f2(outB)}</b> 时倒T减仓避险。`;
+      }
+    }
+    // 2) 爆发点判定（仅在大盘非 BAD、未严重破位且日内空间达标时生效）
+    else if (ta.ignition && mktLevel !== 'BAD' && grid >= 3) {
       ignitionActive = true;
       ignitionTag = ta.ignition.tag;
       mode = 'BUY';
       vcls = 'v-buy';
-      title = '🚀 放量爆发点确立 —— 主升反包，转入强攻正T！';
-      detail = `${ta.ignition.desc} 现价已放量冲过关键均线，主力抄底做多确立，解除一切空头防守锁，顺势执行正T进攻！`;
-    } 
-    // 2) 严重破位与技术点走坏（硬熔断拦截正T）
-    else {
-      const isSevereBreak = (ta.box20 && ta.box20.down) ||
-        (ta.v20 != null && +s.price < ta.v20 && ta.ma20Rising === false && ta.arrange === '空头排列') ||
-        (ta.breaks && ta.breaks.some(b => b.lv === '严重' && b.t.includes('跌破20日箱底')));
-
-      if (isSevereBreak) {
-        brokenLock = true;
-        breakDesc = (ta.breaks && ta.breaks.find(b => b.lv === '严重')?.t) || '跌破20日箱底或MA20生命线';
-        if (mode === 'BUY') {
-          mode = 'REV'; // 强制转为倒T
-          vcls = 'v-warn';
-          title = '⛔ 技术形态破位走坏 —— 触发防套锁，严禁正T低吸！';
-          detail = `现价已【${breakDesc}】，下方支撑彻底失效并转化为上方沉重阻力。在此单边阴跌途中严禁盲目接飞刀做正T！已锁定买入建议，仅允许反弹抽到 <b>${f2(outA)} ~ ${f2(outB)}</b> 时倒T减仓避险。`;
-        }
-      } 
-      // 3) 阴跌止跌十字星 / 金针探底 / 极致地量（未严重破位时提示拐点准备）
-      else if (ta.reversal) {
-        reversalActive = true;
-        reversalTag = ta.reversal.tag;
-        if (mode === 'BUY' || mode === 'WAIT') {
-          title = `👀 ${reversalTag} —— 空头抛压竭尽，准备试T`;
-          detail = `${ta.reversal.desc}。允许在止跌支撑 ¥${f2(ta.reversal.support)} 附近以极轻仓（10%）试探性做正T，跌破该低点严格执行止损。`;
-        }
+      title = '🚀 放量爆发点确立 —— 站稳 MA20 反包，顺势正T！';
+      detail = `${ta.ignition.desc} 且大盘与箱体无系统性破位，顺势执行正T进攻，止损严格守 ${f2(slA)}。`;
+    }
+    // 3) 阴跌止跌十字星 / 金针探底 / 极致地量（大盘非 BAD 且未严重破位时提示拐点准备）
+    else if (ta.reversal && mktLevel !== 'BAD') {
+      reversalActive = true;
+      reversalTag = ta.reversal.tag;
+      if (mode === 'BUY' || mode === 'WAIT') {
+        title = `👀 ${reversalTag} —— 空头抛压竭尽，准备试T`;
+        detail = `${ta.reversal.desc}。允许在止跌支撑 ¥${f2(ta.reversal.support)} 附近以极轻仓（10%）试探性做正T，跌破该低点严格执行止损。`;
       }
     }
   }
@@ -1870,16 +1901,14 @@ export function calc(s){
   const base = Math.round(sh*0.7);
   const t = sh - base;
   const t1 = Math.round(t/3);
-  // 实盘可挂单整手（A股买入必须为100股整数倍）
   const tLots = Math.floor(t / 100) * 100;
-  // 每份挂单手数：若T仓大于等于300股分3份，否则若>=100股分1份或2份
   const t1Lots = tLots >= 300 ? Math.floor(tLots / 300) * 100 : (tLots >= 100 ? 100 : 0);
   const cap = Math.round(+s.cap||0);
 
   // 倒T卖飞熔断保护：现价放量超过倒T卖出区 +2.0% 且逼近卖飞线
   const sellFlyTriggered = (+s.price > 0 && outA > 0 && +s.price >= outA * 1.02);
 
-  return { pc, amp, grid, chg, vr, vsAvg, trend, bull, bear, heavy, light,
+  return { pc, amp, grid, effGrid, effStop, chg, vr, vsAvg, vm, trend, bull, bear, heavy, light,
            gate1, g1cls, gate2, gate3, gate4, g4cls, mktLevel, mode, vcls, title, detail,
            inA, inB, tp1, tp2, slA, slB, outA, outB, bkA, bkB, fly,
            gain1, gain2, sh, base, t, t1, tLots, t1Lots, cap, sellFlyTriggered,

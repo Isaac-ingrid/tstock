@@ -1008,8 +1008,9 @@ async def scan_breakout_ignition(
 
     wm_results = await asyncio.gather(*[_fetch_wm(c) for c, _, _ in daily_passed], return_exceptions=True)
 
-    # Step 4: 对入选股票补充公告排雷
+    # Step 4: 对入选股票补充公告排雷，并用统一的 evaluate_ignition_six_dims 校准评分（消除全市场列表 vs 单股体检分值漂移）
     qualified: List[dict] = []
+    qual_bars: List[Tuple[List[dict], List[dict], List[dict]]] = []
     for (c, dbars, pre), wm_res in zip(daily_passed, wm_results):
         if not isinstance(wm_res, tuple):
             continue
@@ -1020,14 +1021,17 @@ async def scan_breakout_ignition(
         scored = _classify_and_score_ignition(pre, wm)
         q = quotes.get(c) or {}
         s_info = seed_meta.get(c) or {}
+        px_now = round(q.get("price") or dbars[-1]["close"], 2)
+        chg_now = round(q.get("chg") if q.get("chg") is not None else pre["curDayChg"], 2)
+        nm_now = str(q.get("name") or s_info.get("name") or c).replace(" ", "")
         qualified.append({
             "code": c,
             "tcode": _to_tcode(c),
-            "name": str(q.get("name") or s_info.get("name") or c).replace(" ", ""),
+            "name": nm_now,
             "hybk": s_info.get("hybk") or "其他",
             "latestDate": dbars[-1]["date"],
-            "price": round(q.get("price") or dbars[-1]["close"], 2),
-            "chg": round(q.get("chg") if q.get("chg") is not None else pre["curDayChg"], 2),
+            "price": px_now,
+            "chg": chg_now,
             "turnover": round(q.get("turnover") or 0.0, 2),
             "amountYi": round((q.get("amount") or 0.0) / 1e8, 2),
             "mcapYi": round((q.get("mcap") or 0.0) / 1e8, 1),
@@ -1036,16 +1040,31 @@ async def scan_breakout_ignition(
             **wm,
             **scored,
         })
+        qual_bars.append((dbars, w_bars, m_bars))
 
-    # 补充公告排雷（小并发）
+    # 补充公告排雷（小并发）并统一调用 evaluate_ignition_six_dims 对齐总分
     sem_notice = asyncio.Semaphore(4)
     notice_list = await asyncio.gather(
         *[_fetch_stock_notice_risk(http_client, item["code"], sem_notice) for item in qualified[:45]],
         return_exceptions=True,
     )
     for idx, nres in enumerate(notice_list):
-        if isinstance(nres, dict):
-            qualified[idx].update(nres)
+        notice_obj = nres if isinstance(nres, dict) else {}
+        if notice_obj:
+            qualified[idx].update(notice_obj)
+        dbars_i, wbars_i, mbars_i = qual_bars[idx]
+        unified = evaluate_ignition_six_dims(
+            qualified[idx]["code"],
+            dbars_i,
+            wbars_i,
+            mbars_i,
+            cur_price=qualified[idx]["price"],
+            day_chg=qualified[idx]["chg"],
+            lookback_days=lookback_days,
+            notice=notice_obj,
+            name=qualified[idx]["name"],
+        )
+        qualified[idx]["ignitionScore"] = unified["ignitionScore"]
 
     stage_order = {"SHAKEOUT_READY": 0, "CONVERGED_WAIT": 1, "DIGESTING": 2, "PULLBACK_RISK": 3}
     qualified.sort(

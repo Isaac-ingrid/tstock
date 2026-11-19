@@ -40,6 +40,7 @@ export default function TradePage({
 }) {
   const [internalActiveCode, setInternalActiveCode] = useState(() => (pool[0]?.code || ''));
   const [sentiment, setSentiment] = useState(null);
+  const [noticeRisks, setNoticeRisks] = useState({});
   const activeStockCode = externalActiveCode !== undefined ? externalActiveCode : internalActiveCode;
   const handleSelectStock = externalSelectStock || setInternalActiveCode;
 
@@ -64,12 +65,14 @@ export default function TradePage({
         pool={pool}
         onSelectStock={handleSelectStock}
         onJumpDiagnosis={onJumpDiagnosis}
+        onNoticeRisksChange={setNoticeRisks}
       />
 
       {/* 决策引擎（分「实盘持仓」与「自选观察」紧凑买卖点卡片，点击再展开完整做T详情） */}
       <ConsoleSection
         pool={pool}
         sentiment={sentiment}
+        noticeRisks={noticeRisks}
         activeStockCode={activeStockCode}
         totalAssets={totalAssets}
         tradeLogs={tradeLogs}
