@@ -1,14 +1,11 @@
 import React from 'react';
-import { f2, money } from '../services/utils.js';
-import { buildActionSignal } from './BattleCardGrid.jsx';
+import { money } from '../services/utils.js';
 import { NAV_ROUTES } from '../data/site.js';
 
 export default function TopNav({
   activeTab,
   onTabChange,
   pool = [],
-  activeStockCode,
-  onSelectStock,
   tailCount,
   ledgerCount,
   totalAssets,
@@ -36,12 +33,12 @@ export default function TopNav({
     return null;
   };
 
-  const holdingStocks = pool.filter((s) => (s.shares || 0) > 0);
-  const watchStocks = pool.filter((s) => (s.shares || 0) <= 0);
+  const holdingCount = pool.filter((s) => (s.shares || 0) > 0).length;
+  const watchCount = pool.length - holdingCount;
 
   return (
     <div className={`topbar topbar-v2 ${isStale ? 'stale' : ''}`} id="topbar">
-      {/* 第一行：品牌 + 主导航 + 核心操作按钮（互不挤压） */}
+      {/* 第一行：品牌 + 主导航 + 核心操作按钮 */}
       <div className="tb-row-main">
         <div
           className="tb-brand"
@@ -105,7 +102,7 @@ export default function TopNav({
         </div>
       </div>
 
-      {/* 第二行：资产胶囊 + 盘中时钟 + 持仓/自选单行横滑快捷联动条 */}
+      {/* 第二行：精简状态条（资产 + 盘中时钟 + 持仓/自选汇总入口，永不溢出） */}
       <div className="tb-row-sub">
         <div
           className="tb-acc-pill"
@@ -136,57 +133,16 @@ export default function TopNav({
           </span>
         </div>
 
-        {pool.length > 0 && (
-          <div className="tb-pool-scroll" title="点击任意标的直达今日作战台并展开其面板">
-            {holdingStocks.length > 0 && <span className="tb-grp-lbl pos">持仓</span>}
-            {holdingStocks.map((s) => {
-              const code6 = String(s.code).padStart(6, '0');
-              const isCur = String(activeStockCode) === code6;
-              const sig = buildActionSignal(s);
-              const chgCls = sig.chg > 0 ? 'up' : sig.chg < 0 ? 'down' : '';
-              return (
-                <button
-                  key={code6}
-                  type="button"
-                  className={`tb-stock-chip kind-${sig.kind} ${isCur ? 'active' : ''}`}
-                  onClick={() => onSelectStock && onSelectStock(code6)}
-                  title={`${s.name} (${code6}) · ${sig.badge}\n${sig.headline}`}
-                >
-                  <span className="tb-chip-name">{s.name}</span>
-                  <span className={`tb-chip-px ${chgCls}`}>{f2(sig.px)}</span>
-                  <span className={`tb-chip-chg ${chgCls}`}>
-                    {sig.chg >= 0 ? '+' : ''}{sig.chg.toFixed(1)}%
-                  </span>
-                  <span className={`tb-sig-dot kind-${sig.kind}`} />
-                </button>
-              );
-            })}
-
-            {watchStocks.length > 0 && <span className="tb-grp-lbl watch">自选</span>}
-            {watchStocks.map((s) => {
-              const code6 = String(s.code).padStart(6, '0');
-              const isCur = String(activeStockCode) === code6;
-              const sig = buildActionSignal(s);
-              const chgCls = sig.chg > 0 ? 'up' : sig.chg < 0 ? 'down' : '';
-              return (
-                <button
-                  key={code6}
-                  type="button"
-                  className={`tb-stock-chip kind-${sig.kind} ${isCur ? 'active' : ''}`}
-                  onClick={() => onSelectStock && onSelectStock(code6)}
-                  title={`${s.name} (${code6}) · ${sig.badge}\n${sig.headline}`}
-                >
-                  <span className="tb-chip-name">{s.name}</span>
-                  <span className={`tb-chip-px ${chgCls}`}>{f2(sig.px)}</span>
-                  <span className={`tb-chip-chg ${chgCls}`}>
-                    {sig.chg >= 0 ? '+' : ''}{sig.chg.toFixed(1)}%
-                  </span>
-                  <span className={`tb-sig-dot kind-${sig.kind}`} />
-                </button>
-              );
-            })}
-          </div>
-        )}
+        <button
+          type="button"
+          className="tb-pool-summary"
+          onClick={() => onTabChange('/trade')}
+          title="直达今日作战台查看全部持仓与自选买卖点卡片"
+        >
+          <span className="tb-grp-lbl pos">持仓 {holdingCount}</span>
+          <span className="tb-grp-lbl watch">自选 {watchCount}</span>
+          <span className="tb-sum-link">去作战台 →</span>
+        </button>
       </div>
     </div>
   );

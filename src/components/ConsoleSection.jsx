@@ -1,11 +1,17 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import StockCard from './StockCard.jsx';
 import BattleCardGrid from './BattleCardGrid.jsx';
+import PositionRiskBar, {
+  POS_RULES_KEY,
+  loadPosRules,
+  getAllowedPosCap,
+} from './PositionRiskBar.jsx';
 import { posCalc } from '../services/api.js';
 import { money } from '../services/utils.js';
 
 export default function ConsoleSection({
   pool = [],
+  sentiment = null,
   activeStockCode,
   totalAssets = 100000,
   tradeLogs = [],
@@ -32,6 +38,14 @@ export default function ConsoleSection({
   const [tierFilter, setTierFilter] = useState('all'); // 'all' | 'long' | 'short'
   const [expandedCode, setExpandedCode] = useState(''); // 点击卡片才展开对应完整做T详情面板
   const [expandAll, setExpandAll] = useState(false);
+  const [posRules, setPosRules] = useState(() => loadPosRules());
+
+  const handleUpdatePosRules = (next) => {
+    setPosRules(next);
+    try {
+      localStorage.setItem(POS_RULES_KEY, JSON.stringify(next));
+    } catch (_) {}
+  };
 
   // 当外部（如 TopNav 胶囊、起爆/连板跳转）明确选中某只标的时，同步展开其详情面板
   useEffect(() => {
@@ -52,6 +66,8 @@ export default function ConsoleSection({
   const tacticalStocks = useMemo(() => pool.filter((s) => s.tier === 'short' || s.poolTag === '短线'), [pool]);
   const baseMktVal = useMemo(() => baseStocks.reduce((acc, s) => acc + (s.shares || 0) * (s.price || s.cost || 0), 0), [baseStocks]);
   const tacticalMktVal = useMemo(() => tacticalStocks.reduce((acc, s) => acc + (s.shares || 0) * (s.price || s.cost || 0), 0), [tacticalStocks]);
+  const totalMktVal = baseMktVal + tacticalMktVal;
+  const { capPct: allowedCapPct } = getAllowedPosCap(sentiment, posRules);
   const baseCash = Math.max(0, baseCapital - baseMktVal);
   const tacticalCash = Math.max(0, tacticalCapital - tacticalMktVal);
 
@@ -153,6 +169,16 @@ export default function ConsoleSection({
         )}
       </div>
 
+      {/* ⚖️ 动态仓位风控条（情绪总阀联动总仓上限 + 单票集中度红线） */}
+      <PositionRiskBar
+        pool={pool}
+        totalAssets={totalAssetsNum}
+        sentiment={sentiment}
+        posRules={posRules}
+        onUpdateRules={handleUpdatePosRules}
+        onSelectStock={handleToggleExpand}
+      />
+
       {/* 分组切换栏：全部 / 实盘持仓 / 自选观察 + 周期过滤 + 展开全部 */}
       <div className="battle-toolbar">
         <div className="bt-tabs">
@@ -233,8 +259,14 @@ export default function ConsoleSection({
           )}
           <BattleCardGrid
             stocks={holdingList}
+            tradeLogs={tradeLogs}
+            totalAssets={totalAssetsNum}
+            posRules={posRules}
+            totalMktVal={totalMktVal}
+            allowedCapPct={allowedCapPct}
             expandedCode={expandAll ? '' : expandedCode}
             onToggleExpand={handleToggleExpand}
+            onUpdateStock={onUpdateStock}
             onOpenQuickT={onOpenQuickT}
             onJumpDiagnosis={onJumpDiagnosis}
             onJumpIgnition={onJumpIgnition}
@@ -257,8 +289,14 @@ export default function ConsoleSection({
           )}
           <BattleCardGrid
             stocks={watchList}
+            tradeLogs={tradeLogs}
+            totalAssets={totalAssetsNum}
+            posRules={posRules}
+            totalMktVal={totalMktVal}
+            allowedCapPct={allowedCapPct}
             expandedCode={expandAll ? '' : expandedCode}
             onToggleExpand={handleToggleExpand}
+            onUpdateStock={onUpdateStock}
             onOpenQuickT={onOpenQuickT}
             onJumpDiagnosis={onJumpDiagnosis}
             onJumpIgnition={onJumpIgnition}

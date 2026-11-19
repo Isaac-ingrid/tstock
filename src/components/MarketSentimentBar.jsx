@@ -5,7 +5,7 @@ import { fetchLimitUpPool } from '../services/api.js';
  * 🌡️ 全市场超短情绪温度计 & 炸板率风控总阀组件
  * 用于在做T决策台与打板专栏顶部全局预警：防系统性退潮与高炸板率大面风险
  */
-export default function MarketSentimentBar({ externalSentiment = null, compact = false }) {
+export default function MarketSentimentBar({ externalSentiment = null, compact = false, onSentimentChange = null }) {
   const [sentiment, setSentiment] = useState(externalSentiment);
   const [loading, setLoading] = useState(false);
 
@@ -15,20 +15,22 @@ export default function MarketSentimentBar({ externalSentiment = null, compact =
       const res = await fetchLimitUpPool();
       if (res && res.ok && res.sentiment) {
         setSentiment(res.sentiment);
+        if (onSentimentChange) onSentimentChange(res.sentiment);
       }
     } catch (_) {}
     if (!silent) setLoading(false);
-  }, []);
+  }, [onSentimentChange]);
 
   useEffect(() => {
     if (externalSentiment) {
       setSentiment(externalSentiment);
+      if (onSentimentChange) onSentimentChange(externalSentiment);
       return;
     }
     loadSentiment(true);
     const timer = setInterval(() => loadSentiment(true), 60000);
     return () => clearInterval(timer);
-  }, [externalSentiment, loadSentiment]);
+  }, [externalSentiment, loadSentiment, onSentimentChange]);
 
   if (!sentiment) {
     return null;

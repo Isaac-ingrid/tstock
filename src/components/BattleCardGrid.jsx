@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { calc, posCalc } from '../services/api.js';
-import { f2, money } from '../services/utils.js';
+import { f2, money, getTodayTStatus, copyPlain } from '../services/utils.js';
 
 /**
  * 根据「自选观察」vs「实盘持仓」分别生成清晰、直白的买卖点判定结论：
@@ -18,14 +18,12 @@ export function buildActionSignal(stock) {
   const distBuyPct = px > 0 && c.inA > 0 ? ((px - c.inA) / px) * 100 : null;
   const distSellPct = px > 0 && c.outA > 0 ? ((c.outA - px) / px) * 100 : null;
 
-  // 默认结构
   let kind = 'wait'; // 'buy' | 'sell' | 'stop' | 'warn' | 'wait'
   let badge = '⏳ 暂观望';
   let headline = '信号未明，先看戏不动';
   let triggerText = c.inA > 0 ? `参考低吸 ¥${f2(c.inA)} · 压力 ¥${f2(c.outA)}` : '等待行情同步';
 
   if (!hasPos) {
-    // ===== 自选观察股：只关心「现在是不是买点」 =====
     if (c.brokenLock || c.bear) {
       kind = 'stop';
       badge = '🚫 非买点 · 禁接飞刀';
@@ -68,7 +66,6 @@ export function buildActionSignal(stock) {
       triggerText = `关注低吸位 ¥${f2(c.inA)} · 止损 ¥${f2(c.slA)}`;
     }
   } else {
-    // ===== 实盘持仓股：关心「卖点 / 正T买点 / 止损 / 持股」 =====
     const hitStop = c.slA > 0 && px <= c.slA && pos.floatPct != null && pos.floatPct <= -3.5;
     if (hitStop || (c.brokenLock && pos.floatPct != null && pos.floatPct < 0)) {
       kind = 'stop';
@@ -100,7 +97,7 @@ export function buildActionSignal(stock) {
         : (isNearBuy ? '🟢 当前买点 · 低吸正T' : '🟢 偏买点 · 挂单正T');
       headline = c.ignitionActive
         ? '放量爆发确立，底仓拿稳并顺势做正T'
-        : `缩量回踩支撑，可低吸做正T摊薄成本`;
+        : '缩量回踩支撑，可低吸做正T摊薄成本';
       triggerText = `低吸 ¥${f2(c.inA)} → T出目标 ¥${f2(c.tp1)} · 止损 ¥${f2(c.slA)}`;
     } else {
       kind = 'wait';
@@ -115,16 +112,175 @@ export function buildActionSignal(stock) {
   return { kind, badge, headline, triggerText, c, pos, chg, px, hasPos };
 }
 
+/** 卡片内置：一键下单手数 / 以损定仓 / 盈亏比计算器 */
+function OrderSizingCalc({ stock, sig, totalAssets, posRules, totalMktVal = 0, allowedCapPct = 80, onClose }) {
+  const { c, px, pos } = sig;
+  const assets = Math.max(1, +totalAssets || 100000);
+  const singleMaxPct = posRules?.singleMaxPct ?? 30;
+  const riskDefaultPct = posRules?.riskPerTradePct ?? 1.5;
+
+  const defaultBudget = Math.max(5000, Math.round(assets * 0.1));
+  const [budget, setBudget] = useState(String(defaultBudget));
+  const [entryPx, setEntryPx] = useState(() => f2(c.inA > 0 ? c.inA : px));
+  const [stopPx, setStopPx] = useState(() => f2(c.slA > 0 ? c.slA : px * 0.97));
+  const [targetPx, setTargetPx] = useState(() => f2(c.tp1 > 0 ? c.tp1 : px * 1.04));
+
+  const bNum = Math.max(0, parseFloat(budget) || 0);
+  const eNum = Math.max(0.01, parseFloat(entryPx) || px || 1);
+  const sNum = Math.max(0.01, parseFloat(stopPx) || eNum * 0.97);
+  const tNum = Math.max(0.01, parseFloat(targetPx) || eNum * 1.04);
+
+  const shares = Math.floor(bNum / (eNum * 100)) * 100;
+  const actualAmt = shares * eNum;
+  const comm = actualAmt > 0 ? Math.max(5, actualAmt * 0.00025) : 0;
+  const riskPerShare = Math.max(0, eNum - sNum);
+  const rewardPerShare = Math.max(0, tNum - eNum);
+  const maxLoss = shares * riskPerShare + comm * 2 + actualAmt * 0.0005;
+  const expGain = shares * rewardPerShare - (comm * 2 + actualAmt * 0.0005);
+  const rrRatio = riskPerShare > 0 ? rewardPerShare / riskPerShare : 0;
+  const lossPct = eNum > 0 ? ((sNum - eNum) / eNum) * 100 : 0;
+  const gainPct = eNum > 0 ? ((tNum - eNum) / eNum) * 100 : 0;
+
+  // 买入后单票占比 & 总仓位占比风控校验
+  const curSingleMkt = pos?.curMkt || 0;
+  const afterSinglePct = ((curSingleMkt + actualAmt) / assets) * 100;
+  const afterTotalPct = ((totalMktVal + actualAmt) / assets) * 100;
+  const overSingle = actualAmt > 0 && afterSinglePct > singleMaxPct + 0.1;
+  const overTotal = actualAmt > 0 && afterTotalPct > allowedCapPct + 0.1;
+
+  // 以损定仓：按「最大可承受亏损 = 总资产 × riskPct%」反推整手预算
+  const applyRiskSizing = (riskPct) => {
+    const rps = eNum - sNum;
+    if (rps <= 0.005) return;
+    const maxRiskAmt = (assets * riskPct) / 100;
+    const rawShares = Math.floor(maxRiskAmt / rps / 100) * 100;
+    const nextBudget = Math.max(0, Math.round(rawShares * eNum));
+    setBudget(String(nextBudget));
+  };
+
+  const riskPresets = Array.from(new Set([1, riskDefaultPct, 2])).sort((a, b) => a - b);
+
+  const handleCopyOrder = () => {
+    const txt = [
+      `【条件单预案】${stock.name} (${String(stock.code).padStart(6, '0')})`,
+      `计划挂单买入：¥${f2(eNum)} × ${shares} 股（约 ¥${Math.round(actualAmt).toLocaleString('zh-CN')}，买后单票 ${afterSinglePct.toFixed(1)}% / 总仓 ${afterTotalPct.toFixed(1)}%）`,
+      `止损防守价：¥${f2(sNum)}（${lossPct.toFixed(1)}%，最大回撤约 ¥${Math.round(maxLoss)}，占总资产 ${((maxLoss / assets) * 100).toFixed(2)}%）`,
+      `止盈目标价：¥${f2(tNum)}（+${gainPct.toFixed(1)}%，预期收益约 ¥${Math.round(expGain)}）`,
+      `盈亏比：1 : ${rrRatio.toFixed(2)}${stock.memo ? `\n买入逻辑：${stock.memo}` : ''}`,
+    ].join('\n');
+    copyPlain(txt, `已复制 ${stock.name} 下单与条件单参数`);
+  };
+
+  return (
+    <div className="bc-calc-box" onClick={(e) => e.stopPropagation()}>
+      <div className="bcc-head">
+        <span>🧮 下单手数 &amp; 以损定仓试算（100股整手）</span>
+        <button type="button" className="bcc-close" onClick={onClose}>✕</button>
+      </div>
+
+      <div className="bcc-presets">
+        {riskPresets.map((rp) => (
+          <button
+            key={`risk-${rp}`}
+            type="button"
+            className="bcc-chip risk"
+            onClick={() => applyRiskSizing(rp)}
+            title={`以损定仓：若打到止损价 ¥${f2(sNum)}，最多只亏总资产的 ${rp}%（约 ¥${Math.round((assets * rp) / 100)}）`}
+          >
+            🛡️ 亏{rp}%定仓
+          </button>
+        ))}
+        {[
+          { label: '1成仓', val: Math.round(assets * 0.1) },
+          { label: '2成仓', val: Math.round(assets * 0.2) },
+          { label: '3成仓', val: Math.round(assets * 0.3) },
+        ].map((p) => (
+          <button
+            key={p.label}
+            type="button"
+            className="bcc-chip"
+            onClick={() => setBudget(String(p.val))}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="bcc-inputs">
+        <label>
+          <span>预算(元)</span>
+          <input type="number" step="1000" value={budget} onChange={(e) => setBudget(e.target.value)} />
+        </label>
+        <label>
+          <span>挂单价</span>
+          <input type="number" step="0.01" value={entryPx} onChange={(e) => setEntryPx(e.target.value)} />
+        </label>
+        <label>
+          <span>止损价</span>
+          <input type="number" step="0.01" value={stopPx} onChange={(e) => setStopPx(e.target.value)} />
+        </label>
+        <label>
+          <span>止盈价</span>
+          <input type="number" step="0.01" value={targetPx} onChange={(e) => setTargetPx(e.target.value)} />
+        </label>
+      </div>
+
+      <div className="bcc-res">
+        <div>
+          可买 <b>{shares} 股</b>（¥{Math.round(actualAmt).toLocaleString('zh-CN')}）
+        </div>
+        <div>
+          盈亏比 <b className={rrRatio >= 1.8 ? 'up' : rrRatio < 1.2 ? 'warn' : ''}>1 : {rrRatio.toFixed(2)}</b>
+        </div>
+        <div>
+          止损约 <b className="down">-¥{Math.round(Math.max(0, maxLoss))}</b> ({lossPct.toFixed(1)}%)
+        </div>
+        <div>
+          止盈约 <b className="up">+¥{Math.round(Math.max(0, expGain))}</b> (+{gainPct.toFixed(1)}%)
+        </div>
+      </div>
+
+      {(overSingle || overTotal) && (
+        <div className="bcc-risk-warn">
+          {overSingle && (
+            <div>⚠️ 买入后该股仓位将达 <b>{afterSinglePct.toFixed(1)}%</b>，超过单票红线 {singleMaxPct}%</div>
+          )}
+          {overTotal && (
+            <div>🚨 买入后总仓位将达 <b>{afterTotalPct.toFixed(1)}%</b>，超过当前情绪上限 {allowedCapPct}%</div>
+          )}
+        </div>
+      )}
+
+      <div className="bcc-foot">
+        <span className="bcc-fee">含单边佣金约 ¥{comm.toFixed(1)} + 印花税</span>
+        <button type="button" className="bc-act-btn" onClick={handleCopyOrder}>
+          📋 复制条件单参数
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function BattleCardGrid({
   stocks = [],
+  tradeLogs = [],
+  totalAssets = 100000,
+  posRules = null,
+  totalMktVal = 0,
+  allowedCapPct = 80,
   expandedCode = '',
   onToggleExpand,
+  onUpdateStock,
   onOpenQuickT,
   onJumpDiagnosis,
   onJumpIgnition,
   emptyTitle = '当前分组暂无标的',
   emptyHint = '可在上方输入框添加 6 位代码或股票名称，或从起爆挖掘 / 连板天梯一键加入。',
 }) {
+  const [editingMemoCode, setEditingMemoCode] = useState('');
+  const [memoDraft, setMemoDraft] = useState('');
+  const [calcOpenCode, setCalcOpenCode] = useState('');
+
   if (!stocks.length) {
     return (
       <div className="battle-empty">
@@ -133,6 +289,13 @@ export default function BattleCardGrid({
       </div>
     );
   }
+
+  const saveMemo = (stock) => {
+    if (onUpdateStock) {
+      onUpdateStock({ ...stock, memo: memoDraft.trim() });
+    }
+    setEditingMemoCode('');
+  };
 
   return (
     <div className="battle-grid">
@@ -143,6 +306,9 @@ export default function BattleCardGrid({
         const sig = buildActionSignal(s);
         const { c, pos, chg, px, hasPos } = sig;
         const chgCls = chg > 0 ? 'up' : chg < 0 ? 'down' : '';
+        const tStatus = hasPos ? getTodayTStatus(s, tradeLogs) : null;
+        const isEditingMemo = editingMemoCode === code6;
+        const isCalcOpen = calcOpenCode === code6;
 
         return (
           <div
@@ -173,9 +339,7 @@ export default function BattleCardGrid({
                   <span className={`bc-tier ${isShort ? 'is-short' : 'is-long'}`}>
                     {isShort ? '⚡ 短线' : '🛡️ 稳健'}
                   </span>
-                  {s.strategyTag && (
-                    <span className="bc-strat">{s.strategyTag}</span>
-                  )}
+                  {s.strategyTag && <span className="bc-strat">{s.strategyTag}</span>}
                 </div>
               </div>
 
@@ -187,6 +351,20 @@ export default function BattleCardGrid({
               </div>
             </div>
 
+            {/* 持仓专属：T+1 今日可卖 / 锁定股数条 */}
+            {hasPos && tStatus && (
+              <div className="bc-t1-row">
+                <span className={`bc-t1-pill ${tStatus.sellableShares > 0 ? 'ok' : 'lock'}`}>
+                  {tStatus.isFirstDayLocked
+                    ? `🔒 T+1 首日锁仓（今日可卖 0 股）`
+                    : `🔓 今日可卖 ${tStatus.sellableShares} 股`}
+                </span>
+                {tStatus.t1LockedShares > 0 && !tStatus.isFirstDayLocked && (
+                  <span className="bc-t1-lock">今日新买锁定 {tStatus.t1LockedShares} 股</span>
+                )}
+              </div>
+            )}
+
             {/* 核心买卖点判定条 */}
             <div className={`bc-verdict kind-${sig.kind}`}>
               <div className="bc-v-head">
@@ -194,6 +372,43 @@ export default function BattleCardGrid({
                 <span className="bc-v-trend">日线{c.trend} · {c.grid.toFixed(1)}格</span>
               </div>
               <div className="bc-v-line">{sig.headline}</div>
+            </div>
+
+            {/* 买入 / 观察逻辑备忘锚点（就地编辑，防盘中情绪化乱操作） */}
+            <div className="bc-memo-wrap" onClick={(e) => e.stopPropagation()}>
+              {isEditingMemo ? (
+                <div className="bc-memo-edit">
+                  <input
+                    type="text"
+                    autoFocus
+                    placeholder="记一句逻辑锚：如「回踩20日线博二波，破18.2认错」"
+                    value={memoDraft}
+                    onChange={(e) => setMemoDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') saveMemo(s);
+                      if (e.key === 'Escape') setEditingMemoCode('');
+                    }}
+                  />
+                  <button type="button" className="bc-memo-save" onClick={() => saveMemo(s)}>
+                    保存
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className={`bc-memo-btn ${s.memo ? 'has-memo' : ''}`}
+                  onClick={() => {
+                    setMemoDraft(s.memo || '');
+                    setEditingMemoCode(code6);
+                  }}
+                  title="点击编辑一句话买入/观察逻辑锚"
+                >
+                  <span className="bc-memo-ico">📝</span>
+                  <span className="bc-memo-txt">
+                    {s.memo || '记一句买入/观察逻辑（如：缩量回踩20日线低吸，破位认错）'}
+                  </span>
+                </button>
+              )}
             </div>
 
             {/* 关键价位三宫格 */}
@@ -237,6 +452,19 @@ export default function BattleCardGrid({
               </div>
             )}
 
+            {/* 内置一键下单手数 & 盈亏比计算器（点击底部 🧮 算手数 展开） */}
+            {isCalcOpen && (
+              <OrderSizingCalc
+                stock={s}
+                sig={sig}
+                totalAssets={totalAssets}
+                posRules={posRules}
+                totalMktVal={totalMktVal}
+                allowedCapPct={allowedCapPct}
+                onClose={() => setCalcOpenCode('')}
+              />
+            )}
+
             {/* 底部联动操作条 */}
             <div className="bc-foot" onClick={(e) => e.stopPropagation()}>
               <div className="bc-links">
@@ -258,6 +486,14 @@ export default function BattleCardGrid({
                 </button>
                 <button
                   type="button"
+                  className={`bc-act-btn ${isCalcOpen ? 'active' : ''}`}
+                  onClick={() => setCalcOpenCode((prev) => (prev === code6 ? '' : code6))}
+                  title="按资金与止损位一键测算可买整手股数与盈亏比"
+                >
+                  🧮 算手数
+                </button>
+                <button
+                  type="button"
                   className="bc-act-btn"
                   onClick={() => onOpenQuickT && onOpenQuickT(s, hasPos ? '正T' : '买入建仓', px)}
                   title={hasPos ? '快捷记录做T或买卖流水' : '记录首次买入建仓（自动转入实盘持仓）'}
@@ -270,7 +506,7 @@ export default function BattleCardGrid({
                 className={`bc-expand-btn ${isExpanded ? 'open' : ''}`}
                 onClick={() => onToggleExpand && onToggleExpand(code6)}
               >
-                {isExpanded ? '收起面板 ▴' : '展开详情 ▾'}
+                {isExpanded ? '收起 ▴' : '详情 ▾'}
               </button>
             </div>
           </div>

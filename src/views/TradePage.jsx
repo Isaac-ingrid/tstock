@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import SelectionSection from '../components/SelectionSection.jsx';
 import ConsoleSection from '../components/ConsoleSection.jsx';
 import MarketSentimentBar from '../components/MarketSentimentBar.jsx';
+import PreMarketPanel from '../components/PreMarketPanel.jsx';
 
 /**
  * 做T决策台页面 (Trade Page)
@@ -38,6 +39,7 @@ export default function TradePage({
   onToggleFastRefresh,
 }) {
   const [internalActiveCode, setInternalActiveCode] = useState(() => (pool[0]?.code || ''));
+  const [sentiment, setSentiment] = useState(null);
   const activeStockCode = externalActiveCode !== undefined ? externalActiveCode : internalActiveCode;
   const handleSelectStock = externalSelectStock || setInternalActiveCode;
 
@@ -55,11 +57,19 @@ export default function TradePage({
   return (
     <div className="page-trade">
       {/* 🌡️ 全市场超短情绪温度计 & 炸板率风控总阀 */}
-      <MarketSentimentBar />
+      <MarketSentimentBar onSentimentChange={setSentiment} />
+
+      {/* 🌅 09:15-09:30 集合竞价速览条 & 持仓/自选盘前公告自动排雷 */}
+      <PreMarketPanel
+        pool={pool}
+        onSelectStock={handleSelectStock}
+        onJumpDiagnosis={onJumpDiagnosis}
+      />
 
       {/* 决策引擎（分「实盘持仓」与「自选观察」紧凑买卖点卡片，点击再展开完整做T详情） */}
       <ConsoleSection
         pool={pool}
+        sentiment={sentiment}
         activeStockCode={activeStockCode}
         totalAssets={totalAssets}
         tradeLogs={tradeLogs}

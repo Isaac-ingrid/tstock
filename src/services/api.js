@@ -58,6 +58,31 @@ export async function fetchStockDiagnosis(code) {
   }
 }
 
+/* 批量盘前公告排雷（一次校验全部持仓与自选股近 35 天高危/提示公告） */
+export async function fetchBatchNoticeRisk(codes = []) {
+  const clean = Array.from(
+    new Set(
+      (codes || [])
+        .map((c) => String(c || '').trim().padStart(6, '0'))
+        .filter((c) => /^\d{6}$/.test(c))
+    )
+  ).slice(0, 30);
+  if (!clean.length) return { ok: true, items: {}, redCount: 0, yellowCount: 0 };
+  const url = `${STOCK_API_BASE}/api/stock/batch_notice_risk?codes=${encodeURIComponent(clean.join(','))}`;
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 12000);
+  try {
+    const res = await fetch(url, { cache: 'no-store', signal: ctl.signal });
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.detail || `批量公告排雷异常 (${res.status})`);
+    }
+    return await res.json();
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 /* 获取全市场连板天梯与打板股池（含强势多标签、玄学字根共振、双轨评分与抱团跟踪池） */
 export async function fetchLimitUpPool(date, mysticRoots = '') {
   const qs = new URLSearchParams();

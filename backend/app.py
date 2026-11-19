@@ -17,7 +17,12 @@ from pydantic import BaseModel, Field
 
 from backend.coach import get_coach_config, test_coach_connection, generate_coach_review
 from backend.diagnosis import get_stock_diagnosis
-from backend.ignition import get_ignition_pool, get_ignition_tracking_pool, diagnose_ignition_stock
+from backend.ignition import (
+    _fetch_stock_notice_risk,
+    diagnose_ignition_stock,
+    get_ignition_pool,
+    get_ignition_tracking_pool,
+)
 from backend.limitup import get_limitup_pool, invalidate_limitup_cache
 from backend.meme_radar import get_meme_radar_overview, diagnose_stock_meme
 from backend.strategy_ledger import get_strategy_performance, snapshot_strategies
@@ -133,6 +138,66 @@ async def stock_diagnosis(
         return await get_stock_diagnosis(code, http_client=http_client)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"体检诊断聚合失败: {exc}") from exc
+
+
+@app.get("/api/stock/batch_notice_risk")
+async def stock_batch_notice_risk(
+    request: Request,
+    codes: str = Query(..., min_length=6, max_length=260),
+) -> dict[str, object]:
+    """盘前批量公告排雷：并发扫描持仓/自选股近 35 天高危与提示公告（复用带上限缓存）"""
+    import datetime
+
+    raw_codes = [c.strip().zfill(6) for c in codes.split(",") if c.strip()]
+    uniq_codes = list(dict.fromkeys(c for c in raw_codes if len(c) == 6 and c.isdigit()))[:30]
+    if not uniq_codes:
+        return {"ok": True, "items": {}, "redCount": 0, "yellowCount": 0, "checkedAt": ""}
+
+    http_client = getattr(request.app.state, "http", None)
+    close_client = http_client is None
+    client = http_client or httpx.AsyncClient(timeout=httpx.Timeout(10.0), trust_env=False)
+    try:
+        sem = asyncio.Semaphore(4)
+        results = await asyncio.gather(
+            *[_fetch_stock_notice_risk(client, c, sem) for c in uniq_codes],
+            return_exceptions=True,
+        )
+    finally:
+        if close_client:
+            await client.aclose()
+
+    today_dt = datetime.date.today()
+    items: dict[str, Any] = {}
+    red_count = 0
+    yellow_count = 0
+    for c, res in zip(uniq_codes, results):
+        info = res if isinstance(res, dict) else {"riskLevel": "安全", "redFlags": [], "yellowAlerts": []}
+        red_flags = info.get("redFlags") or []
+        yellow_alerts = info.get("yellowAlerts") or []
+        recent_3d = False
+        for entry in (*red_flags, *yellow_alerts):
+            try:
+                if (today_dt - datetime.date.fromisoformat(str(entry.get("date") or "")[:10])).days <= 3:
+                    recent_3d = True
+                    break
+            except Exception:
+                pass
+        if red_flags:
+            red_count += 1
+        elif yellow_alerts:
+            yellow_count += 1
+        items[c] = {
+            **info,
+            "hasRecent3dAlert": recent_3d,
+        }
+
+    return {
+        "ok": True,
+        "items": items,
+        "redCount": red_count,
+        "yellowCount": yellow_count,
+        "checkedAt": datetime.datetime.now().strftime("%H:%M:%S"),
+    }
 
 
 @app.get("/api/stock/limitup_pool")
