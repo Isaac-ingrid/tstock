@@ -80,6 +80,7 @@ export default function App() {
     checking: true,
     authenticated: false,
     needsSetup: false,
+    allowOpenRegister: true,
     user: null,
     hasLegacyVault: false,
     legacySummary: null,
@@ -577,11 +578,13 @@ export default function App() {
     setAuthState(prev => ({ ...prev, checking: true, backendError: '' }));
     try {
       const st = await fetchAuthStatus();
+      const openReg = st?.allowOpenRegister !== false;
       if (st?.authenticated && st?.user) {
         setAuthState({
           checking: false,
           authenticated: true,
           needsSetup: false,
+          allowOpenRegister: openReg,
           user: st.user,
           hasLegacyVault: false,
           legacySummary: null,
@@ -595,6 +598,7 @@ export default function App() {
           checking: false,
           authenticated: false,
           needsSetup: Boolean(st?.needsSetup),
+          allowOpenRegister: openReg,
           user: null,
           hasLegacyVault: Boolean(st?.hasLegacyVault),
           legacySummary: st?.legacySummary || null,
@@ -610,6 +614,7 @@ export default function App() {
           checking: false,
           authenticated: false,
           needsSetup: false,
+          allowOpenRegister: true,
           user: null,
           hasLegacyVault: false,
           legacySummary: null,
@@ -622,6 +627,7 @@ export default function App() {
           checking: false,
           authenticated: false,
           needsSetup: false,
+          allowOpenRegister: true,
           user: null,
           hasLegacyVault: false,
           legacySummary: null,
@@ -639,19 +645,17 @@ export default function App() {
   const handleAuthSuccess = useCallback((res) => {
     const user = res?.user;
     if (!user) return;
-    setAuthState({
+    setAuthState(prev => ({
       checking: false,
       authenticated: true,
       needsSetup: false,
+      allowOpenRegister: typeof res?.allowOpenRegister === 'boolean' ? res.allowOpenRegister : prev.allowOpenRegister,
       user,
       hasLegacyVault: false,
       legacySummary: null,
       offlineLocal: false,
       backendError: '',
-    });
-    if (res?.mode === 'setup_owner' && res?.defaultInviteCode) {
-      toastOk(`🎟️ 已为你生成初始好友邀请码 ${res.defaultInviteCode}（可在右上角「👑 ${user.displayName}」随时查看或新建）`, 5500);
-    }
+    }));
     hydrateAuthenticatedVault(user, res?.mode || 'login');
   }, [hydrateAuthenticatedVault]);
 
@@ -664,10 +668,16 @@ export default function App() {
     }
     vaultReadyRef.current = false;
     await postLogout();
+    let latestOpenReg = authStateRef.current.allowOpenRegister;
+    try {
+      const st = await fetchAuthStatus();
+      if (typeof st?.allowOpenRegister === 'boolean') latestOpenReg = st.allowOpenRegister;
+    } catch (_) {}
     setAuthState({
       checking: false,
       authenticated: false,
       needsSetup: false,
+      allowOpenRegister: latestOpenReg,
       user: null,
       hasLegacyVault: false,
       legacySummary: null,
@@ -1931,6 +1941,7 @@ export default function App() {
       <div className="wrap">
         <AuthScreen
           needsSetup={authState.needsSetup}
+          allowOpenRegister={authState.allowOpenRegister}
           hasLegacyVault={authState.hasLegacyVault}
           legacySummary={authState.legacySummary}
           backendError={authState.backendError}
@@ -2280,6 +2291,8 @@ export default function App() {
         open={accountModalOpen}
         onClose={() => setAccountModalOpen(false)}
         currentUser={currentUser}
+        allowOpenRegister={authState.allowOpenRegister}
+        onUpdateOpenRegister={(val) => setAuthState(prev => ({ ...prev, allowOpenRegister: Boolean(val) }))}
         vaultStatus={vaultStatus}
         onSyncVaultNow={() => performVaultSync(true, true)}
         onPullVaultNow={handleRestoreFromVault}

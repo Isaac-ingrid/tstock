@@ -1,11 +1,11 @@
 """backend/auth.py
 
-零外部依赖轻量多账号鉴权、SCRAM 挑战签名防明文传输与邀请码管理引擎
+零外部依赖轻量多账号鉴权、SCRAM 挑战签名防明文传输与注册门禁管理引擎
 - 密码安全：采用类 SCRAM-SHA-256 协议（2048 轮加盐迭代 + 单次随机 Nonce 挑战异或证明），
   即使线上走 80 端口 HTTP，网络上也绝不传输明文密码或可重放凭据；磁盘仅存单向 storedKey。
 - 会话签发：基于 HMAC-SHA256 签发 30 天长效令牌（内嵌 tokenVersion，改密/重置即刻吊销旧令牌）。
 - 账号体系：首个初始化账号自动成为主理人 (owner) 并无缝接管原有 user_vault.json；
-  后续成员必须凭有效邀请码注册，各自享有物理隔离的独立持仓与台账金库。
+  默认开启「免邀请码开放注册」(allowOpenRegister=True)，主理人可随时一键切换为「仅凭邀请码注册」。
 """
 
 from __future__ import annotations
@@ -107,21 +107,26 @@ def _get_or_create_secret(data_dir: Optional[str] = None) -> bytes:
 
 def _load_db_unlocked(data_dir: Optional[str] = None) -> Dict[str, Any]:
     users_path, _ = _auth_paths(data_dir)
+    default_settings = {"allowOpenRegister": True}
     if not os.path.isfile(users_path):
-        return {"version": 1, "users": {}, "invites": []}
+        return {"version": 1, "users": {}, "invites": [], "settings": dict(default_settings)}
     try:
         with open(users_path, "r", encoding="utf-8") as f:
             data = json.load(f)
         if not isinstance(data, dict):
-            return {"version": 1, "users": {}, "invites": []}
+            return {"version": 1, "users": {}, "invites": [], "settings": dict(default_settings)}
         data.setdefault("version", 1)
         if not isinstance(data.get("users"), dict):
             data["users"] = {}
         if not isinstance(data.get("invites"), list):
             data["invites"] = []
+        if not isinstance(data.get("settings"), dict):
+            data["settings"] = dict(default_settings)
+        elif "allowOpenRegister" not in data["settings"]:
+            data["settings"]["allowOpenRegister"] = True
         return data
     except Exception:
-        return {"version": 1, "users": {}, "invites": []}
+        return {"version": 1, "users": {}, "invites": [], "settings": dict(default_settings)}
 
 
 def _save_db_unlocked(db: Dict[str, Any], data_dir: Optional[str] = None) -> None:
@@ -264,7 +269,7 @@ def _public_user(user: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-# ==================== 防爆破限速与一次性挑战签发 ====================
+# ==================== 防爆破限速与全局注册开关 ====================
 
 def _check_rate_limit_unlocked(client_ip: str) -> None:
     now = time.time()
@@ -296,6 +301,30 @@ def is_setup_needed(data_dir: Optional[str] = None) -> bool:
         return len(db["users"]) == 0
 
 
+def get_auth_settings(data_dir: Optional[str] = None) -> Dict[str, Any]:
+    with _AUTH_LOCK:
+        db = _load_db_unlocked(data_dir)
+        allow_open = bool(db.get("settings", {}).get("allowOpenRegister", True))
+    env_flag = os.getenv("TSTOCK_ALLOW_OPEN_REGISTER", "").strip().lower()
+    if env_flag in ("0", "false", "no"):
+        allow_open = False
+    elif env_flag in ("1", "true", "yes"):
+        allow_open = True
+    return {"allowOpenRegister": allow_open}
+
+
+def update_auth_settings(
+    allow_open_register: bool,
+    data_dir: Optional[str] = None,
+) -> Dict[str, Any]:
+    with _AUTH_LOCK:
+        db = _load_db_unlocked(data_dir)
+        db.setdefault("settings", {})
+        db["settings"]["allowOpenRegister"] = bool(allow_open_register)
+        _save_db_unlocked(db, data_dir)
+        return {"ok": True, "settings": {"allowOpenRegister": bool(allow_open_register)}}
+
+
 def get_auth_status(
     token: Optional[str] = None,
     data_dir: Optional[str] = None,
@@ -303,10 +332,12 @@ def get_auth_status(
     needs_setup = is_setup_needed(data_dir)
     user = None if needs_setup else verify_session_token(token, data_dir=data_dir)
     legacy = get_legacy_vault_info(data_dir=data_dir) if needs_setup else {"exists": False, "summary": None}
+    settings = get_auth_settings(data_dir=data_dir)
     return {
         "ok": True,
         "authenticated": user is not None,
         "needsSetup": needs_setup,
+        "allowOpenRegister": settings["allowOpenRegister"],
         "user": user,
         "hasLegacyVault": bool(legacy.get("exists")),
         "legacySummary": legacy.get("summary"),
@@ -323,7 +354,6 @@ def create_login_challenge(
     now = time.time()
 
     with _AUTH_LOCK:
-        # 清理过期挑战
         expired = [k for k, (_, exp) in _NONCE_STORE.items() if exp < now]
         for k in expired:
             _NONCE_STORE.pop(k, None)
@@ -335,7 +365,6 @@ def create_login_challenge(
         if user and HEX32_RE.match(str(user.get("salt") or "")):
             salt_hex = str(user["salt"]).lower()
         else:
-            # 对不存在的账号返回确定性伪盐，防止通过挑战接口枚举账号是否存在
             salt_hex = hmac.new(secret, f"dummy-salt:{u}".encode("utf-8"), hashlib.sha256).hexdigest()[:32]
 
         nonce = secrets.token_hex(24)
@@ -350,7 +379,7 @@ def create_login_challenge(
     }
 
 
-# ==================== 主账号初始化、邀请码注册与登录 ====================
+# ==================== 主账号初始化、自由/邀请码注册与登录 ====================
 
 def _generate_invite_code() -> str:
     alphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
@@ -387,7 +416,7 @@ def setup_initial_owner(
     password: Optional[str] = None,
     data_dir: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """初始化首任主理人账号，并自动将原有 data/user_vault.json 迁移至该主账号名下"""
+    """初始化首任主理人账号，默认开启免邀请码开放注册，并将原有 user_vault.json 迁移至主账号"""
     u = normalize_username(username)
     s_hex, sk_hex = _prepare_stored_credentials(u, salt=salt, stored_key=stored_key, password=password)
     disp = str(display_name or "").strip()[:24] or u
@@ -396,7 +425,7 @@ def setup_initial_owner(
     with _AUTH_LOCK:
         db = _load_db_unlocked(data_dir)
         if len(db["users"]) > 0:
-            raise ValueError("系统已完成主理人初始化，请直接登录或使用邀请码注册")
+            raise ValueError("系统已完成主理人初始化，请直接登录或注册新账号")
 
         owner_rec = {
             "username": u,
@@ -410,13 +439,14 @@ def setup_initial_owner(
         }
         default_invite = {
             "code": _generate_invite_code(),
-            "note": "默认好友邀请码",
+            "note": "备用好友邀请码",
             "maxUses": 5,
             "usedCount": 0,
             "usedBy": [],
             "createdAt": now_s,
             "revoked": False,
         }
+        db.setdefault("settings", {})["allowOpenRegister"] = True
         db["users"][u] = owner_rec
         db["invites"].append(default_invite)
         _save_db_unlocked(db, data_dir)
@@ -427,6 +457,7 @@ def setup_initial_owner(
         "ok": True,
         "token": token,
         "user": _public_user(owner_rec),
+        "allowOpenRegister": True,
         "migratedVault": migration,
         "defaultInviteCode": default_invite["code"],
     }
@@ -434,7 +465,7 @@ def setup_initial_owner(
 
 def register_with_invite(
     username: str,
-    invite_code: str,
+    invite_code: str = "",
     display_name: str = "",
     salt: Optional[str] = None,
     stored_key: Optional[str] = None,
@@ -442,16 +473,15 @@ def register_with_invite(
     client_ip: str = "",
     data_dir: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """凭有效邀请码注册独立子账号，并自动创建干净隔离的专属金库"""
+    """注册独立子账号（默认开放免邀请码直接注册；若主理人关闭开放注册则严格校验有效邀请码）"""
     u = normalize_username(username)
     code_norm = str(invite_code or "").strip().upper()
-    if not code_norm:
-        raise ValueError("请输入邀请码")
 
     s_hex, sk_hex = _prepare_stored_credentials(u, salt=salt, stored_key=stored_key, password=password)
     disp = str(display_name or "").strip()[:24] or u
     now_s = _now_str()
     env_master_invite = os.getenv("TSTOCK_INVITE_CODE", "").strip().upper()
+    allow_open = get_auth_settings(data_dir=data_dir)["allowOpenRegister"]
 
     with _AUTH_LOCK:
         _check_rate_limit_unlocked(client_ip)
@@ -462,18 +492,23 @@ def register_with_invite(
             raise ValueError(f"账号名「{u}」已被占用，请换一个名称")
 
         matched_invite = None
-        for inv in db["invites"]:
-            if not inv.get("revoked") and str(inv.get("code") or "").upper() == code_norm:
-                max_u = int(inv.get("maxUses") or 0)
-                used_u = int(inv.get("usedCount") or 0)
-                if max_u == 0 or used_u < max_u:
-                    matched_invite = inv
-                    break
+        if code_norm:
+            for inv in db["invites"]:
+                if not inv.get("revoked") and str(inv.get("code") or "").upper() == code_norm:
+                    max_u = int(inv.get("maxUses") or 0)
+                    used_u = int(inv.get("usedCount") or 0)
+                    if max_u == 0 or used_u < max_u:
+                        matched_invite = inv
+                        break
 
-        env_matched = bool(env_master_invite and hmac.compare_digest(code_norm, env_master_invite))
-        if not matched_invite and not env_matched:
-            _record_failure_unlocked(client_ip)
-            raise PermissionError("邀请码无效、已过期或已达使用次数上限")
+        env_matched = bool(code_norm and env_master_invite and hmac.compare_digest(code_norm, env_master_invite))
+
+        if not allow_open:
+            if not code_norm:
+                raise ValueError("当前需凭邀请码注册，请输入主理人分享的邀请码")
+            if not matched_invite and not env_matched:
+                _record_failure_unlocked(client_ip)
+                raise PermissionError("邀请码无效、已过期或已达使用次数上限")
 
         if matched_invite is not None:
             matched_invite["usedCount"] = int(matched_invite.get("usedCount") or 0) + 1
@@ -487,7 +522,7 @@ def register_with_invite(
             "role": "member",
             "salt": s_hex,
             "storedKey": sk_hex,
-            "invitedByCode": code_norm,
+            "invitedByCode": code_norm if (matched_invite or env_matched) else "OPEN_REGISTER",
             "tokenVersion": 1,
             "createdAt": now_s,
             "lastLoginAt": now_s,

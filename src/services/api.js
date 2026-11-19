@@ -93,7 +93,7 @@ export async function postSetupOwner({ username, displayName = '', salt, storedK
   return data;
 }
 
-export async function postRegisterWithInvite({ username, displayName = '', inviteCode, salt, storedKey }) {
+export async function postRegisterWithInvite({ username, displayName = '', inviteCode = '', salt, storedKey }) {
   const data = await authJsonFetch('/api/auth/register', {
     method: 'POST',
     body: JSON.stringify({ username, displayName, inviteCode, salt, storedKey }),
@@ -131,6 +131,13 @@ export async function postChangePassword({ nonce, currentProof, newSalt, newStor
 
 export async function fetchAuthInvites() {
   return authJsonFetch('/api/auth/invites', { method: 'GET' });
+}
+
+export async function postUpdateAuthSettings({ allowOpenRegister }) {
+  return authJsonFetch('/api/auth/settings', {
+    method: 'POST',
+    body: JSON.stringify({ allowOpenRegister: Boolean(allowOpenRegister) }),
+  });
 }
 
 export async function postMutateInvite({ action, code = '', note = '', maxUses = 5 }) {

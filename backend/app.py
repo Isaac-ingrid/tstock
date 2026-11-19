@@ -20,6 +20,7 @@ from backend.auth import (
     SESSION_TTL_SECONDS,
     change_user_password,
     create_login_challenge,
+    get_auth_settings,
     get_auth_status,
     list_invites,
     list_users_with_vault_stats,
@@ -28,6 +29,7 @@ from backend.auth import (
     owner_mutate_user,
     register_with_invite,
     setup_initial_owner,
+    update_auth_settings,
     verify_session_token,
 )
 from backend.coach import get_coach_config, test_coach_connection, generate_coach_review
@@ -182,10 +184,14 @@ class AuthSetupOwnerReq(BaseModel):
 class AuthRegisterReq(BaseModel):
     username: str = Field(..., min_length=2, max_length=24)
     displayName: str = ""
-    inviteCode: str = Field(..., min_length=2, max_length=40)
+    inviteCode: str = Field(default="", max_length=40)
     salt: Optional[str] = None
     storedKey: Optional[str] = None
     password: Optional[str] = None
+
+
+class AuthSettingsReq(BaseModel):
+    allowOpenRegister: bool
 
 
 class AuthLoginReq(BaseModel):
@@ -319,9 +325,16 @@ async def auth_change_password_api(request: Request, req: AuthChangePwdReq) -> J
 
 @app.get("/api/auth/invites")
 async def auth_list_invites_api(request: Request) -> dict[str, Any]:
-    """主理人查看全部邀请码与使用明细"""
+    """主理人查看全部邀请码与当前开放注册设置"""
     _require_owner(request)
-    return {"ok": True, "invites": list_invites()}
+    return {"ok": True, "invites": list_invites(), "settings": get_auth_settings()}
+
+
+@app.post("/api/auth/settings")
+async def auth_update_settings_api(request: Request, req: AuthSettingsReq) -> dict[str, Any]:
+    """主理人一键开启或关闭免邀请码开放注册"""
+    _require_owner(request)
+    return update_auth_settings(allow_open_register=req.allowOpenRegister)
 
 
 @app.post("/api/auth/invites")

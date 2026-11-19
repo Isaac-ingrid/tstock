@@ -11,6 +11,7 @@ import {
 
 export default function AuthScreen({
   needsSetup = false,
+  allowOpenRegister = true,
   hasLegacyVault = false,
   legacySummary = null,
   backendError = '',
@@ -75,7 +76,7 @@ export default function AuthScreen({
       }
 
       if (tab === 'register') {
-        if (!inviteCode.trim()) {
+        if (!allowOpenRegister && !inviteCode.trim()) {
           throw new Error('请输入主理人分享的邀请码');
         }
         if (password !== confirmPassword) {
@@ -155,11 +156,11 @@ export default function AuthScreen({
                     {legacySummary ? (
                       <b>（自选 {legacySummary.poolCount || 0} 只 · 持仓 {legacySummary.holdingCount || 0} 只 · 流水 {legacySummary.logCount || 0} 笔）</b>
                     ) : null}
-                    ，完成主账号设置后将<b>自动无缝迁移绑定至你的主账号名下</b>，后续好友需凭你生成的邀请码才能注册独立账号。
+                    ，完成设置后将<b>自动无缝迁移绑定至你的主账号</b>；默认已开启免邀请码开放注册（你可随时在右上角关闭门禁）。
                   </>
                 ) : (
                   <>
-                    首次初始化无需邀请码。创建后你将成为主理人，拥有专属独立金库并可随时生成好友邀请码。
+                    创建后你将成为主理人并拥有专属独立金库；默认已开启免邀请码开放注册，朋友可直接开户（你也可随时切换为仅限邀请码注册）。
                   </>
                 )}
               </div>
@@ -236,14 +237,14 @@ export default function AuthScreen({
                 className={`auth-tab ${tab === 'register' ? 'active' : ''}`}
                 onClick={() => { setTab('register'); setErrMsg(''); }}
               >
-                🎟️ 邀请码注册
+                {allowOpenRegister ? '✨ 注册新账号' : '🎟️ 邀请码注册'}
               </button>
             </div>
 
             <form onSubmit={handleSubmit} className="auth-form">
-              {tab === 'register' && (
+              {tab === 'register' && (!allowOpenRegister || inviteCode) && (
                 <label className="auth-field">
-                  <span>注册邀请码（向主理人获取）</span>
+                  <span>{allowOpenRegister ? '邀请码（选填，当前已开放自由注册）' : '注册邀请码（向主理人获取）'}</span>
                   <input
                     type="text"
                     className="auth-input mono"
@@ -251,7 +252,7 @@ export default function AuthScreen({
                     autoCapitalize="characters"
                     value={inviteCode}
                     onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
-                    required
+                    required={!allowOpenRegister}
                   />
                 </label>
               )}

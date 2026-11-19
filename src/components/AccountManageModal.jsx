@@ -6,6 +6,7 @@ import {
   fetchAuthChallenge,
   postChangePassword,
   fetchAuthInvites,
+  postUpdateAuthSettings,
   postMutateInvite,
   fetchAuthUsers,
   postMutateAuthUser,
@@ -16,6 +17,8 @@ export default function AccountManageModal({
   open,
   onClose,
   currentUser,
+  allowOpenRegister = true,
+  onUpdateOpenRegister,
   vaultStatus,
   onSyncVaultNow,
   onPullVaultNow,
@@ -24,6 +27,8 @@ export default function AccountManageModal({
 }) {
   const isOwner = currentUser?.role === 'owner';
   const [tab, setTab] = useState('profile'); // 'profile' | 'invites' | 'users'
+  const [openReg, setOpenReg] = useState(Boolean(allowOpenRegister));
+  const [settingBusy, setSettingBusy] = useState(false);
 
   // 修改密码表单
   const [curPwd, setCurPwd] = useState('');
@@ -42,18 +47,26 @@ export default function AccountManageModal({
   const [resetTarget, setResetTarget] = useState('');
   const [resetNewPwd, setResetNewPwd] = useState('');
 
+  useEffect(() => {
+    setOpenReg(Boolean(allowOpenRegister));
+  }, [allowOpenRegister]);
+
   const loadOwnerInvites = useCallback(async () => {
     if (!isOwner) return;
     setInvLoading(true);
     try {
       const res = await fetchAuthInvites();
       if (res?.invites) setInvites(res.invites);
+      if (res?.settings && typeof res.settings.allowOpenRegister === 'boolean') {
+        setOpenReg(res.settings.allowOpenRegister);
+        if (onUpdateOpenRegister) onUpdateOpenRegister(res.settings.allowOpenRegister);
+      }
     } catch (err) {
-      toastErr(err?.message || '读取邀请码失败');
+      toastErr(err?.message || '读取注册设置失败');
     } finally {
       setInvLoading(false);
     }
-  }, [isOwner]);
+  }, [isOwner, onUpdateOpenRegister]);
 
   const loadOwnerUsers = useCallback(async () => {
     if (!isOwner) return;
@@ -75,6 +88,26 @@ export default function AccountManageModal({
   }, [open, tab, isOwner, loadOwnerInvites, loadOwnerUsers]);
 
   if (!open || !currentUser) return null;
+
+  const handleToggleOpenRegister = async () => {
+    const nextVal = !openReg;
+    setSettingBusy(true);
+    try {
+      const res = await postUpdateAuthSettings({ allowOpenRegister: nextVal });
+      const confirmed = Boolean(res?.settings?.allowOpenRegister ?? nextVal);
+      setOpenReg(confirmed);
+      if (onUpdateOpenRegister) onUpdateOpenRegister(confirmed);
+      toastOk(
+        confirmed
+          ? '🟢 已开启「免邀请码开放注册」，朋友可直接输入账号密码注册独立金库'
+          : '🔒 已关闭自由注册，现在新用户必须凭有效邀请码才能注册'
+      );
+    } catch (err) {
+      toastErr(err?.message || '更新注册开关失败');
+    } finally {
+      setSettingBusy(false);
+    }
+  };
 
   const handleChangePwd = async (e) => {
     e.preventDefault();
@@ -212,7 +245,7 @@ export default function AccountManageModal({
                 className={`auth-tab ${tab === 'invites' ? 'active' : ''}`}
                 onClick={() => setTab('invites')}
               >
-                🎟️ 邀请码管理
+                🎟️ 注册与邀请码
               </button>
               <button
                 type="button"
@@ -270,6 +303,43 @@ export default function AccountManageModal({
                   </button>
                 </div>
               </div>
+
+              {isOwner && (
+                <div style={{
+                  padding: '10px 13px',
+                  borderRadius: '10px',
+                  background: openReg ? '#f0fdf4' : '#fff7ed',
+                  border: `1px solid ${openReg ? '#86efac' : '#fed7aa'}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: '8px',
+                }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text)', flex: '1 1 220px', minWidth: 0 }}>
+                    <b>{openReg ? '🟢 免邀请码开放注册：已开启' : '🔒 邀请码门禁注册：已开启'}</b>
+                    <div style={{ fontSize: '11.5px', color: 'var(--sub)', marginTop: '2px' }}>
+                      {openReg
+                        ? '朋友打开网址可直接注册独立账号；人齐后可随时关上防陌生人注册。'
+                        : '陌生人无法自由开户，必须输入你分享的有效邀请码才能注册。'}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="mini"
+                    disabled={settingBusy}
+                    onClick={handleToggleOpenRegister}
+                    style={{
+                      fontWeight: 700,
+                      borderColor: openReg ? '#fdba74' : '#86efac',
+                      background: '#fff',
+                      color: openReg ? '#c2410c' : '#15803d',
+                    }}
+                  >
+                    {openReg ? '🔒 切换为仅凭邀请码' : '🟢 开启免邀请码注册'}
+                  </button>
+                </div>
+              )}
 
               <form onSubmit={handleChangePwd} style={{
                 padding: '12px 14px',
@@ -339,6 +409,41 @@ export default function AccountManageModal({
           {tab === 'invites' && isOwner && (
             <>
               <div style={{
+                padding: '10px 13px',
+                borderRadius: '10px',
+                background: openReg ? '#f0fdf4' : '#fff7ed',
+                border: `1px solid ${openReg ? '#86efac' : '#fed7aa'}`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '8px',
+              }}>
+                <div style={{ fontSize: '12px', color: 'var(--text)', flex: '1 1 220px', minWidth: 0 }}>
+                  <b>{openReg ? '🟢 当前已开启「免邀请码开放注册」' : '🔒 当前已开启「邀请码门禁保护」'}</b>
+                  <div style={{ fontSize: '11.5px', color: 'var(--sub)', marginTop: '2px' }}>
+                    {openReg
+                      ? '无需填邀请码即可直接注册；若想限制陌生人开户，点击右侧按钮关闭即可。'
+                      : '新用户注册时必须填写下方未作废的邀请码。'}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="mini"
+                  disabled={settingBusy}
+                  onClick={handleToggleOpenRegister}
+                  style={{
+                    fontWeight: 700,
+                    borderColor: openReg ? '#fdba74' : '#86efac',
+                    background: '#fff',
+                    color: openReg ? '#c2410c' : '#15803d',
+                  }}
+                >
+                  {openReg ? '🔒 切换为仅凭邀请码' : '🟢 开启免邀请码注册'}
+                </button>
+              </div>
+
+              <div style={{
                 padding: '11px 13px',
                 borderRadius: '10px',
                 background: '#f8fafc',
@@ -381,7 +486,7 @@ export default function AccountManageModal({
                   暂无邀请码，点击上方按钮即可一键生成。
                 </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '320px', overflowY: 'auto' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '300px', overflowY: 'auto' }}>
                   {invites.map((inv) => {
                     const maxU = Number(inv.maxUses || 0);
                     const usedU = Number(inv.usedCount || 0);
