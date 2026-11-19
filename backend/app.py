@@ -27,6 +27,7 @@ from backend.limitup import get_limitup_pool, invalidate_limitup_cache
 from backend.meme_radar import get_meme_radar_overview, diagnose_stock_meme
 from backend.strategy_ledger import get_strategy_performance, snapshot_strategies
 from backend.strong_herd import mutate_herd_pool
+from backend.user_vault import load_user_vault, save_user_vault
 
 ALLOWED_HOSTS = {
     "qt.gtimg.cn",
@@ -409,6 +410,36 @@ class CoachReviewReq(BaseModel):
     apiKey: Optional[str] = None
     apiUrl: Optional[str] = None
     model: Optional[str] = None
+    mode: str = "auto"
+
+
+class UserVaultSaveReq(BaseModel):
+    pool: list[dict[str, Any]] = Field(default_factory=list)
+    logs: list[dict[str, Any]] = Field(default_factory=list)
+    tailActives: list[dict[str, Any]] = Field(default_factory=list)
+    snapshots: list[dict[str, Any]] = Field(default_factory=list)
+    posRules: dict[str, Any] = Field(default_factory=dict)
+    initialCapital: float = 100000.0
+    availableCash: float = 0.0
+    force: bool = False
+
+
+@app.get("/api/user/vault")
+async def get_user_vault_api() -> dict[str, Any]:
+    """读取本地磁盘持久化金库（持仓池、成交流水、尾盘持仓、收盘快照、风控配置与现金总账）"""
+    return load_user_vault()
+
+
+@app.post("/api/user/vault")
+async def save_user_vault_api(req: UserVaultSaveReq) -> dict[str, Any]:
+    """原子双写用户金库至本地磁盘，并自动生成按日滚动快照备份"""
+    try:
+        return save_user_vault(
+            payload=req.model_dump(),
+            force=bool(req.force),
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"本地磁盘金库写入失败: {exc}") from exc
 
 
 @app.get("/api/coach/config")
@@ -432,7 +463,7 @@ async def coach_test_api(req: CoachTestReq) -> dict[str, Any]:
 
 @app.post("/api/coach/review")
 async def coach_review_api(req: CoachReviewReq) -> dict[str, Any]:
-    """调用天翼云大模型执行今日操盘与做T实战复盘诊断"""
+    """调用大模型或内置量化规则教练执行今日操盘与做T实战复盘诊断"""
     try:
         return await generate_coach_review(
             trades=req.trades,
@@ -442,6 +473,7 @@ async def coach_review_api(req: CoachReviewReq) -> dict[str, Any]:
             api_key=req.apiKey,
             api_url=req.apiUrl,
             model=req.model,
+            mode=req.mode,
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
@@ -485,7 +517,7 @@ async def proxy(request: Request, url: str = Query(min_length=12)) -> Response:
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail="股票数据源暂时不可用") from exc
 
-    content_type = result.headers.get("content-type", "application/octet-stream").split(";", 1)[0]
+    content_type = result.headers.get("content-type", "application/octet-stream",).split(";", 1)[0]
     if 200 <= result.status_code < 300:
         entry = CacheEntry(
             expires_at=now + _cache_ttl(upstream),

@@ -55,7 +55,7 @@ desktop.ini
 .vscode/
 .idea/
 
-# ---------- 依赖 ----------
+# ---------- 依赖与个人本地金库 ----------
 node_modules/
 dist/
 .next/
@@ -72,3 +72,5 @@ logs/
 backend/__pycache__/
 __pycache__/
 *.py[cod]
+data/user_vault.json
+data/vault_backups/
