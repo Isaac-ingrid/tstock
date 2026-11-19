@@ -20,6 +20,8 @@ function formatLocalIsoDate() {
 export default function BoardPage({
   pool,
   onAddStock,
+  onSelectStock,
+  onJumpIgnition,
   onTabChange,
 }) {
   const [loading, setLoading] = useState(true);
@@ -1429,17 +1431,36 @@ export default function BoardPage({
                         <span>{item.riskDesc}</span>
                       </div>
 
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                         <a
                           href={`#/diagnosis?code=${item.code}`}
                           style={{ fontSize: '11px', color: '#0958d9', textDecoration: 'none', border: '1px solid #91caff', background: '#e6f4ff', padding: '3px 8px', borderRadius: '4px', fontWeight: 600 }}
                         >
                           🩺 全景体检
                         </a>
+                        {onJumpIgnition && (
+                          <button
+                            type="button"
+                            className="mini"
+                            onClick={() => onJumpIgnition(item.code)}
+                            style={{ fontSize: '11px', padding: '3px 8px', marginLeft: 0 }}
+                            title="跳转到起爆挖掘做六维成色体检"
+                          >
+                            🚀 起爆
+                          </button>
+                        )}
                         {inPool ? (
-                          <span style={{ fontSize: '11px', color: 'var(--info)', fontWeight: 600, padding: '3px 6px' }}>✓ 已在做T决策台</span>
+                          <button
+                            type="button"
+                            className="mini"
+                            onClick={() => onSelectStock && onSelectStock(item.code)}
+                            style={{ fontSize: '11px', color: 'var(--info)', fontWeight: 700, padding: '3px 8px', marginLeft: 0, borderColor: 'var(--info-b)', background: 'var(--info-bg)' }}
+                            title="点击直达今日作战台查看该股买卖点"
+                          >
+                            ✓ 进作战台 →
+                          </button>
                         ) : (
-                          <button type="button" className="mini primary" onClick={() => handleAddSingle(item.code, item.name)} style={{ fontSize: '11.5px', padding: '3px 10px' }}>
+                          <button type="button" className="mini primary" onClick={() => handleAddSingle(item.code, item.name)} style={{ fontSize: '11.5px', padding: '3px 10px', marginLeft: 0 }}>
                             ＋ 选入做T决策台
                           </button>
                         )}

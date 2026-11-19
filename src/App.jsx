@@ -134,7 +134,7 @@ export default function App() {
       navigate('/trade');
     }
     setTimeout(() => {
-      const cardEl = document.getElementById(`stockCard_${code6}`) || document.getElementById('secPlan');
+      const cardEl = document.getElementById(`detailDrawer_${code6}`) || document.getElementById(`stockCard_${code6}`) || document.getElementById('secPlan');
       if (cardEl) {
         cardEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
         cardEl.classList.remove('card-highlight-pulse');
@@ -143,6 +143,21 @@ export default function App() {
       }
     }, 120);
   }, [activeTab, navigate]);
+
+  /* 跨板块直达：任意标的跳转至「全景诊股」或「起爆六维体检」 */
+  const handleJumpDiagnosis = useCallback((code) => {
+    const code6 = String(code || '').trim().padStart(6, '0');
+    if (!code6 || code6 === '000000') return;
+    setActiveStockCode(code6);
+    navigate(`/diagnosis?code=${code6}`);
+  }, [navigate]);
+
+  const handleJumpIgnition = useCallback((code) => {
+    const code6 = String(code || '').trim().padStart(6, '0');
+    if (!code6 || code6 === '000000') return;
+    setActiveStockCode(code6);
+    navigate(`/ignition?code=${code6}`);
+  }, [navigate]);
 
   const lastSuccessStamp = useRef(Date.now());
   const importInputRef = useRef(null);
@@ -876,6 +891,8 @@ export default function App() {
               toastOk(`✓ ${stock.name} 行情与K线已更新！`);
             }}
             onCopySinglePlan={handleCopySinglePlan}
+            onJumpDiagnosis={handleJumpDiagnosis}
+            onJumpIgnition={handleJumpIgnition}
           />
         )}
 
@@ -883,7 +900,10 @@ export default function App() {
         {(activeTab === 'tabIgnition' || activeTab === 'tabAll') && (
           <IgnitionPage
             pool={pool}
+            initialCode={query?.code || ''}
             onAddStock={handleAddStockByQuery}
+            onSelectStock={handleSelectStock}
+            onJumpDiagnosis={handleJumpDiagnosis}
           />
         )}
 
@@ -892,6 +912,8 @@ export default function App() {
           <BoardPage
             pool={pool}
             onAddStock={handleAddStockByQuery}
+            onSelectStock={handleSelectStock}
+            onJumpIgnition={handleJumpIgnition}
             onTabChange={navigate}
           />
         )}
@@ -916,6 +938,7 @@ export default function App() {
             initialCode={query?.code || activeStockCode}
             onAddStockToPool={handleAddStockByQuery}
             onSelectStockInPool={handleSelectStock}
+            onJumpIgnition={handleJumpIgnition}
             fastRefresh={fastRefresh}
             onToggleFastRefresh={handleToggleFastRefresh}
           />

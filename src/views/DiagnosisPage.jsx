@@ -35,6 +35,7 @@ export default function DiagnosisPage({
   initialCode = '',
   onAddStockToPool,
   onSelectStockInPool,
+  onJumpIgnition,
   fastRefresh = true,
   onToggleFastRefresh,
 }) {
@@ -638,17 +639,33 @@ export default function DiagnosisPage({
                     {comp.industry && !['-', '--', '—'].includes(comp.industry) ? comp.industry : '行业未归类'}
                   </span>
                   {isInPool ? (
-                    <span style={{ fontSize: '11px', padding: '2px 7px', borderRadius: '4px', background: 'var(--accent-bg)', color: 'var(--accent)', fontWeight: 600 }}>
-                      ✓ 已在做T池
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => onSelectStockInPool && onSelectStockInPool(report.code)}
+                      style={{ fontSize: '11.5px', padding: '2px 8px', borderRadius: '5px', background: 'var(--accent-bg)', color: 'var(--accent)', border: '1px solid var(--accent-b)', fontWeight: 700, cursor: 'pointer' }}
+                      title="点击直达今日作战台查看该股买卖点"
+                    >
+                      ✓ 进作战台 →
+                    </button>
                   ) : onAddStockToPool ? (
                     <button
+                      type="button"
                       onClick={() => onAddStockToPool(report.code)}
-                      style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: 'var(--surface2)', border: '1px solid var(--line)', cursor: 'pointer' }}
+                      style={{ fontSize: '11.5px', padding: '2px 8px', borderRadius: '5px', background: 'var(--surface2)', border: '1px solid var(--line)', cursor: 'pointer', fontWeight: 600 }}
                     >
                       + 加入自选
                     </button>
                   ) : null}
+                  {onJumpIgnition && (
+                    <button
+                      type="button"
+                      onClick={() => onJumpIgnition(report.code)}
+                      style={{ fontSize: '11.5px', padding: '2px 8px', borderRadius: '5px', background: '#eef2ff', color: '#4338ca', border: '1px solid #c7d2fe', cursor: 'pointer', fontWeight: 700 }}
+                      title="跳转到起爆挖掘做六维成色体检"
+                    >
+                      🚀 起爆体检
+                    </button>
+                  )}
                 </div>
                 <div style={{ marginTop: '8px', fontSize: '12.5px', color: 'var(--sub)', lineHeight: 1.6, maxWidth: '750px' }}>
                   <b>公司主营定位：</b>{comp.summary || '暂无主营介绍'}

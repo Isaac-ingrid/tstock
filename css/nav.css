@@ -1,11 +1,81 @@
 /* ============================================================
-   A股做T执行台 · 顶部导航栏与选项卡样式 (nav.css)
+   A股做T执行台 · 顶部导航栏、紧凑作战卡片与全局防拥挤样式 (nav.css)
    ============================================================ */
+
+/* 全局容器放宽，释放宽屏呼吸感 */
+.wrap {
+  max-width: 1320px;
+}
+
+.main-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ==================== 1. 双行吸顶导航栏 ==================== */
+.topbar.topbar-v2 {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  margin-bottom: 18px;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(10px);
+}
+
+.tb-row-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.tb-brand {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.tb-logo {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  filter: drop-shadow(0 2px 6px rgba(56, 189, 248, 0.35));
+}
+
+.tb-brand-txt {
+  font-weight: 800;
+  font-size: 14.5px;
+  letter-spacing: -0.2px;
+  background: linear-gradient(135deg, #0284c7 0%, #059669 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.topbar .tb-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  flex: 1 1 auto;
+}
 
 .topbar .tb-nav a {
   cursor: pointer;
   user-select: none;
   transition: all 0.15s ease;
+  padding: 0 10px;
+  min-height: 32px;
+  font-size: 12.5px;
+  border-radius: 7px;
 }
 
 .topbar .tb-nav a:hover {
@@ -40,6 +110,699 @@
   color: #7c3aed;
 }
 
+.tb-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.tb-btn {
+  font-size: 12px;
+  padding: 0 10px;
+  min-height: 30px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--text);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.tb-btn:hover {
+  background: var(--surface2);
+  border-color: var(--line2);
+}
+
+.tb-btn-refresh {
+  background: var(--text);
+  color: #fff;
+  border-color: var(--text);
+  font-weight: 600;
+}
+
+.tb-btn-refresh:hover {
+  background: #334155;
+  color: #fff;
+}
+
+.tb-btn-muted {
+  background: #f5f5f5;
+  color: #8c8c8c;
+  border-color: #d9d9d9;
+}
+
+.tb-more {
+  position: relative;
+}
+
+.tb-more > summary {
+  list-style: none;
+  font-weight: 800;
+  padding: 0 9px;
+}
+
+.tb-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.tb-more-menu {
+  position: absolute;
+  right: 0;
+  top: 36px;
+  z-index: 80;
+  min-width: 168px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 6px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.14);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.tb-more-menu button {
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  padding: 6px 10px;
+  min-height: 30px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.tb-more-menu button:hover {
+  background: var(--surface2);
+}
+
+/* 第二行：状态与快捷持仓/自选滚动条 */
+.tb-row-sub {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--hair);
+  min-width: 0;
+}
+
+.tb-pool-scroll {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 0;
+  min-width: 0;
+  overflow-x: auto;
+  padding: 1px 0 2px;
+}
+
+.tb-pool-scroll::-webkit-scrollbar {
+  height: 4px;
+}
+
+.tb-pool-scroll::-webkit-scrollbar-thumb {
+  background: var(--line2);
+  border-radius: 99px;
+}
+
+.tb-grp-lbl {
+  font-size: 10.5px;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.tb-grp-lbl.pos {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.tb-grp-lbl.watch {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.tb-sig-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.tb-sig-dot.kind-buy { background: var(--down); }
+.tb-sig-dot.kind-sell { background: var(--up); }
+.tb-sig-dot.kind-stop { background: #dc2626; }
+.tb-sig-dot.kind-warn { background: var(--warn); }
+.tb-sig-dot.kind-wait { background: var(--line2); }
+
+/* ==================== 2. 今日作战台：精简资金条 & 分组工具栏 ==================== */
+.console-v2 {
+  padding: 20px 22px;
+}
+
+.console-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.console-sub {
+  font-size: 12.5px;
+  color: var(--sub);
+  margin-top: 4px;
+}
+
+.console-head-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.console-head-actions button {
+  font-size: 12.5px;
+  padding: 5px 12px;
+  min-height: 32px;
+}
+
+.funding-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.fund-pill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  font-size: 12px;
+  transition: all 0.15s ease;
+}
+
+.fund-pill.long,
+.fund-pill.short {
+  cursor: pointer;
+}
+
+.fund-pill.long {
+  background: linear-gradient(90deg, #f0f7ff, #fff);
+  border-color: #bae0ff;
+}
+
+.fund-pill.long.active {
+  border-color: #1677ff;
+  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.14);
+}
+
+.fund-pill.short {
+  background: linear-gradient(90deg, #fff7e6, #fff);
+  border-color: #ffd591;
+}
+
+.fund-pill.short.active {
+  border-color: #fa8c16;
+  box-shadow: 0 0 0 2px rgba(250, 140, 22, 0.14);
+}
+
+.fund-pill.pnl {
+  background: linear-gradient(90deg, #faf5ff, #fff);
+  border-color: var(--accent-b);
+}
+
+.fp-title {
+  font-weight: 800;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.fp-meta {
+  color: var(--sub);
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11.5px;
+}
+
+.fp-meta b {
+  color: var(--text);
+}
+
+.fp-meta.up b { color: var(--up); }
+.fp-meta.down b { color: var(--down); }
+
+.battle-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--hair);
+}
+
+.bt-tabs {
+  display: inline-flex;
+  gap: 6px;
+  background: var(--surface2);
+  padding: 4px;
+  border-radius: 10px;
+}
+
+.bt-tab {
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 5px 12px;
+  min-height: 30px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--sub);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bt-tab span {
+  font-size: 11px;
+  font-family: ui-monospace, Consolas, monospace;
+  padding: 0 6px;
+  border-radius: 99px;
+  background: rgba(15, 23, 42, 0.06);
+  color: var(--sub);
+}
+
+.bt-tab.active {
+  background: #fff;
+  color: var(--text);
+  border-color: var(--line);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+.bt-tab.active span {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.bt-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ==================== 3. 分组标题与紧凑作战卡片网格 ==================== */
+.battle-group {
+  margin-bottom: 20px;
+}
+
+.bg-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.bg-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.bg-desc {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--mute);
+}
+
+.battle-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  gap: 14px;
+}
+
+.battle-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--line2);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+
+.battle-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+  border-color: var(--line2);
+}
+
+.battle-card.is-expanded {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.18), 0 8px 22px rgba(15, 23, 42, 0.08);
+}
+
+.battle-card.kind-buy { border-top-color: var(--down); }
+.battle-card.kind-sell { border-top-color: var(--up); }
+.battle-card.kind-stop { border-top-color: #dc2626; }
+.battle-card.kind-warn { border-top-color: var(--warn); }
+
+.bc-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.bc-ident {
+  min-width: 0;
+}
+
+.bc-name-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.bc-name {
+  font-size: 15.5px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.bc-code {
+  font-size: 12px;
+  font-family: ui-monospace, Consolas, monospace;
+  color: var(--mute);
+}
+
+.bc-tags {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-top: 5px;
+}
+
+.bc-role,
+.bc-tier,
+.bc-strat {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.bc-role.is-pos {
+  background: #f3e8ff;
+  color: #6d28d9;
+}
+
+.bc-role.is-watch {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.bc-tier.is-short {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.bc-tier.is-long {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.bc-strat {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.bc-price-box {
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.bc-price {
+  font-size: 17px;
+  font-weight: 800;
+  font-family: ui-monospace, Consolas, monospace;
+  line-height: 1.2;
+}
+
+.bc-chg {
+  font-size: 12px;
+  font-weight: 700;
+  font-family: ui-monospace, Consolas, monospace;
+  margin-top: 2px;
+}
+
+.bc-price.up, .bc-chg.up { color: var(--up); }
+.bc-price.down, .bc-chg.down { color: var(--down); }
+
+/* 买卖点判定主横幅 */
+.bc-verdict {
+  border-radius: 9px;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.bc-verdict.kind-buy {
+  background: var(--down-bg);
+  border-color: var(--down-b);
+}
+
+.bc-verdict.kind-sell {
+  background: var(--up-bg);
+  border-color: var(--up-b);
+}
+
+.bc-verdict.kind-stop {
+  background: #fef2f2;
+  border-color: #fca5a5;
+}
+
+.bc-verdict.kind-warn {
+  background: var(--warn-bg);
+  border-color: var(--warn-b);
+}
+
+.bc-v-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.bc-v-badge {
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.bc-verdict.kind-buy .bc-v-badge { color: var(--down-d); }
+.bc-verdict.kind-sell .bc-v-badge { color: var(--up-d); }
+.bc-verdict.kind-stop .bc-v-badge { color: #b91c1c; }
+.bc-verdict.kind-warn .bc-v-badge { color: var(--warn-d); }
+
+.bc-v-trend {
+  font-size: 11px;
+  color: var(--mute);
+  font-family: ui-monospace, Consolas, monospace;
+}
+
+.bc-v-line {
+  font-size: 12px;
+  color: var(--sub);
+  line-height: 1.45;
+}
+
+/* 三宫格价位 */
+.bc-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.bc-m {
+  background: var(--surface);
+  border: 1px solid var(--hair);
+  border-radius: 8px;
+  padding: 7px 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bc-m .k {
+  font-size: 10.5px;
+  color: var(--mute);
+}
+
+.bc-m .v {
+  font-size: 13.5px;
+  font-weight: 800;
+  font-family: ui-monospace, Consolas, monospace;
+  color: var(--text);
+}
+
+.bc-m .v.up { color: var(--up); }
+.bc-m .v.down { color: var(--down); }
+.bc-m .v.warn { color: var(--warn); }
+
+.bc-m .d {
+  font-size: 10.5px;
+  color: var(--mute);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 卡片底栏联动操作 */
+.bc-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 9px;
+  border-top: 1px dashed var(--hair);
+}
+
+.bc-links {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.bc-act-btn {
+  font-size: 11.5px;
+  padding: 3px 8px;
+  min-height: 26px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--sub);
+  font-weight: 600;
+}
+
+.bc-act-btn:hover {
+  background: #fff;
+  border-color: var(--info);
+  color: var(--info);
+}
+
+.bc-expand-btn {
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 3px 10px;
+  min-height: 26px;
+  border-radius: 6px;
+  border: 1px solid var(--line2);
+  background: #fff;
+  color: var(--text);
+}
+
+.bc-expand-btn.open {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* 空态 */
+.battle-empty {
+  padding: 28px 20px;
+  text-align: center;
+  background: var(--surface);
+  border: 1px dashed var(--line2);
+  border-radius: 12px;
+}
+
+.battle-empty-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.battle-empty-hint {
+  font-size: 12px;
+  color: var(--mute);
+  margin-top: 5px;
+}
+
+/* 展开的完整做T面板抽屉 */
+.battle-detail-drawer {
+  margin-top: 16px;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1.5px solid var(--accent-b);
+  box-shadow: 0 6px 24px rgba(124, 58, 237, 0.08);
+}
+
+.bdd-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed var(--line);
+}
+
+.bdd-title {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13.5px;
+  color: var(--sub);
+}
+
+.bdd-title b {
+  font-size: 16px;
+  color: var(--text);
+}
+
+.bdd-code {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12px;
+  color: var(--mute);
+}
+
+.bdd-acts {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bdd-acts .mini {
+  margin-left: 0;
+}
+
 /* 选项卡面板切换与展示 */
 .tab-panel {
   display: none;
@@ -47,4 +810,16 @@
 
 .tab-panel.active {
   display: block;
+}
+
+@media (max-width: 760px) {
+  .tb-row-sub {
+    flex-wrap: wrap;
+  }
+  .battle-grid {
+    grid-template-columns: 1fr;
+  }
+  .console-v2 {
+    padding: 14px;
+  }
 }

@@ -48,7 +48,10 @@ function riskBadge(riskLevel) {
 
 export default function IgnitionPage({
   pool = [],
+  initialCode = '',
   onAddStock,
+  onSelectStock,
+  onJumpDiagnosis,
 }) {
   const [subTab, setSubTab] = useState('breakout'); // 'breakout' | 'dip' | 'tracking'
   const [diagQuery, setDiagQuery] = useState('');
@@ -231,6 +234,15 @@ export default function IgnitionPage({
       setDiagLoading(false);
     }
   }, [diagQuery]);
+
+  // 跨板块联动：当其他页面通过 /ignition?code=XXXXXX 跳转进来时，自动切换到起爆页并执行六维体检
+  useEffect(() => {
+    const c = String(initialCode || '').trim();
+    if (c) {
+      setSubTab('breakout');
+      handleRunDiag(c);
+    }
+  }, [initialCode]);
 
   const handleCopyDiagReport = useCallback((result) => {
     if (!result) return;
@@ -601,6 +613,14 @@ export default function IgnitionPage({
                       <button
                         type="button"
                         className="mini"
+                        onClick={() => onJumpDiagnosis && onJumpDiagnosis(diagResult.code)}
+                        style={{ fontSize: '11px', padding: '3px 8px' }}
+                      >
+                        🩺 全景诊股
+                      </button>
+                      <button
+                        type="button"
+                        className="mini"
                         onClick={() => handleCopyDiagReport(diagResult)}
                         style={{ fontSize: '11px', padding: '3px 8px' }}
                       >
@@ -609,6 +629,13 @@ export default function IgnitionPage({
                     </div>
                   </div>
                 </div>
+
+                {/* K 线反转形态与缺口警示条 */}
+                {diagResult.klinePatterns && (
+                  <div style={{ marginTop: '10px' }}>
+                    <KlinePatternBadges klinePatterns={diagResult.klinePatterns} variant="full" />
+                  </div>
+                )}
 
                 {/* 智能诊断总评 */}
                 <div style={{
