@@ -1,14 +1,14 @@
 [Unit]
-Description=TStock FastAPI data service
+Description=TStock FastAPI Data Service
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-User=www-data
-WorkingDirectory=/opt/tstock/backend
-EnvironmentFile=-/opt/tstock/backend/.env
-ExecStart=/opt/tstock/backend/.venv/bin/uvicorn app:app --host 127.0.0.1 --port 8000 --workers 2
+User=root
+WorkingDirectory=/root/tstock
+EnvironmentFile=-/root/tstock/.env.local
+ExecStart=/root/tstock/backend/.venv/bin/python -m uvicorn backend.app:app --host 127.0.0.1 --port 8000 --workers 2
 Restart=always
 RestartSec=3
 

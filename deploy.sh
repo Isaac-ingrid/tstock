@@ -15,6 +15,7 @@
 #      发布完成后比对文件字节与 tradeDate，确保线上数据真实生效。
 #
 # 用法：
+#   bash deploy.sh --update     # 服务器本机一键全流程（拉代码 + 保护跟踪池 + 重启后端 + 发布前端 + 自检）
 #   bash deploy.sh              # 全量构建并发布（自动识别本机或远程）
 #   bash deploy.sh --data-only  # 仅发布数据契约（盘中快速同步，无需重构前端）
 #   bash deploy.sh --dry-run    # 仅预演打印待发布文件清单
@@ -26,6 +27,17 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT" || exit 1
+
+# 支持一键全流程自更新模式：bash deploy.sh --update [额外参数]
+for a in "$@"; do
+  if [ "$a" = "--update" ] || [ "$a" = "-u" ]; then
+    FORWARD_ARGS=()
+    for x in "$@"; do
+      [ "$x" = "--update" ] || [ "$x" = "-u" ] || FORWARD_ARGS+=("$x")
+    done
+    exec node "$ROOT/scripts/server-update.mjs" "${FORWARD_ARGS[@]+"${FORWARD_ARGS[@]}"}"
+  fi
+done
 
 # ---------- 目标服务器配置 ----------
 HOST="115.29.164.8"

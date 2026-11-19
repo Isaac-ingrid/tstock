@@ -18,7 +18,8 @@
     "timer:status": "node timing_task/status.js",
     "start:local": "node scripts/local-service.mjs start --no-open",
     "stop:local": "node scripts/local-service.mjs stop",
-    "status:local": "node scripts/local-service.mjs status"
+    "status:local": "node scripts/local-service.mjs status",
+    "update:server": "node scripts/server-update.mjs"
   },
   "dependencies": {
     "animejs": "^4.5.0",
