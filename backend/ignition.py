@@ -1578,27 +1578,150 @@ async def scan_dip_leaders(
     }
 
 
+async def mutate_ignition_tracking(
+    action: str,
+    code: str,
+    name: str = "",
+    hybk: str = "",
+    price: float = 0.0,
+    strategy: str = "ignition",
+    sub_type: str = "",
+    verdict: str = "",
+) -> dict:
+    """
+    手动将任意 A 股标的（含 00/60 主板与 30/688 双创）加入或移出「在轨跟踪池」：
+    持久化写入 data/strategy_ledger.json，跨页面（起爆挖掘 / 玄学字辈 / 尾盘潜伏）统一共享。
+    """
+    c6 = str(code or "").strip().zfill(6)
+    if len(c6) != 6 or not c6.isdigit():
+        raise ValueError("股票代码必须为 6 位数字")
+
+    strat = strategy if strategy in ("ignition", "bottom", "meme", "tail_watch") else "ignition"
+    today_iso = datetime.date.today().strftime("%Y-%m-%d")
+
+    async with _LEDGER_FILE_LOCK:
+        ledger_state: dict = {"version": 1, "signals": {}, "updatedAt": ""}
+        if STRATEGY_LEDGER_FILE.exists():
+            try:
+                with STRATEGY_LEDGER_FILE.open("r", encoding="utf-8") as f:
+                    loaded = json.load(f)
+                if isinstance(loaded, dict):
+                    ledger_state = loaded
+            except Exception:
+                pass
+
+        signals_map: Dict[str, dict] = ledger_state.setdefault("signals", {})
+
+        if action == "add":
+            existing_key = next(
+                (
+                    k
+                    for k, v in signals_map.items()
+                    if isinstance(v, dict)
+                    and str(v.get("code") or "").zfill(6) == c6
+                    and v.get("strategy") in ("ignition", "bottom", "meme", "tail_watch")
+                ),
+                None,
+            )
+            px = round(_sf(price), 2)
+            if existing_key:
+                rec = signals_map[existing_key]
+                rec["manualRemoved"] = False
+                rec["manualPinned"] = True
+                if name and (not rec.get("name") or rec.get("name") == c6):
+                    rec["name"] = str(name).replace(" ", "")
+                if hybk and (not rec.get("hybk") or rec.get("hybk") == "其他"):
+                    rec["hybk"] = hybk
+                if px > 0 and _sf(rec.get("refPrice")) <= 0:
+                    rec["refPrice"] = px
+                    rec["buy"] = px
+                if verdict:
+                    rec["verdict"] = verdict
+            else:
+                sig_id = f"{strat}:{today_iso}:{c6}"
+                default_verdict = {
+                    "ignition": "手动起爆跟踪",
+                    "bottom": "抗跌抄底跟踪",
+                    "meme": "字辈共振跟踪",
+                    "tail_watch": "尾盘潜伏跟踪",
+                }.get(strat, "手动加入跟踪")
+                signals_map[sig_id] = {
+                    "id": sig_id,
+                    "strategy": strat,
+                    "subType": sub_type or "MANUAL_TRACK",
+                    "signalDate": today_iso,
+                    "code": c6,
+                    "tcode": _to_tcode(c6),
+                    "name": str(name or c6).replace(" ", ""),
+                    "hybk": str(hybk or "自选跟踪"),
+                    "score": 80.0,
+                    "verdict": str(verdict or default_verdict),
+                    "env": "OK",
+                    "refPrice": px,
+                    "buy": px,
+                    "manualPinned": True,
+                    "manualRemoved": False,
+                }
+        elif action == "remove":
+            for v in signals_map.values():
+                if (
+                    isinstance(v, dict)
+                    and str(v.get("code") or "").zfill(6) == c6
+                    and v.get("strategy") in ("ignition", "bottom", "meme", "tail_watch")
+                ):
+                    v["manualRemoved"] = True
+                    v["manualPinned"] = False
+        else:
+            raise ValueError(f"不支持的跟踪池操作: {action}")
+
+        ledger_state["signals"] = signals_map
+        ledger_state["updatedAt"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        tmp_path = STRATEGY_LEDGER_FILE.with_suffix(".json.tmp")
+        with tmp_path.open("w", encoding="utf-8") as f:
+            json.dump(ledger_state, f, ensure_ascii=False, indent=2)
+        os.replace(tmp_path, STRATEGY_LEDGER_FILE)
+
+    active_codes = sorted({
+        str(v.get("code") or "").zfill(6)
+        for v in signals_map.values()
+        if isinstance(v, dict)
+        and v.get("strategy") in ("ignition", "bottom", "meme", "tail_watch")
+        and not v.get("manualRemoved")
+        and v.get("code")
+    })
+    return {
+        "ok": True,
+        "action": action,
+        "code": c6,
+        "activeCount": len(active_codes),
+        "codes": active_codes,
+    }
+
+
 async def get_ignition_tracking_pool(
     http_client: Optional[httpx.AsyncClient] = None,
     fresh_breakout_items: Optional[List[dict]] = None,
     fresh_date: Optional[str] = None,
 ) -> dict:
     """
-    拉取所有已入库的起爆推荐与抗跌抄底标的，
+    拉取所有已入库的起爆推荐、抗跌抄底、字辈共振与尾盘跟踪标的，
     实时获取最新行情数据，计算当前收益率、在轨生命周期阶段（已起爆/持续蓄势/触及防守/达成大胜）及专属操盘 SOP 指引。
     """
     signals_map: Dict[str, dict] = {}
-    ledger_state: dict = {}
+    ledger_state: dict = {"version": 1, "signals": {}}
     async with _LEDGER_FILE_LOCK:
         if STRATEGY_LEDGER_FILE.exists():
             try:
                 with open(STRATEGY_LEDGER_FILE, "r", encoding="utf-8") as f:
-                    ledger_state = json.load(f)
-                signals_map = ledger_state.get("signals") or {}
+                    loaded = json.load(f)
+                if isinstance(loaded, dict):
+                    ledger_state = loaded
+                    signals_map = ledger_state.get("signals") or {}
             except Exception:
                 signals_map = {}
 
-        # 若传入了当日最新扫描出的起爆标的，自动保全入库，确保次日绝不丢失
+        # 若传入了当日最新扫描出的起爆标的，自动保全入库，确保次日绝不丢失（尊重用户手动移出标记）
         if fresh_breakout_items and fresh_date:
             modified = False
             for it in fresh_breakout_items:
@@ -1630,7 +1753,7 @@ async def get_ignition_tracking_pool(
                         "buy": round(px, 2),
                     }
                     modified = True
-            if modified and ledger_state:
+            if modified:
                 try:
                     ledger_state["signals"] = signals_map
                     ledger_state["updatedAt"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -1644,7 +1767,10 @@ async def get_ignition_tracking_pool(
 
     tracking_sigs = [
         v for v in signals_map.values()
-        if isinstance(v, dict) and v.get("strategy") in ("ignition", "bottom") and v.get("code")
+        if isinstance(v, dict)
+        and v.get("strategy") in ("ignition", "bottom", "meme", "tail_watch")
+        and not v.get("manualRemoved")
+        and v.get("code")
     ]
 
     # 若账本暂无或初次运行，回退至最新扫描落盘文件
@@ -1698,11 +1824,29 @@ async def get_ignition_tracking_pool(
         async with httpx.AsyncClient(timeout=httpx.Timeout(8.0), trust_env=False) as client:
             quotes = await _fetch_q(client)
 
+    strategy_labels = {
+        "ignition": "横盘待起爆",
+        "bottom": "抗跌抄底",
+        "meme": "字辈共振",
+        "tail_watch": "尾盘潜伏",
+    }
+
     items: List[dict] = []
-    for s in tracking_sigs:
-        c6 = s["code"]
+    seen_codes = set()
+    sorted_sigs = sorted(
+        tracking_sigs,
+        key=lambda s: (1 if s.get("manualPinned") else 0, str(s.get("signalDate") or "")),
+        reverse=True,
+    )
+    for s in sorted_sigs:
+        c6 = str(s["code"]).zfill(6)
+        if c6 in seen_codes:
+            continue
+        seen_codes.add(c6)
         q = quotes.get(c6) or {}
         ref_px = _sf(s.get("refPrice") or s.get("buy"))
+        if ref_px <= 0 and _sf(q.get("price")) > 0:
+            ref_px = _sf(q.get("price"))
         cur_px = _sf(q.get("price"), ref_px)
         day_chg = _sf(q.get("chg"), 0.0)
         gain_pct = round(((cur_px / ref_px) - 1.0) * 100.0, 2) if ref_px > 0 else 0.0
@@ -1736,12 +1880,15 @@ async def get_ignition_tracking_pool(
             stage_border = "#bae6fd"
             advice = "处于横盘蓄势吸筹期，底仓拿好；日内分时踩均线可做正T低吸，建议观察周期 3~5 个交易日，等待二次起爆"
 
+        strat_key = s.get("strategy") or "ignition"
+        resolved_name = str(q.get("name") or s.get("name") or c6).replace(" ", "")
         items.append({
-            "id": s.get("id") or f"ignition:{s.get('signalDate')}:{c6}",
-            "strategy": s.get("strategy") or "ignition",
-            "strategyLabel": "横盘待起爆" if (s.get("strategy") or "ignition") == "ignition" else "抗跌抄底",
+            "id": s.get("id") or f"{strat_key}:{s.get('signalDate')}:{c6}",
+            "strategy": strat_key,
+            "strategyLabel": strategy_labels.get(strat_key, "在轨跟踪"),
+            "manualPinned": bool(s.get("manualPinned")),
             "code": c6,
-            "name": s.get("name") or c6,
+            "name": resolved_name,
             "hybk": s.get("hybk") or "其他",
             "signalDate": s.get("signalDate") or "",
             "subType": s.get("subType") or "CONVERGED_WAIT",

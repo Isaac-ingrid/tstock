@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { f2, pct, money, todayStr } from '../services/utils.js';
 import { tRealOf } from '../services/api.js';
 
@@ -18,6 +18,9 @@ export default function AccountSection({
   onClearSnap,
   onUpdateTotalAssets,
   onUpdateCash,
+  onSelectStock,
+  onJumpDiagnosis,
+  onTabChange,
 }) {
   const [editingTotal, setEditingTotal] = useState(false);
   const [newTotal, setNewTotal] = useState(totalAssets);
@@ -25,6 +28,7 @@ export default function AccountSection({
   const [editingCash, setEditingCash] = useState(false);
   const [newCash, setNewCash] = useState(cash);
   const [hoverIdx, setHoverIdx] = useState(null);
+  const svgRef = useRef(null);
 
   const handleSaveTotal = () => {
     const val = parseFloat(newTotal);
@@ -42,6 +46,11 @@ export default function AccountSection({
     }
   };
 
+  const activeTails = useMemo(
+    () => (tailActives || []).filter(t => t && t.status !== 'closed' && (+t.shares || 0) > 0),
+    [tailActives]
+  );
+
   // 实时盈亏归因汇总：持仓浮盈 + 尾盘浮盈 + 累计做T套利 + 相对本金净增减
   const summary = useMemo(() => {
     let floatPL = 0;
@@ -53,8 +62,7 @@ export default function AccountSection({
         floatPL += (px - cost) * sh;
       }
     });
-    (tailActives || []).forEach((t) => {
-      if (t.status === 'closed') return;
+    activeTails.forEach((t) => {
       const sh = +t.shares || 0;
       const px = +t.price || +t.cost || 0;
       const cost = +t.cost || 0;
@@ -92,7 +100,7 @@ export default function AccountSection({
       totalReturn,
       totalReturnPct,
     };
-  }, [pool, tailActives, tradeLogs, totalAssets, initialCapital]);
+  }, [pool, activeTails, tradeLogs, totalAssets, initialCapital]);
 
   // 构造净值与仓位时间序列（历史快照按日期升序 + 今日实时点位）
   const curveSeries = useMemo(() => {
@@ -120,7 +128,6 @@ export default function AccountSection({
     });
 
     const pts = Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
-    // 最大回撤计算
     let peak = 0;
     let maxDD = 0;
     pts.forEach((p) => {
@@ -172,10 +179,28 @@ export default function AccountSection({
     return { W, H, PL, PR, PT, PB, iw, ih, lo, hi, X, Y, YRate, linePath, areaPath };
   }, [curveSeries.pts, summary.baseCap]);
 
+  // 支持手机触屏在净值曲线上横向滑动查点
+  const handleEquityTouch = (e) => {
+    const pts = curveSeries.pts || [];
+    if (pts.length < 2 || !svgRef.current || !chartGeom) return;
+    const touch = e.touches && e.touches[0];
+    if (!touch) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    if (!rect.width) return;
+    const svgX = ((touch.clientX - rect.left) / rect.width) * chartGeom.W;
+    const ratio = Math.max(0, Math.min(1, (svgX - chartGeom.PL) / (chartGeom.iw || 1)));
+    const nearestIdx = Math.round(ratio * (pts.length - 1));
+    setHoverIdx(nearestIdx);
+  };
+
   const activePoint = hoverIdx != null && curveSeries.pts[hoverIdx] ? curveSeries.pts[hoverIdx] : curveSeries.pts[curveSeries.pts.length - 1];
+  const holdingCostRows = useMemo(
+    () => (pool || []).filter((s) => (+s.shares || 0) > 0 || tRealOf(s.code, tradeLogs).n > 0),
+    [pool, tradeLogs]
+  );
 
   return (
-    <div id="accSec" style={{ marginTop: '20px' }}>
+    <div id="accSec">
       <section>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
           <h2 style={{ margin: 0 }}>三、账户真实总账、可用现金与净值曲线</h2>
@@ -187,7 +212,7 @@ export default function AccountSection({
         {/* 核心 5 维资金卡片 */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(195px, 1fr))', gap: '12px', marginBottom: '16px' }}>
           {/* 1. 实时总资产 */}
-          <div className="card" style={{ padding: '14px', background: 'var(--surface2)' }}>
+          <div className="card" style={{ padding: '14px', background: 'var(--surface2)', marginBottom: 0 }}>
             <div style={{ fontSize: '12px', color: 'var(--sub)', display: 'flex', justifyContent: 'space-between' }}>
               <span>实时账户总资产</span>
               <span className={summary.totalReturn >= 0 ? 'up' : 'down'} style={{ fontWeight: 700 }}>
@@ -199,12 +224,14 @@ export default function AccountSection({
                 <div style={{ display: 'inline-flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
                   <input
                     type="number"
+                    inputMode="decimal"
+                    className="acc-cal-input"
                     value={newTotal}
                     onChange={(e) => setNewTotal(e.target.value)}
                     style={{ width: '115px', padding: '3px 6px', fontSize: '14px', borderRadius: '4px', border: '1px solid var(--line)' }}
                   />
-                  <button className="primary" onClick={handleSaveTotal} style={{ padding: '2px 8px', fontSize: '11px' }}>校准</button>
-                  <button onClick={() => setEditingTotal(false)} style={{ padding: '2px 8px', fontSize: '11px' }}>取消</button>
+                  <button type="button" className="primary" onClick={handleSaveTotal} style={{ padding: '2px 8px', fontSize: '11px', minHeight: '28px' }}>校准</button>
+                  <button type="button" onClick={() => setEditingTotal(false)} style={{ padding: '2px 8px', fontSize: '11px', minHeight: '28px' }}>取消</button>
                 </div>
               ) : (
                 <span
@@ -228,19 +255,21 @@ export default function AccountSection({
           </div>
 
           {/* 2. 真实可用现金 */}
-          <div className="card" style={{ padding: '14px', background: 'var(--surface2)' }}>
+          <div className="card" style={{ padding: '14px', background: 'var(--surface2)', marginBottom: 0 }}>
             <div style={{ fontSize: '12px', color: 'var(--sub)' }}>真实可用现金（可挂买单）</div>
             <div style={{ fontSize: '22px', fontWeight: 700, fontFamily: 'ui-monospace,Consolas,monospace', marginTop: '4px', color: 'var(--down)' }}>
               {editingCash ? (
                 <div style={{ display: 'inline-flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
                   <input
                     type="number"
+                    inputMode="decimal"
+                    className="acc-cal-input"
                     value={newCash}
                     onChange={(e) => setNewCash(e.target.value)}
                     style={{ width: '115px', padding: '3px 6px', fontSize: '14px', borderRadius: '4px', border: '1px solid var(--line)' }}
                   />
-                  <button className="primary" onClick={handleSaveCash} style={{ padding: '2px 8px', fontSize: '11px' }}>保存</button>
-                  <button onClick={() => setEditingCash(false)} style={{ padding: '2px 8px', fontSize: '11px' }}>取消</button>
+                  <button type="button" className="primary" onClick={handleSaveCash} style={{ padding: '2px 8px', fontSize: '11px', minHeight: '28px' }}>保存</button>
+                  <button type="button" onClick={() => setEditingCash(false)} style={{ padding: '2px 8px', fontSize: '11px', minHeight: '28px' }}>取消</button>
                 </div>
               ) : (
                 <span
@@ -261,8 +290,20 @@ export default function AccountSection({
           </div>
 
           {/* 3. 持仓总市值（含尾盘隔夜） */}
-          <div className="card" style={{ padding: '14px', background: 'var(--surface2)' }}>
-            <div style={{ fontSize: '12px', color: 'var(--sub)' }}>持仓总市值（含尾盘）</div>
+          <div className="card" style={{ padding: '14px', background: 'var(--surface2)', marginBottom: 0 }}>
+            <div style={{ fontSize: '12px', color: 'var(--sub)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '4px' }}>
+              <span>持仓总市值（含尾盘）</span>
+              {activeTails.length > 0 && onTabChange && (
+                <button
+                  type="button"
+                  className="board-mini-pill-btn track"
+                  onClick={() => onTabChange('/tail')}
+                  title="跳转尾盘潜伏台平仓管理"
+                >
+                  ⚡尾盘{activeTails.length}只 →
+                </button>
+              )}
+            </div>
             <div style={{ fontSize: '22px', fontWeight: 700, fontFamily: 'ui-monospace,Consolas,monospace', marginTop: '4px' }}>
               ¥{money(marketValue)}
             </div>
@@ -273,7 +314,7 @@ export default function AccountSection({
           </div>
 
           {/* 4. 实际总仓位 */}
-          <div className="card" style={{ padding: '14px', background: 'var(--surface2)' }}>
+          <div className="card" style={{ padding: '14px', background: 'var(--surface2)', marginBottom: 0 }}>
             <div style={{ fontSize: '12px', color: 'var(--sub)' }}>实际股票总仓位</div>
             <div style={{ fontSize: '22px', fontWeight: 700, fontFamily: 'ui-monospace,Consolas,monospace', marginTop: '4px', color: posRate > 80 ? 'var(--up)' : 'var(--text)' }}>
               {posRate.toFixed(1)}%
@@ -284,8 +325,20 @@ export default function AccountSection({
           </div>
 
           {/* 5. 做T累计套利与浮动盈亏 */}
-          <div className="card" style={{ padding: '14px', background: 'var(--surface2)' }}>
-            <div style={{ fontSize: '12px', color: 'var(--sub)' }}>做T套利 & 持仓浮盈</div>
+          <div className="card" style={{ padding: '14px', background: 'var(--surface2)', marginBottom: 0 }}>
+            <div style={{ fontSize: '12px', color: 'var(--sub)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '4px' }}>
+              <span>做T套利 &amp; 持仓浮盈</span>
+              {onTabChange && (
+                <button
+                  type="button"
+                  className="board-mini-pill-btn diag"
+                  onClick={() => onTabChange('/ledger')}
+                  title="查看做T成交流水与纪律体检"
+                >
+                  📒台账 →
+                </button>
+              )}
+            </div>
             <div
               className={summary.realizedT >= 0 ? 'up' : 'down'}
               style={{ fontSize: '22px', fontWeight: 700, fontFamily: 'ui-monospace,Consolas,monospace', marginTop: '4px' }}
@@ -301,7 +354,7 @@ export default function AccountSection({
           </div>
         </div>
 
-        {/* 净值与仓位联动曲线 */}
+        {/* 净值与仓位联动曲线（支持鼠标悬停 + 手机触屏滑动查点） */}
         {chartGeom && (
           <div className="card" style={{ padding: '14px 16px', marginBottom: '18px', background: 'var(--surface)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
@@ -313,20 +366,23 @@ export default function AccountSection({
                 </span>
               </div>
               {activePoint && (
-                <div style={{ fontSize: '12px', fontFamily: 'ui-monospace,Consolas,monospace', color: 'var(--sub)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '4px 10px', fontSize: '12px', fontFamily: 'ui-monospace,Consolas,monospace', color: 'var(--sub)' }}>
                   <span>{activePoint.date}{activePoint.live ? '(实时)' : ''}</span>
-                  <span style={{ marginLeft: '10px' }}>总资产 <b>¥{money(activePoint.total)}</b></span>
-                  <span style={{ marginLeft: '10px' }}>市值 ¥{money(activePoint.mkt)}</span>
-                  <span style={{ marginLeft: '10px' }}>现金 ¥{money(activePoint.cash)}</span>
-                  <span style={{ marginLeft: '10px' }}>仓位 <b>{Number(activePoint.rate).toFixed(1)}%</b></span>
+                  <span>总资产 <b>¥{money(activePoint.total)}</b></span>
+                  <span>市值 ¥{money(activePoint.mkt)}</span>
+                  <span>现金 ¥{money(activePoint.cash)}</span>
+                  <span>仓位 <b>{Number(activePoint.rate).toFixed(1)}%</b></span>
                 </div>
               )}
             </div>
 
             <svg
+              ref={svgRef}
               viewBox={`0 0 ${chartGeom.W} ${chartGeom.H}`}
-              style={{ width: '100%', height: 'auto', maxHeight: '220px', display: 'block', overflow: 'visible' }}
+              style={{ width: '100%', height: 'auto', maxHeight: '220px', display: 'block', overflow: 'visible', touchAction: 'pan-y', userSelect: 'none' }}
               onMouseLeave={() => setHoverIdx(null)}
+              onTouchStart={handleEquityTouch}
+              onTouchMove={handleEquityTouch}
             >
               <defs>
                 <linearGradient id="eqAreaGrad" x1="0" y1="0" x2="0" y2="1">
@@ -335,7 +391,6 @@ export default function AccountSection({
                 </linearGradient>
               </defs>
 
-              {/* 横向参考网格线 */}
               {[0, 0.5, 1].map((ratio, idx) => {
                 const val = chartGeom.hi - (chartGeom.hi - chartGeom.lo) * ratio;
                 const y = chartGeom.PT + chartGeom.ih * ratio;
@@ -364,7 +419,6 @@ export default function AccountSection({
                 );
               })}
 
-              {/* 初始本金水位虚线 */}
               {summary.baseCap >= chartGeom.lo && summary.baseCap <= chartGeom.hi && (
                 <g>
                   <line
@@ -387,7 +441,6 @@ export default function AccountSection({
                 </g>
               )}
 
-              {/* 底部仓位柱状带 */}
               {curveSeries.pts.map((p, i) => {
                 const x = chartGeom.X(i);
                 const barW = Math.min(22, Math.max(6, (chartGeom.iw / Math.max(4, curveSeries.pts.length)) * 0.45));
@@ -406,7 +459,6 @@ export default function AccountSection({
                 );
               })}
 
-              {/* 净值面积与折线 */}
               {chartGeom.areaPath && <path d={chartGeom.areaPath} fill="url(#eqAreaGrad)" />}
               <path
                 d={chartGeom.linePath}
@@ -417,7 +469,6 @@ export default function AccountSection({
                 strokeLinejoin="round"
               />
 
-              {/* 数据节点与悬停热区 */}
               {curveSeries.pts.map((p, i) => {
                 const cx = chartGeom.X(i);
                 const cy = chartGeom.Y(p.total);
@@ -431,6 +482,7 @@ export default function AccountSection({
                   <g
                     key={p.date}
                     onMouseEnter={() => setHoverIdx(i)}
+                    onClick={() => setHoverIdx(i)}
                     style={{ cursor: 'pointer' }}
                   >
                     <circle cx={cx} cy={cy} r={isActive ? 4.5 : 3} fill={p.live ? '#dc2626' : '#fff'} stroke="#dc2626" strokeWidth="2" />
@@ -460,10 +512,23 @@ export default function AccountSection({
           </div>
         )}
 
-        {/* 单票做T降本明细（当存在持仓或历史做T记录时展示） */}
-        {pool && pool.some((s) => (+s.shares || 0) > 0 || tRealOf(s.code, tradeLogs).n > 0) && (
-          <div style={{ marginBottom: '18px' }}>
-            <h4 style={{ fontSize: '13.5px', marginBottom: '8px' }}>🎯 个股做T降本与真实成本核算</h4>
+        {/* 单票做T降本明细（支持一键跳转今日作战台或全景诊股） */}
+        <div style={{ marginBottom: '18px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
+            <h4 style={{ fontSize: '13.5px', margin: 0 }}>🎯 个股做T降本与真实成本核算</h4>
+            {onTabChange && (
+              <button
+                type="button"
+                className="mini"
+                style={{ marginLeft: 0, fontSize: '11.5px' }}
+                onClick={() => onTabChange('/trade')}
+              >
+                去今日作战台管理持仓 →
+              </button>
+            )}
+          </div>
+
+          {holdingCostRows.length > 0 ? (
             <div className="tbl-scroll">
               <table>
                 <thead>
@@ -475,46 +540,87 @@ export default function AccountSection({
                     <th>累计做T次数</th>
                     <th>累计做T净落袋</th>
                     <th>每股已降成本</th>
+                    <th style={{ textAlign: 'right' }}>联动直达</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {pool
-                    .filter((s) => (+s.shares || 0) > 0 || tRealOf(s.code, tradeLogs).n > 0)
-                    .map((s) => {
-                      const sh = Math.round(+s.shares || 0);
-                      const cost = +s.cost || 0;
-                      const tr = tRealOf(s.code, tradeLogs);
-                      const perShare = sh > 0 && tr.n > 0 ? tr.sum / sh : null;
-                      const rawCost = perShare !== null ? cost + perShare : cost;
-                      return (
-                        <tr key={s.code}>
-                          <td><b>{s.name}</b> ({String(s.code).padStart(6, '0')})</td>
-                          <td>{sh} 股</td>
-                          <td>¥{f2(cost)}</td>
-                          <td>{sh > 0 ? `¥${f2(rawCost)}` : '—'}</td>
-                          <td>{tr.n} 笔</td>
-                          <td className={tr.sum >= 0 ? 'up' : 'down'}>
-                            <b>{tr.sum >= 0 ? '+' : ''}¥{money(tr.sum)}</b>
-                          </td>
-                          <td className={perShare && perShare > 0 ? 'up' : ''}>
-                            {perShare !== null ? `${perShare >= 0 ? '-' : '+'}¥${f2(Math.abs(perShare))}/股` : '—'}
-                          </td>
-                        </tr>
-                      );
-                    })}
+                  {holdingCostRows.map((s) => {
+                    const code6 = String(s.code || '').padStart(6, '0');
+                    const sh = Math.round(+s.shares || 0);
+                    const cost = +s.cost || 0;
+                    const tr = tRealOf(s.code, tradeLogs);
+                    const perShare = sh > 0 && tr.n > 0 ? tr.sum / sh : null;
+                    const rawCost = perShare !== null ? cost + perShare : cost;
+                    return (
+                      <tr key={code6}>
+                        <td>
+                          <span
+                            onClick={() => onSelectStock && onSelectStock(code6)}
+                            style={{ cursor: onSelectStock ? 'pointer' : 'default' }}
+                            title="点击跳转至今日作战台该股卡片"
+                          >
+                            <b>{s.name}</b> <span style={{ color: 'var(--mute)', fontFamily: 'monospace' }}>({code6})</span>
+                          </span>
+                        </td>
+                        <td>{sh} 股</td>
+                        <td>¥{f2(cost)}</td>
+                        <td>{sh > 0 ? `¥${f2(rawCost)}` : '—'}</td>
+                        <td>{tr.n} 笔</td>
+                        <td className={tr.sum >= 0 ? 'up' : 'down'}>
+                          <b>{tr.sum >= 0 ? '+' : ''}¥{money(tr.sum)}</b>
+                        </td>
+                        <td className={perShare && perShare > 0 ? 'up' : ''}>
+                          {perShare !== null ? `${perShare >= 0 ? '-' : '+'}¥${f2(Math.abs(perShare))}/股` : '—'}
+                        </td>
+                        <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                          <div className="board-act-group is-compact">
+                            {onSelectStock && (
+                              <button
+                                type="button"
+                                className="board-act-btn in-pool"
+                                onClick={() => onSelectStock(code6)}
+                                title="定位至今日作战台该股卡片"
+                              >
+                                🎯作战
+                              </button>
+                            )}
+                            {onJumpDiagnosis && (
+                              <button
+                                type="button"
+                                className="board-act-btn diag"
+                                onClick={() => onJumpDiagnosis(code6)}
+                                title="查看个股全景诊股与排雷"
+                              >
+                                🩺诊股
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
-          </div>
-        )}
+          ) : (
+            <div style={{ padding: '14px', background: 'var(--surface)', borderRadius: '8px', border: '1px dashed var(--line)', fontSize: '12px', color: 'var(--sub)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+              <span>当前暂无持仓或做T降本记录。在今日作战台录入底仓或完成一笔闪电记T后，这里将实时核算每股成本摊薄幅度。</span>
+              {onTabChange && (
+                <button type="button" className="mini primary" style={{ marginLeft: 0 }} onClick={() => onTabChange('/trade')}>
+                  前往今日作战台 →
+                </button>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* 历史收盘净值与收益快照 */}
         <div style={{ marginTop: '18px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
             <h4 style={{ fontSize: '13.5px', margin: 0 }}>📸 每日收盘净值收益快照（15:05 后自动归档）</h4>
-            <div style={{ display: 'flex', gap: '6px' }}>
-              <button className="mini primary" onClick={onTakeSnapshot}>📸 立即记录/更新今日快照</button>
-              {snapshots.length > 0 && <button className="mini" onClick={onClearSnap}>清空历史快照</button>}
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+              <button type="button" className="mini primary" style={{ marginLeft: 0 }} onClick={onTakeSnapshot}>📸 立即记录/更新今日快照</button>
+              {snapshots.length > 0 && <button type="button" className="mini" style={{ marginLeft: 0 }} onClick={onClearSnap}>清空历史快照</button>}
             </div>
           </div>
 

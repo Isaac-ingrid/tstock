@@ -20,6 +20,9 @@ export default function AccountPage({
   onClearSnap,
   onUpdateTotalAssets,
   onUpdateCash,
+  onSelectStock,
+  onJumpDiagnosis,
+  onTabChange,
 }) {
   return (
     <div className="page-account">
@@ -39,6 +42,9 @@ export default function AccountPage({
         onClearSnap={onClearSnap}
         onUpdateTotalAssets={onUpdateTotalAssets}
         onUpdateCash={onUpdateCash}
+        onSelectStock={onSelectStock}
+        onJumpDiagnosis={onJumpDiagnosis}
+        onTabChange={onTabChange}
       />
     </div>
   );

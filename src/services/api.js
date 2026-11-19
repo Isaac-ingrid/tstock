@@ -197,6 +197,93 @@ export async function fetchIgnitionTracking() {
   }
 }
 
+/* 手动加入或移出在轨跟踪池（支持 00/60 主板与 30/688 双创全市场标的；若后端未启动自动降级本地缓存） */
+const LOCAL_TRACK_KEY = 't-local-tracked-codes';
+
+export function loadLocalTrackedCodes() {
+  try {
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(LOCAL_TRACK_KEY) : null;
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr.map(c => String(c).padStart(6, '0')) : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+export function saveLocalTrackedCodes(codes = []) {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const uniq = Array.from(new Set(codes.map(c => String(c).padStart(6, '0')).filter(c => /^\d{6}$/.test(c))));
+      localStorage.setItem(LOCAL_TRACK_KEY, JSON.stringify(uniq));
+    }
+  } catch (_) {}
+}
+
+export async function postIgnitionTrackingAction({
+  action = 'add',
+  code,
+  name = '',
+  hybk = '',
+  price = 0,
+  strategy = 'ignition',
+  subType = '',
+  verdict = '',
+}) {
+  const c6 = String(code || '').trim().padStart(6, '0');
+  const curLocal = new Set(loadLocalTrackedCodes());
+  if (action === 'add') curLocal.add(c6);
+  else if (action === 'remove') curLocal.delete(c6);
+  saveLocalTrackedCodes(Array.from(curLocal));
+
+  const url = `${STOCK_API_BASE}/api/stock/ignition_tracking_action`;
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 8000);
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action,
+        code: c6,
+        name: String(name || ''),
+        hybk: String(hybk || ''),
+        price: +price || 0,
+        strategy,
+        subType,
+        verdict,
+      }),
+      signal: ctl.signal,
+    });
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.detail || `在轨跟踪更新异常 (${res.status})`);
+    }
+    const json = await res.json();
+    // 若为主板 00/60 标的且执行 add，顺带静默同步至连板抱团跟踪池，实现全站跟踪池互通
+    if (action === 'add' && (c6.startsWith('00') || c6.startsWith('60'))) {
+      postHerdAction({
+        action: 'add',
+        code: c6,
+        name: String(name || ''),
+        hybk: String(hybk || '跨页跟踪'),
+        price: +price || 0,
+        reason: verdict || '起爆/尾盘联动加入跟踪',
+      }).catch(() => {});
+    }
+    return json;
+  } catch (_) {
+    return {
+      ok: true,
+      offlineFallback: true,
+      action,
+      code: c6,
+      codes: Array.from(curLocal),
+    };
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 /* 专属诊断自选横盘标的的起爆成色（六维雷达 + SOP操盘预案） */
 export async function fetchIgnitionDiagnose(query) {
   const q = String(query || '').trim();

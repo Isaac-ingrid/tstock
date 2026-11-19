@@ -456,61 +456,68 @@ export default function StockCard({
           {hasHoldings ? `持仓 ${Number(stock.shares).toLocaleString()}股 · 成本 ¥${f2(stock.cost)}` : '未设底仓'}
         </span>
 
-        <button className="mini primary" onClick={() => onOpenQuickT(stock)}>⚡ 快捷记T</button>
-        <button
-          className="mini"
-          style={{ color: '#d97706', borderColor: '#fcd34d', background: '#fffbeb', fontWeight: 700 }}
-          onClick={() => setBeCalcOpen(prev => !prev)}
-          title="展开/收起做T保本价计算器与规费滑点测算"
-        >
-          💰 保本计算器
-        </button>
-        <button
-          className="mini"
-          style={{ color: '#1677ff', borderColor: '#91caff', background: '#e6f4ff', fontWeight: 700 }}
-          onClick={() => onOpenQuickT(stock, '直接买入', f2(stock.price), hasHoldings ? 500 : 1000)}
-          title="直接买入建仓或加仓（自动计算加权平均持仓成本）"
-        >
-          📥 买入{hasHoldings ? '/加仓' : ''}
-        </button>
-        {hasHoldings && (
-          todayT.sellableShares > 0 ? (
-            <button
-              className="mini"
-              style={{ color: '#cf1322', borderColor: '#ffa39e', background: '#fff1f0', fontWeight: 700 }}
-              onClick={() => onOpenQuickT(stock, '直接卖出', f2(stock.price), todayT.sellableShares)}
-              title={`今日可用可卖 ${todayT.sellableShares} 股（已自动扣除今日新买 T+1 冻结股份）`}
-            >
-              📤 卖出
-            </button>
-          ) : (
-            <button
-              className="mini"
-              style={{ color: '#64748b', borderColor: '#cbd5e1', background: '#f8fafc', fontWeight: 600, cursor: 'not-allowed' }}
-              onClick={() => toastErr(`受 A 股 T+1 交易制度限制：【${stock.name}】当前股份全部为今日新买入，当日不可卖出（明日开盘解锁可用）`)}
-              title="今日新买入股份处于 T+1 锁仓期，今日可卖 0 股"
-            >
-              🔒 T+1不可卖
-            </button>
-          )
-        )}
-        <button className="mini" onClick={() => onOpenReason(stock, true)}>🔍 逻辑与利空</button>
-        <button
-          className="mini"
-          style={{ color: '#0e7490', borderColor: '#a5dbe7', background: '#eff9fb', fontWeight: 600 }}
-          onClick={() => {
-            window.location.hash = `#/diagnosis?code=${stock.code}`;
-          }}
-          title="跳转至全景体检报告（排雷、题材风口、套牢筹码与做T自救）"
-        >
-          🩺 全景体检
-        </button>
-        <button className="mini" onClick={() => onRefreshSingle(stock)}>⟳ 取数</button>
-        <button className="mini" onClick={() => onCopySinglePlan(stock)}>📋 计划</button>
-        {stock.manual && Object.keys(stock.manual).length > 0 && (
-          <button className="mini" onClick={handleClearManual} title="恢复由行情自动刷新">⟲ 恢复行情值</button>
-        )}
-        <button className="mini" onClick={() => onRemoveStock(index)}>移除</button>
+        <div className="card-hd-acts">
+          <button type="button" className="mini primary" onClick={() => onOpenQuickT(stock)}>⚡ 快捷记T</button>
+          <button
+            type="button"
+            className="mini"
+            style={{ color: '#d97706', borderColor: '#fcd34d', background: '#fffbeb', fontWeight: 700 }}
+            onClick={() => setBeCalcOpen(prev => !prev)}
+            title="展开/收起做T保本价计算器与规费滑点测算"
+          >
+            💰 保本计算器
+          </button>
+          <button
+            type="button"
+            className="mini"
+            style={{ color: '#1677ff', borderColor: '#91caff', background: '#e6f4ff', fontWeight: 700 }}
+            onClick={() => onOpenQuickT(stock, '直接买入', f2(stock.price), hasHoldings ? 500 : 1000)}
+            title="直接买入建仓或加仓（自动计算加权平均持仓成本）"
+          >
+            📥 买入{hasHoldings ? '/加仓' : ''}
+          </button>
+          {hasHoldings && (
+            todayT.sellableShares > 0 ? (
+              <button
+                type="button"
+                className="mini"
+                style={{ color: '#cf1322', borderColor: '#ffa39e', background: '#fff1f0', fontWeight: 700 }}
+                onClick={() => onOpenQuickT(stock, '直接卖出', f2(stock.price), todayT.sellableShares)}
+                title={`今日可用可卖 ${todayT.sellableShares} 股（已自动扣除今日新买 T+1 冻结股份）`}
+              >
+                📤 卖出
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="mini"
+                style={{ color: '#64748b', borderColor: '#cbd5e1', background: '#f8fafc', fontWeight: 600, cursor: 'not-allowed' }}
+                onClick={() => toastErr(`受 A 股 T+1 交易制度限制：【${stock.name}】当前股份全部为今日新买入，当日不可卖出（明日开盘解锁可用）`)}
+                title="今日新买入股份处于 T+1 锁仓期，今日可卖 0 股"
+              >
+                🔒 T+1不可卖
+              </button>
+            )
+          )}
+          <button type="button" className="mini" onClick={() => onOpenReason(stock, true)}>🔍 逻辑与利空</button>
+          <button
+            type="button"
+            className="mini"
+            style={{ color: '#0e7490', borderColor: '#a5dbe7', background: '#eff9fb', fontWeight: 600 }}
+            onClick={() => {
+              window.location.hash = `#/diagnosis?code=${stock.code}`;
+            }}
+            title="跳转至全景体检报告（排雷、题材风口、套牢筹码与做T自救）"
+          >
+            🩺 全景体检
+          </button>
+          <button type="button" className="mini" onClick={() => onRefreshSingle(stock)}>⟳ 取数</button>
+          <button type="button" className="mini" onClick={() => onCopySinglePlan(stock)}>📋 计划</button>
+          {stock.manual && Object.keys(stock.manual).length > 0 && (
+            <button type="button" className="mini" onClick={handleClearManual} title="恢复由行情自动刷新">⟲ 恢复行情值</button>
+          )}
+          <button type="button" className="mini" onClick={() => onRemoveStock(index)}>移除</button>
+        </div>
 
         <div className="card-hd-snap">
           <span className="snap-px">
@@ -642,7 +649,7 @@ export default function StockCard({
               boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', maxWidth: '74%' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', flex: '1 1 260px', minWidth: 0 }}>
               <span style={{ fontSize: '20px' }}>🎯</span>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
@@ -1204,7 +1211,7 @@ export default function StockCard({
                 </div>
 
                 {/* 买入价格输入 */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <label style={{ fontSize: '11.5px', color: 'var(--sub)', fontWeight: 600 }}>买入价格</label>
                   <input
                     type="text"

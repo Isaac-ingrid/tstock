@@ -18,7 +18,9 @@ export default function LedgerPage({
   onOpenEodModal,
   todayArchived,
   onExport,
-  onImportClick
+  onImportClick,
+  onSelectStock,
+  onJumpDiagnosis,
 }) {
   return (
     <div className="page-ledger">
@@ -37,6 +39,8 @@ export default function LedgerPage({
         todayArchived={todayArchived}
         onExport={onExport}
         onImportClick={onImportClick}
+        onSelectStock={onSelectStock}
+        onJumpDiagnosis={onJumpDiagnosis}
       />
     </div>
   );

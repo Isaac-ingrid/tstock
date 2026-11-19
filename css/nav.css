@@ -3751,3 +3751,888 @@ html[data-pwa="standalone"] .topbar {
   }
 }
 
+/* ==================== 14. 「起爆挖掘 · 玄学共振 · 尾盘潜伏」宽窄屏无裁切与原位操作适配 ==================== */
+.ignition-page-wrap {
+  width: 100%;
+  padding: 2px 0 36px;
+}
+
+.ignition-subtab-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.ignition-subtabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ignition-search-input {
+  padding: 5px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  width: 190px;
+  background: var(--surface2);
+}
+
+.ignition-preset-strip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ignition-diag-input {
+  width: 100%;
+  padding: 7px 12px;
+  font-size: 12.5px;
+  border-radius: 7px;
+  border: 1px solid #94a3b8;
+  background: #fff;
+  font-weight: 600;
+}
+
+.ignition-filter-pills {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+/* 起爆三大表格：桌面端总列宽 + 间距严格 <= min-width 且适配 1380px 主容器，彻底消除右缘操作按钮裁切 */
+.ign-table-scroll {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+
+.ign-breakout-inner {
+  min-width: 1052px;
+}
+
+.ign-dip-inner {
+  min-width: 1052px;
+}
+
+.ign-track-inner {
+  min-width: 1072px;
+}
+
+.ign-breakout-header,
+.ign-breakout-row {
+  display: grid;
+  grid-template-columns: 142px minmax(185px, 1.25fr) 132px 132px minmax(164px, 1.1fr) 54px 170px;
+  gap: 8px;
+  padding: 10px 12px;
+  align-items: center;
+}
+
+.ign-dip-header,
+.ign-dip-row {
+  display: grid;
+  grid-template-columns: 142px minmax(190px, 1.25fr) 142px 114px minmax(166px, 1.1fr) 54px 170px;
+  gap: 8px;
+  padding: 10px 12px;
+  align-items: center;
+}
+
+.ign-track-header,
+.ign-track-row {
+  display: grid;
+  grid-template-columns: 144px 134px 96px 96px 116px minmax(215px, 1.4fr) 198px;
+  gap: 8px;
+  padding: 10px 12px;
+  align-items: center;
+}
+
+.ign-breakout-header,
+.ign-dip-header,
+.ign-track-header {
+  background: #f8fafc;
+  border-bottom: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--mute);
+  user-select: none;
+}
+
+.ign-breakout-row,
+.ign-dip-row,
+.ign-track-row {
+  font-size: 12px;
+  background: #fff;
+}
+
+.ign-breakout-row.is-alt,
+.ign-dip-row.is-alt,
+.ign-track-row.is-alt {
+  background: #fcfcfd;
+}
+
+.igr-col-acts,
+.itr-col-acts {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.igr-sop-bar {
+  grid-column: 1 / -1;
+  background: #f8fafc;
+  padding: 6px 10px;
+  border-radius: 6px;
+  margin-top: 2px;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  border: 1px dashed #cbd5e1;
+}
+
+/* 玄学字辈共振（方向三）双栏与个股行 */
+.meme-search-input {
+  flex: 1 1 260px;
+  min-width: 0;
+  padding: 8px 12px;
+  border-radius: 7px;
+  border: 1px solid var(--line2);
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.meme-mobile-clan-pills {
+  display: none;
+}
+
+.meme-main-grid {
+  display: grid;
+  grid-template-columns: minmax(290px, 0.92fr) minmax(0, 1.48fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.meme-clan-list-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.meme-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.meme-stock-row {
+  padding: 8px 11px;
+  border-radius: 7px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.meme-stock-row.is-vanguard {
+  background: #fffafa;
+  border-color: #fecdd3;
+}
+
+.msr-left,
+.msr-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* 尾盘潜伏（TailSection）头部折行修复、隔夜卡与全量备选池 */
+.tail-rescan-btn {
+  padding: 4px 11px;
+  min-height: 29px;
+  font-size: 11.5px;
+  border-radius: 6px;
+  border: 1px solid var(--accent);
+  background: #fff;
+  color: var(--accent);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 700;
+}
+
+.tail-rescan-btn:hover:not(:disabled) {
+  background: var(--accent-bg);
+}
+
+.tail-active-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 12px;
+}
+
+.tail-active-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.tail-cand-card .tcc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tcc-head-left {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.tail-cand-card .tcc-score-badge {
+  margin-left: 0;
+}
+
+.tcc-inp.qty {
+  width: 72px;
+}
+
+/* 其余达标尾盘备选池 */
+.tail-extra-pool-box {
+  margin-top: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.tepb-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--line);
+}
+
+.tail-extra-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tail-extra-row {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ter-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.ter-ident {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ter-rank {
+  font-size: 11px;
+  font-weight: 800;
+  font-family: ui-monospace, Consolas, monospace;
+  color: var(--accent-d);
+  background: var(--accent-bg);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.ter-name {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.ter-code {
+  font-size: 11.5px;
+  font-family: ui-monospace, Consolas, monospace;
+  color: var(--mute);
+}
+
+.ter-score {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 4px;
+  background: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+
+.ter-metrics {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--sub);
+}
+
+.ter-actions {
+  margin-left: auto;
+}
+
+.ter-buy-drawer {
+  padding-top: 8px;
+  border-top: 1px dashed var(--hair);
+}
+
+/* <= 960px（平板竖屏与手机窄屏）：起爆三大表格自动切换为零横滑单手卡片，玄学共振改为单栏+门派胶囊 */
+@media (max-width: 960px) {
+  .ign-breakout-inner,
+  .ign-dip-inner,
+  .ign-track-inner {
+    min-width: 0;
+  }
+  .ign-breakout-header,
+  .ign-dip-header,
+  .ign-track-header {
+    display: none;
+  }
+  .ign-breakout-row,
+  .ign-dip-row,
+  .ign-track-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px 12px;
+    padding: 12px;
+  }
+  .igr-col-ident,
+  .itr-col-ident {
+    order: 1;
+    flex: 1 1 56%;
+  }
+  .igr-col-score,
+  .itr-col-px {
+    order: 2;
+    text-align: right;
+  }
+  .itr-col-gain {
+    order: 3;
+  }
+  .itr-col-stage {
+    order: 4;
+  }
+  .igr-col-stage {
+    order: 3;
+    flex: 1 1 100%;
+  }
+  .igr-col-zt,
+  .igr-col-wm,
+  .itr-col-base {
+    order: 4;
+    flex: 1 1 45%;
+    background: var(--surface);
+    padding: 6px 8px;
+    border-radius: 6px;
+  }
+  .igr-col-daily {
+    order: 5;
+    flex: 1 1 100%;
+    background: var(--surface);
+    padding: 6px 8px;
+    border-radius: 6px;
+  }
+  .itr-col-sop {
+    order: 6;
+    flex: 1 1 100%;
+  }
+  .igr-sop-bar {
+    order: 7;
+    flex: 1 1 100%;
+  }
+  .igr-col-acts,
+  .itr-col-acts {
+    order: 8;
+    flex: 1 1 100%;
+    justify-content: flex-end;
+    padding-top: 6px;
+    border-top: 1px dashed var(--hair);
+  }
+
+  /* 玄学字辈窄屏：顶部单行横滑选门派，直接呈现下方宗族作战室，免滚过14张长列表 */
+  .meme-mobile-clan-pills {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 2px 1px 4px;
+  }
+  .meme-mobile-clan-pills::-webkit-scrollbar {
+    display: none;
+  }
+  .meme-clan-pill {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-height: 32px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--line2);
+    background: #fff;
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .meme-clan-pill .cnt {
+    font-size: 10.5px;
+    padding: 0 5px;
+    border-radius: 99px;
+    background: var(--surface2);
+    color: var(--sub);
+  }
+  .meme-clan-pill.active {
+    background: #4f46e5;
+    border-color: #4338ca;
+    color: #fff;
+  }
+  .meme-clan-pill.active .cnt {
+    background: rgba(255, 255, 255, 0.22);
+    color: #fff;
+  }
+  .meme-main-grid {
+    grid-template-columns: 1fr;
+  }
+  .meme-clan-list-card {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .ignition-subtab-bar {
+    padding: 9px 11px;
+    gap: 8px;
+  }
+  .ignition-subtabs {
+    width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  .ignition-subtabs::-webkit-scrollbar {
+    display: none;
+  }
+  .ignition-subtabs button.mini {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    min-height: 33px;
+  }
+  .ignition-search-input {
+    width: 100%;
+    min-height: 35px;
+  }
+  .ignition-filter-pills,
+  .ignition-preset-strip {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  .ignition-filter-pills::-webkit-scrollbar,
+  .ignition-preset-strip::-webkit-scrollbar {
+    display: none;
+  }
+  .ignition-filter-pills > * {
+    flex: 0 0 auto;
+  }
+
+  .tail-active-grid {
+    grid-template-columns: 1fr;
+  }
+  .tail-active-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .tcc-pill {
+    min-height: 28px;
+    padding: 3px 8px;
+    font-size: 11px;
+  }
+  .btn-tb-buy {
+    min-height: 38px;
+    font-size: 13px;
+  }
+  .ter-actions {
+    width: 100%;
+    display: flex;
+    justify-content: flex-end;
+    padding-top: 6px;
+    border-top: 1px dashed var(--hair);
+  }
+
+  /* iOS Safari 防聚焦自动缩放 */
+  .ignition-search-input,
+  .ignition-diag-input,
+  .meme-search-input,
+  .tcc-inp,
+  .trc-sell-inp {
+    font-size: 16px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .meme-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .tail-cand-card .tcc-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .tbs-dot {
+    display: none;
+  }
+}
+
+/* ==================== 15. 全站深度巡检：防溢出、去拥挤与跨页聚焦高亮 ==================== */
+
+/* 低优先级消除 flex/grid 容器内 button.mini 全局 margin-left: 8px 造成的双重间距与折行左缩进，
+   使用 :where() 保持 0 附加权重，确保行内 style={{ marginLeft: 'auto' }} 依然正常右对齐 */
+:where(
+  .sel-actions,
+  .card-hd-acts,
+  .perf-page-wrap,
+  .modal-bd,
+  .modal-ft,
+  .overnight-alert-banner,
+  .card-holdings-setup,
+  .card-be-calc,
+  .ledger-head-acts,
+  .llc-actions
+) .mini {
+  margin-left: 0;
+}
+
+/* 跨页定位聚焦态：当从台账/战绩/账户/诊股跳转回作战台时，即使卡片未展开也能醒目高亮 */
+.battle-card.is-focused {
+  border-color: rgba(124, 58, 237, 0.55);
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.14), 0 4px 14px rgba(15, 23, 42, 0.06);
+}
+
+/* StockCard 头部 8 枚操作按钮组：桌面端紧凑排列不重叠，窄屏单行丝滑横滑 */
+.card-hd-acts {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+/* 「策略战绩」全量重构布局：零右缘裁切 + 窄屏单手卡片流 */
+.perf-page-wrap {
+  width: 100%;
+  padding: 2px 0 36px;
+}
+
+.perf-strat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.perf-filter-toolbar {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.perf-strat-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.perf-search-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.perf-date-select {
+  padding: 5px 8px;
+  font-size: 12px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface2);
+  color: var(--text);
+  min-height: 31px;
+}
+
+.perf-search-input {
+  padding: 5px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  width: 175px;
+  background: var(--surface2);
+  color: var(--text);
+  min-height: 31px;
+}
+
+/* 9 列宽表：总列宽 88+82+136+96+86+104+80+170+168 + 8*6(48) + 24 = 1082px <= min-width 1084px，
+   在 1380px 主容器内零横滑、零右缘裁切，操作列完整展示诊股/起爆/跟踪/+自选 */
+.perf-table-scroll {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+
+.perf-table-inner {
+  min-width: 1084px;
+}
+
+.perf-grid-header,
+.perf-grid-row {
+  display: grid;
+  grid-template-columns: 88px 82px 136px 96px 86px 104px 80px minmax(170px, 1fr) 168px;
+  gap: 6px;
+  padding: 8px 12px;
+  align-items: center;
+}
+
+.perf-grid-header {
+  background: #f8fafc;
+  border-bottom: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--mute);
+  user-select: none;
+}
+
+.perf-grid-row {
+  font-size: 12px;
+  background: #fff;
+}
+
+.perf-grid-row.is-alt {
+  background: #fcfcfd;
+}
+
+.pgr-col-ident {
+  min-width: 0;
+}
+
+.pgr-col-acts {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* <= 960px（平板竖屏与手机窄屏）：策略战绩 9 列宽表自动切换为零横滑单手卡片 */
+@media (max-width: 960px) {
+  .perf-table-inner {
+    min-width: 0;
+  }
+  .perf-grid-header {
+    display: none;
+  }
+  .perf-grid-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 12px;
+    padding: 11px 12px;
+  }
+  .pgr-col-ident {
+    order: 1;
+    flex: 1 1 52%;
+  }
+  .pgr-col-ret {
+    order: 2;
+    text-align: right;
+  }
+  .pgr-col-strat {
+    order: 3;
+  }
+  .pgr-col-date {
+    order: 4;
+  }
+  .pgr-col-px,
+  .pgr-col-alt,
+  .pgr-col-ext {
+    order: 5;
+    background: var(--surface);
+    padding: 5px 8px;
+    border-radius: 6px;
+    flex: 1 1 28%;
+  }
+  .pgr-col-horizons {
+    order: 6;
+    flex: 1 1 100%;
+  }
+  .pgr-col-acts {
+    order: 7;
+    flex: 1 1 100%;
+    justify-content: flex-end;
+    padding-top: 6px;
+    border-top: 1px dashed var(--hair);
+  }
+}
+
+@media (max-width: 760px) {
+  .card-hd-acts {
+    width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  .card-hd-acts::-webkit-scrollbar {
+    display: none;
+  }
+  .card-hd-acts > * {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    min-height: 31px;
+  }
+
+  .perf-strat-grid {
+    grid-template-columns: 1fr;
+  }
+  .perf-filter-toolbar {
+    padding: 9px 11px;
+    gap: 8px;
+  }
+  .perf-strat-tabs {
+    width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  .perf-strat-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .perf-strat-tabs button.mini {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    min-height: 32px;
+  }
+  .perf-search-controls {
+    width: 100%;
+  }
+  .perf-date-select {
+    flex: 1 1 130px;
+    min-height: 35px;
+  }
+  .perf-search-input {
+    flex: 2 1 160px;
+    width: auto;
+    min-height: 35px;
+  }
+
+  /* iOS Safari 防聚焦 < 16px 自动放大视口 */
+  .acc-cal-input,
+  .perf-search-input,
+  .perf-date-select,
+  .board-search-input,
+  #dbInput {
+    font-size: 16px !important;
+  }
+}
+
+@media (max-width: 640px) {
+  /* 选股与数据工具条 (.db-row) 窄屏单手化，消除输入框过窄与按钮折行参差 */
+  .db-row {
+    gap: 7px;
+  }
+  .db-row #dbInput {
+    flex: 1 1 100%;
+    min-width: 0;
+    min-height: 36px;
+  }
+  .db-row > button {
+    flex: 1 1 auto;
+    justify-content: center;
+    min-height: 34px;
+  }
+  .db-row .db-sw {
+    flex: 1 1 100%;
+  }
+  .sel-actions .sel-jump-perf {
+    margin-left: 0 !important;
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* 纪律手册 (.axioms / .tw) 超窄屏自适应单列，避免 minmax(280px, 1fr) 撑破 320-360px 屏幕 */
+  .axioms,
+  .tw {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+

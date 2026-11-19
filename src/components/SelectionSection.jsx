@@ -7,6 +7,8 @@ export default function SelectionSection({
   wbLatest,
   pool,
   onAddStock,
+  onSelectStock,
+  onJumpDiagnosis,
   onBatchAdd,
   onOpenReason,
   onRefresh,
@@ -304,7 +306,7 @@ export default function SelectionSection({
   return (
     <section id="secSelection">
       <details className="fold" open id="secSelectionFold">
-        <summary style={{ fontSize: '15px', fontWeight: 700, cursor: 'pointer', padding: '8px 12px', background: 'var(--surface)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <summary style={{ fontSize: '15px', fontWeight: 700, cursor: 'pointer', padding: '8px 12px', background: 'var(--surface)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
           <span>一、选股池与自选股</span>
           <span style={{ fontSize: '11.5px', fontWeight: 400, color: 'var(--mute)' }}>（点击可折叠/展开，便于全屏专注单只做T）</span>
         </summary>
@@ -451,12 +453,12 @@ export default function SelectionSection({
 
           {/* 开盘前集合竞价弱参考看板（含今日候选定盘实况一览与五档大数据） */}
           <details className="fold" style={{ marginTop: '12px', background: 'var(--surface2)', borderRadius: '8px', border: '1px solid var(--line)' }}>
-            <summary style={{ padding: '8px 12px', cursor: 'pointer', fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <summary style={{ padding: '8px 12px', cursor: 'pointer', fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 <span>⏰ 开盘前集合竞价弱参考（09:25~09:30 定盘五档与胜率大数据）</span>
                 {candLoading && <span style={{ fontSize: '11px', color: 'var(--mute)' }}>（正在拉取实时竞价…）</span>}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 {quotesUpdatedTime && (
                   <span className="tag" style={{ background: '#eef2ff', color: 'var(--info)', fontSize: '11px', fontWeight: 600 }}>
                     定盘同步: {quotesUpdatedTime}
@@ -471,12 +473,12 @@ export default function SelectionSection({
               </div>
 
               {/* 看板内子 Tab 切换：今日实况 vs 五档大数据 */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: '10px' }}>
                 <button
                   type="button"
                   className={`mini ${auctionViewTab === 'live' ? 'primary' : ''}`}
                   onClick={() => setAuctionViewTab('live')}
-                  style={{ fontSize: '12px', padding: '3px 10px' }}
+                  style={{ marginLeft: 0, fontSize: '12px', padding: '3px 10px' }}
                 >
                   📊 今日候选股定盘实况榜 ({liveAuctionList.length}只)
                 </button>
@@ -484,7 +486,7 @@ export default function SelectionSection({
                   type="button"
                   className={`mini ${auctionViewTab === 'tiers' ? 'primary' : ''}`}
                   onClick={() => setAuctionViewTab('tiers')}
-                  style={{ fontSize: '12px', padding: '3px 10px' }}
+                  style={{ marginLeft: 0, fontSize: '12px', padding: '3px 10px' }}
                 >
                   📈 五档胜率历史大数据参照表
                 </button>
@@ -515,7 +517,7 @@ export default function SelectionSection({
                         <th style={{ padding: '6px 8px' }}>冲高预期</th>
                         <th style={{ padding: '6px 8px' }}>+2%触及</th>
                         <th style={{ padding: '6px 8px' }}>实战做T/打板指引</th>
-                        <th style={{ padding: '6px 8px', textAlign: 'center' }}>操作</th>
+                        <th style={{ padding: '6px 8px', textAlign: 'right' }}>操作</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -529,7 +531,7 @@ export default function SelectionSection({
 
                         return (
                           <tr key={st.code6} style={{ borderBottom: '1px solid var(--line)' }}>
-                            <td style={{ padding: '5px 8px', fontWeight: 700 }}>
+                            <td style={{ padding: '5px 8px', fontWeight: 700, whiteSpace: 'nowrap' }}>
                               {st.name} <span style={{ fontFamily: 'ui-monospace,Consolas,monospace', fontWeight: 400, color: 'var(--mute)' }}>{st.code6}</span>
                             </td>
                             <td style={{ padding: '5px 8px', fontFamily: 'ui-monospace,Consolas,monospace' }}>
@@ -577,19 +579,38 @@ export default function SelectionSection({
                             <td style={{ padding: '5px 8px', color: 'var(--sub)', fontSize: '11.5px', maxWidth: '220px' }}>
                               {pat?.isWeakToStrong ? pat.title : (t ? t.advice : '等待竞价撮合数据')}
                             </td>
-                            <td style={{ padding: '5px 8px', textAlign: 'center' }}>
-                              {inPool ? (
-                                <span style={{ color: 'var(--info)', fontSize: '11px', fontWeight: 600 }}>已在池</span>
-                              ) : (
-                                <button
-                                  className="mini"
-                                  onClick={() => onAddStock(st.code6)}
-                                  style={{ padding: '2px 6px', fontSize: '11px' }}
-                                  title="选入今日做T决策台"
-                                >
-                                  + 选入
-                                </button>
-                              )}
+                            <td style={{ padding: '5px 8px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                              <div className="board-act-group is-compact">
+                                {onJumpDiagnosis && (
+                                  <button
+                                    type="button"
+                                    className="board-act-btn diag"
+                                    onClick={() => onJumpDiagnosis(st.code6)}
+                                    title="全景诊股与排雷"
+                                  >
+                                    🩺
+                                  </button>
+                                )}
+                                {inPool ? (
+                                  <button
+                                    type="button"
+                                    className="board-act-btn in-pool"
+                                    onClick={() => onSelectStock && onSelectStock(st.code6)}
+                                    title="已在自选池，点击定位到上方作战卡片"
+                                  >
+                                    ✓定位
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className="board-act-btn add-pool"
+                                    onClick={() => onAddStock(st.code6, { tier: 'short', strategyTag: '竞价优选', strategy: 'short' }, { jumpToTrade: false })}
+                                    title="原位加入自选池"
+                                  >
+                                    ＋自选
+                                  </button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         );

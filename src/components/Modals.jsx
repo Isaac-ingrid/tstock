@@ -751,7 +751,7 @@ function QuickTModalInner({ modalData, tradeLogs = [], tiltState = null, onClose
 }
 
 /* 2. 入选理由与利空排查弹窗 */
-export function StockReasonModal({ modalData, onClose, onAdd, onJumpCard }) {
+export function StockReasonModal({ modalData, onClose, onAdd, onJumpCard, onJumpDiagnosis, onJumpIgnition }) {
   if (!modalData || !modalData.open) return null;
   const { stock, inPool } = modalData;
   if (!stock) return null;
@@ -763,19 +763,22 @@ export function StockReasonModal({ modalData, onClose, onAdd, onJumpCard }) {
       onClose={onClose}
       onAdd={onAdd}
       onJumpCard={onJumpCard}
+      onJumpDiagnosis={onJumpDiagnosis}
+      onJumpIgnition={onJumpIgnition}
     />
   );
 }
 
-function StockReasonModalInner({ stock, inPool, onClose, onAdd, onJumpCard }) {
+function StockReasonModalInner({ stock, inPool, onClose, onAdd, onJumpCard, onJumpDiagnosis, onJumpIgnition }) {
   const [initShares, setInitShares] = useState(stock.shares ? String(stock.shares) : '');
   const [initCost, setInitCost] = useState(stock.cost ? String(stock.cost) : (stock.price ? String(stock.price) : ''));
+  const code6 = String(stock.code || '').padStart(6, '0');
 
   return (
     <div className="modal-mask" onClick={onClose}>
       <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '520px' }}>
         <div className="modal-hd">
-          <h3>🔍 入选逻辑与风险排查 · {stock.name} ({stock.code})</h3>
+          <h3>🔍 入选逻辑与风险排查 · {stock.name} ({code6})</h3>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-bd" style={{ fontSize: '13px', lineHeight: 1.7 }}>
@@ -843,7 +846,7 @@ function StockReasonModalInner({ stock, inPool, onClose, onAdd, onJumpCard }) {
                   type="button"
                   className="mini"
                   onClick={() => setInitCost(stock.price ? String(stock.price) : '')}
-                  style={{ padding: '3px 8px', fontSize: '11px', cursor: 'pointer' }}
+                  style={{ marginLeft: 0, padding: '3px 8px', fontSize: '11px', cursor: 'pointer' }}
                 >
                   ⚡ 填入现价
                 </button>
@@ -851,38 +854,70 @@ function StockReasonModalInner({ stock, inPool, onClose, onAdd, onJumpCard }) {
             </div>
           )}
         </div>
-        <div className="modal-ft" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', padding: '10px 14px', borderTop: '1px solid var(--line)' }}>
-          <button className="btn-cancel" onClick={onClose} style={{ padding: '6px 14px', borderRadius: '6px', border: '1px solid var(--line)', background: '#fff', cursor: 'pointer' }}>关闭</button>
-          {inPool && onJumpCard ? (
-            <button
-              className="primary"
-              onClick={() => {
-                onJumpCard(stock);
-                onClose();
-              }}
-              style={{ padding: '6px 16px', borderRadius: '6px', background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 700, cursor: 'pointer' }}
-            >
-              👉 直达该股做T决策卡片
-            </button>
-          ) : null}
-          {!inPool && onAdd ? (
-            <button
-              className="primary"
-              onClick={() => {
-                const sNum = parseInt(initShares, 10) || 0;
-                const cNum = parseFloat(initCost) || 0;
-                onAdd({
-                  ...stock,
-                  shares: sNum,
-                  cost: cNum
-                });
-                onClose();
-              }}
-              style={{ padding: '6px 16px', borderRadius: '6px', background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 700, cursor: 'pointer' }}
-            >
-              ＋ 一键并入自选池
-            </button>
-          ) : null}
+        <div className="modal-ft" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', padding: '10px 14px', borderTop: '1px solid var(--line)' }}>
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+            {onJumpDiagnosis && (
+              <button
+                type="button"
+                className="mini"
+                onClick={() => {
+                  onClose();
+                  onJumpDiagnosis(code6);
+                }}
+                style={{ marginLeft: 0 }}
+              >
+                🩺 全景诊股
+              </button>
+            )}
+            {onJumpIgnition && (
+              <button
+                type="button"
+                className="mini"
+                onClick={() => {
+                  onClose();
+                  onJumpIgnition(code6);
+                }}
+                style={{ marginLeft: 0 }}
+              >
+                🚀 起爆体检
+              </button>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginLeft: 'auto' }}>
+            <button type="button" className="btn-cancel" onClick={onClose} style={{ padding: '6px 14px', borderRadius: '6px', border: '1px solid var(--line)', background: '#fff', cursor: 'pointer' }}>关闭</button>
+            {inPool && onJumpCard ? (
+              <button
+                type="button"
+                className="primary"
+                onClick={() => {
+                  onJumpCard(stock);
+                  onClose();
+                }}
+                style={{ padding: '6px 16px', borderRadius: '6px', background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 700, cursor: 'pointer' }}
+              >
+                👉 直达决策卡片
+              </button>
+            ) : null}
+            {!inPool && onAdd ? (
+              <button
+                type="button"
+                className="primary"
+                onClick={() => {
+                  const sNum = parseInt(initShares, 10) || 0;
+                  const cNum = parseFloat(initCost) || 0;
+                  onAdd({
+                    ...stock,
+                    shares: sNum,
+                    cost: cNum
+                  });
+                  onClose();
+                }}
+                style={{ padding: '6px 16px', borderRadius: '6px', background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 700, cursor: 'pointer' }}
+              >
+                ＋ 一键并入自选池
+              </button>
+            ) : null}
+          </div>
         </div>
       </div>
     </div>
@@ -1202,14 +1237,15 @@ function AlertCenterModalInner({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            flexWrap: 'wrap',
             padding: '11px 14px',
             background: alertEnabled ? '#f0f5ff' : '#fff1f0',
             border: alertEnabled ? '1px solid #adc6ff' : '1px solid #ffa39e',
             borderRadius: '8px',
             marginBottom: '12px',
-            gap: '12px'
+            gap: '10px'
           }}>
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: '1 1 220px', minWidth: 0 }}>
               <div style={{
                 fontWeight: 700,
                 color: alertEnabled ? '#1d39c4' : '#cf1322',
@@ -1252,14 +1288,15 @@ function AlertCenterModalInner({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            flexWrap: 'wrap',
             padding: '10px 14px',
             background: 'linear-gradient(90deg, #faf5ff, #f8fafc)',
             border: '1px solid #d8b4fe',
             borderRadius: '8px',
             marginBottom: '12px',
-            gap: '12px'
+            gap: '10px'
           }}>
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: '1 1 220px', minWidth: 0 }}>
               <div style={{ fontWeight: 700, color: '#6b21a8', fontSize: '13px' }}>
                 ⚡ 分时放量急拉 / 跳水 / 冲板炸板雷达（10分钟冷却防刷屏）
               </div>

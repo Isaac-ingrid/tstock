@@ -58,13 +58,22 @@ export default function ConsoleSection({
     }
   };
 
-  // 当外部（如 TopNav 胶囊、起爆/连板跳转）明确选中某只标的时，同步展开其详情面板
+  // 当外部（如 TopNav 胶囊、起爆/连板/战绩/账户/台账跳转）明确选中某只标的时，确保其不被当前分组过滤隐藏并同步展开面板
   useEffect(() => {
-    if (activeStockCode && pool.some((s) => String(s.code).padStart(6, '0') === String(activeStockCode).padStart(6, '0'))) {
-      // 仅在已展开状态或外部显式切换时更新，保持首屏默认收起更清爽
-      if (expandedCode) {
-        setExpandedCode(String(activeStockCode).padStart(6, '0'));
-      }
+    if (!activeStockCode) return;
+    const code6 = String(activeStockCode).padStart(6, '0');
+    const matched = pool.find((s) => String(s.code).padStart(6, '0') === code6);
+    if (!matched) return;
+    const hasPos = posCalc(matched).hasPos;
+    if ((groupTab === 'holding' && !hasPos) || (groupTab === 'watch' && hasPos)) {
+      setGroupTab('all');
+    }
+    const t = matched.tier === 'short' || matched.tier === 'long' ? matched.tier : matched.poolTag === '稳健' ? 'long' : 'short';
+    if (tierFilter !== 'all' && tierFilter !== t) {
+      setTierFilter('all');
+    }
+    if (expandedCode) {
+      setExpandedCode(code6);
     }
   }, [activeStockCode, pool]);
 
@@ -287,6 +296,7 @@ export default function ConsoleSection({
             tiltState={tiltState}
             totalMktVal={totalMktVal}
             allowedCapPct={allowedCapPct}
+            activeStockCode={activeStockCode}
             expandedCode={expandAll ? '' : expandedCode}
             onToggleExpand={handleToggleExpand}
             onUpdateStock={onUpdateStock}
@@ -320,6 +330,7 @@ export default function ConsoleSection({
             tiltState={tiltState}
             totalMktVal={totalMktVal}
             allowedCapPct={allowedCapPct}
+            activeStockCode={activeStockCode}
             expandedCode={expandAll ? '' : expandedCode}
             onToggleExpand={handleToggleExpand}
             onUpdateStock={onUpdateStock}

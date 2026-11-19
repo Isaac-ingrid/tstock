@@ -173,9 +173,9 @@ export default function TradePage({
       <SelectionSection
         wbLatest={wbLatest}
         pool={pool}
-        onAddStock={async (q) => {
-          await onAddStock(q);
-        }}
+        onAddStock={onAddStock}
+        onSelectStock={handleSelectStock}
+        onJumpDiagnosis={onJumpDiagnosis}
         onBatchAdd={onBatchAdd}
         onOpenReason={handleReasonClick}
         onRefresh={onRefresh}

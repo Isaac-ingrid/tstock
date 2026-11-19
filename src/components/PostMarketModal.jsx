@@ -26,6 +26,7 @@ export default function PostMarketModal({
   onRunWorkflow,
   onOpenQuickT,
   onMarkOvernightT,
+  onTabChange,
 }) {
   const today = todayStr();
   const [selectedDate, setSelectedDate] = useState(today);
@@ -316,6 +317,19 @@ export default function PostMarketModal({
                   </span>
                 ))}
               </div>
+              {onTabChange && (
+                <button
+                  type="button"
+                  className="mini"
+                  style={{ marginLeft: 0, background: '#fff', color: '#6d28d9', borderColor: '#c4b5fd', fontWeight: 700 }}
+                  onClick={() => {
+                    onClose();
+                    onTabChange('/tail');
+                  }}
+                >
+                  ⚡ 去尾盘潜伏台 →
+                </button>
+              )}
             </div>
           )}
 

@@ -1,16 +1,23 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { fetchStrategyPerf, triggerStrategySnapshot } from '../services/api.js';
+import {
+  fetchStrategyPerf,
+  triggerStrategySnapshot,
+  fetchIgnitionTracking,
+  postIgnitionTrackingAction,
+  loadLocalTrackedCodes,
+} from '../services/api.js';
 import { f2, toastOk, toastErr, copyPlain } from '../services/utils.js';
+import { BoardStockActions } from '../components/board/boardShared.jsx';
 
 const STRAT_META = {
-  steady: { label: '稳健长线', color: '#0369a1', bg: '#f0f9ff', border: '#bae6fd', icon: '🛡️' },
-  short: { label: '短线做T', color: '#0f766e', bg: '#f0fdfa', border: '#5eead4', icon: '🎯' },
-  tail: { label: '尾盘黑马', color: '#7c3aed', bg: '#faf5ff', border: '#d8b4fe', icon: '⚡' },
-  board: { label: '连板打板', color: '#cf1322', bg: '#fff1f0', border: '#ffa39e', icon: '🔥' },
-  ignition: { label: '横盘起爆', color: '#c2410c', bg: '#fff7ed', border: '#fed7aa', icon: '🚀' },
-  bottom: { label: '深跌抄底', color: '#15803d', bg: '#f0fdf4', border: '#86efac', icon: '🛟' },
+  steady: { label: '稳健长线', color: '#0369a1', bg: '#f0f9ff', border: '#bae6fd', icon: '🛡️', route: '/trade' },
+  short: { label: '短线做T', color: '#0f766e', bg: '#f0fdfa', border: '#5eead4', icon: '🎯', route: '/trade' },
+  tail: { label: '尾盘黑马', color: '#7c3aed', bg: '#faf5ff', border: '#d8b4fe', icon: '⚡', route: '/tail' },
+  board: { label: '连板打板', color: '#cf1322', bg: '#fff1f0', border: '#ffa39e', icon: '🔥', route: '/board' },
+  ignition: { label: '横盘起爆', color: '#c2410c', bg: '#fff7ed', border: '#fed7aa', icon: '🚀', route: '/ignition' },
+  bottom: { label: '深跌抄底', color: '#15803d', bg: '#f0fdf4', border: '#86efac', icon: '🛟', route: '/ignition' },
 };
 
 function fmtRet(v, emptyText = '待结算') {
@@ -27,13 +34,13 @@ function retColor(v) {
 function MetricPill({ label, stats }) {
   const c = stats?.count || 0;
   return (
-    <div style={{ padding: '7px 9px', borderRadius: '6px', background: 'rgba(255,255,255,0.8)', border: '1px solid var(--line)' }}>
+    <div style={{ padding: '7px 9px', borderRadius: '6px', background: 'rgba(255,255,255,0.84)', border: '1px solid var(--line)', minWidth: 0 }}>
       <div style={{ fontSize: '10.5px', color: 'var(--mute)', marginBottom: '2px' }}>{label}</div>
       {c === 0 ? (
         <div style={{ fontSize: '12px', color: 'var(--mute)', fontWeight: 600 }}>待 T+1 结算</div>
       ) : (
         <>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' }}>
             <b style={{ fontSize: '14px', fontFamily: 'monospace', color: retColor(stats.mean) }}>{fmtRet(stats.mean)}</b>
             <span style={{ fontSize: '11px', color: 'var(--sub)' }}>胜率 <b>{stats.winRate}%</b></span>
           </div>
@@ -50,16 +57,20 @@ export default function PerfPage({
   tradeLogs = [],
   pool = [],
   onAddStock,
+  onSelectStock,
+  onJumpIgnition,
   onTabChange,
 }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState('');
-  const [stratTab, setStratTab] = useState('all'); // 'all' | 'steady' | 'short' | 'tail' | 'board'
+  const [stratTab, setStratTab] = useState('all');
   const [dateFilter, setDateFilter] = useState('all');
   const [searchKw, setSearchKw] = useState('');
   const [onlyFillable, setOnlyFillable] = useState(false);
+  const [trackedCodes, setTrackedCodes] = useState(() => new Set(loadLocalTrackedCodes()));
+  const [trackBusyCode, setTrackBusyCode] = useState('');
 
   const loadPerf = useCallback(async (forceRefresh = false) => {
     try {
@@ -78,9 +89,25 @@ export default function PerfPage({
     }
   }, []);
 
+  const loadTrackedPool = useCallback(async () => {
+    try {
+      const res = await fetchIgnitionTracking();
+      if (res && res.ok && Array.isArray(res.items)) {
+        setTrackedCodes(prev => {
+          const next = new Set([...prev, ...loadLocalTrackedCodes()]);
+          res.items.forEach(it => {
+            if (it?.code) next.add(String(it.code).padStart(6, '0'));
+          });
+          return next;
+        });
+      }
+    } catch (_) {}
+  }, []);
+
   useEffect(() => {
     loadPerf(false);
-  }, [loadPerf]);
+    loadTrackedPool();
+  }, [loadPerf, loadTrackedPool]);
 
   const handleSyncSnapshot = async () => {
     try {
@@ -95,14 +122,61 @@ export default function PerfPage({
     }
   };
 
+  const handleTrackStock = useCallback(async (action, item) => {
+    const code6 = String(item?.code || '').padStart(6, '0');
+    if (!code6 || code6 === '000000') return;
+    setTrackBusyCode(code6);
+    try {
+      const sm = STRAT_META[item?.strategy] || STRAT_META.short;
+      const res = await postIgnitionTrackingAction({
+        action,
+        code: code6,
+        name: item?.name || code6,
+        hybk: item?.hybk || sm.label,
+        price: +(item?.latestPrice || item?.entryPrice || item?.buy || item?.refPrice || 0),
+        strategy: item?.strategy || 'short',
+        subType: 'PERF_WATCH',
+        verdict: `${sm.label}建档跟踪 (${item?.signalDate || ''})`,
+      });
+      if (res && res.ok) {
+        setTrackedCodes(prev => {
+          const next = new Set(prev);
+          if (action === 'add') next.add(code6);
+          else next.delete(code6);
+          return next;
+        });
+      }
+      toastOk(`📌 已将 ${item?.name || code6} 加入多周期跟踪池！`);
+    } catch (err) {
+      toastErr('加入跟踪池失败：' + (err?.message || '未知错误'));
+    } finally {
+      setTrackBusyCode('');
+    }
+  }, []);
+
+  const handleAddSingleToPool = useCallback((code, name, r) => {
+    if (!onAddStock) return;
+    const sm = STRAT_META[r?.strategy] || STRAT_META.short;
+    const refPx = +(r?.entryPrice || r?.buy || r?.refPrice || r?.latestPrice || 0);
+    onAddStock(
+      code,
+      {
+        tier: r?.strategy === 'steady' ? 'long' : 'short',
+        strategy: r?.strategy || 'short',
+        strategyTag: sm.label,
+        refPrice: refPx > 0 ? refPx : undefined,
+      },
+      { jumpToTrade: false }
+    );
+  }, [onAddStock]);
+
   const inPoolCodes = useMemo(() => new Set((pool || []).map(s => String(s.code).padStart(6, '0'))), [pool]);
   const records = useMemo(() => data?.records || [], [data]);
   const summaries = useMemo(() => data?.summaries || {}, [data]);
 
-  // 个人实盘做T统计（来自 LedgerPage tradeLogs）
   const manualStats = useMemo(() => {
     const closed = (tradeLogs || []).filter(lg => {
-      const isPureBuy = lg.dir === '买入建仓' || lg.dir === '买入加仓' || lg.dir === '直接买入';
+      const isPureBuy = lg.dir === '买入建仓' || lg.dir === '买入加仓' || lg.dir === '直接买入' || lg.dir === '尾盘买入';
       return !isPureBuy && (+lg.buy > 0 && +lg.sell > 0);
     });
     const wins = closed.filter(lg => (+lg.net || 0) > 0).length;
@@ -167,22 +241,23 @@ export default function PerfPage({
     if (h.t10 != null) chips.push(['T+10', h.t10]);
     if (h.t20 != null) chips.push(['T+20', h.t20]);
     if (chips.length === 0) {
-      return <span style={{ fontSize: '11px', color: 'var(--mute)' }}>今日建档 · 待下一个交易日产生时间节点曲线</span>;
+      return <span style={{ fontSize: '11px', color: 'var(--mute)' }}>今日建档 · 待下一个交易日产生节点曲线</span>;
     }
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
         {chips.map(([k, v]) => (
           <span
             key={k}
             style={{
               fontSize: '10.5px',
-              padding: '1px 6px',
+              padding: '1px 5px',
               borderRadius: '4px',
               background: v >= 0 ? '#fff1f0' : '#f0fdf4',
               color: v >= 0 ? '#cf1322' : '#15803d',
               border: `1px solid ${v >= 0 ? '#ffa39e' : '#bbf7d0'}`,
               fontFamily: 'monospace',
               fontWeight: 700,
+              whiteSpace: 'nowrap',
             }}
           >
             {k} {fmtRet(v)}
@@ -200,7 +275,7 @@ export default function PerfPage({
   const bt = summaries.bottom || {};
 
   return (
-    <div style={{ maxWidth: '1440px', margin: '0 auto', padding: '12px 16px 40px' }}>
+    <div className="perf-page-wrap">
       {/* 顶部总览横幅 */}
       <div style={{
         background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #312e81 100%)',
@@ -225,7 +300,7 @@ export default function PerfPage({
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <button type="button" className="mini" onClick={handleCopyReport} style={{ background: 'rgba(56,189,248,0.2)', color: '#bae6fd', borderColor: '#38bdf8', padding: '4px 10px' }}>
+            <button type="button" className="mini" onClick={handleCopyReport} style={{ marginLeft: 0, background: 'rgba(56,189,248,0.2)', color: '#bae6fd', borderColor: '#38bdf8', padding: '4px 10px' }}>
               📋 复制战绩摘要
             </button>
             <button
@@ -233,7 +308,7 @@ export default function PerfPage({
               className="mini"
               disabled={syncing || loading}
               onClick={handleSyncSnapshot}
-              style={{ background: '#10b981', color: '#fff', borderColor: '#059669', padding: '4px 12px', fontWeight: 700 }}
+              style={{ marginLeft: 0, background: '#10b981', color: '#fff', borderColor: '#059669', padding: '4px 12px', fontWeight: 700 }}
             >
               {syncing ? '⟳ 同步建档中…' : '⟳ 同步今日各池建档'}
             </button>
@@ -267,7 +342,7 @@ export default function PerfPage({
             建档当日 (T+0) 标为「待结算」，自首个次日 (T+1) 起每日自动核算开盘/回踩/做T增厚与多周期节点收益。
           </span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           <span>
             👤 <b>我的手工做T实盘：</b>{manualStats.totalTrades} 笔 ｜ 胜率 <b>{manualStats.winRate ?? '—'}%</b> ｜ 净盈亏{' '}
             <b style={{ fontFamily: 'monospace', color: retColor(manualStats.netSum) }}>
@@ -275,20 +350,31 @@ export default function PerfPage({
             </b>
           </span>
           {onTabChange && (
-            <button type="button" className="mini" onClick={() => onTabChange('/ledger')} style={{ fontSize: '11px' }}>
+            <button type="button" className="mini" onClick={() => onTabChange('/ledger')} style={{ marginLeft: 0, fontSize: '11px' }}>
               去台账明细 →
             </button>
           )}
         </div>
       </div>
 
-      {/* 四维策略卡片横向对比 */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(310px, 1fr))', gap: '12px', marginBottom: '16px' }}>
+      {/* 六维策略卡片横向对比 */}
+      <div className="perf-strat-grid">
         {/* 1. 稳健长线 */}
         <div style={{ padding: '14px', borderRadius: '10px', background: STRAT_META.steady.bg, border: `1.5px solid ${STRAT_META.steady.border}` }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <b style={{ fontSize: '14px', color: STRAT_META.steady.color }}>🛡️ ① 稳健底仓（长线）</b>
-            <span style={{ fontSize: '11px', fontWeight: 700, color: STRAT_META.steady.color }}>建档 {st.totalSignals || 0} 只</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: '8px' }}>
+            <b
+              onClick={() => setStratTab(stratTab === 'steady' ? 'all' : 'steady')}
+              style={{ fontSize: '14px', color: STRAT_META.steady.color, cursor: 'pointer' }}
+              title="点击筛选稳健长线建档明细"
+            >
+              🛡️ ① 稳健底仓（长线）
+            </b>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ fontSize: '11px', fontWeight: 700, color: STRAT_META.steady.color }}>建档 {st.totalSignals || 0} 只</span>
+              {onTabChange && (
+                <button type="button" className="board-mini-pill-btn diag" onClick={() => onTabChange('/trade')}>作战台 →</button>
+              )}
+            </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
             <MetricPill label="纯持有至今 (T+1开盘起)" stats={st.holdStats} />
@@ -302,27 +388,49 @@ export default function PerfPage({
 
         {/* 2. 短线做T（两列并列展示） */}
         <div style={{ padding: '14px', borderRadius: '10px', background: STRAT_META.short.bg, border: `1.5px solid ${STRAT_META.short.border}` }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <b style={{ fontSize: '14px', color: STRAT_META.short.color }}>🎯 ② 短线做T候选（双口径并列）</b>
-            <span style={{ fontSize: '11px', fontWeight: 700, color: STRAT_META.short.color }}>
-              可执行 {sh.execSignals || 0} / 闸门拦截 {sh.badBlockedSignals || 0}
-            </span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: '8px' }}>
+            <b
+              onClick={() => setStratTab(stratTab === 'short' ? 'all' : 'short')}
+              style={{ fontSize: '14px', color: STRAT_META.short.color, cursor: 'pointer' }}
+              title="点击筛选短线做T建档明细"
+            >
+              🎯 ② 短线做T候选（双口径）
+            </b>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ fontSize: '11px', fontWeight: 700, color: STRAT_META.short.color }}>
+                可执行 {sh.execSignals || 0} / 闸门 {sh.badBlockedSignals || 0}
+              </span>
+              {onTabChange && (
+                <button type="button" className="board-mini-pill-btn diag" onClick={() => onTabChange('/trade')}>作战台 →</button>
+              )}
+            </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
             <MetricPill label="列A · 次日开盘直接买" stats={sh.openCol?.stats} />
             <MetricPill label={`列B · 回踩区间成交 (达成${sh.pullbackCol?.fillRate ?? '—'}%)`} stats={sh.pullbackCol?.stats} />
           </div>
           <div style={{ fontSize: '11px', color: 'var(--sub)', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '4px' }}>
-            <span>正T日K增厚α: <b style={{ color: retColor(sh.tAlpha?.avgTAlpha) }}>{fmtRet(sh.tAlpha?.avgTAlpha, '—')}</b> (触发日胜率 {sh.tAlpha?.tDayWinRate ?? '—'}%)</span>
-            <span>BAD闸门对照组: <b>{fmtRet(sh.badControlStats?.mean, '无')}</b></span>
+            <span>正T日K增厚α: <b style={{ color: retColor(sh.tAlpha?.avgTAlpha) }}>{fmtRet(sh.tAlpha?.avgTAlpha, '—')}</b> (触发胜率 {sh.tAlpha?.tDayWinRate ?? '—'}%)</span>
+            <span>BAD闸门对照: <b>{fmtRet(sh.badControlStats?.mean, '无')}</b></span>
           </div>
         </div>
 
         {/* 3. 尾盘黑马 */}
         <div style={{ padding: '14px', borderRadius: '10px', background: STRAT_META.tail.bg, border: `1.5px solid ${STRAT_META.tail.border}` }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <b style={{ fontSize: '14px', color: STRAT_META.tail.color }}>⚡ ③ 尾盘黑马（14:30 隔夜）</b>
-            <span style={{ fontSize: '11px', fontWeight: 700, color: STRAT_META.tail.color }}>建档 {tl.totalSignals || 0} 只</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: '8px' }}>
+            <b
+              onClick={() => setStratTab(stratTab === 'tail' ? 'all' : 'tail')}
+              style={{ fontSize: '14px', color: STRAT_META.tail.color, cursor: 'pointer' }}
+              title="点击筛选尾盘黑马建档明细"
+            >
+              ⚡ ③ 尾盘黑马（14:30 隔夜）
+            </b>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ fontSize: '11px', fontWeight: 700, color: STRAT_META.tail.color }}>建档 {tl.totalSignals || 0} 只</span>
+              {onTabChange && (
+                <button type="button" className="board-mini-pill-btn diag" onClick={() => onTabChange('/tail')}>潜伏台 →</button>
+              )}
+            </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
             <MetricPill label="T+1 规则出场(+2.5%止盈/-1.5%止损)" stats={tl.t1RuleStats} />
@@ -336,9 +444,20 @@ export default function PerfPage({
 
         {/* 4. 连板打板 */}
         <div style={{ padding: '14px', borderRadius: '10px', background: STRAT_META.board.bg, border: `1.5px solid ${STRAT_META.board.border}` }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <b style={{ fontSize: '14px', color: STRAT_META.board.color }}>🔥 ④ 连板打板（剔除一字/尾盘）</b>
-            <span style={{ fontSize: '11px', fontWeight: 700, color: STRAT_META.board.color }}>可买样本 {bd.totalSignals || 0} 只</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: '8px' }}>
+            <b
+              onClick={() => setStratTab(stratTab === 'board' ? 'all' : 'board')}
+              style={{ fontSize: '14px', color: STRAT_META.board.color, cursor: 'pointer' }}
+              title="点击筛选连板打板建档明细"
+            >
+              🔥 ④ 连板打板（剔除一字/尾盘）
+            </b>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ fontSize: '11px', fontWeight: 700, color: STRAT_META.board.color }}>样本 {bd.totalSignals || 0} 只</span>
+              {onTabChange && (
+                <button type="button" className="board-mini-pill-btn diag" onClick={() => onTabChange('/board')}>天梯台 →</button>
+              )}
+            </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
             <MetricPill label="T+1 次日开盘溢价" stats={bd.t1OpenStats} />
@@ -352,9 +471,20 @@ export default function PerfPage({
 
         {/* 5. 横盘试盘起爆 */}
         <div style={{ padding: '14px', borderRadius: '10px', background: STRAT_META.ignition.bg, border: `1.5px solid ${STRAT_META.ignition.border}` }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <b style={{ fontSize: '14px', color: STRAT_META.ignition.color }}>🚀 ⑤ 横盘试盘起爆（多周期潜伏）</b>
-            <span style={{ fontSize: '11px', fontWeight: 700, color: STRAT_META.ignition.color }}>建档 {ig.totalSignals || 0} 只</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: '8px' }}>
+            <b
+              onClick={() => setStratTab(stratTab === 'ignition' ? 'all' : 'ignition')}
+              style={{ fontSize: '14px', color: STRAT_META.ignition.color, cursor: 'pointer' }}
+              title="点击筛选横盘起爆建档明细"
+            >
+              🚀 ⑤ 横盘试盘起爆（多周期潜伏）
+            </b>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ fontSize: '11px', fontWeight: 700, color: STRAT_META.ignition.color }}>建档 {ig.totalSignals || 0} 只</span>
+              {onTabChange && (
+                <button type="button" className="board-mini-pill-btn diag" onClick={() => onTabChange('/ignition')}>起爆台 →</button>
+              )}
+            </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
             <MetricPill label="🔥 震仓完成·待起爆" stats={ig.shakeoutStats} />
@@ -368,9 +498,20 @@ export default function PerfPage({
 
         {/* 6. 深跌抗跌抄底 */}
         <div style={{ padding: '14px', borderRadius: '10px', background: STRAT_META.bottom.bg, border: `1.5px solid ${STRAT_META.bottom.border}` }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <b style={{ fontSize: '14px', color: STRAT_META.bottom.color }}>🛟 ⑥ 深跌抗跌抄底（利空钝化）</b>
-            <span style={{ fontSize: '11px', fontWeight: 700, color: STRAT_META.bottom.color }}>建档 {bt.totalSignals || 0} 只</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: '8px' }}>
+            <b
+              onClick={() => setStratTab(stratTab === 'bottom' ? 'all' : 'bottom')}
+              style={{ fontSize: '14px', color: STRAT_META.bottom.color, cursor: 'pointer' }}
+              title="点击筛选深跌抄底建档明细"
+            >
+              🛟 ⑥ 深跌抗跌抄底（利空钝化）
+            </b>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ fontSize: '11px', fontWeight: 700, color: STRAT_META.bottom.color }}>建档 {bt.totalSignals || 0} 只</span>
+              {onTabChange && (
+                <button type="button" className="board-mini-pill-btn diag" onClick={() => onTabChange('/ignition')}>抄底台 →</button>
+              )}
+            </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
             <MetricPill label="抗跌触发持有至今" stats={bt.latestStats} />
@@ -384,19 +525,8 @@ export default function PerfPage({
       </div>
 
       {/* 明细筛选工具栏 */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        flexWrap: 'wrap',
-        gap: '10px',
-        padding: '10px 14px',
-        background: 'var(--surface)',
-        border: '1px solid var(--line)',
-        borderRadius: '10px',
-        marginBottom: '12px',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+      <div className="perf-filter-toolbar">
+        <div className="perf-strat-tabs">
           {[
             { k: 'all', label: `全部策略 (${records.length})` },
             { k: 'steady', label: `🛡️ 稳健长线 (${st.totalSignals || 0})` },
@@ -411,16 +541,16 @@ export default function PerfPage({
               type="button"
               className={`mini ${stratTab === t.k ? 'primary' : ''}`}
               onClick={() => setStratTab(t.k)}
-              style={{ fontWeight: stratTab === t.k ? 800 : 600 }}
+              style={{ marginLeft: 0, fontWeight: stratTab === t.k ? 800 : 600 }}
             >
               {t.label}
             </button>
           ))}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+        <div className="perf-search-controls">
           {stratTab === 'short' && (
-            <label style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11.5px', cursor: 'pointer' }}>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11.5px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
               <input type="checkbox" checked={onlyFillable} onChange={e => setOnlyFillable(e.target.checked)} />
               <span>仅看回踩买进</span>
             </label>
@@ -428,7 +558,7 @@ export default function PerfPage({
           <select
             value={dateFilter}
             onChange={e => setDateFilter(e.target.value)}
-            style={{ padding: '4px 8px', fontSize: '12px', borderRadius: '6px', border: '1px solid var(--line)', background: 'var(--surface2)' }}
+            className="perf-date-select"
           >
             <option value="all">全部建档日</option>
             {availDates.map(d => (
@@ -440,25 +570,15 @@ export default function PerfPage({
             placeholder="搜代码 / 名称 / 板块…"
             value={searchKw}
             onChange={e => setSearchKw(e.target.value)}
-            style={{ padding: '4px 10px', fontSize: '12px', borderRadius: '6px', border: '1px solid var(--line)', width: '165px', background: 'var(--surface2)' }}
+            className="perf-search-input"
           />
         </div>
       </div>
 
-      {/* 明细表 */}
-      <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: '10px', overflowX: 'auto' }}>
-        <div style={{ minWidth: '1020px' }}>
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: '92px 86px 150px 106px 96px 110px 92px minmax(200px, 1fr) 88px',
-            gap: '8px',
-            padding: '8px 12px',
-            background: '#f8fafc',
-            borderBottom: '1px solid var(--line)',
-            fontSize: '11px',
-            fontWeight: 700,
-            color: 'var(--mute)',
-          }}>
+      {/* 明细表：宽屏 9 列精确对齐零溢出，窄屏自动沉降为单手无横滑卡片 */}
+      <div className="perf-table-scroll">
+        <div className="perf-table-inner">
+          <div className="perf-grid-header">
             <div>策略赛道</div>
             <div>建档 / 闸门</div>
             <div>标的 / 评级</div>
@@ -467,7 +587,7 @@ export default function PerfPage({
             <div>列B回踩 / 做Tα</div>
             <div>极值(盈/撤)</div>
             <div>各时间节点收益率</div>
-            <div style={{ textAlign: 'right' }}>操作</div>
+            <div style={{ textAlign: 'right' }}>诊断 / 跟踪 / 自选</div>
           </div>
 
           {loading && !data && (
@@ -484,23 +604,17 @@ export default function PerfPage({
 
           {filteredRecords.map((r, idx) => {
             const sm = STRAT_META[r.strategy] || STRAT_META.short;
-            const inT = inPoolCodes.has(r.code);
+            const c6 = String(r.code || '').padStart(6, '0');
             return (
               <div
                 key={r.id}
+                className={`perf-grid-row ${idx % 2 === 1 ? 'is-alt' : ''}`}
                 style={{
-                  display: 'grid',
-                  gridTemplateColumns: '92px 86px 150px 106px 96px 110px 92px minmax(200px, 1fr) 88px',
-                  gap: '8px',
-                  alignItems: 'center',
-                  padding: '8px 12px',
                   borderBottom: idx === filteredRecords.length - 1 ? 'none' : '1px solid var(--line)',
-                  background: idx % 2 === 1 ? '#fcfcfd' : '#fff',
-                  fontSize: '12px',
                 }}
               >
-                <div>
-                  <span style={{ fontSize: '11px', fontWeight: 800, padding: '2px 6px', borderRadius: '4px', background: sm.bg, color: sm.color, border: `1px solid ${sm.border}` }}>
+                <div className="pgr-col-strat">
+                  <span style={{ fontSize: '11px', fontWeight: 800, padding: '2px 6px', borderRadius: '4px', background: sm.bg, color: sm.color, border: `1px solid ${sm.border}`, display: 'inline-block', whiteSpace: 'nowrap' }}>
                     {sm.icon} {sm.label}
                   </span>
                   {r.subType && (
@@ -508,16 +622,16 @@ export default function PerfPage({
                   )}
                 </div>
 
-                <div style={{ fontFamily: 'monospace', fontSize: '11px' }}>
+                <div className="pgr-col-date" style={{ fontFamily: 'monospace', fontSize: '11px' }}>
                   <div>{r.signalDate}</div>
                   <div style={{ color: r.env === 'BAD' || r.env === 'RED' ? '#cf1322' : r.env === 'WARN' || r.env === 'YELLOW' ? '#d97706' : '#15803d', fontWeight: 700 }}>
                     闸门:{r.env}
                   </div>
                 </div>
 
-                <div style={{ minWidth: 0 }}>
+                <div className="pgr-col-ident" style={{ minWidth: 0 }}>
                   <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    <b>{r.name}</b> <span style={{ fontFamily: 'monospace', fontSize: '11px', color: 'var(--mute)' }}>{r.code}</span>
+                    <b>{r.name}</b> <span style={{ fontFamily: 'monospace', fontSize: '11px', color: 'var(--mute)' }}>{c6}</span>
                   </div>
                   <div style={{ fontSize: '10.5px', color: 'var(--sub)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {r.score ? `${Math.round(r.score)}分` : ''}{r.verdict ? ` · ${r.verdict}` : ''}{r.hybk ? ` · ${r.hybk}` : ''}
@@ -525,14 +639,14 @@ export default function PerfPage({
                   </div>
                 </div>
 
-                <div style={{ fontFamily: 'monospace', fontSize: '11px' }}>
+                <div className="pgr-col-px" style={{ fontFamily: 'monospace', fontSize: '11px' }}>
                   <div>现 ¥{f2(r.latestPrice)}</div>
                   <div style={{ color: 'var(--mute)' }}>
                     {r.entryPrice ? `入 ¥${f2(r.entryPrice)}` : `锚 ¥${f2(r.buy || r.refPrice)}`}
                   </div>
                 </div>
 
-                <div style={{ fontFamily: 'monospace', fontWeight: 800, color: retColor(r.retLatest) }}>
+                <div className="pgr-col-ret" style={{ fontFamily: 'monospace', fontWeight: 800, color: retColor(r.retLatest) }}>
                   <div>{fmtRet(r.retLatest, '待T+1')}</div>
                   {r.totalReturnWithT != null && (
                     <div style={{ fontSize: '10.5px', color: retColor(r.totalReturnWithT) }}>
@@ -541,7 +655,7 @@ export default function PerfPage({
                   )}
                 </div>
 
-                <div style={{ fontFamily: 'monospace', fontSize: '11px' }}>
+                <div className="pgr-col-alt" style={{ fontFamily: 'monospace', fontSize: '11px' }}>
                   {r.strategy === 'short' ? (
                     <>
                       <div style={{ fontWeight: 700, color: r.pullbackFilled === false ? 'var(--mute)' : retColor(r.retAltLatest) }}>
@@ -574,24 +688,28 @@ export default function PerfPage({
                   )}
                 </div>
 
-                <div style={{ fontFamily: 'monospace', fontSize: '11px' }}>
+                <div className="pgr-col-ext" style={{ fontFamily: 'monospace', fontSize: '11px' }}>
                   <div style={{ color: 'var(--up)' }}>{fmtRet(r.maxGainPct, '—')}</div>
                   <div style={{ color: 'var(--down)' }}>{fmtRet(r.maxDrawdownPct, '—')}</div>
                 </div>
 
-                <div>{renderHorizonChips(r)}</div>
+                <div className="pgr-col-horizons">{renderHorizonChips(r)}</div>
 
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
-                  <a href={`#/diagnosis?code=${r.code}`} className="mini" style={{ textDecoration: 'none', padding: '2px 5px', fontSize: '10.5px' }} title="全景体检">
-                    🩺
-                  </a>
-                  {!inT && onAddStock ? (
-                    <button type="button" className="mini primary" onClick={() => { onAddStock(r.code); toastOk(`已将 ${r.name} 选入做T决策台`); }} style={{ fontSize: '10.5px', padding: '2px 6px' }}>
-                      ＋T
-                    </button>
-                  ) : (
-                    <span style={{ fontSize: '10.5px', color: 'var(--info)', fontWeight: 700 }}>✓T</span>
-                  )}
+                <div className="pgr-col-acts">
+                  <BoardStockActions
+                    stock={{ ...r, code: c6 }}
+                    inPoolCodes={inPoolCodes}
+                    herdCodeSet={trackedCodes}
+                    herdBusyCode={trackBusyCode}
+                    onHerdAction={handleTrackStock}
+                    onJumpHerd={() => onTabChange && onTabChange('/ignition')}
+                    onAddSingle={handleAddSingleToPool}
+                    onSelectStock={onSelectStock}
+                    onJumpIgnition={onJumpIgnition}
+                    showScore={false}
+                    allowAllBoardsTrack={true}
+                    compact={true}
+                  />
                 </div>
               </div>
             );

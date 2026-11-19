@@ -235,9 +235,13 @@ export default function App() {
       navigate('/trade');
     }
     setTimeout(() => {
-      const cardEl = document.getElementById(`detailDrawer_${code6}`) || document.getElementById(`stockCard_${code6}`) || document.getElementById('secPlan');
+      const cardEl =
+        document.getElementById(`detailDrawer_${code6}`) ||
+        document.getElementById(`stockCard_${code6}`) ||
+        document.getElementById(`battleCard_${code6}`) ||
+        document.getElementById('secPlan');
       if (cardEl) {
-        cardEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        cardEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
         cardEl.classList.remove('card-highlight-pulse');
         void cardEl.offsetWidth;
         cardEl.classList.add('card-highlight-pulse');
@@ -1116,7 +1120,7 @@ export default function App() {
                 tier: meta.tier || st.tier || 'short',
                 strategyTag: meta.strategyTag || st.strategyTag || '超短',
                 ...(meta.strategy ? { planStrategy: meta.strategy } : {}),
-                ...(meta.strategy === 'ignition' ? { ignitionMeta: meta } : {}),
+                ...(meta.strategy === 'ignition' || meta.refPrice || meta.stopPrice ? { ignitionMeta: meta } : {}),
               };
             }
             return st;
@@ -1786,6 +1790,7 @@ export default function App() {
             onAddStock={handleAddStockByQuery}
             onSelectStock={handleSelectStock}
             onJumpDiagnosis={handleJumpDiagnosis}
+            onTabChange={navigate}
           />
         )}
 
@@ -1801,6 +1806,7 @@ export default function App() {
 
         {(activeTab === 'tabTail' || activeTab === 'tabAll') && (
           <TailPage
+            pool={pool}
             totalAssets={totalAssets}
             cash={cash}
             actives={tailActives}
@@ -1809,6 +1815,10 @@ export default function App() {
             onExecTailBuy={handleExecTailBuy}
             onExecTailExit={handleExecTailExit}
             onRefreshContract={fetchContract}
+            onAddStock={handleAddStockByQuery}
+            onSelectStock={handleSelectStock}
+            onJumpIgnition={handleJumpIgnition}
+            onTabChange={navigate}
           />
         )}
 
@@ -1830,6 +1840,8 @@ export default function App() {
             tradeLogs={tradeLogs}
             pool={pool}
             onAddStock={handleAddStockByQuery}
+            onSelectStock={handleSelectStock}
+            onJumpIgnition={handleJumpIgnition}
             onTabChange={navigate}
           />
         )}
@@ -1847,6 +1859,9 @@ export default function App() {
             tailActives={tailActives}
             tradeLogs={tradeLogs}
             snapshots={snapshots}
+            onSelectStock={handleSelectStock}
+            onJumpDiagnosis={handleJumpDiagnosis}
+            onTabChange={navigate}
             onTakeSnapshot={() => {
               const today = todayStr();
               const snap = { date: today, total: totalAssets, mkt: marketValue, cash, rate: posRate.toFixed(1) };
@@ -1899,6 +1914,8 @@ export default function App() {
             pool={pool}
             onExport={handleExport}
             onImportClick={() => importInputRef.current && importInputRef.current.click()}
+            onSelectStock={handleSelectStock}
+            onJumpDiagnosis={handleJumpDiagnosis}
           />
         )}
 
@@ -1927,6 +1944,8 @@ export default function App() {
           onClose={() => setReasonModal({ open: false, stock: null, inPool: false })}
           onAdd={(st) => handleBatchAdd([st], st.pool === 'steady' ? '稳健' : '短线')}
           onJumpCard={(st) => handleSelectStock(st.code)}
+          onJumpDiagnosis={handleJumpDiagnosis}
+          onJumpIgnition={handleJumpIgnition}
         />
       )}
 
@@ -1970,6 +1989,7 @@ export default function App() {
         onRunWorkflow={handleRunEodWorkflow}
         onOpenQuickT={(stock, dir, px, qty) => setQuickTModal({ open: true, stock, defaultDir: dir, defaultPx: px, defaultQty: qty })}
         onMarkOvernightT={handleMarkOvernightT}
+        onTabChange={navigate}
       />
 
       <PwaInstallModal

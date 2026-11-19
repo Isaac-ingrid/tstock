@@ -359,6 +359,7 @@ export default function BattleCardGrid({
   tiltState = null,
   totalMktVal = 0,
   allowedCapPct = 80,
+  activeStockCode = '',
   expandedCode = '',
   onToggleExpand,
   onUpdateStock,
@@ -388,11 +389,14 @@ export default function BattleCardGrid({
     setEditingMemoCode('');
   };
 
+  const activeCode6 = activeStockCode ? String(activeStockCode).padStart(6, '0') : '';
+
   return (
     <div className="battle-grid">
       {stocks.map((s) => {
         const code6 = String(s.code || '').padStart(6, '0');
         const isExpanded = expandedCode === code6;
+        const isFocused = activeCode6 === code6;
         const isShort = s.tier === 'short' || s.poolTag === '短线';
         const noticeRisk = noticeRisks?.[code6] || null;
         const sig = buildActionSignal(s, { sentiment, noticeRisk, tiltState });
@@ -405,7 +409,8 @@ export default function BattleCardGrid({
         return (
           <div
             key={code6}
-            className={`battle-card kind-${sig.kind} ${isExpanded ? 'is-expanded' : ''}`}
+            id={`battleCard_${code6}`}
+            className={`battle-card kind-${sig.kind} ${isExpanded ? 'is-expanded' : ''} ${isFocused ? 'is-focused' : ''}`}
             onClick={() => onToggleExpand && onToggleExpand(code6)}
             role="button"
             tabIndex={0}

@@ -36,8 +36,8 @@ export function TagBadges({ tags = [] }) {
 }
 
 /**
- * 统一且绝不折行裁切的连板模块个股操作按钮组：
- * 支持 📊评分拆解(可选) · 🩺诊股 · 📌跟踪/✓跟踪(主板00/60) · ＋自选/✓已自选(全池通用)
+ * 统一且绝不折行裁切的全站个股快捷操作按钮组：
+ * 支持 📊评分拆解(可选) · 🩺诊股 · 🚀起爆(可选) · 自定义扩展项 · 📌跟踪/✓跟踪 · ＋自选/✓已自选(原位留页可连选)
  */
 export function BoardStockActions({
   stock,
@@ -52,14 +52,21 @@ export function BoardStockActions({
   onJumpIgnition,
   compact = false,
   showHerd = true,
+  allowAllBoardsTrack = false,
+  trackTitle = '加入自动抱团跟踪池',
+  trackedTitle = '已在跟踪池，点击查看跟踪详情',
   showDiag = true,
   readOnlyHistory = false,
+  extraActions = null,
 }) {
   if (!stock || !stock.code) return null;
   const code6 = String(stock.code).trim().padStart(6, '0');
   const inT = Boolean(inPoolCodes?.has(code6));
   const inH = Boolean(herdCodeSet?.has(code6));
-  const canTrackHerd = showHerd && Boolean(onHerdAction) && isMainboard0060(code6);
+  const canTrackHerd =
+    showHerd &&
+    Boolean(onHerdAction) &&
+    (allowAllBoardsTrack || isMainboard0060(code6));
 
   return (
     <div className={`board-act-group ${compact ? 'is-compact' : 'is-full'}`}>
@@ -88,7 +95,7 @@ export function BoardStockActions({
         </a>
       )}
 
-      {onJumpIgnition && !compact && (
+      {onJumpIgnition && (
         <button
           type="button"
           className="board-act-btn ignition"
@@ -98,9 +105,11 @@ export function BoardStockActions({
           }}
           title="跳转到起爆挖掘做六维成色体检"
         >
-          🚀 起爆
+          {compact ? '🚀' : '🚀 起爆'}
         </button>
       )}
+
+      {extraActions}
 
       {canTrackHerd && (
         inH ? (
@@ -109,9 +118,9 @@ export function BoardStockActions({
             className="board-act-btn tracked"
             onClick={(e) => {
               e.stopPropagation();
-              if (onJumpHerd) onJumpHerd();
+              if (onJumpHerd) onJumpHerd(stock);
             }}
-            title={onJumpHerd ? '已在自动抱团跟踪池，点击查看跟踪详情' : '已在自动抱团跟踪池'}
+            title={onJumpHerd ? trackedTitle : '已在跟踪池'}
           >
             {compact ? '✓跟踪' : '✓ 已跟踪'}
           </button>
@@ -124,7 +133,7 @@ export function BoardStockActions({
               e.stopPropagation();
               onHerdAction('add', stock);
             }}
-            title={readOnlyHistory ? '历史复盘模式暂禁修改实时抱团池' : '加入自动抱团跟踪池'}
+            title={readOnlyHistory ? '历史复盘模式暂禁修改实时跟踪池' : trackTitle}
           >
             {herdBusyCode === code6 ? '…' : compact ? '📌跟踪' : '📌 加跟踪'}
           </button>
@@ -151,7 +160,7 @@ export function BoardStockActions({
             e.stopPropagation();
             if (onAddSingle) onAddSingle(code6, stock.name, stock);
           }}
-          title="加入自选池（留在当前页可连续添加多只标的）"
+          title="原位加入自选池（留在当前页可连续添加多只标的）"
         >
           {compact ? '＋自选' : '＋ 加入自选'}
         </button>

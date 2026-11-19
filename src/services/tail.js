@@ -11,9 +11,10 @@ export function getAccountTotalAssetsForTail() {
   return getAccountTotalAssets();
 }
 
-/* 获取尾盘推荐候选标的（选 1~2 只最强黑马） */
-export function getTailBuyCandidates(customWb) {
-  const totalAssets = getAccountTotalAssetsForTail();
+/* 获取尾盘推荐候选标的（默认选 1~2 只最强黑马；可传 limit 查看全部达标备选池） */
+export function getTailBuyCandidates(customWb, options = {}) {
+  const { limit = 2, totalAssetsOverride = null } = options || {};
+  const totalAssets = Number(totalAssetsOverride) > 0 ? Number(totalAssetsOverride) : getAccountTotalAssetsForTail();
   const tenPctBudget = totalAssets * 0.10;
   
   let cands = [];
@@ -43,10 +44,10 @@ export function getTailBuyCandidates(customWb) {
   // 按得分由高到低降序
   list.sort((a, b) => (+b.score || 0) - (+a.score || 0));
 
-  // 最多推荐 2 只最强黑马（各占 10% 仓位或平分）
-  const top2 = list.slice(0, 2);
+  const sliced = limit > 0 ? list.slice(0, limit) : list;
 
-  return top2.map((c, idx) => {
+  return sliced.map((c, idx) => {
+    const code6 = String(c.code || '').trim().padStart(6, '0');
     const px = +(c.buy || c.price || c.close || 10);
     const recShares = Math.max(100, Math.floor((tenPctBudget / px) / 100) * 100);
     const halfShares = Math.max(100, Math.floor((tenPctBudget * 0.5 / px) / 100) * 100);
@@ -65,22 +66,31 @@ export function getTailBuyCandidates(customWb) {
           `🎯 闭环预案：次日早盘 09:30~10:00 冲高 ${tp1} (+2.5%) 坚决止盈`
         ];
 
+    const rankTitle =
+      idx === 0
+        ? '🥇 首选黑马 TOP 1'
+        : idx === 1
+        ? '🥈 次选黑马 TOP 2'
+        : `⚡ 达标备选 #${idx + 1}`;
+    const rankClass = idx === 0 ? 'top1' : idx === 1 ? 'top2' : 'extra';
+
     return {
       rank: idx + 1,
-      rankTitle: idx === 0 ? '🥇 首选黑马 TOP 1' : '🥈 次选黑马 TOP 2',
-      rankClass: idx === 0 ? 'top1' : 'top2',
-      name: c.name,
-      code: c.code,
-      tcode: c.tcode || (c.code ? (c.code.startsWith('6') ? 'sh' + c.code : 'sz' + c.code) : ''),
+      rankTitle,
+      rankClass,
+      name: c.name || code6,
+      code: code6,
+      hybk: c.hybk || c.sector || c.board || '尾盘黑马',
+      tcode: c.tcode || (code6 ? (code6.startsWith('6') ? 'sh' + code6 : 'sz' + code6) : ''),
       score: c.score || 90,
       verdict: c.verdict || (src === 'tail' ? '可挂' : '可做'),
       price: px,
       chgPct: c.chgPct != null ? +c.chgPct : (c.retOpen != null ? +c.retOpen : 2.5),
-      limitRoom: c.limitRoom != null ? c.limitRoom : null,
-      tailRel: c.tailRel != null ? c.tailRel : null,
-      vwapOnline: c.vwapOnline != null ? +c.vwapOnline.toFixed(1) : 95.0,
-      volRatio: c.volRatio != null ? +c.volRatio.toFixed(2) : 2.0,
-      turnover: c.turnover ? +c.turnover.toFixed(1) : 5.0,
+      limitRoom: c.limitRoom != null ? +c.limitRoom : null,
+      tailRel: c.tailRel != null ? +c.tailRel : null,
+      vwapOnline: c.vwapOnline != null ? +Number(c.vwapOnline).toFixed(1) : 95.0,
+      volRatio: c.volRatio != null ? +Number(c.volRatio).toFixed(2) : 2.0,
+      turnover: c.turnover ? +Number(c.turnover).toFixed(1) : 5.0,
       shares: recShares,
       recShares,
       halfShares,

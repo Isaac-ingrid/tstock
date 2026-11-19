@@ -19,6 +19,14 @@ export const MISTAKE_DICTIONARY = [
 
 const LOCAL_AI_KEY = 'tstock_ai_coach_config';
 
+function extractLogCode6(lg) {
+  if (lg?.code && /^\d{6}$/.test(String(lg.code).trim())) {
+    return String(lg.code).trim();
+  }
+  const m = String(lg?.stock || '').match(/(\d{6})/);
+  return m ? m[1] : '';
+}
+
 export default function LedgerSection({
   logs = [],
   wbLatest = null,
@@ -33,7 +41,9 @@ export default function LedgerSection({
   onOpenEodModal,
   todayArchived = false,
   onExport,
-  onImportClick
+  onImportClick,
+  onSelectStock,
+  onJumpDiagnosis,
 }) {
   // 核心导航轨制：'ALL' | 'long_t' | 'short_swing' | 'BENCHMARK'
   const [activeTrackTab, setActiveTrackTab] = useState('ALL');
@@ -981,6 +991,8 @@ export default function LedgerSection({
         <div className={`ledger-log-cards mode-${logViewMode}`}>
           {filteredLogs.length > 0 ? (
             filteredLogs.map(lg => {
+              const code6 = extractLogCode6(lg);
+              const inPool = Boolean(code6 && (pool || []).some(p => String(p.code).padStart(6, '0') === code6));
               const tagList = (lg.mistakeTags || []).map(id => {
                 const item = MISTAKE_DICTIONARY.find(m => m.id === id);
                 return item ? `${item.icon} ${item.name}` : id;
@@ -1088,6 +1100,26 @@ export default function LedgerSection({
                       依据：{lg.basis || '客观信号'}
                     </span>
                     <div className="llc-actions">
+                      {code6 && inPool && onSelectStock && (
+                        <button
+                          type="button"
+                          className="llc-btn-del"
+                          onClick={() => onSelectStock(code6)}
+                          title="跳转至今日作战台该股卡片"
+                        >
+                          🎯 作战
+                        </button>
+                      )}
+                      {code6 && onJumpDiagnosis && (
+                        <button
+                          type="button"
+                          className="llc-btn-del"
+                          onClick={() => onJumpDiagnosis(code6)}
+                          title="查看个股全景诊股"
+                        >
+                          🩺 诊股
+                        </button>
+                      )}
                       {onUpdateLog && (
                         <button
                           type="button"
@@ -1138,6 +1170,8 @@ export default function LedgerSection({
             <tbody>
               {filteredLogs.length > 0 ? (
                 filteredLogs.map(lg => {
+                  const code6 = extractLogCode6(lg);
+                  const inPool = Boolean(code6 && (pool || []).some(p => String(p.code).padStart(6, '0') === code6));
                   const tagList = (lg.mistakeTags || []).map(id => {
                     const item = MISTAKE_DICTIONARY.find(m => m.id === id);
                     return item ? `${item.icon} ${item.name}` : id;
@@ -1165,7 +1199,19 @@ export default function LedgerSection({
                           {lg.track === 'short_swing' ? '⚡ 短线攻防' : '🛡️ 长线做T'}
                         </span>
                       </td>
-                      <td style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{lg.stock}</td>
+                      <td style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
+                        {code6 && inPool && onSelectStock ? (
+                          <span
+                            onClick={() => onSelectStock(code6)}
+                            style={{ cursor: 'pointer', borderBottom: '1px dashed var(--line2)' }}
+                            title="点击跳转至今日作战台该股卡片"
+                          >
+                            {lg.stock}
+                          </span>
+                        ) : (
+                          lg.stock
+                        )}
+                      </td>
                       <td>
                         <span className={`pill ${
                           (lg.dir || '').includes('买') || (lg.dir || '').includes('正T') || (lg.dir || '').includes('潜伏') ? 'p-buy' : 'p-sell'
@@ -1229,7 +1275,18 @@ export default function LedgerSection({
                         {lg.reflection || lg.note || '—'}
                       </td>
                       <td style={{ whiteSpace: 'nowrap' }}>
-                        <div style={{ display: 'inline-flex', gap: '4px' }}>
+                        <div style={{ display: 'inline-flex', gap: '4px', alignItems: 'center' }}>
+                          {code6 && onJumpDiagnosis && (
+                            <button
+                              type="button"
+                              className="mini"
+                              onClick={() => onJumpDiagnosis(code6)}
+                              style={{ marginLeft: 0, padding: '2px 6px' }}
+                              title="跳转个股全景诊股"
+                            >
+                              🩺
+                            </button>
+                          )}
                           {onUpdateLog && (
                             <button
                               type="button"

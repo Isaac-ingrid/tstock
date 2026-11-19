@@ -22,6 +22,7 @@ from backend.ignition import (
     diagnose_ignition_stock,
     get_ignition_pool,
     get_ignition_tracking_pool,
+    mutate_ignition_tracking,
 )
 from backend.limitup import get_limitup_pool, invalidate_limitup_cache
 from backend.meme_radar import get_meme_radar_overview, diagnose_stock_meme
@@ -110,6 +111,17 @@ class HerdActionReq(BaseModel):
     hybk: str = ""
     price: float = 0.0
     reason: str = ""
+
+
+class IgnitionTrackActionReq(BaseModel):
+    action: str = Field(..., pattern="^(add|remove)$")
+    code: str = Field(..., min_length=6, max_length=6, pattern="^[0-9]{6}$")
+    name: str = ""
+    hybk: str = ""
+    price: float = 0.0
+    strategy: str = "ignition"
+    subType: str = ""
+    verdict: str = ""
 
 
 @app.get("/")
@@ -300,6 +312,26 @@ async def stock_ignition_tracking(request: Request) -> dict[str, object]:
         return await get_ignition_tracking_pool(http_client=http_client)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"起爆在轨跟踪获取失败: {exc}") from exc
+
+
+@app.post("/api/stock/ignition_tracking_action")
+async def stock_ignition_tracking_action(payload: IgnitionTrackActionReq) -> dict[str, object]:
+    """手动加入或移出在轨生命周期跟踪池（全市场支持 00/60/30/688）"""
+    try:
+        return await mutate_ignition_tracking(
+            action=payload.action,
+            code=payload.code,
+            name=payload.name,
+            hybk=payload.hybk,
+            price=payload.price,
+            strategy=payload.strategy,
+            sub_type=payload.subType,
+            verdict=payload.verdict,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"在轨跟踪池更新失败: {exc}") from exc
 
 
 @app.get("/api/stock/ignition_diagnose")
