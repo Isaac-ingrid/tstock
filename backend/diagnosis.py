@@ -8,11 +8,12 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 from .limitup import get_limitup_pool
+from .market_data import BoundedTTLCache, fetch_kline_rows
+from .patterns import analyze_kline_patterns
 
-# 内存缓存，避免频繁请求上游 (TTL 15 秒)
-_DIAGNOSIS_CACHE: Dict[str, Tuple[float, dict]] = {}
-_DIAG_CACHE_LOCK = asyncio.Lock()
+# 带容量上限的内存缓存，避免频繁请求上游与内存泄漏 (TTL 15 秒，上限 256 支)
 CACHE_TTL_SECONDS = 15.0
+_DIAGNOSIS_CACHE = BoundedTTLCache(maxsize=256, default_ttl=CACHE_TTL_SECONDS)
 
 
 def calc_ema(values: List[float], period: int) -> List[float]:
@@ -133,6 +134,7 @@ def build_comprehensive_decision(
     market_sentiment: dict,
     atr_profile: Optional[dict] = None,
     experimental_dna: Optional[dict] = None,
+    kline_patterns: Optional[dict] = None,
 ) -> dict:
     """
     结合公告排雷、技术均线趋势、筹码位置、日内分时VWAP与板块/大盘情绪，
@@ -202,6 +204,34 @@ def build_comprehensive_decision(
         elif is_macd_golden:
             positive_points.append("MACD 呈现金叉或红柱放大，短期多头动能恢复")
 
+    kp = kline_patterns or {}
+    has_top_island = bool(kp.get("hasTopIsland", False))
+    has_bottom_island = bool(kp.get("hasBottomIsland", False))
+    has_gravestone = bool(kp.get("hasHighGravestone", False))
+    has_bearish_engulfing = bool(kp.get("hasBearishEngulfing", False))
+    has_immortal_guide = bool(kp.get("hasImmortalGuide", False))
+
+    if has_top_island:
+        trend_score -= 12
+        top_p = next((p for p in kp.get("patterns", []) if p.get("code") == "TOP_ISLAND"), None)
+        risk_points.append(f"🚨 K线高危【顶部岛形反转】：{(top_p or {}).get('desc', '高位向下跳空形成套牢孤岛，严禁抄底')}")
+    if has_gravestone:
+        trend_score -= 6
+        gs_p = next((p for p in kp.get("patterns", []) if p.get("code") == "HIGH_GRAVESTONE"), None)
+        risk_points.append(f"🚨 K线警示【高位天量避雷针】：{(gs_p or {}).get('desc', '高位放量长上影抛压沉重')}")
+    if has_bearish_engulfing:
+        trend_score -= 6
+        be_p = next((p for p in kp.get("patterns", []) if p.get("code") == "BEARISH_ENGULFING"), None)
+        risk_points.append(f"🚨 K线警示【高位放量阴包阳】：{(be_p or {}).get('desc', '空头放量吞没前阳')}")
+    if has_bottom_island:
+        trend_score += 5
+        bi_p = next((p for p in kp.get("patterns", []) if p.get("code") == "BOTTOM_ISLAND"), None)
+        positive_points.append(f"🔥 K线强反转【底部岛形反转】：{(bi_p or {}).get('desc', '低位放量向上跳空确立反转')}")
+    if has_immortal_guide:
+        trend_score += 3
+        ig_p = next((p for p in kp.get("patterns", []) if p.get("code") == "IMMORTAL_GUIDE"), None)
+        positive_points.append(f"✨ K线结构【仙人指路反包】：{(ig_p or {}).get('desc', '试盘长上影次日收阳反包')}")
+
     if rsi6 >= 78:
         trend_score -= 4
         risk_points.append(f"6日 RSI 达 {rsi6:.1f}（短线严重超买钝化），追高极易触发回吐")
@@ -239,11 +269,16 @@ def build_comprehensive_decision(
     chip_desc = f"箱体分位 {box_pos:.0f}% · 获利盘 {profit_ratio:.0f}%"
 
     # ---- 维度4：分时盘口与资金承接 (满分 20) ----
-    p_type = intraday.get("patternType", "chop")
-    vwap_diff = float(intraday.get("vwapDiff", 0.0) or 0.0)
+    is_today_intraday = intraday.get("isToday", True) if intraday else False
+    p_type = intraday.get("patternType", "chop") if is_today_intraday else "stale"
+    vwap_diff = float(intraday.get("vwapDiff", 0.0) or 0.0) if is_today_intraday else 0.0
     intraday_amp = float(intraday.get("amp", 0.0) or 0.0)
 
-    if p_type in ("rebound", "bull"):
+    if not is_today_intraday:
+        intraday_score = 12
+        if intraday and intraday.get("date"):
+            risk_points.append(f"当前分时为历史交易日（{intraday['date']}）数据，盘口信号待开盘后更新")
+    elif p_type in ("rebound", "bull"):
         if vwap_diff >= 3.0:
             intraday_score = 12
             risk_points.append(f"现价偏离分时黄线（VWAP）达 +{vwap_diff:.2f}%，日内追高乖离率过大")
@@ -265,7 +300,7 @@ def build_comprehensive_decision(
         intraday_score = 11
 
     intraday_score = max(0, min(20, intraday_score))
-    intraday_desc = intraday.get("pattern", "分时数据有限")[:18]
+    intraday_desc = (intraday.get("pattern", "分时数据有限")[:18]) if is_today_intraday else "非今日分时·中性"
 
     # ---- 维度5：题材风口与大盘情绪共振 (满分 15) ----
     sec_role = sector_ecology.get("role", "")
@@ -360,7 +395,16 @@ def build_comprehensive_decision(
         risk_rating = "极高风险"
         risk_color = "red"
         suggested_position = "0% (空仓回避)"
-    elif is_broken and not (is_doji or is_ignition):
+    elif has_top_island:
+        can_buy_level = "NO_BUY"
+        can_buy_verdict = "🚫 顶部岛形反转套牢区 · 严禁抄底/正T"
+        is_buy_point_now = False
+        timing_headline = "❌ 明确非买点（顶部岛形反转一票否决）"
+        timing_analysis = "高位形成向下跳空缺口与上方悬空套牢孤岛，筹码结构已遭破坏。严禁左侧低吸或做正T，持仓者仅宜趁反抽缺口下沿果断倒T降仓止损！"
+        risk_rating = "极高风险"
+        risk_color = "red"
+        suggested_position = "0% (空仓回避/反抽减仓)"
+    elif is_broken and not (is_doji or is_ignition or has_bottom_island):
         can_buy_level = "NO_BUY"
         can_buy_verdict = "🚫 技术破位下行 · 严禁盲目抄底"
         is_buy_point_now = False
@@ -382,7 +426,7 @@ def build_comprehensive_decision(
         risk_rating = "偏高风险"
         risk_color = "red"
         suggested_position = "0% (等待分时转强)"
-    elif is_stagnation or rsi6 >= 80 or vwap_diff >= 3.0:
+    elif is_stagnation or has_gravestone or has_bearish_engulfing or rsi6 >= 80 or vwap_diff >= 3.0:
         can_buy_level = "WAIT"
         can_buy_verdict = "👀 短期偏热过乖离 · 切忌追高接盘"
         is_buy_point_now = False
@@ -478,9 +522,17 @@ def build_comprehensive_decision(
                 stop_loss = round(ideal_low - max(1.00 * atr14_val, ideal_low * 0.025), 2)
             stop_loss = max(0.01, stop_loss)
             target_1 = round(max(box_top, cur_px + 1.80 * atr14_val, avg_cost * 1.02), 2)
+            sup_gap = kp.get("nearestSupportGap")
+            gap_hint = (
+                f" · 3日不补支撑缺口 ¥{sup_gap['gapLow']:.2f}~¥{sup_gap['gapHigh']:.2f}"
+                if (sup_gap and sup_gap.get("confirmed3d")) else ""
+            )
+            if sup_gap and sup_gap.get("confirmed3d") and sup_gap["gapHigh"] < ideal_high:
+                ideal_low = round(max(ideal_low, sup_gap["gapHigh"]), 2)
             calibration_note = (
                 f"已按 14日ATR (¥{atr14_val:.2f} / {atr_pct_val:.2f}%) 动态校准低吸缓冲与 1.2×ATR 抗洗盘止损带宽"
                 + (f" · 基因：{dna_tag}" if dna_tag else "")
+                + gap_hint
             )
         else:
             ideal_low = round(max(box_bot * 0.995, min(ma20, ma5, vwap_ref) * 0.985), 2)
@@ -636,53 +688,21 @@ async def _fetch_diag_kline_days(
     em_secid: str,
     limit: int = 120,
 ) -> List[list]:
-    """多源拉取前复权日K（优先东方财富 push2his，回退 web.ifzq / ifzq 防腾讯云 WAF 501）。"""
-    em_url = (
-        f"https://push2his.eastmoney.com/api/qt/stock/kline/get"
-        f"?secid={em_secid}&fields1=f1,f2,f3,f4,f5,f6"
-        f"&fields2=f51,f52,f53,f54,f55,f56&klt=101&fqt=1&end=20500101&lmt={limit}"
-    )
-    try:
-        r_em = await client.get(em_url, headers={"Referer": "https://quote.eastmoney.com/"})
-        if r_em.status_code == 200 and r_em.text.lstrip().startswith("{"):
-            klines = (r_em.json().get("data") or {}).get("klines") or []
-            parsed: List[list] = []
-            for row in klines:
-                pts = str(row).split(",")
-                if len(pts) >= 6:
-                    parsed.append([pts[0], pts[1], pts[2], pts[3], pts[4], pts[5]])
-            if len(parsed) >= 20:
-                return parsed
-    except Exception:
-        pass
-
-    for host in ("web.ifzq.gtimg.cn", "ifzq.gtimg.cn"):
-        u = f"https://{host}/appstock/app/fqkline/get?param={tcode},day,,,{limit},qfq"
-        try:
-            r_tx = await client.get(u, headers={"Referer": "https://gu.qq.com/"})
-            if r_tx.status_code == 200 and r_tx.text.lstrip().startswith("{"):
-                j = r_tx.json()
-                node = (j.get("data") or {}).get(tcode) or {}
-                days = node.get("qfqday") or node.get("day") or []
-                if days:
-                    return days
-        except Exception:
-            continue
-    return []
+    """多源拉取前复权日K（复用 market_data 统一东财主用 + 腾讯回退与带上限缓存）。"""
+    return await fetch_kline_rows(client, em_secid, limit=limit, tcode_fallback=tcode)
 
 
-async def get_stock_diagnosis(code: str) -> dict:
+async def get_stock_diagnosis(
+    code: str,
+    http_client: Optional[httpx.AsyncClient] = None,
+) -> dict:
     """获取股票的全景诊断聚合数据（行情、排雷公告、板块风口、身位生态、二波预期、分时VWAP、筹码处方）"""
     code = str(code).strip().zfill(6)
-    now = time.monotonic()
 
-    # 1. 查缓存
-    async with _DIAG_CACHE_LOCK:
-        if code in _DIAGNOSIS_CACHE:
-            exp, data = _DIAGNOSIS_CACHE[code]
-            if exp > now:
-                return data
-            _DIAGNOSIS_CACHE.pop(code, None)
+    # 1. 查带容量上限缓存
+    cached = await _DIAGNOSIS_CACHE.get(code)
+    if cached is not None:
+        return cached
 
     mkt = "sh" if code.startswith(("6", "9")) else ("sz" if code.startswith(("0", "2", "3")) else "bj")
     tcode = f"{mkt}{code}"
@@ -690,13 +710,15 @@ async def get_stock_diagnosis(code: str) -> dict:
     em_secid = f"1.{code}" if mkt == "sh" else f"0.{code}"
     mkt_upper = mkt.upper()
 
-    async with httpx.AsyncClient(
+    close_client = http_client is None
+    client = http_client or httpx.AsyncClient(
         timeout=httpx.Timeout(9.0),
         trust_env=False,
         headers={
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         },
-    ) as client:
+    )
+    try:
         # 并发请求多维度公开数据接口（日K已切东财push2his主用 + web.ifzq回退，避免ifzq WAF 501）
         q_url = f"https://qt.gtimg.cn/q={tcode}"
         ann_url = f"https://np-anotice-stock.eastmoney.com/api/security/ann?sr=-1&page_size=30&page_index=1&ann_type=A&stock_list={code}"
@@ -714,11 +736,14 @@ async def get_stock_diagnosis(code: str) -> dict:
             client.get(hot_bk_url, headers={"Referer": "https://quote.eastmoney.com/"}),
             _fetch_diag_kline_days(client, tcode, em_secid, 120),
             client.get(min_url),
-            get_limitup_pool(),
+            get_limitup_pool(http_client=client),
             client.get(ind_url, headers={"Referer": "https://quote.eastmoney.com/"}),
         ]
 
         resps = await asyncio.gather(*reqs, return_exceptions=True)
+    finally:
+        if close_client:
+            await client.aclose()
 
     def _sf(v: Any, d: float = 0.0) -> float:
         try:
@@ -963,6 +988,7 @@ async def get_stock_diagnosis(code: str) -> dict:
     chips_data = {}
     second_wave_data = {}
     technicals_data = {}
+    kline_patterns = analyze_kline_patterns(days, code=code, name=quote_data.get("name", ""))
     experimental_dna = None
     atr_profile = None
 
@@ -1077,9 +1103,14 @@ async def get_stock_diagnosis(code: str) -> dict:
                 cur_vol_avg = sum(vols[-5:]) / 5 if len(vols) >= 5 else vols[-1]
                 vol_shrink = (cur_vol_avg / peak_vol_avg) * 100 if peak_vol_avg > 0 else 100.0
 
-                # 二波研判逻辑
+                # 二波研判逻辑（若存在顶部岛形反转，一票否决黄金二波潜伏判定）
                 if wave1_amp >= 28:
-                    if days_from_top <= 3:
+                    if kline_patterns.get("hasTopIsland"):
+                        stage = "⚠️ 顶部岛形反转·派发套牢区"
+                        stage_tag = "high_risk"
+                        potential = "极低 (顶部岛形反转否决)"
+                        desc = "高位出现向下跳空顶部岛形反转，上方形成密集套牢孤岛，即便缩量回踩 MA20 也严禁误判为二波低吸点！"
+                    elif days_from_top <= 3:
                         stage = "① 首轮加速高潮期"
                         stage_tag = "high_risk"
                         potential = "尚在首轮末端"
@@ -1226,13 +1257,17 @@ async def get_stock_diagnosis(code: str) -> dict:
         except Exception:
             pass
 
-    # 7. 全天分时 (VWAP 均价线与日内形态)
+    # 7. 全天分时 (VWAP 均价线与日内形态，带日期守卫防止盘前/休市误用昨日分时)
     min_resp = resps[6]
     intraday_data = {}
     if not isinstance(min_resp, Exception) and min_resp.status_code == 200:
         try:
             m_json = min_resp.json()
-            min_arr = m_json.get("data", {}).get(tcode, {}).get("data", {}).get("data", [])
+            min_node = m_json.get("data", {}).get(tcode, {}).get("data", {}) or {}
+            min_arr = min_node.get("data", [])
+            min_date = re.sub(r"\D", "", str(min_node.get("date") or ""))[:8]
+            today_ymd = datetime.date.today().strftime("%Y%m%d")
+            is_today_min = (min_date == today_ymd) if min_date else True
             if min_arr:
                 m_prices = []
                 m_vwap_arr = []
@@ -1282,7 +1317,12 @@ async def get_stock_diagnosis(code: str) -> dict:
                         pattern = "分时震荡多空拉锯"
                         pattern_type = "chop"
 
+                    if not is_today_min:
+                        pattern = f"[历史分时 {min_date}] {pattern}"
+
                     intraday_data = {
+                        "date": min_date,
+                        "isToday": is_today_min,
                         "curPrice": cur_p,
                         "vwap": round(last_v, 2),
                         "vwapDiff": round(((cur_p - last_v) / last_v) * 100, 2) if last_v > 0 else 0.0,
@@ -1313,9 +1353,13 @@ async def get_stock_diagnosis(code: str) -> dict:
 
     prescriptions = []
 
-    # 1) 排雷法则
+    # 1) 排雷与高危 K 线形态法则
     if red_flags:
         prescriptions.append(f"【严控风险】近1个月有高危公告（{red_flags[0]['title'][:25]}），深套切勿盲目补仓！")
+    if kline_patterns.get("hasTopIsland"):
+        prescriptions.append("【顶部岛形反转】高位向下跳空留下悬空套牢区，严禁正T抄底摊薄，反抽缺口下沿坚决倒T降仓！")
+    elif kline_patterns.get("hasBottomIsland"):
+        prescriptions.append("【底部岛形反转】低位放量向上跳空突破孤岛，趋势拐点信号明确，回踩缺口上沿不补可顺势正T！")
 
     # 2) 二波预期法则 (最核心的解套指引)
     if second_wave_data:
@@ -1339,8 +1383,8 @@ async def get_stock_diagnosis(code: str) -> dict:
         elif "板块大容量中军" in sec_role:
             prescriptions.append("【中军持股】作为板块大容量中军，承接力强，适合依托 20 日均线与箱体下沿做底仓波段网格T。")
 
-    # 4) 分时日内与做T空间法则
-    if intraday_data:
+    # 4) 分时日内与做T空间法则（仅对今日有效分时生效）
+    if intraday_data and intraday_data.get("isToday", True):
         amp = intraday_data.get("amp", 0.0)
         p_type = intraday_data.get("patternType")
         if amp < 2.0:
@@ -1416,6 +1460,7 @@ async def get_stock_diagnosis(code: str) -> dict:
         market_sentiment=market_sentiment,
         atr_profile=atr_profile,
         experimental_dna=experimental_dna,
+        kline_patterns=kline_patterns,
     )
 
     diag_result = {
@@ -1435,6 +1480,7 @@ async def get_stock_diagnosis(code: str) -> dict:
         "greenCatalysts": green_catalysts,
         "chips": chips_data,
         "technicals": technicals_data,
+        "klinePatterns": kline_patterns,
         "atrProfile": atr_profile,
         "experimentalDNA": experimental_dna,
         "marketContext": market_sentiment,
@@ -1450,8 +1496,7 @@ async def get_stock_diagnosis(code: str) -> dict:
     # 微信复制文本
     diag_result["wechatSummary"] = build_wechat_summary(diag_result)
 
-    # 写入缓存
-    async with _DIAG_CACHE_LOCK:
-        _DIAGNOSIS_CACHE[code] = (now + CACHE_TTL_SECONDS, diag_result)
+    # 写入带容量上限缓存
+    await _DIAGNOSIS_CACHE.set(code, diag_result, ttl=CACHE_TTL_SECONDS)
 
     return diag_result

@@ -13,18 +13,18 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import httpx
 
+from .market_data import BoundedTTLCache, fetch_batch_quotes, fetch_kline_rows
+from .patterns import analyze_kline_patterns
+
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 HERD_POOL_FILE = DATA_DIR / "herd_pool.json"
 _HERD_FILE_LOCK = asyncio.Lock()
 
-# 进程内短周期缓存，避免频繁请求上游行情
-_HIST_ZT_CACHE: Dict[str, Tuple[float, List[dict]]] = {}
-_RECENT_ZT_CACHE: Dict[str, Tuple[float, List[Tuple[str, List[dict]]]]] = {}
-_KLINE_CACHE: Dict[str, Tuple[float, List[list]]] = {}
-_HERD_CACHE_LOCK = asyncio.Lock()
-
+# 带容量上限的进程内短周期缓存，避免频繁请求上游行情与内存泄漏
 HIST_ZT_TTL = 3600.0
 KLINE_TTL = 180.0
+_HIST_ZT_CACHE: BoundedTTLCache[str, List[dict]] = BoundedTTLCache(maxsize=128, default_ttl=HIST_ZT_TTL)
+_RECENT_ZT_CACHE: BoundedTTLCache[str, List[Tuple[str, List[dict]]]] = BoundedTTLCache(maxsize=64, default_ttl=HIST_ZT_TTL)
 
 NOISE_CONCEPT_KEYWORDS = (
     "昨日",
@@ -434,11 +434,9 @@ def _save_herd_state_sync(state: dict) -> None:
 
 
 async def _fetch_hist_zt_pool(client: httpx.AsyncClient, date_str: str) -> List[dict]:
-    now_ts = time.monotonic()
-    async with _HERD_CACHE_LOCK:
-        cached = _HIST_ZT_CACHE.get(date_str)
-        if cached and cached[0] > now_ts:
-            return cached[1]
+    cached = await _HIST_ZT_CACHE.get(date_str)
+    if cached is not None:
+        return cached
 
     url = (
         "https://push2ex.eastmoney.com/getTopicZTPool"
@@ -458,8 +456,7 @@ async def _fetch_hist_zt_pool(client: httpx.AsyncClient, date_str: str) -> List[
         pool = []
 
     if pool:
-        async with _HERD_CACHE_LOCK:
-            _HIST_ZT_CACHE[date_str] = (now_ts + HIST_ZT_TTL, pool)
+        await _HIST_ZT_CACHE.set(date_str, pool, ttl=HIST_ZT_TTL)
     return pool
 
 
@@ -467,11 +464,9 @@ async def _fetch_recent_zt_days(
     client: httpx.AsyncClient, actual_date: str, lookback_cal_days: int = 7, max_valid_days: int = 3
 ) -> List[Tuple[str, List[dict]]]:
     """并发探测实际交易日之前的近 3 个交易日涨停池，用于自动发现昨日高标/近期抱团核。"""
-    now_ts = time.monotonic()
-    async with _HERD_CACHE_LOCK:
-        cached_days = _RECENT_ZT_CACHE.get(actual_date)
-        if cached_days and cached_days[0] > now_ts:
-            return cached_days[1]
+    cached_days = await _RECENT_ZT_CACHE.get(actual_date)
+    if cached_days is not None:
+        return cached_days
 
     cand_dates = [_shift_date_str(actual_date, -d) for d in range(1, lookback_cal_days + 1)]
     res_list = await asyncio.gather(
@@ -486,113 +481,18 @@ async def _fetch_recent_zt_days(
                 break
 
     if out:
-        async with _HERD_CACHE_LOCK:
-            _RECENT_ZT_CACHE[actual_date] = (now_ts + HIST_ZT_TTL, out)
+        await _RECENT_ZT_CACHE.set(actual_date, out, ttl=HIST_ZT_TTL)
     return out
 
 
 async def _fetch_batch_quotes(client: httpx.AsyncClient, codes: List[str]) -> Dict[str, dict]:
-    """单次批量拉取多只主板股的腾讯实时行情（0.1秒级）。"""
-    if not codes:
-        return {}
-    out: Dict[str, dict] = {}
-    unique_codes = list(dict.fromkeys(str(c).zfill(6) for c in codes if c))
-    for i in range(0, len(unique_codes), 60):
-        chunk = unique_codes[i : i + 60]
-        q_str = ",".join(_to_tcode(c) for c in chunk)
-        try:
-            r = await client.get(f"https://qt.gtimg.cn/q={q_str}")
-            if r.status_code != 200:
-                continue
-            for line in r.text.split(";"):
-                if "~" not in line:
-                    continue
-                parts = line.split("~")
-                if len(parts) <= 45:
-                    continue
-                code = str(parts[2]).strip().zfill(6)
-                name = str(parts[1]).strip()
-                px = _sf(parts[3])
-                prev_close = _sf(parts[4])
-                if px <= 0:
-                    continue
-                out[code] = {
-                    "code": code,
-                    "tcode": _to_tcode(code),
-                    "name": name,
-                    "price": round(px, 2),
-                    "prevClose": round(prev_close, 2),
-                    "high": round(_sf(parts[33], px), 2),
-                    "low": round(_sf(parts[34], px), 2),
-                    "chg": round(_sf(parts[32]), 2),
-                    "amount": _sf(parts[37]) * 10000.0,
-                    "turnover": round(_sf(parts[38]), 2),
-                    "mcap": _sf(parts[45]) * 1.0e8,
-                    "vr": round(_sf(parts[49], 1.0), 2) if len(parts) > 49 else 1.0,
-                }
-        except Exception:
-            continue
-    return out
+    """委托统一行情网关批量拉取腾讯实时行情（0.1秒级，带容量上限缓存）。"""
+    return await fetch_batch_quotes(client, codes, ttl=4.0)
 
 
 async def _fetch_daily_kline(client: httpx.AsyncClient, code: str, sem: Optional[asyncio.Semaphore] = None) -> List[list]:
-    now_ts = time.monotonic()
-    async with _HERD_CACHE_LOCK:
-        cached = _KLINE_CACHE.get(code)
-        if cached and cached[0] > now_ts:
-            return cached[1]
-
-    tcode = _to_tcode(code)
-    em_secid = f"1.{code}" if str(code).startswith(("6", "9")) else f"0.{code}"
-    em_kline_url = (
-        f"https://push2his.eastmoney.com/api/qt/stock/kline/get"
-        f"?secid={em_secid}&fields1=f1,f2,f3,f4,f5,f6"
-        f"&fields2=f51,f52,f53,f54,f55,f56&klt=101&fqt=1&end=20500101&lmt=30"
-    )
-    tx_urls = [
-        f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={tcode},day,,,30,qfq",
-        f"https://ifzq.gtimg.cn/appstock/app/fqkline/get?param={tcode},day,,,30,qfq",
-        f"https://proxy.finance.qq.com/ifzqgtimg/appstock/app/fqkline/get?param={tcode},day,,,30,qfq",
-    ]
-    days: List[list] = []
-
-    async def _do_fetch() -> List[list]:
-        try:
-            r_em = await client.get(em_kline_url, headers={"Referer": "https://quote.eastmoney.com/"})
-            if r_em.status_code == 200 and r_em.text.lstrip().startswith("{"):
-                klines = (r_em.json().get("data") or {}).get("klines") or []
-                parsed = [str(row).split(",")[:6] for row in klines if len(str(row).split(",")) >= 6]
-                if parsed:
-                    return parsed
-        except Exception:
-            pass
-
-        for url in tx_urls:
-            try:
-                r = await client.get(url, headers={"Referer": "https://gu.qq.com/"})
-                if r.status_code == 200 and r.text.strip().startswith("{"):
-                    j = r.json()
-                    res_days = (
-                        j.get("data", {}).get(tcode, {}).get("qfqday")
-                        or j.get("data", {}).get(tcode, {}).get("day")
-                        or []
-                    )
-                    if res_days:
-                        return res_days
-            except Exception:
-                continue
-        return []
-
-    if sem is not None:
-        async with sem:
-            days = await _do_fetch()
-    else:
-        days = await _do_fetch()
-
-    if days:
-        async with _HERD_CACHE_LOCK:
-            _KLINE_CACHE[code] = (now_ts + KLINE_TTL, days)
-    return days
+    """委托统一行情网关拉取 60 日前复权日K（东财主用 + 腾讯回退）。"""
+    return await fetch_kline_rows(client, code, lmt=60, sem=sem, ttl=KLINE_TTL)
 
 
 def _build_stock_tags(
@@ -787,9 +687,17 @@ def _eval_herd_health(
     is_zt = chg >= 9.6
     is_strong_repair = chg >= 5.5 and vs_ma5 >= -0.5
 
+    # K 线形态风控检测（提前捕捉高位顶部岛形反转、天量避雷针与放量阴包阳）
+    kline_patterns = analyze_kline_patterns(days, code=code)
+    has_top_island = bool(kline_patterns.get("hasTopIsland"))
+    has_gravestone = bool(kline_patterns.get("hasHighGravestone"))
+    has_bearish_engulfing = bool(kline_patterns.get("hasBearishEngulfing"))
+
     # ---- 宽松版破位自动移出规则（今日涨停/放量强修复豁免） ----
     evict_reasons: List[str] = []
     if not is_zt and not is_strong_repair:
+        if has_top_island:
+            evict_reasons.append("高位顶部岛形反转（向下跳空形成悬空套牢孤岛），提前触发破位移出")
         if chg <= -9.5:
             evict_reasons.append(f"跌停核按钮({chg:.1f}%)，主力踩踏出局")
         if len(closes_eval) >= 12 and vs_ma20 <= -1.5 and cur_px < ma5:
@@ -824,6 +732,7 @@ def _eval_herd_health(
             "healthBg": "#fef2f2",
             "healthBorder": "#fca5a5",
             "healthDesc": "；".join(evict_reasons),
+            "klinePatterns": kline_patterns,
         }
 
     if is_zt:
@@ -831,6 +740,19 @@ def _eval_herd_health(
         h_label = "🔥 连板涨停加速"
         h_col, h_bg, h_bd = "#cf1322", "#fff1f0", "#ffa39e"
         h_desc = f"今日涨停封板 (+{chg:.2f}%)，距MA5 +{vs_ma5:.1f}%，继续领跑抱团情绪。"
+    elif not is_strong_repair and (has_gravestone or has_bearish_engulfing):
+        h_status = "warning"
+        warn_tags = []
+        if has_gravestone:
+            warn_tags.append("高位天量避雷针")
+        if has_bearish_engulfing:
+            warn_tags.append("高位放量阴包阳")
+        h_label = "🟡 高位派发形态黄牌预警"
+        h_col, h_bg, h_bd = "#b45309", "#fffbeb", "#fcd34d"
+        h_desc = (
+            f"检测到【{'/'.join(warn_tags)}】高位派发预警（距高点{dd_from_peak:.1f}%，偏离MA10 {vs_ma10:+.1f}%），"
+            "即便尚未跌破均线红线也严禁追高，优先趁分时冲高倒T减仓锁定利润。"
+        )
     elif not is_strong_repair and (vs_ma10 < -0.5 or dd_from_peak <= -14.0 or chg <= -6.0):
         h_status = "warning"
         h_label = "🟡 深水洗盘黄牌预警"
@@ -874,6 +796,7 @@ def _eval_herd_health(
         "healthBg": h_bg,
         "healthBorder": h_bd,
         "healthDesc": h_desc,
+        "klinePatterns": kline_patterns,
     }
 
 

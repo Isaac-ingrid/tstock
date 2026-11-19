@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { f2, money$, toastWarn } from '../../services/utils.js';
 import { searchTencent } from '../../services/api.js';
 import { TagBadges } from './boardShared.jsx';
+import KlinePatternBadges from '../KlinePatternBadges.jsx';
 
 export default function HerdPoolPanel({
   displayItems,
@@ -329,6 +330,7 @@ export default function HerdPoolPanel({
 
             <div style={{ marginBottom: '8px' }}>
               <TagBadges tags={item.tags} />
+              <KlinePatternBadges klinePatterns={item.klinePatterns} variant="compact" />
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '8px', padding: '6px 10px', background: 'var(--surface2)', borderRadius: '6px', fontSize: '12px', marginBottom: '8px' }}>

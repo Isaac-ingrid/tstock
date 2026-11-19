@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { f2, pct, money, money$, toastOk, toastErr, toastWarn, copyPlain } from '../services/utils.js';
 import { fetchStockDiagnosis, searchTencent, postHerdAction, loadChart, loadStock, refreshSingleFastRt, isAShareTradingNow } from '../services/api.js';
 import ChartCanvas from '../components/ChartCanvas.jsx';
+import KlinePatternBadges from '../components/KlinePatternBadges.jsx';
 
 const QUICK_PRESETS = [
   { code: '002085', name: '万丰奥威' },
@@ -838,6 +839,9 @@ export default function DiagnosisPage({
                       {dec.timingAnalysis}
                     </div>
                   </div>
+
+                  {/* A股K线形态与缺口状态机警示条（岛形反转/避雷针/阴包阳/仙人指路/3日不补缺口） */}
+                  <KlinePatternBadges klinePatterns={report.klinePatterns} variant="banner" style={{ marginBottom: '12px', marginTop: 0 }} />
 
                   {/* 参考交易价格带 (Trade Plan) */}
                   {dec.tradePlan && (

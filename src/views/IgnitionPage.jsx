@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { fetchIgnitionPool, fetchIgnitionTracking, fetchIgnitionDiagnose } from '../services/api.js';
 import { f2, toastOk, toastErr, copyPlain } from '../services/utils.js';
 import MemeRadarSection from '../components/MemeRadarSection.jsx';
+import KlinePatternBadges from '../components/KlinePatternBadges.jsx';
 
 const CUSTOM_US_KEY = 't-ignition-custom-us';
 
@@ -851,6 +852,7 @@ export default function IgnitionPage({
                       {item.shakeoutSignals && item.shakeoutSignals.length > 0 && (
                         <div style={{ color: '#cf1322', fontWeight: 700 }}>⚡ {item.shakeoutSignals.join(' + ')}</div>
                       )}
+                      <KlinePatternBadges klinePatterns={item.klinePatterns} variant="compact" />
                     </div>
 
                     <div style={{ fontFamily: 'monospace', fontSize: '16px', fontWeight: 800, color: item.ignitionScore >= 80 ? '#cf1322' : '#0369a1' }}>
@@ -1138,6 +1140,7 @@ export default function IgnitionPage({
                       <div style={{ fontSize: '11px', color: 'var(--sub)', marginTop: '4px', lineHeight: 1.4 }}>
                         {item.dipTip}
                       </div>
+                      <KlinePatternBadges klinePatterns={item.klinePatterns} variant="compact" />
                     </div>
 
                     <div style={{ fontSize: '11px', lineHeight: 1.5 }}>

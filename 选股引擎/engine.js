@@ -103,12 +103,15 @@ function mapRow(d) {
   };
 }
 
+const isTodaySnapshot = (filename) =>
+  filename === `snapshot-${TODAY}.json` || filename.startsWith(`tail-snapshot-${TODAY}-`);
+
 async function fetchAll({ force = false } = {}) {
   if (!force && fs.existsSync(CACHE)) {
     const cached = JSON.parse(fs.readFileSync(CACHE, 'utf8'));
     if (cached?.rows?.length > 3000) {
       console.log(`（使用本地快照缓存 ${CACHE}，共 ${cached.rows.length} 只；加 --force 重新拉取）`);
-      return cached.rows;
+      return { rows: cached.rows, isFallback: false, fallbackFile: null };
     }
   }
 
@@ -140,8 +143,10 @@ async function fetchAll({ force = false } = {}) {
         .sort((a, b) => b.rows.length - a.rows.length);
 
       if (snaps.length > 0) {
-        console.log(`⚠️ 东财 clist 首包重试超时，启动最全历史快照兜底: ${snaps[0].f} (${snaps[0].rows.length} 只)`);
-        return snaps[0].rows;
+        const picked = snaps[0];
+        const crossDay = !isTodaySnapshot(picked.f);
+        console.log(`⚠️ 东财 clist 首包重试超时，启动最全历史快照兜底: ${picked.f} (${picked.rows.length} 只)`);
+        return { rows: picked.rows, isFallback: crossDay, fallbackFile: picked.f };
       }
     }
     throw new Error('东财 clist 接口重试失败且无可用快照');
@@ -181,6 +186,8 @@ async function fetchAll({ force = false } = {}) {
     out.push(...list);
   }
   let rows = out.filter((x) => Number.isFinite(x.chgPct) && x.price > 0);
+  let isFallback = false;
+  let fallbackFile = null;
   if (rows.length < 4500 && fs.existsSync(OUT_DIR)) {
     const snaps = fs.readdirSync(OUT_DIR)
       .filter((f) => f.startsWith('snapshot-') || f.startsWith(`tail-snapshot-${TODAY}-`))
@@ -192,17 +199,19 @@ async function fetchAll({ force = false } = {}) {
         if (c?.rows?.length > rows.length && c?.rows?.length > 4500) {
           console.log(`⚠️ 本次抓包样本偏少(${rows.length})，补充全量快照(${snap}, ${c.rows.length}只)`);
           rows = c.rows;
+          isFallback = !isTodaySnapshot(snap);
+          fallbackFile = snap;
           break;
         }
       } catch {}
     }
   }
 
-  if (rows.length > 3000) {
+  if (rows.length > 3000 && !isFallback) {
     fs.mkdirSync(OUT_DIR, { recursive: true });
     fs.writeFileSync(CACHE, JSON.stringify({ date: TODAY, total, rows }, null, 0));
   }
-  return rows;
+  return { rows, isFallback, fallbackFile };
 }
 
 /* ---------------- 日K：30 日涨停 ---------------- */
@@ -248,25 +257,28 @@ const { scoreStock } = require('./score');
   const limitN = process.argv.includes('--limit') ? +process.argv[process.argv.indexOf('--limit') + 1] : 30;
 
   console.log(`\n【${TODAY}】全市场扫描`);
-  let all;
+  let all, isFallback = false, fallbackFile = null;
   try {
-    all = await fetchAll({ force: process.argv.includes('--force') });
+    const snapRes = await fetchAll({ force: process.argv.includes('--force') });
+    all = snapRes.rows;
+    isFallback = snapRes.isFallback;
+    fallbackFile = snapRes.fallbackFile;
   } catch (e) {
     console.error('\n✗ 全市场快照拉取失败（接口限流或网络中断）：' + e.message);
     console.error('  已抓过的日期会缓存到 out/snapshot-YYYY-MM-DD.json，重跑会直接读缓存；');
     console.error('  需要重抓时加 --force。');
     process.exit(2);
   }
-  console.log(`获取 ${all.length} 只（含涨跌幅有效值）\n`);
+  console.log(`获取 ${all.length} 只（含涨跌幅有效值）${isFallback ? ` [跨日兜底: ${fallbackFile}]` : ''}\n`);
 
-  const known = (s) => !!s.name && !/^N|^C/.test(s.name); // 排除上市首日无涨跌幅限制标记不全的（保守）
+  const known = (s) => !!s.name && !/^N|^C/.test(s.name); // 排除上市初期无涨跌幅限制的新股（N/C 开头）
 
   /* 漏斗（严格六步法，逐级累计） */
   const funnel = {};
   let cur = all.slice();
   funnel['① 全市场'] = cur.length;
-  cur = cur.filter((s) => !/ST/i.test(s.name));
-  funnel['② 非 ST'] = cur.length;
+  cur = cur.filter((s) => known(s) && !/ST/i.test(s.name));
+  funnel['② 非 ST/新股'] = cur.length;
   cur = cur.filter((s) => !CFG.excludeBoard.includes(boardOf(s.code)));
   funnel['③ 剔除创业板/北交所'] = cur.length;
   cur = cur.filter((s) => s.totalCap >= CFG.capMin && s.totalCap <= CFG.capMax);
@@ -281,7 +293,7 @@ const { scoreStock } = require('./score');
 
   /* 打分版放宽集 */
   const loose = all.filter((s) => {
-    if (/ST/i.test(s.name)) return false;
+    if (!known(s) || /ST/i.test(s.name)) return false;
     if (CFG.excludeBoard.includes(boardOf(s.code))) return false;
     if (s.totalCap < CFG.capMin || s.totalCap > CFG.capMax) return false;
     if (s.chgPct < CFG.looseChgMin || s.chgPct > CFG.looseChgMax) return false;
@@ -354,34 +366,38 @@ const { scoreStock } = require('./score');
   console.log(`\n明细 → ${file}`);
 
   /* ---- 台账：清单 + 全市场收盘快照（收益回算的唯一数据源） ---- */
-  const LEDGER = path.join(__dirname, 'ledger');
-  fs.mkdirSync(LEDGER, { recursive: true });
+  if (isFallback) {
+    console.warn(`⚠️ 本次使用的是跨日历史兜底快照（${fallbackFile}），已跳过写入 ledger/picks-${TODAY}.json 与 ledger/close-${TODAY}.json，防止污染收益台账！`);
+  } else {
+    const LEDGER = path.join(__dirname, 'ledger');
+    fs.mkdirSync(LEDGER, { recursive: true });
 
-  const picks = {
-    date: TODAY,
-    generatedAt: new Date().toISOString(),
-    note: '引擎当日输出；score/verdict 为打分版结论。收益回算只认这份清单。',
-    funnel,
-    picks: passed.map((r) => ({
-      code: r.code, name: r.name, board: r.board,
-      chgPct: r.chgPct, volRatio: r.volRatio, turnover: r.turnover,
-      totalCap: +r.totalCap.toFixed(1), amount: r.amount,
-      score: r.score, verdict: r.verdict, parts: r.parts,
-      limitUpDate: r.kl?.hit?.date || null,
-      pullback: r.kl?.pullback ?? null,
-      vwapOnline: r.vw?.onlineRatio ?? null,
-      vwapBreachAfter10: r.vw?.belowAfter10 ?? null,
-    })),
-  };
-  fs.writeFileSync(path.join(LEDGER, `picks-${TODAY}.json`), JSON.stringify(picks, null, 1));
+    const picks = {
+      date: TODAY,
+      generatedAt: new Date().toISOString(),
+      note: '引擎当日输出；score/verdict 为打分版结论。收益回算只认这份清单。',
+      funnel,
+      picks: passed.map((r) => ({
+        code: r.code, name: r.name, board: r.board,
+        chgPct: r.chgPct, volRatio: r.volRatio, turnover: r.turnover,
+        totalCap: +r.totalCap.toFixed(1), amount: r.amount,
+        score: r.score, verdict: r.verdict, parts: r.parts,
+        limitUpDate: r.kl?.hit?.date || null,
+        pullback: r.kl?.pullback ?? null,
+        vwapOnline: r.vw?.onlineRatio ?? null,
+        vwapBreachAfter10: r.vw?.belowAfter10 ?? null,
+      })),
+    };
+    fs.writeFileSync(path.join(LEDGER, `picks-${TODAY}.json`), JSON.stringify(picks, null, 1));
 
-  const closes = {
-    date: TODAY,
-    note: '全市场收盘快照，用于日后按任意持有期回算收益；不做复权处理，复权差异由回算时统一用日K修正。',
-    count: all.length,
-    rows: all.map((s) => [s.code, s.name, s.price, s.chgPct, s.amount, s.totalCap]),
-  };
-  fs.writeFileSync(path.join(LEDGER, `close-${TODAY}.json`), JSON.stringify(closes));
+    const closes = {
+      date: TODAY,
+      note: '全市场收盘快照，用于日后按任意持有期回算收益；不做复权处理，复权差异由回算时统一用日K修正。',
+      count: all.length,
+      rows: all.map((s) => [s.code, s.name, s.price, s.chgPct, s.amount, s.totalCap]),
+    };
+    fs.writeFileSync(path.join(LEDGER, `close-${TODAY}.json`), JSON.stringify(closes));
 
-  console.log(`台账 → ledger/picks-${TODAY}.json（${picks.picks.length} 只）、ledger/close-${TODAY}.json（${all.length} 只）`);
+    console.log(`台账 → ledger/picks-${TODAY}.json（${picks.picks.length} 只）、ledger/close-${TODAY}.json（${all.length} 只）`);
+  }
 })();

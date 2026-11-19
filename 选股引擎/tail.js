@@ -286,7 +286,7 @@ function scoreTail(c, vw, kl, medianTI) {
   /* 0. 时间闸：14:30 前跑没有意义（尾盘强度还没成形），15:00 后跑就该走 engine.js */
   const mins = +HHMM.slice(0, 2) * 60 + +HHMM.slice(2);
   if (mins < 845 && !DRY) console.log('  ⚠ 当前早于 14:05，尾盘量能尚未成形，结果仅供参考');
-  if (mins >= 1500 && !DRY) console.log('  ⚠ 已收盘，尾盘战法请改用 engine.js 的收盘候选');
+  if (mins >= 900 && !DRY) console.log('  ⚠ 已收盘，尾盘战法请改用 engine.js 的收盘候选');
 
   /* 1. 实时全市场快照 */
   console.log('① 拉取全市场实时快照…');

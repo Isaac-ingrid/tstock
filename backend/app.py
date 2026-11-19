@@ -123,10 +123,14 @@ async def health() -> dict[str, object]:
 
 
 @app.get("/api/stock/diagnosis")
-async def stock_diagnosis(code: str = Query(min_length=6, max_length=6, pattern="^[0-9]{6}$")) -> dict[str, object]:
+async def stock_diagnosis(
+    request: Request,
+    code: str = Query(min_length=6, max_length=6, pattern="^[0-9]{6}$"),
+) -> dict[str, object]:
     """个股全景体检报告：聚合行情、公告排雷、板块风口、公司主营、筹码分布与做T自救处方"""
     try:
-        return await get_stock_diagnosis(code)
+        http_client = getattr(request.app.state, "http", None)
+        return await get_stock_diagnosis(code, http_client=http_client)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"体检诊断聚合失败: {exc}") from exc
 
@@ -264,7 +268,6 @@ _tail_scan_lock = asyncio.Lock()
 
 
 @app.post("/api/stock/run_tail_scan")
-@app.get("/api/stock/run_tail_scan")
 async def run_tail_scan_api(force: bool = Query(default=True)) -> dict[str, object]:
     """一键触发全市场尾盘黑马实时选股扫描并更新契约与前端缓存"""
     if _tail_scan_lock.locked():
