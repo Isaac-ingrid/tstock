@@ -382,13 +382,20 @@ function money$(v){
   if (a >= 1e4) return (v/1e4).toFixed(1) + '万';
   return Math.round(v) + '';
 }
-/* 把一段文字画成带底色的信息条（悬停提示 / 轴上标注共用） */
-function chipText(ctx, txt, x, y, col, bg){
-  const tw = ctx.measureText(txt).width;
+/* 把一段文字画成带底色的信息条（悬停提示 / 轴上标注共用；支持按 maxW 自动省略防窄屏溢出） */
+function chipText(ctx, txt, x, y, col, bg, maxW){
+  let out = String(txt || '');
+  if (maxW && maxW > 24 && ctx.measureText(out).width + 7 > maxW) {
+    while (out.length > 4 && ctx.measureText(out + '…').width + 7 > maxW) {
+      out = out.slice(0, -1);
+    }
+    out += '…';
+  }
+  const tw = ctx.measureText(out).width;
   ctx.globalAlpha = .94; ctx.fillStyle = bg || '#fff';
   ctx.fillRect(x, y-8, tw+7, 15);
   ctx.globalAlpha = 1; ctx.fillStyle = col;
-  ctx.fillText(txt, x+3.5, y);
+  ctx.fillText(out, x+3.5, y);
   return tw + 7;
 }
 
@@ -414,9 +421,17 @@ export function drawChart(cv, s){
   const ov = s.ov || (s.ov = {});
   const subKind = s.sub || 'macd';
 
-  const W = Math.max(320, cv.clientWidth || cv.parentElement?.clientWidth || 640);
-  const PL = 8, PR = 54, PT = 34, PB = 20;      // PT 留出两行信息条的高度（图例已移到画布外的 HTML 里）
-  const hMain = 216, hVol = 56, subH = 86, gap = 9;
+  const rawW = cv.clientWidth || cv.parentElement?.clientWidth || 640;
+  const W = Math.max(260, rawW);
+  const isNarrow = W < 460;
+  const PL = isNarrow ? 6 : 8;
+  const PR = isNarrow ? 48 : 54;
+  const PT = 34;
+  const PB = isNarrow ? 18 : 20;                // PT 留出两行信息条的高度（图例已移到画布外的 HTML 里）
+  const hMain = isNarrow ? 186 : 216;
+  const hVol = isNarrow ? 46 : 56;
+  const subH = isNarrow ? 68 : 86;
+  const gap = isNarrow ? 7 : 9;
   const H = PT + hMain + gap + hVol + gap + subH + PB;
 
   const dpr = window.devicePixelRatio || 1;
@@ -427,7 +442,7 @@ export function drawChart(cv, s){
   const ctx = cv.getContext('2d');
   ctx.setTransform(dpr,0,0,dpr,0,0);
   ctx.clearRect(0,0,W,H);
-  ctx.font = '11px ui-monospace,Consolas,monospace';
+  ctx.font = isNarrow ? '10.5px ui-monospace,Consolas,monospace' : '11px ui-monospace,Consolas,monospace';
   ctx.textBaseline = 'middle';
 
   const y0 = PT, y1 = y0 + hMain;
@@ -688,8 +703,13 @@ export function drawChart(cv, s){
   const hv = hi >= 0 ? view[hi] : view[view.length-1];
   const hj = hi >= 0 ? hi : view.length-1;
   const chg = (hv.close - hv.open)/hv.open*100;
-  const row1 = dlab(hv) + '  开' + f2(hv.open) + ' 高' + f2(hv.high) + ' 低' + f2(hv.low) + ' 收' + f2(hv.close)
-             + '  ' + pct(chg) + '  量' + (hv.vol >= 10000 ? (hv.vol/10000).toFixed(2) + '万手' : (hv.vol||0) + '手');
+  const volTxt = hv.vol >= 10000
+    ? (hv.vol/10000).toFixed(isNarrow ? 1 : 2) + (isNarrow ? '万' : '万手')
+    : (hv.vol||0) + (isNarrow ? '' : '手');
+  const row1 = isNarrow
+    ? `${dlab(hv)} 开${f2(hv.open)} 高${f2(hv.high)} 低${f2(hv.low)} 收${f2(hv.close)} ${pct(chg)} 量${volTxt}`
+    : dlab(hv) + '  开' + f2(hv.open) + ' 高' + f2(hv.high) + ' 低' + f2(hv.low) + ' 收' + f2(hv.close)
+      + '  ' + pct(chg) + '  量' + volTxt;
   const g = (arr)=> arr ? arr[hj] : null;
   const p2 = [];
   if (ov.ma) p2.push('MA5 ' + nf(g(ind.ma5)), 'MA10 ' + nf(g(ind.ma10)), 'MA20 ' + nf(g(ind.ma20)), 'MA60 ' + nf(g(ind.ma60)));
@@ -698,17 +718,17 @@ export function drawChart(cv, s){
   if (ind.macd) p2.push('DIF ' + nf(g(ind.macd.dif),3), 'DEA ' + nf(g(ind.macd.dea),3));
   const row2 = p2.join('  ');
   ctx.textAlign = 'left';
-  chipText(ctx, row1, PL, 12, hv.close >= hv.open ? CH.up : CH.dn, 'rgba(255,255,255,.95)');
+  chipText(ctx, row1, PL, 12, hv.close >= hv.open ? CH.up : CH.dn, 'rgba(255,255,255,.95)', W - PL - 4);
   // 第二行：按可用宽度自适应取舍 —— 宁可少显示两项，也不要让文字溢出画布被裁掉
   if (row2){
     const parts = p2.slice();
     let line = '';
     for (let i=0;i<parts.length;i++){
       const t = line ? line + '  ' + parts[i] : parts[i];
-      if (ctx.measureText(t).width > innerW - 4) break;
+      if (ctx.measureText(t).width > W - PL - 12) break;
       line = t;
     }
-    if (line) chipText(ctx, line, PL, 27, CH.mute, 'rgba(255,255,255,.95)');
+    if (line) chipText(ctx, line, PL, 27, CH.mute, 'rgba(255,255,255,.95)', W - PL - 4);
   }
 }
 
@@ -962,12 +982,14 @@ function drawRt(cv, s, min, ctx, L){
     });
   }
 
-  // 主力出货风险雷达诊断
+  // 主力出货风险雷达诊断（窄屏下已由上方横幅 + 第二行标签展示，让出第1行全宽给分时十字准星读数）
+  const isNarrow = W < 460;
   const radar = analyzeIntradayDistribution(pts, prev, s);
   s._distRadar = radar;
-  if (ovRt.radar) {
-    const radarW = ctx.measureText(radar.badge).width + 12;
-    chipText(ctx, radar.badge, W - PR - radarW, 12, radar.color, radar.bg);
+  let radarBadgeW = 0;
+  if (ovRt.radar && !isNarrow) {
+    radarBadgeW = ctx.measureText(radar.badge).width + 12;
+    chipText(ctx, radar.badge, W - PR - radarBadgeW, 12, radar.color, radar.bg);
   }
 
   // 成交量（每分钟差分）
@@ -1015,20 +1037,24 @@ function drawRt(cv, s, min, ctx, L){
     ctx.globalAlpha = 1;
   });
   ctx.fillStyle = CH.mute; ctx.textAlign = 'left';
-  ctx.fillText(_vslots ? '放量倍数（该分钟量 ÷ 前5日同一时段均量，1× = 常态）'
-                       : '放量倍数（该分钟量 ÷ 当日均量 —— 早盘天然偏高，基准未取到）', PL+1, s0+8);
+  const subTitle = isNarrow
+    ? (_vslots ? '放量倍数(÷5日同刻均量, 1×常态)' : '放量倍数(÷当日均量)')
+    : (_vslots ? '放量倍数（该分钟量 ÷ 前5日同一时段均量，1× = 常态）'
+               : '放量倍数（该分钟量 ÷ 当日均量 —— 早盘天然偏高，基准未取到）');
+  ctx.fillText(subTitle, PL+1, s0+8);
 
   // 时间轴
-  const marks = ['0930','1030','1130','1400','1500'];
+  const marks = isNarrow ? ['0930','1130','1400','1500'] : ['0930','1030','1130','1400','1500'];
   ctx.textAlign = 'center'; ctx.fillStyle = CH.mute;
   marks.forEach(t=>{
     let idx = -1;
     for (let i=0;i<pts.length;i++) if (pts[i].t === t){ idx = i; break; }
     if (idx < 0) return;
-    ctx.fillText(t.slice(0,2) + ':' + t.slice(2), X(idx), H-7);
+    const tx = Math.max(PL + 16, Math.min(W - PR - 16, X(idx)));
+    ctx.fillText(t.slice(0,2) + ':' + t.slice(2), tx, H-7);
   });
 
-  // 悬停
+  // 悬停 / 触屏十字准星
   const hs = _hover[cv.id];
   const hi = (hs != null && hs >= 0 && hs < pts.length) ? hs : -1;
   if (hi >= 0){
@@ -1046,15 +1072,34 @@ function drawRt(cv, s, min, ctx, L){
   const sigTag = nearSig
     ? `${nearSig.confirmed ? '●确认' : '◐试探'}${nearSig.type === 'BUY' ? '买' : '卖'}`
     : '';
-  const row = p.t.slice(0,2) + ':' + p.t.slice(2) + '  价 ' + f2(p.price) + '  ' + pct(pctv)
-            + '  均价 ' + f2(p.avg) + '  偏离 ' + (bias >= 0 ? '+' : '') + bias.toFixed(2) + '%'
-            + '  该分钟 ' + p.vol + ' 手'
-            + (nearSig ? `  | ${sigTag}:${nearSig.reason}` : '')
-            + (nearAct ? `  | ◆实盘${nearAct.side}:¥${f2(nearAct.px)}` : '');
+  const row = isNarrow
+    ? `${p.t.slice(0,2)}:${p.t.slice(2)} 价${f2(p.price)} ${pct(pctv)} 均${f2(p.avg)} 偏${bias >= 0 ? '+' : ''}${bias.toFixed(2)}% 量${p.vol}`
+      + (nearSig ? ` | ${sigTag}` : '')
+      + (nearAct ? ` | ◆${nearAct.side}${f2(nearAct.px)}` : '')
+    : p.t.slice(0,2) + ':' + p.t.slice(2) + '  价 ' + f2(p.price) + '  ' + pct(pctv)
+      + '  均价 ' + f2(p.avg) + '  偏离 ' + (bias >= 0 ? '+' : '') + bias.toFixed(2) + '%'
+      + '  该分钟 ' + p.vol + ' 手'
+      + (nearSig ? `  | ${sigTag}:${nearSig.reason}` : '')
+      + (nearAct ? `  | ◆实盘${nearAct.side}:¥${f2(nearAct.px)}` : '');
   ctx.textAlign = 'left';
-  chipText(ctx, row, PL, 12, pctv >= 0 ? CH.up : CH.dn, 'rgba(255,255,255,.95)');
-  chipText(ctx, '昨收 ' + f2(prev) + '　量比 ' + nf(+s.vr, 2) + '　换手 ' + (s._ta && s._ta.turnover ? s._ta.turnover.toFixed(2) + '%' : '—')
-    + '　' + radar.badge + (cost > 0 ? ('　持仓成本 ¥' + f2(cost)) : '') + (bePrice > 0 ? ('　做T保本 ¥' + f2(bePrice)) : ''), PL, 27, CH.txt, 'rgba(255,255,255,.95)');
+  const row1MaxW = radarBadgeW > 0 ? (W - PR - radarBadgeW - PL - 6) : (W - PL - 4);
+  chipText(ctx, row, PL, 12, pctv >= 0 ? CH.up : CH.dn, 'rgba(255,255,255,.95)', row1MaxW);
+
+  const row2Parts = [
+    '昨收 ' + f2(prev),
+    '量比 ' + nf(+s.vr, 2),
+    '换手 ' + (s._ta && s._ta.turnover ? s._ta.turnover.toFixed(2) + '%' : '—'),
+    radar.badge,
+  ];
+  if (cost > 0) row2Parts.push((isNarrow ? '成本 ¥' : '持仓成本 ¥') + f2(cost));
+  if (bePrice > 0) row2Parts.push((isNarrow ? '保本 ¥' : '做T保本 ¥') + f2(bePrice));
+  let row2Line = '';
+  for (let i = 0; i < row2Parts.length; i++) {
+    const cand = row2Line ? (row2Line + (isNarrow ? '  ' : '　') + row2Parts[i]) : row2Parts[i];
+    if (ctx.measureText(cand).width > W - PL - 12 && row2Line) break;
+    row2Line = cand;
+  }
+  chipText(ctx, row2Line, PL, 27, CH.txt, 'rgba(255,255,255,.95)', W - PL - 4);
 }
 
 /* ===================== 图表工具条（周期 / 叠加 / 副图） ===================== */

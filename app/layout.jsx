@@ -2,13 +2,37 @@ import '../css/style.css';
 import '../css/nav.css';
 import '../css/anim.css';
 
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+  viewportFit: 'cover',
+  themeColor: '#ffffff',
+};
+
 export const metadata = {
   title: '智策战情室 · A股多维选股与实战终端',
   description: 'A股起爆挖掘、龙头抄底、连板情绪、尾盘黑马、盘中做T与策略战绩回算系统',
+  applicationName: '智策战情室',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    title: '智策战情室',
+    statusBarStyle: 'default',
+  },
+  formatDetection: {
+    telephone: false,
+  },
   icons: {
-    icon: '/favicon.svg',
-    shortcut: '/favicon.svg',
-    apple: '/favicon.svg',
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+    ],
+    shortcut: ['/favicon.svg'],
+    apple: [
+      { url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
+    ],
   },
 };
 

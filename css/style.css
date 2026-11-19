@@ -1733,3 +1733,286 @@
   font-size: 11px;
   color: var(--mute);
 }
+
+/* ===================== 窄屏与手机端浏览器体验专项优化 ===================== */
+
+/* 1. 闪电记T与弹窗快捷点位筹码 */
+.qt-quick-chips {
+  display: flex;
+  gap: 5px;
+  margin-top: 5px;
+  flex-wrap: wrap;
+}
+.qt-chip {
+  font-size: 11px;
+  padding: 2px 7px;
+  min-height: 24px;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--sub);
+  cursor: pointer;
+  line-height: 1.3;
+  white-space: nowrap;
+  transition: all 0.14s ease;
+}
+.qt-chip:hover {
+  border-color: var(--info);
+  color: var(--info);
+  background: var(--info-bg);
+}
+.qt-chip.buy {
+  background: var(--down-bg);
+  border-color: var(--down-b);
+  color: var(--down-d);
+  font-weight: 600;
+}
+.qt-chip.sell {
+  background: var(--up-bg);
+  border-color: var(--up-b);
+  color: var(--up-d);
+  font-weight: 600;
+}
+.qt-chip.accent {
+  background: var(--accent-bg);
+  border-color: var(--accent-b);
+  color: var(--accent-d);
+  font-weight: 700;
+}
+
+/* 2. 分时与K线画布：分钟周期展开条 + 触屏十字准星收起按钮 */
+.kbar-more-strip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.kbar-more-strip::-webkit-scrollbar {
+  display: none;
+}
+.kbar-more-strip > * {
+  flex-shrink: 0;
+}
+.kline-canvas-wrap {
+  position: relative;
+}
+.kline-clear-crosshair {
+  position: absolute;
+  right: 8px;
+  top: 5px;
+  z-index: 6;
+  font-size: 11px;
+  font-weight: 700;
+  min-height: 24px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(15, 23, 42, 0.78);
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.18);
+}
+.kline-clear-crosshair:hover {
+  background: rgba(15, 23, 42, 0.9);
+  color: #fff;
+}
+
+/* 3. 中窄屏（平板竖屏 / 分屏窗口 / 手机，<= 760px）全局收敛与防溢出 */
+@media (max-width: 760px) {
+  body {
+    padding: 10px 10px calc(32px + env(safe-area-inset-bottom, 0px));
+  }
+  section,
+  #secTailBuy,
+  .red-perf-box {
+    padding: 12px 12px;
+    margin-bottom: 12px;
+    border-radius: 10px;
+  }
+  .card-hd {
+    padding: 8px 10px;
+  }
+  .card-bd {
+    padding: 10px 10px;
+  }
+  /* 修复写死最小宽度在 360px-390px 手机下撑破横向滚动条的问题 */
+  .tail-cards-grid,
+  .trb-items-grid,
+  .rules-grid {
+    grid-template-columns: 1fr;
+  }
+  .cog-diag {
+    min-width: 0;
+    flex: 1 1 100%;
+  }
+  #dbInput {
+    min-width: 0;
+    flex: 1 1 180px;
+  }
+  .pb.pb-hold {
+    min-width: 100%;
+  }
+  .dd-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .sr-wrap {
+    grid-template-columns: 1fr;
+  }
+
+  /* 分时/K线工具栏：窄屏转为单行顺滑横滑，不堆叠4行挤占看盘主图 */
+  .kbar.kbar-responsive {
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 7px 10px !important;
+  }
+  .kbar.kbar-responsive::-webkit-scrollbar {
+    display: none;
+  }
+  .kbar.kbar-responsive > * {
+    flex-shrink: 0;
+  }
+  .kbar.kbar-responsive .chip,
+  .kbar-more-strip .chip {
+    min-height: 30px;
+    padding: 3px 10px;
+    display: inline-flex;
+    align-items: center;
+    font-size: 12px;
+  }
+  .kline-radar-banner {
+    margin: 6px 8px 4px !important;
+    padding: 6px 10px !important;
+  }
+  .kline-rt-zone-bar {
+    padding: 8px 10px !important;
+  }
+  .kline-zone-act {
+    min-height: 28px !important;
+    padding: 3px 9px !important;
+    font-size: 11.5px !important;
+  }
+
+  /* iOS Safari 防聚焦自动放大跳动（输入框字号 >= 16px） */
+  .modal-bd input[type="number"],
+  .modal-bd input[type="text"],
+  .modal-bd select,
+  #dbInput,
+  .bc-memo-edit input,
+  .bcc-inputs input,
+  .pb-inp,
+  .lts-inp {
+    font-size: 16px !important;
+  }
+
+  /* 尾盘清T风控横幅窄屏紧凑化 */
+  .overnight-alert-banner {
+    padding: 10px 12px !important;
+  }
+  #toastHost {
+    left: 12px;
+    right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    max-width: none;
+  }
+}
+
+/* 4. 手机端（<= 640px）底部抽屉式弹窗（Bottom Sheet）与单手大拇指操作热区 */
+@keyframes modal-sheet-up {
+  from {
+    opacity: 0.6;
+    transform: translateY(28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 640px) {
+  .modal-mask {
+    align-items: flex-end;
+    padding: 0;
+  }
+  .modal-box {
+    max-width: 100% !important;
+    width: 100%;
+    border-radius: 16px 16px 0 0;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+    max-height: 92dvh;
+    display: flex;
+    flex-direction: column;
+    animation: modal-sheet-up 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .modal-box::before {
+    content: "";
+    display: block;
+    width: 38px;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--line2);
+    margin: 7px auto 2px;
+    flex-shrink: 0;
+  }
+  .modal-hd {
+    padding: 10px 14px;
+    flex-shrink: 0;
+  }
+  .modal-hd h3 {
+    font-size: 14.5px;
+    line-height: 1.35;
+  }
+  .modal-close {
+    min-height: 32px;
+    min-width: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-bd {
+    padding: 12px 14px;
+    max-height: none;
+    flex: 1 1 auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .modal-ft {
+    padding: 10px 14px calc(12px + env(safe-area-inset-bottom, 0px)) !important;
+    flex-shrink: 0;
+  }
+  .quickt-modal-box .modal-ft button {
+    min-height: 40px;
+    font-size: 13.5px;
+  }
+  .quickt-modal-box .modal-ft button.primary {
+    flex: 1;
+  }
+  .qt-chip {
+    min-height: 30px;
+    padding: 4px 9px;
+    font-size: 11.5px;
+  }
+  .qt-dir-tabs {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px !important;
+  }
+  .qt-dir-tabs .m-dir-btn {
+    min-height: 38px;
+    font-size: 12.5px !important;
+  }
+}
+
+@media (max-width: 380px) {
+  .qt-price-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+

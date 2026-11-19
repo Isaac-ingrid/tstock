@@ -16,10 +16,12 @@ export default function ChartCanvas({
 }) {
   const canvasRef = useRef(null);
   const lastSigKeyRef = useRef('');
+  const touchTrackRef = useRef({ x: 0, y: 0, mode: null });
   const [loading, setLoading] = useState(false);
   const [ddLoading, setDdLoading] = useState(false);
   const [showMorePeriods, setShowMorePeriods] = useState(false);
   const [rtSig, setRtSig] = useState(null);
+  const [touchPinned, setTouchPinned] = useState(false);
 
   // 周期合法性校验（防旧缓存或错误传参污染）
   const curPeriod = VALID_PERIODS.includes(stock.p) ? stock.p : 'day';
@@ -58,9 +60,19 @@ export default function ChartCanvas({
     return () => window.removeEventListener('resize', handleResize);
   }, [renderCanvas, stock, tradeLogs, stock.p, stock.ov, stock.ovRt, stock.sub, stock._k, stock.bePrice, stock.cost]);
 
+  const clearCrosshair = useCallback(() => {
+    const cv = canvasRef.current;
+    setTouchPinned(false);
+    if (!cv) return;
+    setHover(cv.id, null);
+    drawChart(cv, stock);
+  }, [stock]);
+
   // 切换周期：分时、日K、周K、月K或分钟级K线
   const handlePeriodChange = async (p) => {
     if (p === curPeriod) return;
+    setTouchPinned(false);
+    if (canvasRef.current) setHover(canvasRef.current.id, null);
     setLoading(true);
     stock.p = p;
     try {
@@ -117,25 +129,71 @@ export default function ChartCanvas({
     }
   };
 
-  const handleMouseMove = (e) => {
+  const clientXToIndex = (clientX, clampToBounds = false) => {
     const cv = canvasRef.current;
-    if (!cv || !cv._geo) return;
+    if (!cv || !cv._geo) return null;
     const g = cv._geo;
     const r = cv.getBoundingClientRect();
-    const x = e.clientX - r.left;
+    const x = clientX - r.left;
     let idx = g.kind === 'bar'
       ? Math.floor((x - g.PL) / g.bw)
       : Math.round(((x - g.PL) / (g.innerW || 1)) * (g.n - 1));
-    if (!(idx >= 0 && idx < g.n)) idx = -1;
+    if (clampToBounds) {
+      idx = Math.max(0, Math.min(g.n - 1, idx));
+    } else if (!(idx >= 0 && idx < g.n)) {
+      idx = -1;
+    }
+    return idx;
+  };
+
+  const handleMouseMove = (e) => {
+    const cv = canvasRef.current;
+    if (!cv || !cv._geo) return;
+    const idx = clientXToIndex(e.clientX, false);
+    if (idx == null) return;
     setHover(cv.id, idx);
     drawChart(cv, stock);
   };
 
   const handleMouseLeave = () => {
+    if (touchPinned) return;
     const cv = canvasRef.current;
     if (!cv) return;
     setHover(cv.id, null);
     drawChart(cv, stock);
+  };
+
+  // 手机/触屏查图支持：单指横向拖动实时移动十字准星，纵向正常滚动页面（配合 touch-action: pan-y）
+  const handleTouchStart = (e) => {
+    const cv = canvasRef.current;
+    if (!cv || !cv._geo || !e.touches || !e.touches.length) return;
+    const t = e.touches[0];
+    touchTrackRef.current = { x: t.clientX, y: t.clientY, mode: null };
+    const idx = clientXToIndex(t.clientX, true);
+    if (idx != null) {
+      setTouchPinned(true);
+      setHover(cv.id, idx);
+      drawChart(cv, stock);
+    }
+  };
+
+  const handleTouchMove = (e) => {
+    const cv = canvasRef.current;
+    if (!cv || !cv._geo || !e.touches || !e.touches.length) return;
+    const t = e.touches[0];
+    const st = touchTrackRef.current;
+    const dx = Math.abs(t.clientX - st.x);
+    const dy = Math.abs(t.clientY - st.y);
+    if (!st.mode && (dx > 5 || dy > 5)) {
+      st.mode = dx >= dy * 0.85 ? 'scrub' : 'scroll';
+    }
+    if (st.mode === 'scroll') return;
+    const idx = clientXToIndex(t.clientX, true);
+    if (idx != null) {
+      setTouchPinned(true);
+      setHover(cv.id, idx);
+      drawChart(cv, stock);
+    }
   };
 
   const isMoreActive = P_MORE.some(([k]) => k === curPeriod);
@@ -143,8 +201,8 @@ export default function ChartCanvas({
 
   return (
     <div className="kline-box" style={{ background: '#fff', borderRadius: '8px', border: '1px solid var(--line)', marginBottom: '12px' }}>
-      {/* 1. 顶部操作栏（周期/叠加/副图/资金） */}
-      <div className="kbar k-main" style={{ padding: '8px 12px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+      {/* 1. 顶部操作栏（周期/叠加/副图/资金；窄屏下自动转为单行顺滑横滑，不遮挡分时图） */}
+      <div className="kbar k-main kbar-responsive" style={{ padding: '8px 12px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
         <span className="lbl" style={{ fontSize: '11.5px', color: 'var(--mute)', fontWeight: 600 }}>周期</span>
         {P_MAIN.map(([k, label]) => (
           <button
@@ -157,50 +215,14 @@ export default function ChartCanvas({
           </button>
         ))}
 
-        {/* 更多分钟周期下拉菜单 */}
-        <div style={{ position: 'relative', display: 'inline-block' }}>
-          <button
-            type="button"
-            className={`chip pd ${isMoreActive ? 'on' : ''}`}
-            onClick={() => setShowMorePeriods(!showMorePeriods)}
-            title="更多分钟级K线（1分/5分/15分/30分/60分）"
-          >
-            {moreLabel} ▾
-          </button>
-
-          {showMorePeriods && (
-            <div
-              style={{
-                position: 'absolute',
-                top: 'calc(100% + 4px)',
-                left: 0,
-                zIndex: 40,
-                background: '#fff',
-                border: '1px solid var(--line)',
-                borderRadius: '7px',
-                padding: '4px 6px',
-                display: 'flex',
-                gap: '4px',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              {P_MORE.map(([k, label]) => (
-                <button
-                  key={k}
-                  type="button"
-                  className={`chip pd ${curPeriod === k ? 'on' : ''}`}
-                  onClick={() => {
-                    handlePeriodChange(k);
-                    setShowMorePeriods(false);
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <button
+          type="button"
+          className={`chip pd ${isMoreActive || showMorePeriods ? 'on' : ''}`}
+          onClick={() => setShowMorePeriods((prev) => !prev)}
+          title="展开/收起分钟级K线（1分/5分/15分/30分/60分）"
+        >
+          {moreLabel} {showMorePeriods ? '▴' : '▾'}
+        </button>
 
         {curPeriod === 'rt' ? (
           <>
@@ -226,7 +248,7 @@ export default function ChartCanvas({
                 style={{
                   fontSize: '11px',
                   padding: '2px 8px',
-                  marginLeft: '4px',
+                  marginLeft: '2px',
                   borderColor: fastRefresh ? '#f59e0b' : undefined,
                   color: fastRefresh ? '#b45309' : undefined,
                   background: fastRefresh ? '#fffbeb' : undefined,
@@ -277,14 +299,34 @@ export default function ChartCanvas({
           {ddLoading ? '💰 取数中…' : '💰 大单资金'}
         </button>
 
-        <span className="rd" style={{ marginLeft: 'auto', fontSize: '11.5px', color: 'var(--mute)' }}>
+        <span className="rd" style={{ marginLeft: 'auto', fontSize: '11.5px', color: 'var(--mute)', whiteSpace: 'nowrap' }}>
           {loading ? '正在载入…' : chartMeta(stock)}
         </span>
       </div>
 
+      {/* 1b. 分钟级K线展开条（独立于横滑工具栏，窄屏绝不被 overflow 裁剪） */}
+      {showMorePeriods && (
+        <div className="kbar-more-strip">
+          <span className="lbl" style={{ fontSize: '11px', color: 'var(--mute)', fontWeight: 600 }}>分钟周期</span>
+          {P_MORE.map(([k, label]) => (
+            <button
+              key={k}
+              type="button"
+              className={`chip pd ${curPeriod === k ? 'on' : ''}`}
+              onClick={() => {
+                handlePeriodChange(k);
+                setShowMorePeriods(false);
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* 2. 分时主力出货风险雷达与做T保本诊断横幅 */}
       {curPeriod === 'rt' && stock._distRadar && (
-        <div style={{
+        <div className="kline-radar-banner" style={{
           margin: '6px 12px 4px',
           padding: '7px 12px',
           borderRadius: '6px',
@@ -300,11 +342,11 @@ export default function ChartCanvas({
             <span style={{ fontSize: '12px', fontWeight: 800, color: stock._distRadar.color }}>
               {stock._distRadar.title}
             </span>
-            <span style={{ fontSize: '11.5px', color: 'var(--sub)' }}>
+            <span className="kline-radar-desc" style={{ fontSize: '11.5px', color: 'var(--sub)' }}>
               {stock._distRadar.desc}
             </span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '11.5px', color: 'var(--mute)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '11.5px', color: 'var(--mute)', flexWrap: 'wrap' }}>
             <span>
               偏离均线: <b style={{ fontFamily: 'monospace', color: stock._distRadar.bias >= 0 ? 'var(--up)' : 'var(--down)' }}>
                 {stock._distRadar.bias >= 0 ? '+' : ''}{stock._distRadar.bias.toFixed(2)}%
@@ -320,15 +362,29 @@ export default function ChartCanvas({
         </div>
       )}
 
-      {/* 3. 手绘 Canvas 画布 */}
-      <canvas
-        id={`kln-${poolIndex}`}
-        ref={canvasRef}
-        data-ki={poolIndex}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
-        style={{ width: '100%', display: 'block', cursor: 'crosshair' }}
-      />
+      {/* 3. 手绘 Canvas 画布（支持鼠标悬停 + 手机触屏单指横向拖动十字准星） */}
+      <div className="kline-canvas-wrap">
+        {touchPinned && (
+          <button
+            type="button"
+            className="kline-clear-crosshair"
+            onClick={clearCrosshair}
+            title="收起触屏十字准星，恢复最新一分钟实时值"
+          >
+            ✕ 收起十字线
+          </button>
+        )}
+        <canvas
+          id={`kln-${poolIndex}`}
+          ref={canvasRef}
+          data-ki={poolIndex}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          style={{ width: '100%', display: 'block', cursor: 'crosshair', touchAction: 'pan-y', WebkitTapHighlightColor: 'transparent' }}
+        />
+      </div>
 
       {/* 3b. 分时图买卖点与推荐区速览条 */}
       {curPeriod === 'rt' && (rtSig || stock._rtSignals) && (() => {
@@ -339,7 +395,7 @@ export default function ChartCanvas({
         const oov = sig.outOfView || [];
         const fmtDist = (d) => d == null ? '' : `(${d >= 0 ? '+' : ''}${d.toFixed(2)}%)`;
         return (
-          <div style={{
+          <div className="kline-rt-zone-bar" style={{
             padding: '7px 14px',
             borderTop: '1px solid var(--line)',
             background: '#fafbfc',
@@ -351,25 +407,25 @@ export default function ChartCanvas({
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                 {z.buyHi > 0 && (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#cf1322' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#cf1322', flexWrap: 'wrap' }}>
                     <span>🔴 <b>推荐买区</b></span>
                     <b style={{ fontFamily: 'monospace' }}>¥{f2(z.buyLo > 0 ? z.buyLo : z.buyHi)}~{f2(z.buyHi)}</b>
                     <span style={{ color: 'var(--mute)', fontFamily: 'monospace' }}>{fmtDist(sig.distToBuyPct)}</span>
                     {onOpenQuickT && (
-                      <button type="button" className="mini" onClick={() => onOpenQuickT(stock, '正T', f2(z.buyHi))} style={{ fontSize: '10px', padding: '1px 5px', borderColor: '#fca5a5', color: '#cf1322', background: '#fff1f0' }}>
-                        按此正T
+                      <button type="button" className="mini kline-zone-act" onClick={() => onOpenQuickT(stock, '正T', f2(z.buyHi))} style={{ fontSize: '10.5px', padding: '2px 7px', borderColor: '#fca5a5', color: '#cf1322', background: '#fff1f0', marginLeft: '2px' }}>
+                        ⚡ 按此正T
                       </button>
                     )}
                   </span>
                 )}
                 {z.sellLo > 0 && (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#15803d' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#15803d', flexWrap: 'wrap' }}>
                     <span>🟢 <b>推荐卖区</b></span>
                     <b style={{ fontFamily: 'monospace' }}>¥{f2(z.sellLo)}~{f2(z.sellHi > 0 ? z.sellHi : z.sellLo)}</b>
                     <span style={{ color: 'var(--mute)', fontFamily: 'monospace' }}>{fmtDist(sig.distToSellPct)}</span>
                     {onOpenQuickT && (
-                      <button type="button" className="mini" onClick={() => onOpenQuickT(stock, '倒T', f2(z.sellLo))} style={{ fontSize: '10px', padding: '1px 5px', borderColor: '#86efac', color: '#15803d', background: '#f0fdf4' }}>
-                        按此倒T
+                      <button type="button" className="mini kline-zone-act" onClick={() => onOpenQuickT(stock, '倒T', f2(z.sellLo))} style={{ fontSize: '10.5px', padding: '2px 7px', borderColor: '#86efac', color: '#15803d', background: '#f0fdf4', marginLeft: '2px' }}>
+                        ⚡ 按此倒T
                       </button>
                     )}
                   </span>
@@ -440,7 +496,7 @@ export default function ChartCanvas({
         style={{ padding: '6px 14px 2px', borderTop: '1px solid var(--line)' }}
       />
 
-      {/* 4. 画布下方实时指标与数据统计条 */}
+      {/* 5. 画布下方实时指标与数据统计条 */}
       <div
         className="k-stat-wrap"
         dangerouslySetInnerHTML={{ __html: chartStat(stock) }}

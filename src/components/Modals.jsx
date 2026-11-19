@@ -168,9 +168,14 @@ function QuickTModalInner({ modalData, tradeLogs = [], tiltState = null, onClose
     }
   };
 
+  const suggestTQty = Math.max(
+    100,
+    Math.floor(((todayT.sellableShares || totalHeld || 300) * 0.3) / 100) * 100
+  );
+
   return (
     <div className="modal-mask" onClick={onClose}>
-      <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '470px' }}>
+      <div className="modal-box quickt-modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '470px' }}>
         <div className="modal-hd">
           <h3>
             {isDirectBuy ? '📥 记录买入 / 加仓' : isDirectSell ? '📤 记录直接卖出 / 减仓' : '⚡ 闪电记T'} · {stock.name} ({stock.code})
@@ -195,8 +200,8 @@ function QuickTModalInner({ modalData, tradeLogs = [], tiltState = null, onClose
             </div>
           )}
 
-          {/* 四向操作选项卡 */}
-          <div className="modal-dir-tabs" style={{ display: 'flex', gap: '6px', marginBottom: '14px' }}>
+          {/* 四向操作选项卡（窄屏下自动切换为 2×2 大拇指网格） */}
+          <div className="modal-dir-tabs qt-dir-tabs" style={{ display: 'flex', gap: '6px', marginBottom: '14px' }}>
             <button
               type="button"
               className={`m-dir-btn ${dir === '正T' ? 'active' : ''}`}
@@ -294,23 +299,23 @@ function QuickTModalInner({ modalData, tradeLogs = [], tiltState = null, onClose
                 )}
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+              <div className="qt-price-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
                 <div className="fld">
                   <label style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span>买入成交价 (元)</span>
                   </label>
                   <input
-                    type="number" step="0.01" value={buyPx}
+                    type="number" inputMode="decimal" step="0.01" value={buyPx}
                     onChange={e => setBuyPx(e.target.value)}
                     placeholder="买入价"
-                    style={{ width: '100%', minHeight: '32px', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--line)' }}
+                    style={{ width: '100%', minHeight: '34px', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--line)' }}
                   />
-                  <div style={{ display: 'flex', gap: '4px', marginTop: '4px', flexWrap: 'wrap' }}>
+                  <div className="qt-quick-chips">
                     {stock.price ? (
                       <button
                         type="button"
+                        className="qt-chip"
                         onClick={() => setBuyPx(String(stock.price))}
-                        style={{ fontSize: '10.5px', padding: '1px 5px', borderRadius: '3px', border: '1px solid var(--line)', background: '#fff', cursor: 'pointer' }}
                       >
                         现价 {f2(stock.price)}
                       </button>
@@ -318,8 +323,8 @@ function QuickTModalInner({ modalData, tradeLogs = [], tiltState = null, onClose
                     {c && c.inA > 0 ? (
                       <button
                         type="button"
+                        className="qt-chip buy"
                         onClick={() => setBuyPx(f2(c.inA))}
-                        style={{ fontSize: '10.5px', padding: '1px 5px', borderRadius: '3px', border: '1px solid var(--line)', background: '#fff', cursor: 'pointer' }}
                       >
                         低吸 {f2(c.inA)}
                       </button>
@@ -327,8 +332,8 @@ function QuickTModalInner({ modalData, tradeLogs = [], tiltState = null, onClose
                     {stock.prevClose ? (
                       <button
                         type="button"
+                        className="qt-chip"
                         onClick={() => setBuyPx(f2(stock.prevClose))}
-                        style={{ fontSize: '10.5px', padding: '1px 5px', borderRadius: '3px', border: '1px solid var(--line)', background: '#fff', cursor: 'pointer' }}
                       >
                         昨收 {f2(stock.prevClose)}
                       </button>
@@ -339,21 +344,21 @@ function QuickTModalInner({ modalData, tradeLogs = [], tiltState = null, onClose
                 <div className="fld">
                   <label style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span>买入股数 (股)</span>
-                    <span style={{ color: 'var(--sub)' }}>{totalHeld > 0 ? `已有: ${totalHeld}股` : '首次建仓'}</span>
+                    <span style={{ color: 'var(--sub)' }}>{totalHeld > 0 ? `已有:${totalHeld}` : '建仓'}</span>
                   </label>
                   <input
-                    type="number" step="100" value={qty}
+                    type="number" inputMode="numeric" step="100" value={qty}
                     onChange={e => setQty(e.target.value)}
                     placeholder="买入股数"
-                    style={{ width: '100%', minHeight: '32px', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--line)' }}
+                    style={{ width: '100%', minHeight: '34px', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--line)' }}
                   />
-                  <div style={{ display: 'flex', gap: '4px', marginTop: '4px', flexWrap: 'wrap' }}>
+                  <div className="qt-quick-chips">
                     {(totalHeld > 0 ? [100, 500, 1000] : [500, 1000, 2000]).map(n => (
                       <button
                         key={n}
                         type="button"
+                        className="qt-chip"
                         onClick={() => setQty(n)}
-                        style={{ fontSize: '10.5px', padding: '1px 5px', borderRadius: '3px', border: '1px solid var(--line)', background: '#fff', cursor: 'pointer' }}
                       >
                         +{n}
                       </button>
@@ -361,8 +366,8 @@ function QuickTModalInner({ modalData, tradeLogs = [], tiltState = null, onClose
                     {totalHeld > 0 && (
                       <button
                         type="button"
+                        className="qt-chip"
                         onClick={() => setQty(totalHeld)}
-                        style={{ fontSize: '10.5px', padding: '1px 5px', borderRadius: '3px', border: '1px solid var(--line)', background: '#fff', cursor: 'pointer' }}
                       >
                         +1倍仓
                       </button>
@@ -388,7 +393,7 @@ function QuickTModalInner({ modalData, tradeLogs = [], tiltState = null, onClose
                   <span style={{ color: 'var(--sub)' }}>买入后总持仓:</span>
                   <b style={{ fontFamily: 'monospace', color: '#1677ff' }}>{newHeldBuy} 股 {totalHeld > 0 ? `(+${q}股)` : ''}</b>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '4px' }}>
                   <span style={{ color: 'var(--sub)' }}>买入后成本均价:</span>
                   <div>
                     <b style={{ fontSize: '14px', fontFamily: 'monospace', color: 'var(--accent)' }}>¥{f2(newWeightedCostBuy)}</b>
@@ -423,23 +428,23 @@ function QuickTModalInner({ modalData, tradeLogs = [], tiltState = null, onClose
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+              <div className="qt-price-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
                 <div className="fld">
                   <label style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span>卖出成交价 (元)</span>
                   </label>
                   <input
-                    type="number" step="0.01" value={sellPx}
+                    type="number" inputMode="decimal" step="0.01" value={sellPx}
                     onChange={e => setSellPx(e.target.value)}
                     placeholder="卖出价"
-                    style={{ width: '100%', minHeight: '32px', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--line)' }}
+                    style={{ width: '100%', minHeight: '34px', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--line)' }}
                   />
-                  <div style={{ display: 'flex', gap: '4px', marginTop: '4px', flexWrap: 'wrap' }}>
+                  <div className="qt-quick-chips">
                     {stock.price ? (
                       <button
                         type="button"
+                        className="qt-chip"
                         onClick={() => setSellPx(String(stock.price))}
-                        style={{ fontSize: '10.5px', padding: '1px 5px', borderRadius: '3px', border: '1px solid var(--line)', background: '#fff', cursor: 'pointer' }}
                       >
                         现价 {f2(stock.price)}
                       </button>
@@ -447,17 +452,17 @@ function QuickTModalInner({ modalData, tradeLogs = [], tiltState = null, onClose
                     {+stock.cost > 0 ? (
                       <button
                         type="button"
+                        className="qt-chip"
                         onClick={() => setSellPx(String(stock.cost))}
-                        style={{ fontSize: '10.5px', padding: '1px 5px', borderRadius: '3px', border: '1px solid var(--line)', background: '#fff', cursor: 'pointer' }}
                       >
-                        保本价 {f2(stock.cost)}
+                        保本 {f2(stock.cost)}
                       </button>
                     ) : null}
                     {c && c.tp1 ? (
                       <button
                         type="button"
+                        className="qt-chip sell"
                         onClick={() => setSellPx(f2(c.tp1))}
-                        style={{ fontSize: '10.5px', padding: '1px 5px', borderRadius: '3px', border: '1px solid var(--line)', background: '#fff', cursor: 'pointer' }}
                       >
                         T1 {f2(c.tp1)}
                       </button>
@@ -470,10 +475,10 @@ function QuickTModalInner({ modalData, tradeLogs = [], tiltState = null, onClose
                     <span>买入成本价 (元)</span>
                   </label>
                   <input
-                    type="number" step="0.01" value={buyPx}
+                    type="number" inputMode="decimal" step="0.01" value={buyPx}
                     onChange={e => setBuyPx(e.target.value)}
                     placeholder="底仓成本"
-                    style={{ width: '100%', minHeight: '32px', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--line)' }}
+                    style={{ width: '100%', minHeight: '34px', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--line)' }}
                   />
                   <div style={{ fontSize: '11px', color: 'var(--mute)', marginTop: '4px' }}>
                     作为盈亏核算基准
@@ -489,41 +494,41 @@ function QuickTModalInner({ modalData, tradeLogs = [], tiltState = null, onClose
                   </span>
                 </label>
                 <input
-                  type="number" step="100" value={qty}
+                  type="number" inputMode="numeric" step="100" value={qty}
                   onChange={e => setQty(e.target.value)}
-                  style={{ width: '100%', minHeight: '32px', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--line)' }}
+                  style={{ width: '100%', minHeight: '34px', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--line)' }}
                 />
-                <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
+                <div className="qt-quick-chips" style={{ marginTop: '6px' }}>
                   {todayT.sellableShares > 0 && (
                     <button
                       type="button"
+                      className="qt-chip sell"
                       onClick={() => setQty(todayT.sellableShares)}
-                      style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', border: '1px solid #ffa39e', background: '#fff1f0', color: '#cf1322', fontWeight: 700, cursor: 'pointer' }}
                     >
-                      全卖可用底仓 ({todayT.sellableShares}股)
+                      全卖可用 ({todayT.sellableShares}股)
                     </button>
                   )}
                   {todayT.sellableShares >= 200 && (
                     <button
                       type="button"
+                      className="qt-chip"
                       onClick={() => setQty(Math.floor(todayT.sellableShares / 200) * 100)}
-                      style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', border: '1px solid var(--line)', background: '#fff', cursor: 'pointer' }}
                     >
                       卖半仓 ({Math.floor(todayT.sellableShares / 200) * 100}股)
                     </button>
                   )}
                   <button
                     type="button"
+                    className="qt-chip"
                     onClick={() => setQty(100)}
-                    style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', border: '1px solid var(--line)', background: '#fff', cursor: 'pointer' }}
                   >
                     1手 (100股)
                   </button>
                   {c && c.t1Lots && c.t1Lots !== 100 && (
                     <button
                       type="button"
+                      className="qt-chip"
                       onClick={() => setQty(c.t1Lots)}
-                      style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', border: '1px solid var(--line)', background: '#fff', cursor: 'pointer' }}
                     >
                       建议T仓 ({c.t1Lots}股)
                     </button>
@@ -545,7 +550,7 @@ function QuickTModalInner({ modalData, tradeLogs = [], tiltState = null, onClose
                   <span>回笼可用现金:</span>
                   <b style={{ color: 'var(--accent)' }}>¥{money(netCash)} 元</b>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed var(--line)', paddingTop: '4px', marginTop: '4px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed var(--line)', paddingTop: '4px', marginTop: '4px', flexWrap: 'wrap', gap: '4px' }}>
                   <b>本次实际落袋净盈亏:</b>
                   <b className={netProfitSell >= 0 ? 'up' : 'down'} style={{ fontSize: '14.5px' }}>
                     {netProfitSell >= 0 ? '+' : ''}{money(netProfitSell)} 元 ({profitRateSell >= 0 ? '+' : ''}{profitRateSell.toFixed(2)}%)
@@ -560,24 +565,78 @@ function QuickTModalInner({ modalData, tradeLogs = [], tiltState = null, onClose
               </div>
             </div>
           ) : (
-            /* ===== 正T / 倒T 界面 ===== */
+            /* ===== 正T / 倒T 界面（补齐移动端一键点位与仓位筹码，免手敲数字） ===== */
             <div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
+              <div className="qt-price-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
                 <div className="fld">
                   <label>买入成交价 (元)</label>
                   <input
-                    type="number" step="0.01" value={buyPx}
+                    type="number" inputMode="decimal" step="0.01" value={buyPx}
                     onChange={e => setBuyPx(e.target.value)}
-                    style={{ width: '100%', minHeight: '32px', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--line)' }}
+                    style={{ width: '100%', minHeight: '34px', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--line)' }}
                   />
+                  <div className="qt-quick-chips">
+                    {stock.price ? (
+                      <button type="button" className="qt-chip" onClick={() => setBuyPx(f2(stock.price))}>
+                        现价 {f2(stock.price)}
+                      </button>
+                    ) : null}
+                    {c && c.inA > 0 ? (
+                      <button type="button" className="qt-chip buy" onClick={() => setBuyPx(f2(c.inA))}>
+                        低吸1 {f2(c.inA)}
+                      </button>
+                    ) : null}
+                    {c && c.inB > 0 ? (
+                      <button type="button" className="qt-chip buy" onClick={() => setBuyPx(f2(c.inB))}>
+                        低吸2 {f2(c.inB)}
+                      </button>
+                    ) : null}
+                    {+stock.avg > 0 ? (
+                      <button type="button" className="qt-chip" onClick={() => setBuyPx(f2(stock.avg))}>
+                        均价 {f2(stock.avg)}
+                      </button>
+                    ) : null}
+                    {dir === '倒T' && s > 0 ? (
+                      <button type="button" className="qt-chip buy" onClick={() => setBuyPx(f2(s * 0.985))}>
+                        -1.5% {f2(s * 0.985)}
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
                 <div className="fld">
                   <label>卖出成交价 (元)</label>
                   <input
-                    type="number" step="0.01" value={sellPx}
+                    type="number" inputMode="decimal" step="0.01" value={sellPx}
                     onChange={e => setSellPx(e.target.value)}
-                    style={{ width: '100%', minHeight: '32px', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--line)' }}
+                    style={{ width: '100%', minHeight: '34px', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--line)' }}
                   />
+                  <div className="qt-quick-chips">
+                    {stock.price ? (
+                      <button type="button" className="qt-chip" onClick={() => setSellPx(f2(stock.price))}>
+                        现价 {f2(stock.price)}
+                      </button>
+                    ) : null}
+                    {c && c.outA > 0 ? (
+                      <button type="button" className="qt-chip sell" onClick={() => setSellPx(f2(c.outA))}>
+                        高抛1 {f2(c.outA)}
+                      </button>
+                    ) : null}
+                    {c && c.tp1 > 0 ? (
+                      <button type="button" className="qt-chip sell" onClick={() => setSellPx(f2(c.tp1))}>
+                        止盈1 {f2(c.tp1)}
+                      </button>
+                    ) : null}
+                    {dir === '正T' && b > 0 ? (
+                      <button type="button" className="qt-chip sell" onClick={() => setSellPx(f2(b * 1.015))}>
+                        +1.5% {f2(b * 1.015)}
+                      </button>
+                    ) : null}
+                    {+stock.bePrice > 0 ? (
+                      <button type="button" className="qt-chip" onClick={() => setSellPx(f2(stock.bePrice))}>
+                        保本 {f2(stock.bePrice)}
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
               </div>
 
@@ -589,13 +648,46 @@ function QuickTModalInner({ modalData, tradeLogs = [], tiltState = null, onClose
               <div className="fld" style={{ marginBottom: '14px' }}>
                 <label style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>成交股数</span>
-                  <span style={{ color: 'var(--sub)' }}>建议T仓: {Math.max(100, Math.floor(((todayT.sellableShares || totalHeld) * 0.3) / 100) * 100)} 股</span>
+                  <span style={{ color: 'var(--sub)' }}>建议T仓: {suggestTQty} 股</span>
                 </label>
                 <input
-                  type="number" step="100" value={qty}
+                  type="number" inputMode="numeric" step="100" value={qty}
                   onChange={e => setQty(e.target.value)}
-                  style={{ width: '100%', minHeight: '32px', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--line)' }}
+                  style={{ width: '100%', minHeight: '34px', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--line)' }}
                 />
+                <div className="qt-quick-chips" style={{ marginTop: '6px' }}>
+                  <button
+                    type="button"
+                    className="qt-chip accent"
+                    onClick={() => setQty(suggestTQty)}
+                  >
+                    建议T仓 ({suggestTQty})
+                  </button>
+                  <button type="button" className="qt-chip" onClick={() => setQty(100)}>
+                    100股
+                  </button>
+                  <button type="button" className="qt-chip" onClick={() => setQty(500)}>
+                    500股
+                  </button>
+                  {todayT.sellableShares >= 200 && (
+                    <button
+                      type="button"
+                      className="qt-chip"
+                      onClick={() => setQty(Math.floor(todayT.sellableShares / 200) * 100)}
+                    >
+                      半仓 ({Math.floor(todayT.sellableShares / 200) * 100})
+                    </button>
+                  )}
+                  {todayT.sellableShares > 0 && (
+                    <button
+                      type="button"
+                      className="qt-chip"
+                      onClick={() => setQty(todayT.sellableShares)}
+                    >
+                      全可用 ({todayT.sellableShares})
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="quickt-preview" style={{ background: 'var(--surface2)', padding: '10px 12px', borderRadius: '8px', fontSize: '12.5px', lineHeight: 1.7 }}>

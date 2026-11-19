@@ -5,55 +5,104 @@ import { NAV_ROUTES } from '../data/site.js';
 const TAB_TO_PATH = {};
 const PATH_TO_TAB = {};
 
-NAV_ROUTES.forEach(item => {
+NAV_ROUTES.forEach((item) => {
   TAB_TO_PATH[item.tab] = item.path;
   PATH_TO_TAB[item.path] = item.tab;
 });
 
-// 解析当前的 URL Hash
-function parseHash(hashStr) {
-  const currentHash = typeof window !== 'undefined' ? window.location.hash : '#/trade';
-  const raw = (hashStr || currentHash || '').replace(/^#\/?/, '/');
-  const [pathPart, queryPart] = raw.split('?');
-  const path = pathPart ? (pathPart.startsWith('/') ? pathPart : '/' + pathPart) : '/trade';
+function normalizeTargetPath(rawTarget) {
+  if (!rawTarget) return '';
+  const clean = String(rawTarget).trim().replace(/^#\/?/, '');
+  if (!clean) return '';
+  if (TAB_TO_PATH[clean]) return TAB_TO_PATH[clean];
+  const withSlash = clean.startsWith('/') ? clean : '/' + clean;
+  const matched = NAV_ROUTES.find((r) => r.path === withSlash);
+  return matched ? matched.path : '';
+}
+
+/**
+ * 解析当前 URL（同时兼容 `#/trade?code=xxx` 与 PWA `start_url` / `shortcuts` 的 `/?tab=trade&eod=1`）
+ * 规则优先级：URL Search `?tab=`（主屏启动与快捷菜单显式直达） > URL Hash `#/...` > 默认 `/trade`（今日作战台）
+ */
+function parseCurrentLocation(overrideHash) {
+  if (typeof window === 'undefined') {
+    return {
+      path: '/trade',
+      activeTab: NAV_ROUTES[0].tab,
+      query: {},
+      routeInfo: NAV_ROUTES[0],
+      fromSearchParam: false,
+    };
+  }
+
+  const searchParams = new URLSearchParams(window.location.search || '');
+  const searchTab = normalizeTargetPath(searchParams.get('tab') || searchParams.get('route'));
+
+  const currentHash = overrideHash !== undefined ? overrideHash : window.location.hash;
+  const rawHash = (currentHash || '').replace(/^#\/?/, '/');
+  const [hashPathPart, hashQueryPart] = rawHash.split('?');
+  const hashPath = hashPathPart
+    ? hashPathPart.startsWith('/')
+      ? hashPathPart
+      : '/' + hashPathPart
+    : '';
+
+  const effectivePath = searchTab || hashPath || '/trade';
+  const matchedRoute = NAV_ROUTES.find((r) => r.path === effectivePath) || NAV_ROUTES[0];
 
   const query = {};
-  if (queryPart) {
-    const usp = new URLSearchParams(queryPart);
+  for (const [k, v] of searchParams.entries()) {
+    if (k !== 'tab' && k !== 'route' && k !== 'source') {
+      query[k] = v;
+    }
+  }
+  if (hashQueryPart) {
+    const usp = new URLSearchParams(hashQueryPart);
     for (const [k, v] of usp.entries()) {
       query[k] = v;
     }
   }
 
-  // 映射到具体的 activeTab
-  const matchedRoute = NAV_ROUTES.find(r => r.path === path) || NAV_ROUTES[0];
-  const activeTab = matchedRoute.tab;
-
   return {
     path: matchedRoute.path,
-    activeTab,
+    activeTab: matchedRoute.tab,
     query,
-    routeInfo: matchedRoute
+    routeInfo: matchedRoute,
+    fromSearchParam: Boolean(searchTab || searchParams.get('eod') || searchParams.get('source')),
   };
 }
 
 /**
  * 响应式 URL 路由管理 Hook
- * 将页面激活状态与浏览器 URL (Hash) 彻底绑定，支持前进/后退、直接收藏与分享链接
+ * 支持浏览器 Hash 导航与手机主屏幕 PWA 图标/长按快捷方式直达今日作战台
  */
 export function useRoute() {
-  const [route, setRoute] = useState(() => parseHash());
+  const [route, setRoute] = useState(() => parseCurrentLocation());
 
   useEffect(() => {
-    // 若当前没有任何 hash，自动置为默认的 #/trade
-    if (!window.location.hash || window.location.hash === '#/') {
-      window.location.hash = '#/trade';
+    const initial = parseCurrentLocation();
+
+    // 若从 PWA 桌面图标或快捷方式（如 /?tab=trade&source=pwa 或 /?tab=tail）启动，静默收敛为干净的 Hash URL
+    if (initial.fromSearchParam) {
+      const passthrough = new URLSearchParams();
+      if (initial.query.code) passthrough.set('code', initial.query.code);
+      const qSuffix = passthrough.toString() ? `?${passthrough.toString()}` : '';
+      const cleanUrl = `${window.location.pathname}#${initial.path}${qSuffix}`;
+      try {
+        window.history.replaceState(null, '', cleanUrl);
+      } catch (_) {}
+      setRoute(initial);
+    } else if (!window.location.hash || window.location.hash === '#/') {
+      try {
+        window.history.replaceState(null, '', `${window.location.pathname}#/trade`);
+      } catch (_) {
+        window.location.hash = '#/trade';
+      }
     }
 
     const handleHashChange = () => {
-      const next = parseHash();
+      const next = parseCurrentLocation(window.location.hash);
       setRoute(next);
-      // 记录到本地存储备忘
       try {
         localStorage.setItem('t-active-tab', next.activeTab);
       } catch (_) {}
@@ -75,7 +124,6 @@ export function useRoute() {
       if (target.startsWith('/') || target.startsWith('#/')) {
         destPath = target.replace(/^#\/?/, '/');
       } else if (TAB_TO_PATH[target]) {
-        // 支持传入 tabConsole 等旧 tab id
         destPath = TAB_TO_PATH[target];
       } else {
         destPath = '/' + target;
@@ -85,8 +133,8 @@ export function useRoute() {
     const nextHash = `#${destPath}`;
     if (window.location.hash !== nextHash) {
       if (options.replace) {
-        const urlWithoutHash = window.location.href.split('#')[0];
-        window.location.replace(`${urlWithoutHash}${nextHash}`);
+        const base = window.location.pathname || '/';
+        window.location.replace(`${base}${nextHash}`);
       } else {
         window.location.hash = nextHash;
       }
@@ -102,7 +150,7 @@ export function useRoute() {
     activeTab: route.activeTab,
     query: route.query,
     routeInfo: route.routeInfo,
-    navigate
+    navigate,
   };
 }
 

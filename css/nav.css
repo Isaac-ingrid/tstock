@@ -1622,20 +1622,470 @@
   align-items: start;
 }
 
-@media (max-width: 760px) {
-  .tb-row-sub {
-    flex-wrap: wrap;
+/* 主交易动作按钮高亮层级（桌面端与手机端共用，一眼区分记T/建仓与辅助跳转） */
+.bc-act-btn.primary-t.is-pos-t {
+  background: var(--accent-bg);
+  border-color: var(--accent-b);
+  color: var(--accent-d);
+  font-weight: 700;
+}
+.bc-act-btn.primary-t.is-pos-t:hover {
+  background: #ede9fe;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.bc-act-btn.primary-t.is-watch-buy {
+  background: var(--down-bg);
+  border-color: var(--down-b);
+  color: var(--down-d);
+  font-weight: 700;
+}
+.bc-act-btn.primary-t.is-watch-buy:hover {
+  background: #dcfce7;
+  border-color: var(--down);
+  color: var(--down);
+}
+.bc-act-btn.primary-t.is-locked {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #b91c1c;
+}
+
+/* ==================== 8. 窄屏与手机端浏览器盯盘适配 ==================== */
+
+/* <= 920px：顶部 10 项导航自动沉降为单行丝滑横滑条，吸顶高度立减 55%+ */
+@media (max-width: 920px) {
+  .topbar.topbar-v2 {
+    padding: 8px 12px;
+    gap: 6px;
+    margin-bottom: 12px;
+    border-radius: 10px;
   }
+  .tb-row-main {
+    gap: 8px;
+  }
+  .tb-brand {
+    order: 1;
+    padding: 2px 4px;
+  }
+  .tb-actions {
+    order: 2;
+    margin-left: auto;
+    gap: 5px;
+  }
+  .topbar .tb-nav {
+    order: 3;
+    flex: 1 1 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 5px;
+    padding: 2px 0 3px;
+    border-top: 1px solid var(--hair);
+    padding-top: 6px;
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 18px), transparent);
+    mask-image: linear-gradient(90deg, #000 calc(100% - 18px), transparent);
+  }
+  .topbar .tb-nav::-webkit-scrollbar {
+    display: none;
+  }
+  .topbar .tb-nav a {
+    flex: 0 0 auto;
+    min-height: 31px;
+    padding: 0 9px;
+    font-size: 12px;
+  }
+  .tb-row-sub {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 7px;
+    padding-top: 6px;
+  }
+  .tb-row-sub::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
   .battle-grid {
     grid-template-columns: 1fr;
+    gap: 11px;
   }
   .console-v2 {
-    padding: 14px;
+    padding: 12px;
+  }
+  .console-head {
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .console-head-actions {
+    width: 100%;
+  }
+  .console-head-actions button {
+    flex: 1 1 auto;
+    justify-content: center;
+    min-height: 34px;
+    font-size: 12px;
+    padding: 5px 8px;
+  }
+  .funding-strip {
+    grid-template-columns: 1fr;
+    gap: 7px;
+    margin-bottom: 12px;
+  }
+  .fund-pill {
+    padding: 8px 11px;
+  }
+
+  /* 分组筛选与排序栏窄屏横滑防折行拥挤 */
+  .battle-toolbar {
+    gap: 8px;
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+  }
+  .bt-tabs {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex-wrap: nowrap;
+  }
+  .bt-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .bt-tab {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    min-height: 32px;
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+  .bt-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  /* 持仓紧凑卡片大拇指触控热区放大与防误触 */
+  .battle-card {
+    padding: 12px 13px;
+    gap: 9px;
+  }
+  .battle-card:hover {
+    transform: none;
+  }
+  .bc-foot {
+    flex-wrap: wrap;
+    gap: 6px;
+    padding-top: 8px;
+  }
+  .bc-links {
+    gap: 5px;
+    flex: 1 1 auto;
+  }
+  .bc-act-btn {
+    min-height: 32px;
+    padding: 4px 8px;
+    font-size: 11.5px;
+  }
+  .bc-expand-btn {
+    min-height: 32px;
+    padding: 4px 10px;
+    font-size: 11.5px;
+    margin-left: auto;
+  }
+  .bc-memo-btn {
+    min-height: 32px;
+  }
+  .bc-memo-edit input,
+  .bc-memo-save {
+    min-height: 34px;
   }
   .bcc-inputs {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .pr-bar-row {
-    grid-template-columns: 88px 1fr 82px;
+  .bcc-chip {
+    min-height: 28px;
+    padding: 3px 9px;
   }
+
+  /* 展开的完整做T抽屉在窄屏释放内边距，操作按钮支持横滑 */
+  .battle-detail-drawer {
+    margin-top: 12px;
+    padding: 10px 9px;
+    border-radius: 12px;
+  }
+  .bdd-bar {
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .bdd-acts {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  .bdd-acts::-webkit-scrollbar {
+    display: none;
+  }
+  .bdd-acts .mini {
+    flex: 0 0 auto;
+    min-height: 31px;
+    white-space: nowrap;
+  }
+
+  .pr-body {
+    grid-template-columns: 1fr;
+  }
+  .pr-bar-row {
+    grid-template-columns: 84px 1fr 78px;
+  }
+}
+
+/* <= 480px 手机竖屏：精简顶部次要文字，保证首屏留给核心行情与分时图 */
+@media (max-width: 480px) {
+  .tb-acc-mkt {
+    display: none;
+  }
+  .tb-btn {
+    min-height: 31px;
+    padding: 0 8px;
+    font-size: 11.5px;
+  }
+  .tb-sum-link {
+    display: none;
+  }
+  .bc-m {
+    padding: 6px 7px;
+  }
+  .bc-m .v {
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 375px) {
+  .tb-btn-txt {
+    display: none;
+  }
+  .tb-btn {
+    padding: 0 9px;
+  }
+}
+
+/* ==================== 9. PWA 全屏盯盘模式 & 主屏直达体验 ==================== */
+
+/* 顶栏 APP 全屏徽章 */
+.tb-pwa-tag {
+  font-size: 9.5px;
+  font-weight: 800;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: linear-gradient(135deg, #0284c7 0%, #059669 100%);
+  color: #fff;
+  letter-spacing: 0.4px;
+  line-height: 1.3;
+}
+
+/* 手机端或全屏独立 App 模式下自动收起首屏装饰性大标题（TopNav 已自带品牌Logo），
+   让用户点手机主屏图标 0 像素阻碍直达「今日作战台」持仓卡片 */
+@media (max-width: 640px) {
+  header.top {
+    display: none;
+  }
+}
+
+@media (display-mode: standalone), (display-mode: fullscreen) {
+  header.top {
+    display: none;
+  }
+  body {
+    padding-top: max(10px, calc(env(safe-area-inset-top, 0px) + 6px));
+    padding-left: max(10px, env(safe-area-inset-left, 0px));
+    padding-right: max(10px, env(safe-area-inset-right, 0px));
+    padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+    overscroll-behavior-y: contain;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .topbar {
+    top: env(safe-area-inset-top, 0px);
+  }
+}
+
+html[data-pwa="standalone"] header.top {
+  display: none;
+}
+
+html[data-pwa="standalone"] body {
+  padding-top: max(10px, calc(env(safe-area-inset-top, 0px) + 6px));
+  overscroll-behavior-y: contain;
+}
+
+html[data-pwa="standalone"] .topbar {
+  top: env(safe-area-inset-top, 0px);
+}
+
+/* 手机浏览器顶部轻量安装提示条 */
+.pwa-install-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 11px;
+  margin-bottom: 10px;
+  border-radius: 10px;
+  background: linear-gradient(90deg, #0f172a 0%, #1e293b 100%);
+  color: #f8fafc;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.16);
+}
+
+.pib-left {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  flex: 1;
+  cursor: pointer;
+}
+
+.pib-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  flex-shrink: 0;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+}
+
+.pib-txt {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.pib-txt b {
+  font-size: 12px;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pib-txt span {
+  font-size: 10.5px;
+  color: #cbd5e1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pib-acts {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.pib-btn {
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: none;
+  background: linear-gradient(135deg, #0284c7 0%, #10b981 100%);
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.pib-btn:hover {
+  background: linear-gradient(135deg, #0369a1 0%, #059669 100%);
+  color: #fff;
+}
+
+.pib-close {
+  min-height: 28px;
+  min-width: 26px;
+  padding: 0 4px;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 16px;
+}
+
+.pib-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+/* PWA 安装指引弹窗卡片样式 */
+.pwa-hero-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 13px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  margin-bottom: 12px;
+}
+
+.pwa-hero-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.16);
+}
+
+.pwa-steps-box {
+  padding: 11px 13px;
+  border-radius: 9px;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+}
+
+.pwa-steps-title {
+  font-size: 12.5px;
+  font-weight: 800;
+  color: #0369a1;
+  margin-bottom: 6px;
+}
+
+.pwa-step-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pwa-shortcut-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.pwa-sc-item {
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pwa-sc-item b {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.pwa-sc-item span {
+  font-size: 10.5px;
+  color: var(--mute);
 }

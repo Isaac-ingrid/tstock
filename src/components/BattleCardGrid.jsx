@@ -294,19 +294,19 @@ function OrderSizingCalc({ stock, sig, totalAssets, posRules, totalMktVal = 0, a
       <div className="bcc-inputs">
         <label>
           <span>预算(元)</span>
-          <input type="number" step="1000" value={budget} onChange={(e) => setBudget(e.target.value)} />
+          <input type="number" inputMode="numeric" step="1000" value={budget} onChange={(e) => setBudget(e.target.value)} />
         </label>
         <label>
           <span>挂单价</span>
-          <input type="number" step="0.01" value={entryPx} onChange={(e) => setEntryPx(e.target.value)} />
+          <input type="number" inputMode="decimal" step="0.01" value={entryPx} onChange={(e) => setEntryPx(e.target.value)} />
         </label>
         <label>
           <span>止损价</span>
-          <input type="number" step="0.01" value={stopPx} onChange={(e) => setStopPx(e.target.value)} />
+          <input type="number" inputMode="decimal" step="0.01" value={stopPx} onChange={(e) => setStopPx(e.target.value)} />
         </label>
         <label>
           <span>止盈价</span>
-          <input type="number" step="0.01" value={targetPx} onChange={(e) => setTargetPx(e.target.value)} />
+          <input type="number" inputMode="decimal" step="0.01" value={targetPx} onChange={(e) => setTargetPx(e.target.value)} />
         </label>
       </div>
 
@@ -598,7 +598,7 @@ export default function BattleCardGrid({
                 </button>
                 <button
                   type="button"
-                  className={`bc-act-btn ${!hasPos && isTiltLocked ? 'is-locked' : ''}`}
+                  className={`bc-act-btn primary-t ${hasPos ? 'is-pos-t' : 'is-watch-buy'} ${!hasPos && isTiltLocked ? 'is-locked' : ''}`}
                   onClick={() => {
                     if (!hasPos && isTiltLocked) {
                       toastWarn('🔒 单日防上头熔断保护中：已暂停新开仓买入，请先在上方风控条冷静复盘');

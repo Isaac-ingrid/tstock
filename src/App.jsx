@@ -14,6 +14,7 @@ import IgnitionPage from './views/IgnitionPage.jsx';
 import PerfPage from './views/PerfPage.jsx';
 import { QuickTModal, StockReasonModal, TradingClockModal, ToastHost, OvernightBanner, AlertCenterModal } from './components/Modals.jsx';
 import PostMarketModal from './components/PostMarketModal.jsx';
+import PwaInstallModal, { usePwaManager, PwaInstallBanner } from './components/PwaInstallModal.jsx';
 
 import { SITE_META, APP_PAGE_TITLE, STORAGE_KEYS, DEFAULT_POOL } from './data/site.js';
 import useRoute from './router/useRoute.js';
@@ -63,6 +64,8 @@ import {
 export default function App() {
   /* ================= 1. 响应式 URL 路由与核心状态 ================= */
   const { path, activeTab, navigate, query } = useRoute();
+  const pwa = usePwaManager();
+  const eodShortcutHandledRef = useRef(false);
 
   const [pool, setPool] = useState(() => {
     try {
@@ -997,7 +1000,7 @@ export default function App() {
     return () => clearInterval(timer);
   }, [fastRefresh]);
 
-  /* 定时任务与生命周期 */
+  /* 定时任务与生命周期（含手机主屏 App 从后台切回前台秒级自动同步行情） */
   useEffect(() => {
     updateClockRef.current();
     const clockTimer = setInterval(() => updateClockRef.current(), 1000);
@@ -1017,13 +1020,35 @@ export default function App() {
       }
     }, 60000);
 
+    // 手机 PWA 全屏盯盘增强：从券商软件切回战情室前台时（距上次更新超过 15 秒），立即静默拉取最新分时与现价
+    const handleVisibilityResume = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        updateClockRef.current();
+        if (Date.now() - lastSuccessStamp.current >= 15000) {
+          handleRefreshRef.current(true);
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityResume);
+    window.addEventListener('pageshow', handleVisibilityResume);
+
     return () => {
       clearInterval(clockTimer);
       clearInterval(staleTimer);
       clearTimeout(initialTimer);
       clearInterval(autoRefreshTimer);
+      document.removeEventListener('visibilitychange', handleVisibilityResume);
+      window.removeEventListener('pageshow', handleVisibilityResume);
     };
   }, []);
+
+  /* 支持手机桌面图标长按「15:05 收盘归档」快捷方式直达并自动拉起归档弹窗 */
+  useEffect(() => {
+    if (!eodShortcutHandledRef.current && query?.eod === '1') {
+      eodShortcutHandledRef.current = true;
+      setEodModalOpen(true);
+    }
+  }, [query]);
 
   /* ================= 2. 用户操作交互 ================= */
   const handleUpdateStock = (updated) => {
@@ -1632,6 +1657,13 @@ export default function App() {
     <div className="wrap">
       <Header />
 
+      <PwaInstallBanner
+        visible={pwa.showMobileBanner}
+        canNativePrompt={pwa.canNativePrompt}
+        onInstall={pwa.triggerInstall}
+        onDismiss={pwa.dismissBanner}
+      />
+
       <TopNav
         activeTab={activeTab}
         onTabChange={handleTabChange}
@@ -1649,6 +1681,8 @@ export default function App() {
         onOpenClock={() => setClockModalOpen(true)}
         onOpenAlertModal={() => setAlertModalOpen(true)}
         onOpenEodModal={() => setEodModalOpen(true)}
+        onOpenPwaModal={pwa.triggerInstall}
+        isStandalone={pwa.isStandalone}
         todayArchived={todayArchived}
         isPostMarketWindow={isPostMarketWindow}
         onCopyPlan={handleCopyPlan}
@@ -1922,6 +1956,15 @@ export default function App() {
         onRunWorkflow={handleRunEodWorkflow}
         onOpenQuickT={(stock, dir, px, qty) => setQuickTModal({ open: true, stock, defaultDir: dir, defaultPx: px, defaultQty: qty })}
         onMarkOvernightT={handleMarkOvernightT}
+      />
+
+      <PwaInstallModal
+        open={pwa.installModalOpen}
+        onClose={pwa.closeInstallModal}
+        isStandalone={pwa.isStandalone}
+        canNativePrompt={pwa.canNativePrompt}
+        platform={pwa.platform}
+        onTriggerNative={pwa.triggerInstall}
       />
 
       <ToastHost

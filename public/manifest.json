@@ -1,0 +1,96 @@
+{
+  "id": "/",
+  "name": "智策战情室 · A股盘中做T与短线实战终端",
+  "short_name": "智策战情室",
+  "description": "A股今日作战台、分时做T买卖点、起爆挖掘、连板情绪、尾盘黑马与15:05收盘复盘终端",
+  "start_url": "/?tab=trade&source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "background_color": "#0f172a",
+  "theme_color": "#ffffff",
+  "lang": "zh-CN",
+  "dir": "ltr",
+  "categories": ["finance", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "今日作战台",
+      "short_name": "今日作战",
+      "description": "直达实盘持仓买卖点判定与分时做T盯盘面板",
+      "url": "/?tab=trade&source=pwa",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "起爆挖掘池",
+      "short_name": "起爆挖掘",
+      "description": "直达放量突破起爆与龙头首阴候选池",
+      "url": "/?tab=ignition&source=pwa",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "尾盘黑马台",
+      "short_name": "尾盘黑马",
+      "description": "14:30 尾盘潜伏建仓与次日早盘冲高止盈雷达",
+      "url": "/?tab=tail&source=pwa",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "15:05 收盘归档",
+      "short_name": "收盘归档",
+      "description": "一键同步收盘价、排查未平T仓并生成明日挂单简报",
+      "url": "/?tab=trade&eod=1&source=pwa",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ]
+}

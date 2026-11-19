@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { money } from '../services/utils.js';
 import { NAV_ROUTES } from '../data/site.js';
 
@@ -17,6 +17,8 @@ export default function TopNav({
   onOpenClock,
   onOpenAlertModal,
   onOpenEodModal,
+  onOpenPwaModal,
+  isStandalone = false,
   todayArchived = false,
   isPostMarketWindow = false,
   onCopyPlan,
@@ -27,6 +29,32 @@ export default function TopNav({
   notifyActive,
   alertEnabled = true,
 }) {
+  const navRef = useRef(null);
+  const moreRef = useRef(null);
+
+  // 窄屏横向滑动导航栏：切换Tab时仅在导航容器内平滑居中当前项，绝不干扰页面纵向滚动
+  useEffect(() => {
+    const navEl = navRef.current;
+    if (!navEl || navEl.scrollWidth <= navEl.clientWidth + 4) return;
+    const activeEl = navEl.querySelector('a.active');
+    if (!activeEl) return;
+    const targetLeft = Math.max(
+      0,
+      activeEl.offsetLeft - navEl.clientWidth / 2 + activeEl.clientWidth / 2
+    );
+    try {
+      navEl.scrollTo({ left: targetLeft, behavior: 'smooth' });
+    } catch (_) {
+      navEl.scrollLeft = targetLeft;
+    }
+  }, [activeTab]);
+
+  const closeMore = () => {
+    if (moreRef.current) {
+      moreRef.current.open = false;
+    }
+  };
+
   const getBadge = (key) => {
     if (key === 'poolCount') return pool.length > 0 ? pool.length : null;
     if (key === 'tailCount') return tailCount > 0 ? tailCount : null;
@@ -41,18 +69,19 @@ export default function TopNav({
 
   return (
     <div className={`topbar topbar-v2 ${isStale ? 'stale' : ''}`} id="topbar">
-      {/* 第一行：品牌 + 主导航 + 核心操作按钮 */}
+      {/* 第一行：品牌 + 主导航（窄屏自动沉降为单行横滑条） + 核心操作按钮 */}
       <div className="tb-row-main">
         <div
           className="tb-brand"
           onClick={() => onTabChange('/trade')}
-          title="智策战情室 · 首页"
+          title="智策战情室 · 直达今日作战台"
         >
           <img src="/favicon.svg" alt="T-Stock" className="tb-logo" />
           <span className="tb-brand-txt">T-Stock</span>
+          {isStandalone && <span className="tb-pwa-tag" title="当前处于主屏幕独立全屏盯盘模式">APP</span>}
         </div>
 
-        <nav className="tb-nav" id="topNav">
+        <nav className="tb-nav" id="topNav" ref={navRef}>
           {NAV_ROUTES.map((item) => {
             const badge = getBadge(item.badgeKey);
             const isActive = activeTab === item.tab;
@@ -83,7 +112,8 @@ export default function TopNav({
             onClick={onOpenAlertModal || onToggleNotify}
             title={alertEnabled ? '盘中到价与买卖提醒设置' : '免打扰模式已开启，点击设置'}
           >
-            {alertEnabled ? '🔔 提醒' : '🔕 静音'}
+            <span>{alertEnabled ? '🔔' : '🔕'}</span>
+            <span className="tb-btn-txt">{alertEnabled ? '提醒' : '静音'}</span>
           </button>
           {onOpenEodModal && (
             <button
@@ -100,7 +130,10 @@ export default function TopNav({
                   : undefined
               }
             >
-              {todayArchived ? '✅ 已归档' : isPostMarketWindow ? '🏁 待归档' : '🏁 归档'}
+              <span>{todayArchived ? '✅' : '🏁'}</span>
+              <span className="tb-btn-txt">
+                {todayArchived ? '已归档' : isPostMarketWindow ? '待归档' : '归档'}
+              </span>
             </button>
           )}
           <button
@@ -110,23 +143,67 @@ export default function TopNav({
             onClick={onRefresh}
             title="立即拉取最新行情与深度分时"
           >
-            ↻ 刷新
+            <span>↻</span>
+            <span className="tb-btn-txt">刷新</span>
           </button>
-          <details className="tb-more">
-            <summary className="tb-btn" title="更多工具（计划复制 / 收盘归档 / 导入导出）">⋯</summary>
+          <details className="tb-more" ref={moreRef}>
+            <summary className="tb-btn" title="更多工具（添加到手机主屏 / 计划复制 / 收盘归档 / 导入导出）">⋯</summary>
             <div className="tb-more-menu">
-              {onOpenEodModal && (
-                <button type="button" onClick={onOpenEodModal}>🏁 15:05 盘后一键收盘归档</button>
+              {onOpenPwaModal && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeMore();
+                    onOpenPwaModal();
+                  }}
+                >
+                  {isStandalone ? '📱 全屏盯盘模式说明' : '📲 添加到手机主屏幕'}
+                </button>
               )}
-              <button type="button" onClick={onCopyPlan}>📋 复制今日作战计划</button>
-              <button type="button" onClick={onExport}>⬇ 导出 JSON 备份</button>
-              <button type="button" onClick={onImportClick}>⬆ 导入 JSON 恢复</button>
+              {onOpenEodModal && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeMore();
+                    onOpenEodModal();
+                  }}
+                >
+                  🏁 15:05 盘后一键收盘归档
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  closeMore();
+                  if (onCopyPlan) onCopyPlan();
+                }}
+              >
+                📋 复制今日作战计划
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  closeMore();
+                  if (onExport) onExport();
+                }}
+              >
+                ⬇ 导出 JSON 备份
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  closeMore();
+                  if (onImportClick) onImportClick();
+                }}
+              >
+                ⬆ 导入 JSON 恢复
+              </button>
             </div>
           </details>
         </div>
       </div>
 
-      {/* 第二行：精简状态条（资产 + 盘中时钟 + 持仓/自选汇总入口，永不溢出） */}
+      {/* 第二行：精简状态条（资产 + 盘中时钟 + 持仓/自选汇总入口，窄屏单行横滑不撑高） */}
       <div className="tb-row-sub">
         <div
           className="tb-acc-pill"
@@ -136,9 +213,9 @@ export default function TopNav({
         >
           <span className="tb-acc-k">资产</span>
           <b>¥{money(totalAssets)}</b>
-          <span className="tb-acc-sep" />
-          <span className="tb-acc-k">市值</span>
-          <b>¥{money(marketValue)}</b>
+          <span className="tb-acc-sep tb-acc-mkt" />
+          <span className="tb-acc-k tb-acc-mkt">市值</span>
+          <b className="tb-acc-mkt">¥{money(marketValue)}</b>
           <span className="tb-acc-sep" />
           <span className="tb-acc-k">仓位</span>
           <b>{posRate.toFixed(1)}%</b>
@@ -165,7 +242,7 @@ export default function TopNav({
         >
           <span className="tb-grp-lbl pos">持仓 {holdingCount}</span>
           <span className="tb-grp-lbl watch">自选 {watchCount}</span>
-          <span className="tb-sum-link">去作战台 →</span>
+          <span className="tb-sum-link">作战台 →</span>
         </button>
       </div>
     </div>
