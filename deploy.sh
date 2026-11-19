@@ -115,6 +115,20 @@ if [ "$DATA_ONLY" -eq 1 ]; then
   add "data/latest.json"
 else
   command -v npm >/dev/null 2>&1 || fail "未找到 npm，无法构建 Next.js 静态站点"
+  export NEXT_TELEMETRY_DISABLED=1
+  # 小内存 Linux 云主机 (<= 4.5GB) 自动开启低内存与线程限流保护，防止抢占同机服务内存或 OOM
+  if [ "$(uname -s)" = "Linux" ] && [ -r /proc/meminfo ]; then
+    MEM_KB=$(awk '/^MemTotal:/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)
+    if [ "${MEM_KB:-0}" -gt 0 ] && [ "$MEM_KB" -le 4718592 ]; then
+      export RAYON_NUM_THREADS="${RAYON_NUM_THREADS:-1}"
+      export UV_THREADPOOL_SIZE="${UV_THREADPOOL_SIZE:-2}"
+      case "${NODE_OPTIONS:-}" in
+        *--max-old-space-size*) ;;
+        *) export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--max-old-space-size=1024" ;;
+      esac
+      say "🛡️ 检测到小内存服务器 ($(( MEM_KB / 1024 ))MB)，已自动开启禁遥测与低内存编译保护"
+    fi
+  fi
   say "执行 Next.js 静态导出构建..."
   npm run build || fail "Next.js 构建失败，已停止部署"
   [ -f "out/index.html" ] || fail "构建完成但 out/index.html 不存在"

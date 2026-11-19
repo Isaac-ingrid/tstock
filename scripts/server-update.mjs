@@ -201,9 +201,23 @@ async function main() {
 
   // ---------- 4. 强制以 /stock-api 前缀构建并同步静态站点 ----------
   step('4/5 构建静态前端并本机同步至 dist/');
+  const totalMemMB = Math.round(os.totalmem() / (1024 * 1024));
+  const buildEnv = {
+    NEXT_PUBLIC_STOCK_API_BASE: '/stock-api',
+    NEXT_TELEMETRY_DISABLED: '1',
+  };
+  if (IS_LINUX && totalMemMB <= 4608) {
+    if (!process.env.RAYON_NUM_THREADS) buildEnv.RAYON_NUM_THREADS = '1';
+    if (!process.env.UV_THREADPOOL_SIZE) buildEnv.UV_THREADPOOL_SIZE = '2';
+    const curNodeOpts = process.env.NODE_OPTIONS || '';
+    if (!curNodeOpts.includes('--max-old-space-size')) {
+      buildEnv.NODE_OPTIONS = `${curNodeOpts} --max-old-space-size=1024`.trim();
+    }
+    ok(`检测到小内存云主机 (${totalMemMB}MB)，已自动启用禁遥测与低内存限流保护`);
+  }
   const deployArgs = ['deploy.sh', '--local'];
   if (dataOnly) deployArgs.push('--data-only');
-  runInherit('bash', deployArgs, { NEXT_PUBLIC_STOCK_API_BASE: '/stock-api' });
+  runInherit('bash', deployArgs, buildEnv);
 
   // ---------- 5. 双链路线上健康自检 ----------
   step('5/5 线上服务双链路健康自检');
