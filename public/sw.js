@@ -5,7 +5,7 @@
    兼顾手机主屏秒开安装能力与盘中 100% 实时鲜活行情。
    ============================================================ */
 
-const CACHE_NAME = 'tstock-shell-v1';
+const CACHE_NAME = 'tstock-shell-v2';
 const PRECACHE_ASSETS = [
   '/',
   '/manifest.json',
@@ -48,8 +48,9 @@ self.addEventListener('fetch', (event) => {
   // 1. 跨域请求（腾讯/东财实时行情、前复权K线等）一律直连网络，零拦截零缓存
   if (url.origin !== self.location.origin) return;
 
-  // 2. 同源动态数据接口与开发环境热更新流一律直连网络
+  // 2. 同源动态数据接口（含 /stock-api/ 反代）与开发环境热更新流一律直连网络
   if (
+    url.pathname.startsWith('/stock-api/') ||
     url.pathname.startsWith('/api/') ||
     url.pathname.startsWith('/data/') ||
     url.pathname.startsWith('/_next/webpack-hmr')

@@ -116,6 +116,7 @@ if [ "$DATA_ONLY" -eq 1 ]; then
 else
   command -v npm >/dev/null 2>&1 || fail "未找到 npm，无法构建 Next.js 静态站点"
   export NEXT_TELEMETRY_DISABLED=1
+  export NEXT_PUBLIC_STOCK_API_BASE="${NEXT_PUBLIC_STOCK_API_BASE:-/stock-api}"
   # 小内存 Linux 云主机 (<= 4.5GB) 自动开启低内存与线程限流保护，防止抢占同机服务内存或 OOM
   if [ "$(uname -s)" = "Linux" ] && [ -r /proc/meminfo ]; then
     MEM_KB=$(awk '/^MemTotal:/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)

@@ -971,8 +971,8 @@ async def scan_breakout_ignition(
         if c in quotes and quotes[c]["price"] > 0 and quotes[c]["amount"] >= 4e7
     ][:200]
 
-    # Step 3A: 拉取日K初筛
-    sem_k = asyncio.Semaphore(4)
+    # Step 3A: 拉取日K初筛（走免 WAF 极速腾讯代理节点 + 东财熔断保护）
+    sem_k = asyncio.Semaphore(8)
     daily_tasks = [
         _fetch_em_klines(
             http_client,
@@ -994,8 +994,8 @@ async def scan_breakout_ignition(
         if pre is not None:
             daily_passed.append((c, dbars, pre))
 
-    # Step 3B: 仅对通过日K缩量试盘筛查的标的拉周K+月K，大幅降低东财限流风险
-    sem_wm = asyncio.Semaphore(3)
+    # Step 3B: 仅对通过日K缩量试盘筛查的标的拉周K+月K
+    sem_wm = asyncio.Semaphore(6)
 
     async def _fetch_wm(code: str) -> Tuple[List[dict], List[dict]]:
         em_secid = f"{'1' if code.startswith(('6', '9')) else '0'}.{code}"

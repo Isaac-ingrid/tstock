@@ -16,8 +16,18 @@ const T_S = 'https://proxy.finance.qq.com/ifzqgtimg/appstock/smartbox/search/get
 const T_K = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get';          // 前复权日K（API 稳定节点，免 WAF 501 拦截）
 
 /* 所有股票数据统一经过独立后端。静态导出时该值会由 NEXT_PUBLIC_STOCK_API_BASE 写入；
-   未配置时默认请求同域 /stock-api，便于 nginx 反向代理到 FastAPI。 */
-const STOCK_API_BASE = (process.env.NEXT_PUBLIC_STOCK_API_BASE || '/stock-api').replace(/\/$/, '');
+   线上公网或局域网访问时若检测到残留的 localhost/127.0.0.1（如来自本地 .env.local），自动切回同域 /stock-api 反代。 */
+const RAW_API_BASE = (process.env.NEXT_PUBLIC_STOCK_API_BASE || '').trim().replace(/\/$/, '');
+const STOCK_API_BASE = (() => {
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname || '';
+    const isLocalHost = host === 'localhost' || host === '127.0.0.1' || window.location.protocol === 'file:';
+    if (!isLocalHost && (!RAW_API_BASE || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(RAW_API_BASE))) {
+      return '/stock-api';
+    }
+  }
+  return RAW_API_BASE || '/stock-api';
+})();
 
 const AUTH_TOKEN_KEY = 't-auth-token';
 export const AUTH_LAST_USER_KEY = 't-auth-last-user';
@@ -306,7 +316,7 @@ export async function fetchIgnitionPool({
   }
   const url = `${STOCK_API_BASE}/api/stock/ignition_pool?${qs.toString()}`;
   const ctl = new AbortController();
-  const t = setTimeout(() => ctl.abort(), 35000);
+  const t = setTimeout(() => ctl.abort(), 55000);
   try {
     const res = await fetch(url, { cache: 'no-store', headers: authHeaders(), signal: ctl.signal });
     if (!res.ok) {
@@ -597,8 +607,8 @@ export function tcodeFromCode(code){
   if (/^(4|8)/.test(c))      return 'bj' + c;   // 北交所
   return null;
 }
-function tcodeFromInput(v){
-  const s = String(v).trim().toLowerCase().replace(/\s+/g, '');
+export function tcodeFromInput(v){
+  const s = String(v || '').trim().toLowerCase().replace(/\s+/g, '');
   const m = s.match(/^(sh|sz|bj)?(\d{6})$/);
   if (!m) return null;
   return m[1] ? m[1] + m[2] : tcodeFromCode(m[2]);
@@ -679,17 +689,23 @@ async function fetchJsonWithWafFallback(url, ms = 12000) {
     if (!txt || !txt.trim().startsWith('{')) throw new Error('invalid json');
     return JSON.parse(txt);
   };
-  try {
-    return await tryFetchJson(url);
-  } catch (err) {
-    if (url.includes('https://ifzq.gtimg.cn/')) {
-      return await tryFetchJson(url.replace('https://ifzq.gtimg.cn/', 'https://web.ifzq.gtimg.cn/'));
-    }
-    if (url.includes('https://web.ifzq.gtimg.cn/')) {
-      return await tryFetchJson(url.replace('https://web.ifzq.gtimg.cn/', 'https://ifzq.gtimg.cn/'));
-    }
-    throw err;
+  const candidates = [url];
+  if (url.includes('https://ifzq.gtimg.cn/')) {
+    candidates.push(url.replace('https://ifzq.gtimg.cn/', 'https://proxy.finance.qq.com/ifzqgtimg/'));
+    candidates.push(url.replace('https://ifzq.gtimg.cn/', 'https://web.ifzq.gtimg.cn/'));
+  } else if (url.includes('https://web.ifzq.gtimg.cn/')) {
+    candidates.push(url.replace('https://web.ifzq.gtimg.cn/', 'https://proxy.finance.qq.com/ifzqgtimg/'));
+    candidates.push(url.replace('https://web.ifzq.gtimg.cn/', 'https://ifzq.gtimg.cn/'));
   }
+  let lastErr = null;
+  for (const cand of candidates) {
+    try {
+      return await tryFetchJson(cand);
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw lastErr || new Error('Failed to fetch');
 }
 
 const KLINE_N = 120;
@@ -1878,10 +1894,14 @@ function autoSnapshot(){
   renderTailBuySection(); console.log('[自动快照] 已记录 ' + r.date + '：总资产 ' + r.total); }
 }
 
-/* 网络自检：三条链路分别探测，把"哪个环节断了"一次说清 */
+/* 网络自检：十三条核心链路分别探测，同时支持 React 状态回显与原生 DOM 兜底 */
 export async function selfTest(){
-  const st = document.getElementById('dbStatus');
-  st.className='db-status'; st.textContent = '正在自检三条链路…';
+  const st = typeof document !== 'undefined' ? document.getElementById('dbStatus') : null;
+  if (st) {
+    st.style.display = 'block';
+    st.className = 'db-status';
+    st.textContent = '正在自检十三条数据链路…';
+  }
   const rows = [];
   const probe = async (label, fn)=>{
     const t0 = Date.now();
@@ -1890,120 +1910,101 @@ export async function selfTest(){
   };
   await probe('行情　qt.gtimg.cn',       async ()=> (await fetchQuotes(['sh605128'])).sh605128 ? 1 : 0);
   await probe('检索　proxy.finance.qq.com', async ()=> (await searchTencent('上海沿浦')).length);
-  await probe('日K　ifzq.gtimg.cn',       async ()=> (await fetchKline('sh605128')).length);
-  await probe('周K　ifzq.gtimg.cn',       async ()=> (await fetchKlineBig('sh605128','week',20)).length);
-  await probe('月K　ifzq.gtimg.cn',       async ()=> (await fetchKlineBig('sh605128','month',20)).length);
+  await probe('日K　腾讯前复权源',        async ()=> (await fetchKline('sh605128')).length);
+  await probe('周K　腾讯前复权源',        async ()=> (await fetchKlineBig('sh605128','week',20)).length);
+  await probe('月K　腾讯前复权源',        async ()=> (await fetchKlineBig('sh605128','month',20)).length);
   await probe('分钟K 15分',               async ()=> (await fetchKlineMin('sh605128','m15',20)).length);
   await probe('分钟K 5分（量能基准）',     async ()=> (await fetchKlineMin('sh605128','m5',482)).length);
   await probe('分时　ifzq.gtimg.cn',      async ()=> (await fetchMinute('sh605128')).pts.length);
   await probe('逐笔　stock.gtimg.cn',     async ()=> (await fetchDetail('sh605128', 8)).recs.length);
   await probe('指数　qt.gtimg.cn',        async ()=> (await fetchQuotes(['sh000001'])).sh000001 ? 1 : 0);
-  await probe('指数日K ifzq',             async ()=> (await fetchKlineBig('sh000001','day',30)).length);
+  await probe('指数日K 前复权源',         async ()=> (await fetchKlineBig('sh000001','day',30)).length);
   await probe('估值　datacenter-web',     async ()=> (await fetchValSeries('605128', 60)).length);
   await probe('板块　datacenter-web',     async ()=> (await fetchBoards('605128.SH')).length);
   const ok = rows.every(r => r[1]);
-  st.className = ok ? 'db-status' : 'db-status err';
-  st.innerHTML = rows.map(r =>
+  const html = rows.map(r =>
     (r[1] ? '✅' : '❌') + ' ' + r[0] + '　' + (r[1] ? '正常' : '失败') + '　' + r[2] + 'ms' + (r[3] ? '　' + r[3] : '')
   ).join('<br>') + (ok ? '<br>十三条链路全通：行情 / 检索 / 日周月K / 分钟K / 分时 / 分时量能基准 / 逐笔大单 / 指数 / 指数日K / 历史估值 / 板块归属 全部可用。'
                        : '<br>结论：检索挂了不影响使用 —— 直接输 <b>6 位代码</b>（如 605128）添加即可，这条路在本地换算，不走检索接口。<br>'
                          + '指数/估值/板块三条是新链路，若失败则第四条闸门、估值分位、板块归属会显示"数据不足"，不影响三闸门与做T价位计算。');
+  if (st) {
+    st.style.display = 'block';
+    st.className = ok ? 'db-status' : 'db-status err';
+    st.innerHTML = html;
+  }
+  return { ok, rows, html };
 }
 
-/* 添加自选：能本地解析的代码，绝不依赖检索接口；传入 currentPool 时先同步 React 最新持仓防止覆盖丢失 */
-export async function addByQuery(q, currentPool = null){
-  if (Array.isArray(currentPool)) {
-    pool.splice(0, pool.length, ...currentPool);
+/* 解析用户输入为标准股票候选（纯函数无全局数组竞争）：6 位代码 0 网络直出，名称/拼音走检索 */
+export async function resolveStockInput(q){
+  const trimmed = String(q || '').trim();
+  if (!trimmed) throw new Error('请输入股票代码或名称');
+  const direct = tcodeFromInput(trimmed);
+  if (direct) {
+    const code = String(codeOf(direct)).padStart(6, '0');
+    return { status: 'single', candidate: { name: '', code, tcode: direct } };
   }
-  const st  = typeof document !== 'undefined' ? document.getElementById('dbStatus') : null;
-  const box = typeof document !== 'undefined' ? document.getElementById('dbCands') : null;
-  if (box) box.innerHTML = '';
-
-  /* 快路径：纯 6 位代码 / sh605128 形式 —— 本地算 tcode，零网络检索 */
-  const direct = tcodeFromInput(q);
-  if (direct){
-    const code = codeOf(direct);
-    if (pool.some(s => String(s.code).padStart(6, '0') === String(code).padStart(6, '0'))){
-      if (st) { st.className='db-status err'; st.textContent = code + ' 已经在自选池里了。'; }
-      toastWarn(code + ' 已经在自选池里了');
-      return { status: 'exists', code };
-    }
-    if (st) { st.className='db-status'; st.textContent = '按代码直接添加 ' + direct + ' …'; }
-    const added = await adoptCandidate({ name:'', code, tcode:direct });
-    return { status: added ? 'added' : 'exists', stock: added };
-  }
-
-  /* 常规路径：名称 / 拼音首字母 / 部分代码 → 走检索 */
-  if (st) { st.className='db-status'; st.textContent = '正在检索「' + q + '」…'; }
   let list;
-  try{ list = await searchTencent(q); }
-  catch(e){
-    if (st) {
-      st.className='db-status err';
-      st.innerHTML = '检索接口连不上（' + e.message + '）。<br>不必等它 —— 直接输 <b>6 位代码</b>（如 605128）即可添加，<b>这条路径不走检索，一定可用</b>。';
-    }
-    throw new Error('检索接口不可用（' + e.message + '），请直接输入6位股票代码');
+  try {
+    list = await searchTencent(trimmed);
+  } catch (e) {
+    throw new Error('检索接口不可用（' + e.message + '），请直接输入 6 位股票代码');
   }
-  if (!list.length){
-    if (st) { st.className='db-status err'; st.textContent = '没找到匹配的 A 股「' + q + '」，可换名称、拼音首字母（如 shyp），或直接输 6 位代码。'; }
-    throw new Error('未找到匹配的 A 股「' + q + '」');
+  if (!list.length) {
+    throw new Error('未找到匹配的 A 股「' + trimmed + '」，可换名称、拼音首字母或直接输 6 位代码');
   }
-  if (list.length > 1){
-    if (box) {
-      box.innerHTML = list.map((x,i)=>`<button data-cand="${i}">${x.name} ${x.code}${x.market?'·'+x.market:''}</button>`).join('');
-      box.querySelectorAll('button[data-cand]').forEach(b=>{
-        b.onclick = ()=> adoptCandidate(list[+b.dataset.cand]);
-      });
-    }
-    if (st) st.textContent = '找到 ' + list.length + ' 个结果，点一个加入自选：';
-    const exact = list.find(x => x.name === String(q).trim() || x.code === String(q).trim());
+  if (list.length > 1) {
+    const exact = list.find(x => x.name === trimmed || String(x.code).padStart(6, '0') === trimmed);
     if (exact) {
-      const added = await adoptCandidate(exact);
-      return { status: added ? 'added' : 'exists', stock: added };
-    }
-    if (!box) {
-      const added = await adoptCandidate(list[0]);
-      return { status: added ? 'added' : 'exists', stock: added, candidates: list };
+      return { status: 'single', candidate: exact };
     }
     return { status: 'multiple', candidates: list };
   }
-  const added = await adoptCandidate(list[0]);
-  return { status: added ? 'added' : 'exists', stock: added };
+  return { status: 'single', candidate: list[0] };
+}
+
+/* 添加自选（兼容旧调用路径，彻底消除异步取数期间被 React 每秒时钟重绘 syncRuntimeState 冲掉新股的竞态） */
+export async function addByQuery(q, currentPool = null){
+  const basePool = Array.isArray(currentPool) ? [...currentPool] : [...pool];
+  const resolved = await resolveStockInput(q);
+  if (resolved.status === 'multiple') {
+    return { status: 'multiple', candidates: resolved.candidates };
+  }
+  const cand = resolved.candidate;
+  const code6 = String(cand.code).padStart(6, '0');
+  if (basePool.some(s => String(s.code).padStart(6, '0') === code6)) {
+    toastWarn((cand.name || code6) + ' 已经在自选池里了');
+    return { status: 'exists', code: code6 };
+  }
+  const added = await adoptCandidate(cand, basePool);
+  return { status: added ? 'added' : 'exists', stock: added, code: code6 };
 }
 
 export async function adoptCandidate(c, currentPool = null){
-  if (Array.isArray(currentPool)) {
-    pool.splice(0, pool.length, ...currentPool);
-  }
-  const st = typeof document !== 'undefined' ? document.getElementById('dbStatus') : null;
-  if (pool.some(s => String(s.code).padStart(6, '0') === String(c.code).padStart(6, '0'))){
-    if (st) { st.className='db-status err'; st.textContent = (c.name||c.code) + ' 已经在自选池里了。'; }
+  const code6 = String(c.code).padStart(6, '0');
+  const basePool = Array.isArray(currentPool) ? [...currentPool] : [...pool];
+  if (basePool.some(s => String(s.code).padStart(6, '0') === code6)){
     return null;
   }
-  const box = typeof document !== 'undefined' ? document.getElementById('dbCands') : null;
-  if (box) box.innerHTML = '';
   const newStock = {
-    name: c.name || c.code,
-    code: String(c.code).padStart(6, '0'),
-    tcode: c.tcode || tcodeFromCode(String(c.code).padStart(6, '0')),
+    name: c.name || code6,
+    code: code6,
+    tcode: c.tcode || tcodeFromCode(code6),
     prevClose: 0, open: 0, high: 0, low: 0, price: 0, avg: 0, vr: 1,
     ma5: null, ma10: null, ma20: null, shares: 0, cost: 0, cap: 0,
     tier: 'short', p: 'day'
   };
-  pool.push(newStock);
-  const s = pool[pool.length-1];
-  try{
-    await loadStock(s);
-    if (st) {
-      st.className='db-status';
-      st.innerHTML = '已加入 <b>'+s.name+' '+s.code+'</b>，行情已同步' + (s._maOk ? '（含均线）' : '（均线未同步，可点 ⟳ 重试）') + '。';
-    }
+  try {
+    await loadStock(newStock);
+  } catch (_) {}
+  const latestPool = Array.isArray(pool) ? [...pool] : basePool;
+  if (!latestPool.some(s => String(s.code).padStart(6, '0') === code6)) {
+    latestPool.push(newStock);
   }
-  catch(e){ if (st) { st.className='db-status err'; st.textContent = '已加入 ' + s.code + '，但取数失败：' + e.message; } }
-  if (typeof render === 'function') render(pool);
-  else if (typeof window !== 'undefined' && window.render) window.render(pool);
+  pool.splice(0, pool.length, ...latestPool);
+  if (typeof window !== 'undefined' && window.render) window.render(pool);
   savePool();
-  return s;
+  return newStock;
 }
 
 /* 交易时段自动刷新 */

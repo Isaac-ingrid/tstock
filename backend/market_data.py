@@ -11,6 +11,8 @@ from __future__ import annotations
 """
 
 import asyncio
+import datetime
+import json
 import time
 from collections import OrderedDict
 from typing import Any, Dict, Generic, List, Optional, Tuple, TypeVar
@@ -32,7 +34,14 @@ def to_tcode(code: str) -> str:
     c = str(code or "").strip().lower()
     if c.startswith(("sh", "sz", "bj")) and len(c) == 8:
         return c
-    c6 = c.zfill(6)
+    if "." in c:
+        mkt, num = c.split(".", 1)
+        c6 = num.strip().zfill(6)
+        if mkt == "1":
+            return f"sh{c6}"
+        if mkt == "0":
+            return f"bj{c6}" if c6.startswith(("4", "8")) else f"sz{c6}"
+    c6 = c.replace("sh", "").replace("sz", "").replace("bj", "").zfill(6)
     if c6.startswith(("6", "9")):
         return f"sh{c6}"
     if c6.startswith(("4", "8")):
@@ -44,7 +53,12 @@ def to_em_secid(code: str) -> str:
     raw = str(code or "").strip()
     if "." in raw:
         return raw
-    c = raw.lower().replace("sh", "").replace("sz", "").replace("bj", "").zfill(6)
+    low = raw.lower()
+    if low.startswith("sh"):
+        return f"1.{low[2:].zfill(6)}"
+    if low.startswith(("sz", "bj")):
+        return f"0.{low[2:].zfill(6)}"
+    c = low.zfill(6)
     return f"{'1' if c.startswith(('6', '9')) else '0'}.{c}"
 
 
@@ -94,6 +108,10 @@ class BoundedTTLCache(Generic[K, V]):
 _KLINE_CACHE: BoundedTTLCache[Tuple[str, int, int], List[dict]] = BoundedTTLCache(maxsize=1024, default_ttl=300.0)
 _QUOTE_CACHE: BoundedTTLCache[str, dict] = BoundedTTLCache(maxsize=2048, default_ttl=4.0)
 
+# 东财 push2his 连续超时自动熔断状态（避免批量扫盘逐只卡在 15s 连接超时）
+_EM_HIS_FAIL_COUNT = 0
+_EM_HIS_COOLDOWN_UNTIL = 0.0
+
 
 def parse_em_klines(klines: List[Any]) -> List[dict]:
     out: List[dict] = []
@@ -123,6 +141,168 @@ def parse_em_klines(klines: List[Any]) -> List[dict]:
     return out
 
 
+def parse_tencent_fqkline_node(jd: dict, period: str = "day") -> List[dict]:
+    if not isinstance(jd, dict):
+        return []
+    arr = jd.get(f"qfq{period}") or jd.get(period) or []
+    bars: List[dict] = []
+    for row in arr:
+        if not isinstance(row, list) or len(row) < 6:
+            continue
+        o = safe_float(row[1])
+        c = safe_float(row[2])
+        h = safe_float(row[3])
+        lo = safe_float(row[4])
+        if c <= 0 or h <= 0 or lo <= 0:
+            continue
+        bars.append({
+            "date": str(row[0])[:10],
+            "open": o,
+            "close": c,
+            "high": h,
+            "low": lo,
+            "vol": safe_float(row[5]),
+            "amount": 0.0,
+            "amp": ((h - lo) / max(1e-6, o) * 100.0),
+            "pctChg": None,
+            "turnover": None,
+        })
+    return bars
+
+
+def _aggregate_daily_bars(daily_bars: List[dict], period: str) -> List[dict]:
+    if period == "day" or not daily_bars:
+        return daily_bars
+    buckets: "OrderedDict[str, dict]" = OrderedDict()
+    for b in daily_bars:
+        dt_str = str(b.get("date") or "")[:10]
+        if len(dt_str) < 10:
+            continue
+        if period == "month":
+            bkey = dt_str[:7]
+        else:
+            try:
+                iso_y, iso_w, _ = datetime.date.fromisoformat(dt_str).isocalendar()
+                bkey = f"{iso_y}-W{iso_w:02d}"
+            except Exception:
+                bkey = dt_str[:7]
+        cur = buckets.get(bkey)
+        if cur is None:
+            buckets[bkey] = {
+                "date": dt_str,
+                "open": b["open"],
+                "close": b["close"],
+                "high": b["high"],
+                "low": b["low"],
+                "vol": b["vol"],
+                "amount": b.get("amount", 0.0),
+                "amp": 0.0,
+                "pctChg": None,
+                "turnover": None,
+            }
+        else:
+            cur["date"] = dt_str
+            cur["close"] = b["close"]
+            cur["high"] = max(cur["high"], b["high"])
+            cur["low"] = min(cur["low"], b["low"])
+            cur["vol"] += b["vol"]
+            cur["amount"] += b.get("amount", 0.0)
+    out = list(buckets.values())
+    for item in out:
+        item["amp"] = (item["high"] - item["low"]) / max(1e-6, item["open"]) * 100.0
+    return out
+
+
+async def _fetch_sina_klines(
+    client: httpx.AsyncClient,
+    tc: str,
+    period: str = "day",
+    lmt: int = 120,
+) -> List[dict]:
+    if not tc or tc.startswith("bj"):
+        return []
+    raw_len = lmt if period == "day" else (min(1000, lmt * 6) if period == "week" else min(1200, lmt * 23))
+    sina_path = f"/CN_MarketDataService.getKLineData?symbol={tc}&scale=240&ma=no&datalen={raw_len}"
+    sina_hosts = (
+        f"https://quotes.sina.cn/cn/api/json_v2.php{sina_path}",
+        f"https://money.finance.sina.com.cn/quotes_service/api/json_v2.php{sina_path}",
+    )
+    for u in sina_hosts:
+        try:
+            r = await client.get(
+                u,
+                headers={"Referer": "https://finance.sina.com.cn/"},
+                timeout=4.5,
+            )
+            if r.status_code != 200:
+                continue
+            txt = r.text.strip()
+            if not txt.startswith("["):
+                continue
+            arr = json.loads(txt)
+            if not isinstance(arr, list) or not arr:
+                continue
+            bars: List[dict] = []
+            for row in arr:
+                if not isinstance(row, dict):
+                    continue
+                o = safe_float(row.get("open"))
+                c = safe_float(row.get("close"))
+                h = safe_float(row.get("high"))
+                lo = safe_float(row.get("low"))
+                vol_shares = safe_float(row.get("volume"))
+                if c <= 0 or h <= 0 or lo <= 0:
+                    continue
+                bars.append({
+                    "date": str(row.get("day") or "")[:10],
+                    "open": o,
+                    "close": c,
+                    "high": h,
+                    "low": lo,
+                    "vol": round(vol_shares / 100.0, 2),
+                    "amount": 0.0,
+                    "amp": ((h - lo) / max(1e-6, o) * 100.0),
+                    "pctChg": None,
+                    "turnover": None,
+                })
+            if bars:
+                return _aggregate_daily_bars(bars, period)[-lmt:]
+        except Exception:
+            continue
+    return []
+
+
+def build_tencent_fqkline_payload(
+    tcode: str,
+    period: str,
+    lmt: int,
+    bars: List[dict],
+) -> dict:
+    p = period if period in ("day", "week", "month") else "day"
+    qfq_key = f"qfq{p}"
+    rows = [
+        [
+            str(b["date"])[:10],
+            f"{float(b['open']):.2f}",
+            f"{float(b['close']):.2f}",
+            f"{float(b['high']):.2f}",
+            f"{float(b['low']):.2f}",
+            f"{float(b.get('vol') or 0.0):.0f}",
+        ]
+        for b in (bars or [])[-max(1, int(lmt)) :]
+    ]
+    return {
+        "code": 0,
+        "msg": "",
+        "data": {
+            tcode: {
+                qfq_key: rows,
+                p: rows,
+            }
+        },
+    }
+
+
 async def fetch_em_klines(
     client: httpx.AsyncClient,
     secid: str,
@@ -132,75 +312,87 @@ async def fetch_em_klines(
     tcode_fallback: Optional[str] = None,
     ttl: float = 300.0,
 ) -> List[dict]:
-    """统一拉取东方财富前复权 K 线（klt: 101日/102周/103月），失败自动回退腾讯多节点。"""
+    """统一拉取前复权 K 线（klt: 101日/102周/103月）：腾讯免 WAF 代理主用 + 东财短超时熔断 + 新浪兜底。"""
+    global _EM_HIS_FAIL_COUNT, _EM_HIS_COOLDOWN_UNTIL
+
     cache_key = (secid, klt, lmt)
     cached = await _KLINE_CACHE.get(cache_key)
     if cached is not None:
         return cached
 
-    url = (
-        "https://push2his.eastmoney.com/api/qt/stock/kline/get"
-        f"?secid={secid}&fields1=f1,f2,f3,f4,f5,f6"
-        f"&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt={klt}&fqt=1&end=20500101&lmt={lmt}"
-    )
+    p_map = {101: "day", 102: "week", 103: "month"}
+    period = p_map.get(klt, "day")
+    is_board = str(secid).startswith("90.")
 
-    async def _do_one() -> List[dict]:
+    tc = tcode_fallback
+    if not tc and not is_board:
+        tc = to_tcode(secid)
+
+    async def _try_tencent_url(u: str, req_timeout: float = 4.5) -> List[dict]:
+        if not tc:
+            return []
         try:
-            r = await client.get(url, headers={"Referer": "https://quote.eastmoney.com/"})
+            rt = await client.get(
+                u,
+                headers={"Referer": "https://gu.qq.com/"},
+                timeout=req_timeout,
+            )
+            if rt.status_code == 200 and rt.text.lstrip().startswith("{"):
+                jd = (rt.json().get("data") or {}).get(tc) or {}
+                return parse_tencent_fqkline_node(jd, period=period)
+        except Exception:
+            pass
+        return []
+
+    async def _try_eastmoney() -> List[dict]:
+        global _EM_HIS_FAIL_COUNT, _EM_HIS_COOLDOWN_UNTIL
+        if not is_board and time.monotonic() < _EM_HIS_COOLDOWN_UNTIL:
+            return []
+        url = (
+            "https://push2his.eastmoney.com/api/qt/stock/kline/get"
+            f"?secid={secid}&fields1=f1,f2,f3,f4,f5,f6"
+            f"&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt={klt}&fqt=1&end=20500101&lmt={lmt}"
+        )
+        try:
+            r = await client.get(
+                url,
+                headers={"Referer": "https://quote.eastmoney.com/"},
+                timeout=3.5,
+            )
             if r.status_code == 200 and r.text.lstrip().startswith("{"):
                 raw = ((r.json().get("data") or {}).get("klines")) or []
                 parsed = parse_em_klines(raw)
                 if parsed:
+                    _EM_HIS_FAIL_COUNT = 0
                     return parsed
         except Exception:
-            pass
+            _EM_HIS_FAIL_COUNT += 1
+            if _EM_HIS_FAIL_COUNT >= 3:
+                _EM_HIS_COOLDOWN_UNTIL = time.monotonic() + 120.0
+        return []
 
-        tc = tcode_fallback
-        if not tc and ("." in secid) and not secid.startswith("90."):
-            c_part = secid.split(".")[-1]
-            if len(c_part) == 6 and c_part.isdigit():
-                tc = to_tcode(c_part)
+    async def _do_one() -> List[dict]:
+        if tc and not is_board:
+            primary_qq = f"https://proxy.finance.qq.com/ifzqgtimg/appstock/app/fqkline/get?param={tc},{period},,,{lmt},qfq"
+            bars = await _try_tencent_url(primary_qq, req_timeout=4.5)
+            if bars:
+                return bars
 
-        if tc:
-            p_map = {101: "day", 102: "week", 103: "month"}
-            period = p_map.get(klt, "day")
-            urls = [
+        bars = await _try_eastmoney()
+        if bars:
+            return bars
+
+        if tc and not is_board:
+            bars = await _fetch_sina_klines(client, tc, period=period, lmt=lmt)
+            if bars:
+                return bars
+            for alt_u in (
                 f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={tc},{period},,,{lmt},qfq",
-                f"https://proxy.finance.qq.com/ifzqgtimg/appstock/app/fqkline/get?param={tc},{period},,,{lmt},qfq",
                 f"https://ifzq.gtimg.cn/appstock/app/fqkline/get?param={tc},{period},,,{lmt},qfq",
-            ]
-            for u in urls:
-                try:
-                    rt = await client.get(u, headers={"Referer": "https://gu.qq.com/"})
-                    if rt.status_code == 200 and rt.text.lstrip().startswith("{"):
-                        jd = (rt.json().get("data") or {}).get(tc) or {}
-                        arr = jd.get(f"qfq{period}") or jd.get(period) or []
-                        bars: List[dict] = []
-                        for row in arr:
-                            if not isinstance(row, list) or len(row) < 6:
-                                continue
-                            o = safe_float(row[1])
-                            c = safe_float(row[2])
-                            h = safe_float(row[3])
-                            lo = safe_float(row[4])
-                            if c <= 0 or h <= 0 or lo <= 0:
-                                continue
-                            bars.append({
-                                "date": str(row[0])[:10],
-                                "open": o,
-                                "close": c,
-                                "high": h,
-                                "low": lo,
-                                "vol": safe_float(row[5]),
-                                "amount": 0.0,
-                                "amp": 0.0,
-                                "pctChg": None,
-                                "turnover": None,
-                            })
-                        if bars:
-                            return bars
-                except Exception:
-                    continue
+            ):
+                bars = await _try_tencent_url(alt_u, req_timeout=3.0)
+                if bars:
+                    return bars
         return []
 
     if sem is not None:
@@ -223,7 +415,7 @@ async def fetch_kline_rows(
 ) -> List[list]:
     """返回 [date, open, close, high, low, vol] 格式前复权日K，兼容 diagnosis.py 与 strong_herd.py。"""
     tc = to_tcode(code_or_tcode)
-    em_secid = to_em_secid(code_or_tcode)
+    em_secid = to_em_secid(tc)
     bars = await fetch_em_klines(client, em_secid, klt=101, lmt=lmt, sem=sem, tcode_fallback=tc, ttl=ttl)
     return [
         [b["date"], str(b["open"]), str(b["close"]), str(b["high"]), str(b["low"]), str(b["vol"])]

@@ -19,7 +19,10 @@ from backend.ignition import (  # noqa: E402
 )
 from backend.market_data import (  # noqa: E402
     BoundedTTLCache,
+    _aggregate_daily_bars,
+    build_tencent_fqkline_payload,
     parse_em_klines,
+    parse_tencent_fqkline_node,
     to_em_secid,
     to_tcode,
 )
@@ -88,12 +91,41 @@ class TestMarketData(unittest.TestCase):
     def test_code_converters_and_parse(self):
         self.assertEqual(to_tcode("600519"), "sh600519")
         self.assertEqual(to_tcode("000001"), "sz000001")
+        self.assertEqual(to_tcode("1.000001"), "sh000001")
         self.assertEqual(to_em_secid("600519"), "1.600519")
         self.assertEqual(to_em_secid("300750"), "0.300750")
+        # 沪市核心指数 sh000001 / sh000688 必须保留沪市 1. 前缀，不能误判成深市 0.000001 平安银行
+        self.assertEqual(to_em_secid("sh000001"), "1.000001")
+        self.assertEqual(to_em_secid("sh000688"), "1.000688")
+        self.assertEqual(to_em_secid("sz399006"), "0.399006")
         bars = parse_em_klines(["2025-12-01,10.0,10.5,10.8,9.9,12345,1234567,9.0,5.0,0.5,2.1"])
         self.assertEqual(len(bars), 1)
         self.assertAlmostEqual(bars[0]["close"], 10.5)
         self.assertAlmostEqual(bars[0]["pctChg"], 5.0)
+
+        # 验证腾讯 fqkline 同构合成与双向解析闭环（兼容日/周/月及指数）
+        payload = build_tencent_fqkline_payload("sh605128", "week", 20, bars)
+        self.assertEqual(payload["code"], 0)
+        node = payload["data"]["sh605128"]
+        self.assertIn("qfqweek", node)
+        self.assertIn("week", node)
+        parsed_back = parse_tencent_fqkline_node(node, period="week")
+        self.assertEqual(len(parsed_back), 1)
+        self.assertAlmostEqual(parsed_back[0]["close"], 10.5)
+
+        # 验证日线兜底源向周K/月K聚合
+        d_bars = [
+            _make_bar("2026-10-12", 10.0, 10.4, 10.6, 9.8, 1000.0),
+            _make_bar("2026-10-13", 10.4, 10.8, 11.0, 10.2, 1500.0),
+            _make_bar("2026-11-02", 11.0, 11.5, 11.7, 10.9, 2000.0),
+        ]
+        m_agg = _aggregate_daily_bars(d_bars, "month")
+        self.assertEqual(len(m_agg), 2)
+        self.assertAlmostEqual(m_agg[0]["open"], 10.0)
+        self.assertAlmostEqual(m_agg[0]["close"], 10.8)
+        self.assertAlmostEqual(m_agg[0]["high"], 11.0)
+        self.assertAlmostEqual(m_agg[0]["low"], 9.8)
+        self.assertAlmostEqual(m_agg[0]["vol"], 2500.0)
 
     def test_bounded_ttl_cache_lru_and_expiry(self):
         async def _run():

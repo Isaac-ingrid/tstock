@@ -42,6 +42,7 @@ from backend.ignition import (
     mutate_ignition_tracking,
 )
 from backend.limitup import get_limitup_pool, invalidate_limitup_cache
+from backend.market_data import build_tencent_fqkline_payload, fetch_em_klines, to_em_secid
 from backend.meme_radar import get_meme_radar_overview, diagnose_stock_meme
 from backend.strategy_ledger import get_strategy_performance, snapshot_strategies
 from backend.strong_herd import mutate_herd_pool
@@ -530,8 +531,6 @@ async def stock_strategy_perf(
     refresh: bool = Query(False),
 ) -> dict[str, object]:
     """四维策略推荐战绩与胜率统计"""
-    if refresh:
-        _require_user(request)
     try:
         http_client = getattr(request.app.state, "http", None)
         return await get_strategy_performance(http_client=http_client, force_snapshot=refresh)
@@ -561,8 +560,6 @@ async def stock_ignition_pool(
     refresh: bool = Query(False),
 ) -> dict[str, object]:
     """起爆点挖掘双方向扫描：横盘多周期试盘起爆 + 板块深跌腰斩龙头抗跌抄底"""
-    if refresh:
-        _require_user(request)
     parsed_custom = None
     if custom_mappings and custom_mappings.strip():
         try:
@@ -821,26 +818,87 @@ async def proxy(request: Request, url: str = Query(min_length=12)) -> Response:
         if cached:
             _cache.pop(upstream, None)
 
+    parsed_up = urlsplit(upstream)
+    host = parsed_up.hostname or ""
+    is_fqkline = "/appstock/app/fqkline/get" in parsed_up.path
+    synthesized_bytes: Optional[bytes] = None
+
     try:
-        host = urlsplit(upstream).hostname or ""
-        result = await request.app.state.http.get(
-            upstream,
-            headers={"Referer": "https://gu.qq.com/" if "ifzq.gtimg.cn" in host else f"https://{host}/"},
-        )
-        # 若腾讯某边缘节点触发 WAF 501，自动在 ifzq.gtimg.cn 与 web.ifzq.gtimg.cn 间互切重试一次
-        if result.status_code == 501 and host in ("ifzq.gtimg.cn", "web.ifzq.gtimg.cn"):
-            alt_host = "web.ifzq.gtimg.cn" if host == "ifzq.gtimg.cn" else "ifzq.gtimg.cn"
-            alt_url = upstream.replace(f"https://{host}/", f"https://{alt_host}/", 1)
-            alt_res = await request.app.state.http.get(
-                alt_url,
+        if is_fqkline and host in ("ifzq.gtimg.cn", "web.ifzq.gtimg.cn"):
+            qq_proxy_url = f"https://proxy.finance.qq.com/ifzqgtimg{parsed_up.path}?{parsed_up.query}"
+            result = await request.app.state.http.get(
+                qq_proxy_url,
                 headers={"Referer": "https://gu.qq.com/"},
             )
-            if 200 <= alt_res.status_code < 300:
-                result = alt_res
+        else:
+            result = await request.app.state.http.get(
+                upstream,
+                headers={"Referer": "https://gu.qq.com/" if "ifzq.gtimg.cn" in host else f"https://{host}/"},
+            )
+            if result.status_code == 501 and host in ("ifzq.gtimg.cn", "web.ifzq.gtimg.cn"):
+                alt_host = "web.ifzq.gtimg.cn" if host == "ifzq.gtimg.cn" else "ifzq.gtimg.cn"
+                for cand_url in (
+                    f"https://proxy.finance.qq.com/ifzqgtimg{parsed_up.path}?{parsed_up.query}",
+                    upstream.replace(f"https://{host}/", f"https://{alt_host}/", 1),
+                ):
+                    alt_res = await request.app.state.http.get(
+                        cand_url,
+                        headers={"Referer": "https://gu.qq.com/"},
+                    )
+                    if 200 <= alt_res.status_code < 300:
+                        result = alt_res
+                        break
     except httpx.TimeoutException as exc:
-        raise HTTPException(status_code=504, detail="股票数据源请求超时") from exc
+        if not is_fqkline:
+            raise HTTPException(status_code=504, detail="股票数据源请求超时") from exc
+        result = None
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail="股票数据源暂时不可用") from exc
+        if not is_fqkline:
+            raise HTTPException(status_code=502, detail="股票数据源暂时不可用") from exc
+        result = None
+
+    if is_fqkline and (result is None or not (200 <= result.status_code < 300) or not result.text.lstrip().startswith("{")):
+        from urllib.parse import parse_qs
+
+        qs_map = parse_qs(parsed_up.query)
+        param_raw = (qs_map.get("param") or [""])[0]
+        parts = [p.strip() for p in param_raw.split(",")]
+        tc = parts[0] if len(parts) >= 1 else ""
+        period = parts[1] if len(parts) >= 2 and parts[1] in ("day", "week", "month") else "day"
+        try:
+            lmt = int(parts[4]) if len(parts) >= 5 and parts[4] else 120
+        except ValueError:
+            lmt = 120
+        if tc:
+            klt_map = {"day": 101, "week": 102, "month": 103}
+            bars = await fetch_em_klines(
+                request.app.state.http,
+                to_em_secid(tc),
+                klt=klt_map.get(period, 101),
+                lmt=lmt,
+                tcode_fallback=tc,
+            )
+            if bars:
+                payload = build_tencent_fqkline_payload(tc, period, lmt, bars)
+                synthesized_bytes = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+
+    if synthesized_bytes is not None:
+        entry = CacheEntry(
+            expires_at=now + _cache_ttl(upstream),
+            status_code=200,
+            content=synthesized_bytes,
+            content_type="application/json",
+        )
+        async with _cache_lock:
+            _cache[upstream] = entry
+        return Response(
+            content=synthesized_bytes,
+            status_code=200,
+            media_type="application/json",
+            headers={"X-TStock-Cache": "FALLBACK"},
+        )
+    if result is None:
+        raise HTTPException(status_code=502, detail="K线数据源暂时不可用")
 
     content_type = result.headers.get("content-type", "application/octet-stream",).split(";", 1)[0]
     if 200 <= result.status_code < 300:

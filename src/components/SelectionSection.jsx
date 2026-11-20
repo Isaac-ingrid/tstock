@@ -18,6 +18,8 @@ export default function SelectionSection({
 }) {
   const [onlyRed, setOnlyRed] = useState(true);
   const [manualInput, setManualInput] = useState('');
+  const [searchCandidates, setSearchCandidates] = useState([]);
+  const [addingBusy, setAddingBusy] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [auctionViewTab, setAuctionViewTab] = useState('live'); // 'live' (今日实况) | 'tiers' (五档胜率表)
   const [candQuotes, setCandQuotes] = useState({});
@@ -150,16 +152,97 @@ export default function SelectionSection({
     });
   }, [short, getCandData]);
 
-  const handleManualAdd = () => {
+  const handleManualAdd = async () => {
     const q = manualInput.trim();
-    if (!q) return;
-    onAddStock(q);
+    if (!q || addingBusy || !onAddStock) return;
+    setAddingBusy(true);
+    try {
+      const res = await onAddStock(q, null, { fromSearchBox: true });
+      if (res && res.status === 'multiple' && Array.isArray(res.candidates)) {
+        setSearchCandidates(res.candidates);
+      } else if (res) {
+        setSearchCandidates([]);
+        setManualInput('');
+      }
+    } finally {
+      setAddingBusy(false);
+    }
+  };
+
+  const handlePickSearchCand = async (cand) => {
+    if (!cand || !onAddStock) return;
+    setSearchCandidates([]);
     setManualInput('');
+    await onAddStock(cand.code, { name: cand.name });
   };
 
   const handleManualRefreshAll = () => {
     refreshCandQuotes();
     if (onRefresh) onRefresh(false);
+  };
+
+  const renderManualAddBlock = () => {
+    const isObjStatus = dbStatus && typeof dbStatus === 'object' && dbStatus.html;
+    const hasStatus = Boolean(isObjStatus ? dbStatus.html : dbStatus);
+    return (
+      <>
+        <div className="sel-sep">手动添加 / 刷新行情</div>
+
+        <div className="db-row">
+          <input
+            type="text"
+            id="dbInput"
+            placeholder="输入 A股 代码或名称 —— 605128 / 上海沿浦 / shyp（拼音首字母也行）"
+            value={manualInput}
+            onChange={e => setManualInput(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleManualAdd();
+              }
+            }}
+            autoComplete="off"
+          />
+          <button type="button" className="primary" disabled={addingBusy} onClick={handleManualAdd}>
+            {addingBusy ? '检索中…' : '＋ 添加'}
+          </button>
+          <button type="button" onClick={handleManualRefreshAll}>⟳ 刷新全部行情</button>
+          <button type="button" onClick={onSelfTest}>🩺 网络自检</button>
+          <label className="db-sw">
+            <input
+              type="checkbox"
+              id="dbAuto"
+              checked={autoRefresh}
+              onChange={e => setAutoRefresh(e.target.checked)}
+            />
+            交易时段每分钟自动刷新
+          </label>
+        </div>
+
+        <div
+          id="dbStatus"
+          className={isObjStatus && dbStatus.isErr ? 'db-status err' : 'db-status'}
+          style={{ display: hasStatus ? 'block' : 'none', marginTop: '6px' }}
+          {...(isObjStatus ? { dangerouslySetInnerHTML: { __html: dbStatus.html } } : {})}
+        >
+          {!isObjStatus ? (dbStatus || '') : null}
+        </div>
+
+        <div id="dbCands" style={{ display: searchCandidates.length > 0 ? 'flex' : 'none', gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
+          {searchCandidates.map(cand => (
+            <button
+              key={cand.code}
+              type="button"
+              className="mini primary"
+              style={{ marginLeft: 0 }}
+              onClick={() => handlePickSearchCand(cand)}
+            >
+              ＋ {cand.name} {cand.code}{cand.market ? ` · ${cand.market}` : ''}
+            </button>
+          ))}
+        </div>
+      </>
+    );
   };
 
   if (!D) {
@@ -171,6 +254,7 @@ export default function SelectionSection({
           </summary>
           <div className="fold-bd" style={{ paddingTop: '12px' }}>
             <div className="sel-empty">正在读取选股契约数据 data/latest.json...</div>
+            {renderManualAddBlock()}
           </div>
         </details>
       </section>
@@ -658,38 +742,7 @@ export default function SelectionSection({
             </div>
           </details>
 
-          <div className="sel-sep">手动添加 / 刷新行情</div>
-
-          <div className="db-row">
-            <input
-              id="dbInput"
-              placeholder="输入 A股 代码或名称 —— 605128 / 上海沿浦 / shyp（拼音首字母也行）"
-              value={manualInput}
-              onChange={e => setManualInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleManualAdd(); }}
-              autoComplete="off"
-            />
-            <button className="primary" onClick={handleManualAdd}>＋ 添加</button>
-            <button onClick={handleManualRefreshAll}>⟳ 刷新全部行情</button>
-            <button onClick={onSelfTest}>🩺 网络自检</button>
-            <label className="db-sw">
-              <input
-                type="checkbox"
-                id="dbAuto"
-                checked={autoRefresh}
-                onChange={e => setAutoRefresh(e.target.checked)}
-              />
-              交易时段每分钟自动刷新
-            </label>
-          </div>
-
-          {dbStatus && (
-            <div id="dbStatus" className="db-status" style={{ display: 'block', marginTop: '6px' }}>
-              {dbStatus}
-            </div>
-          )}
-
-          <div id="dbCands"></div>
+          {renderManualAddBlock()}
 
           {/* 图表能力折叠 */}
           <details className="fold" style={{ marginTop: '12px' }}>

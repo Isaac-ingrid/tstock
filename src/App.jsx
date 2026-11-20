@@ -35,6 +35,7 @@ import {
   tcodeFromCode,
   calc,
   addByQuery,
+  resolveStockInput,
   selfTest,
   checkPriceAlerts,
   checkIntradayAnomalies,
@@ -1344,53 +1345,106 @@ export default function App() {
   };
 
   const handleAddStockByQuery = async (qStr, meta = null, options = {}) => {
-    const { jumpToTrade = true, silentToast = false } = options || {};
-    toast('正在全市场检索标的…', 'info');
+    const { jumpToTrade = true, silentToast = false, fromSearchBox = false } = options || {};
+    const queryClean = String(qStr || '').trim();
+    if (!queryClean) return null;
+
     try {
-      const res = await addByQuery(qStr, poolRef.current);
-      if (res && res.status === 'exists') {
-        if (jumpToTrade && res.code) {
-          handleSelectStock(res.code);
+      const resolved = await resolveStockInput(queryClean);
+      if (resolved.status === 'multiple') {
+        if (fromSearchBox) {
+          setDbStatus(`找到 ${resolved.candidates.length} 个匹配结果，请点击下方候选按钮加入自选：`);
+          return { status: 'multiple', candidates: resolved.candidates };
+        }
+        resolved.candidate = resolved.candidates[0];
+      }
+
+      const cand = resolved.candidate;
+      const code6 = String(cand.code || '').padStart(6, '0');
+      const curList = poolRef.current || [];
+      if (curList.some(s => String(s.code).padStart(6, '0') === code6)) {
+        if (jumpToTrade) {
+          handleSelectStock(code6);
         } else if (!silentToast) {
-          toastWarn(`${qStr} 已在自选池中`);
+          toastWarn(`${cand.name || code6} 已在自选池中`);
         }
-        return res;
+        return { status: 'exists', code: code6 };
       }
-      const raw = localStorage.getItem(STORAGE_KEYS.POOL);
-      if (raw) {
-        let parsed = JSON.parse(raw);
-        if (meta && parsed.length > 0) {
-          const c6 = String(res?.stock?.code || qStr).trim().padStart(6, '0');
-          parsed = parsed.map(st => {
-            if (String(st.code).padStart(6, '0') === c6 || st.name === qStr) {
-              return {
-                ...st,
-                tier: meta.tier || st.tier || 'short',
-                strategyTag: meta.strategyTag || st.strategyTag || '超短',
-                ...(meta.strategy ? { planStrategy: meta.strategy } : {}),
-                ...(meta.strategy === 'ignition' || meta.refPrice || meta.stopPrice ? { ignitionMeta: meta } : {}),
-              };
-            }
-            return st;
-          });
-          try {
-            localStorage.setItem(STORAGE_KEYS.POOL, JSON.stringify(parsed));
-          } catch (_) {}
-        }
-        setPool(parsed);
-        const targetCode = res?.stock?.code || parsed[parsed.length - 1]?.code;
-        if (targetCode) {
-          if (jumpToTrade) {
-            handleSelectStock(targetCode);
-          } else {
-            setActiveStockCode(String(targetCode).padStart(6, '0'));
-          }
-        }
+
+      const seedPx = Math.max(0, +(meta?.refPrice || meta?.price || 0));
+      const newStock = {
+        name: cand.name || meta?.name || code6,
+        code: code6,
+        tcode: cand.tcode || tcodeFromCode(code6),
+        prevClose: seedPx,
+        open: seedPx,
+        high: seedPx,
+        low: seedPx,
+        price: seedPx,
+        avg: seedPx,
+        vr: 1,
+        ma5: null,
+        ma10: null,
+        ma20: null,
+        shares: 0,
+        cost: 0,
+        cap: 0,
+        tier: meta?.tier || 'short',
+        p: 'day',
+        ...(meta?.strategyTag ? { strategyTag: meta.strategyTag } : {}),
+        ...(meta?.strategy ? { planStrategy: meta.strategy } : {}),
+        ...(meta && (meta.strategy === 'ignition' || meta.refPrice || meta.stopPrice) ? { ignitionMeta: meta } : {}),
+      };
+
+      const optimisticNext = [...curList, newStock];
+      poolRef.current = optimisticNext;
+      setPool(prev => (prev.some(st => String(st.code).padStart(6, '0') === code6) ? prev : [...prev, newStock]));
+
+      if (jumpToTrade) {
+        handleSelectStock(code6);
+      } else {
+        setActiveStockCode(code6);
       }
+
       if (!silentToast) {
-        toastOk(`✓ 已将 ${res?.stock?.name || qStr} 加入自选池！`);
+        toastOk(`✓ 已将 ${newStock.name} (${code6}) 加入自选池！`);
       }
-      return res;
+
+      // 后台异步拉取实时行情、前复权均线与板块估值，绝不阻塞按钮点击响应且零竞态覆盖
+      (async () => {
+        const working = { ...newStock };
+        try {
+          await loadStock(working);
+          await loadChart(working, true);
+          await loadResearch(working, false);
+          setPool(prev => {
+            const merged = prev.map(st => {
+              if (String(st.code).padStart(6, '0') !== code6) return st;
+              return {
+                ...working,
+                shares: st.shares ?? working.shares,
+                cost: st.cost ?? working.cost,
+                cap: st.cap ?? working.cap,
+                tier: st.tier || working.tier,
+                poolTag: st.poolTag || working.poolTag,
+                strategyTag: st.strategyTag || working.strategyTag,
+                planStrategy: st.planStrategy || working.planStrategy,
+                ignitionMeta: st.ignitionMeta || working.ignitionMeta,
+                memo: st.memo || working.memo,
+                unclosedTQty: st.unclosedTQty ?? working.unclosedTQty,
+                ignoreTailTDate: st.ignoreTailTDate || working.ignoreTailTDate,
+              };
+            });
+            poolRef.current = merged;
+            return merged;
+          });
+          setDbStatus(`已同步 ${working.name} (${code6}) 实时行情${working._maOk ? '与前复权均线' : ''}`);
+        } catch (err) {
+          setDbStatus(`已加入 ${code6}，实时行情稍后重试同步（${err.message}）`);
+        }
+      })();
+
+      return { status: 'added', stock: newStock, code: code6 };
     } catch (e) {
       toastErr('添加标的失败：' + e.message);
       return null;
@@ -1398,11 +1452,9 @@ export default function App() {
   };
 
   const handleBatchAdd = (list, poolTag) => {
-    const currentCodes = new Set(pool.map(s => String(rCodeOf(s))));
-    function rCodeOf(item) {
-      return String(item?.code || '').padStart(6, '0');
-    }
-    const toAdd = list.filter(r => !currentCodes.has(String(r.code).padStart(6, '0')));
+    const curList = poolRef.current || [];
+    const currentCodes = new Set(curList.map(s => String(s?.code || '').padStart(6, '0')));
+    const toAdd = (list || []).filter(r => r && !currentCodes.has(String(r.code).padStart(6, '0')));
     if (!toAdd.length) {
       toastWarn('所选标的均已在自选池中');
       return;
@@ -1410,34 +1462,43 @@ export default function App() {
 
     const newItems = toAdd.map(r => {
       const code6 = String(r.code).padStart(6, '0');
-      const tcode = r.tcode || ((code6.startsWith('6') || code6.startsWith('9')) ? 'sh' + code6 : 'sz' + code6);
+      const tcode = r.tcode || tcodeFromCode(code6);
+      const px = +(r.price || 10);
       return {
-        name: r.name,
+        name: r.name || code6,
         code: code6,
         tcode,
-        prevClose: r.price || 10,
-        open: r.price || 10,
-        high: r.price || 10,
-        low: r.price || 10,
-        price: r.price || 10,
-        avg: r.price || 10,
+        prevClose: px,
+        open: px,
+        high: px,
+        low: px,
+        price: px,
+        avg: px,
         vr: r.volRatio || 1.2,
-        ma5: r.price || 10,
-        ma10: r.price || 10,
-        ma20: r.price || 10,
+        ma5: px,
+        ma10: px,
+        ma20: px,
         shares: 0,
         cost: 0,
         cap: r.totalCap || 0,
         tier: poolTag === '短线' ? 'short' : 'long',
-        poolTag
+        poolTag,
+        p: 'day',
       };
     });
 
-    setPool(prev => [...prev, ...newItems]);
+    const nextPool = [...curList, ...newItems];
+    poolRef.current = nextPool;
+    setPool(prev => {
+      const seen = new Set(prev.map(s => String(s?.code || '').padStart(6, '0')));
+      const filtered = newItems.filter(it => !seen.has(it.code));
+      return [...prev, ...filtered];
+    });
     toastOk(`✓ 成功将 ${newItems.length} 只${poolTag}标的并入自选池！`);
     if (newItems.length === 1) {
       handleSelectStock(newItems[0].code);
     }
+    setTimeout(() => handleRefreshRef.current?.(true), 80);
   };
 
   /* 买入建仓 / 买入加仓 / 底仓校准 */
@@ -2043,7 +2104,13 @@ export default function App() {
             onBatchAdd={handleBatchAdd}
             onOpenReason={(st, have) => setReasonModal({ open: true, stock: st, inPool: have })}
             onRefresh={() => handleRefresh(false)}
-            onSelfTest={selfTest}
+            onSelfTest={async () => {
+              setDbStatus('正在自检十三条数据链路…');
+              const res = await selfTest();
+              if (res?.html) {
+                setDbStatus({ html: res.html, isErr: !res.ok });
+              }
+            }}
             onJumpPerf={() => navigate('/perf')}
             onUpdateStock={handleUpdateStock}
             onBuyStock={handleBuyStock}
