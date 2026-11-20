@@ -41,6 +41,7 @@ import {
   checkIntradayAnomalies,
   checkMarketAlerts,
   simulateIntradayAnomaly,
+  simulateLeadingResonanceAlert,
   refreshSingleFastRt,
   isAShareTradingNow,
   fetchUserVault,
@@ -891,6 +892,12 @@ export default function App() {
 
   const handleSimulateAnomaly = useCallback(() => {
     const res = simulateIntradayAnomaly(poolRef.current);
+    setPool([...(poolRef.current || [])]);
+    return res;
+  }, []);
+
+  const handleSimulateLeading = useCallback(() => {
+    const res = simulateLeadingResonanceAlert(poolRef.current);
     setPool([...(poolRef.current || [])]);
     return res;
   }, []);
@@ -2392,6 +2399,7 @@ export default function App() {
             });
           }}
           onSimulateAnomaly={handleSimulateAnomaly}
+          onSimulateLeading={handleSimulateLeading}
           unclosedCount={unclosedStocks.length}
         />
       )}

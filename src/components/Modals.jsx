@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { f2, money, getTodayTStatus, toastWarn, playAlertTone } from '../services/utils.js';
-import { calc } from '../services/api.js';
+import { calc, computeLeadingMomentum } from '../services/api.js';
 import { evaluateChannelHoldingDiscipline } from '../services/risk.js';
 
 /* 1. 快捷记T弹窗（含单日防上头熔断锁保护：锁买不锁卖） */
@@ -1162,6 +1162,7 @@ export function AlertCenterModal({
   simTailAlert = false,
   onToggleSimTailAlert,
   onSimulateAnomaly,
+  onSimulateLeading,
   unclosedCount = 0
 }) {
   if (!open) return null;
@@ -1177,6 +1178,7 @@ export function AlertCenterModal({
       simTailAlert={simTailAlert}
       onToggleSimTailAlert={onToggleSimTailAlert}
       onSimulateAnomaly={onSimulateAnomaly}
+      onSimulateLeading={onSimulateLeading}
       unclosedCount={unclosedCount}
     />
   );
@@ -1193,6 +1195,7 @@ function AlertCenterModalInner({
   simTailAlert,
   onToggleSimTailAlert,
   onSimulateAnomaly,
+  onSimulateLeading,
   unclosedCount = 0
 }) {
   const [alertList, setAlertList] = useState(() => {
@@ -1202,7 +1205,7 @@ function AlertCenterModalInner({
       return [];
     }
   });
-  const [filterCat, setFilterCat] = useState('all'); // 'all' | 'P0' | 'P1' | 'P2'
+  const [filterCat, setFilterCat] = useState('all'); // 'all' | 'P0' | 'P1' | 'leading' | 'P2'
 
   useEffect(() => {
     const handleAlerts = (e) => {
@@ -1225,9 +1228,11 @@ function AlertCenterModalInner({
 
   const p0Count = alertList.filter((a) => inferPriority(a) === 'P0').length;
   const p1Count = alertList.filter((a) => inferPriority(a) === 'P1').length;
+  const leadCount = alertList.filter((a) => a?.category === 'leading').length;
   const p2Count = alertList.filter((a) => inferPriority(a) === 'P2').length;
   const filteredAlerts = alertList.filter((a) => {
     if (filterCat === 'all') return true;
+    if (filterCat === 'leading') return a?.category === 'leading';
     return inferPriority(a) === filterCat;
   });
 
@@ -1251,12 +1256,29 @@ function AlertCenterModalInner({
       return { ...t, dev, absDev: Math.abs(dev) };
     }).sort((a, b) => a.absDev - b.absDev)[0];
 
+    let leadMom = null;
+    try { leadMom = computeLeadingMomentum(s); } catch (_) {}
+    const liveLead =
+      (leadMom?.ready && ((leadMom.bullHits || 0) >= 3 || (leadMom.bearHits || 0) >= 3)
+        ? {
+            dir: (leadMom.bullHits || 0) >= 3 ? 'bull' : 'bear',
+            text: `${leadMom.shortTag} ${leadMom.scoreTxt}`,
+          }
+        : null) ||
+      (s._leadResonance
+        ? {
+            dir: s._leadResonance.dir,
+            text: `🔥 ${s._leadResonance.label} ${s._leadResonance.scoreTxt || ''}`.trim(),
+          }
+        : null);
+
     return {
       name: s.name,
       code: s.code,
       price: p,
       nearest,
       anomaly: s._anomaly,
+      liveLead,
     };
   }).filter(Boolean);
 
@@ -1294,7 +1316,7 @@ function AlertCenterModalInner({
               </div>
               <div style={{ fontSize: '11.5px', color: 'var(--sub)', marginTop: '2px', lineHeight: 1.5 }}>
                 {alertEnabled
-                  ? '同时监控「买卖/止损到价」与「分时5分钟放量急拉/放量跳水/冲板回落/大盘急杀」。'
+                  ? '同时监控「买卖/止损到价」、「3维/4维主力先导强共振(P1)」与「分时5分钟急拉/跳水/炸板/大盘急杀」。'
                   : '已静音所有提示音、标题闪烁与桌面弹窗，适合在办公室安心工作。'}
               </div>
             </div>
@@ -1338,7 +1360,7 @@ function AlertCenterModalInner({
               </div>
               <div style={{ fontSize: '11.5px', color: 'var(--sub)', marginTop: '2px', lineHeight: 1.5 }}>
                 <b>🚨 P0 持仓救命级</b>（跌破止损/炸板/跳水/首阴清仓）：三连急促警报 + 顶栏常驻红条；
-                <b> 🎯 P1 确认执行级</b>（右侧拐头确认买卖点）：双音阶清脆提示；
+                <b> 🎯 P1 确认执行级</b>（右侧拐头确认买卖点 + <b>🔥 3维/4维主力先导强共振</b>）：双音阶清脆提示；
                 <b> 👀 P2 观察预备级</b>（刚进观察区未拐头）：仅静默记入流水，不发声打断看盘。
               </div>
             </div>
@@ -1377,6 +1399,26 @@ function AlertCenterModalInner({
               >
                 🎵 试听P1
               </button>
+              {onSimulateLeading && (
+                <button
+                  type="button"
+                  onClick={() => onSimulateLeading()}
+                  style={{
+                    padding: '5px 10px',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    whiteSpace: 'nowrap',
+                    cursor: 'pointer',
+                    borderRadius: '6px',
+                    border: '1px solid #fda4af',
+                    background: '#fff1f2',
+                    color: '#be123c'
+                  }}
+                  title="交替演练 3 维多头先导强共振(+84) 与 3 维诱多暗出共振(-78) 自动写入 P1 提醒流水"
+                >
+                  🔥 演练先导P1
+                </button>
+              )}
               {onSimulateAnomaly && (
                 <button
                   type="button"
@@ -1501,6 +1543,22 @@ function AlertCenterModalInner({
                   >
                     <div>
                       <b style={{ color: 'var(--text)' }}>{item.name}</b> <span style={{ fontSize: '11.5px', color: 'var(--mute)' }}>{item.code}</span>
+                      {item.liveLead && (
+                        <span
+                          style={{
+                            marginLeft: 6,
+                            padding: '1px 5px',
+                            borderRadius: '4px',
+                            fontSize: '10.5px',
+                            fontWeight: 700,
+                            background: item.liveLead.dir === 'bear' ? '#ecfdf5' : '#fff1f2',
+                            color: item.liveLead.dir === 'bear' ? '#047857' : '#be123c',
+                            border: `1px solid ${item.liveLead.dir === 'bear' ? '#6ee7b7' : '#fda4af'}`,
+                          }}
+                        >
+                          {item.liveLead.text}
+                        </span>
+                      )}
                       {item.anomaly && (
                         <span style={{ marginLeft: 6, fontSize: '10.5px', fontWeight: 700, color: item.anomaly.level === 'surge' ? '#cf1322' : '#15803d' }}>
                           {item.anomaly.label}
@@ -1524,7 +1582,7 @@ function AlertCenterModalInner({
             </div>
           </div>
 
-          {/* 5. 今日已触发异动与到价流水记录（支持 P0 / P1 / P2 分级筛选） */}
+          {/* 5. 今日已触发异动、先导强共振与到价流水记录（支持 P0 / P1 / 先导共振 / P2 分级筛选） */}
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
@@ -1535,6 +1593,7 @@ function AlertCenterModalInner({
                   { key: 'all', label: `全部 (${alertList.length})` },
                   { key: 'P0', label: `🚨 P0救命 (${p0Count})` },
                   { key: 'P1', label: `🎯 P1确认 (${p1Count})` },
+                  { key: 'leading', label: `🔥 先导共振 (${leadCount})` },
                   { key: 'P2', label: `👀 P2预备 (${p2Count})` },
                 ].map((tab) => (
                   <button
@@ -1564,12 +1623,16 @@ function AlertCenterModalInner({
               <div className="alert-list" style={{ maxHeight: '195px', overflowY: 'auto', border: '1px solid var(--line)', borderRadius: '8px', background: '#fff' }}>
                 {filteredAlerts.map(a => {
                   const prio = inferPriority(a);
-                  const prioStyle =
-                    prio === 'P0'
-                      ? { background: '#dc2626', color: '#ffffff', border: '1px solid #b91c1c' }
-                      : prio === 'P1'
-                      ? { background: '#eff6ff', color: '#1d4ed8', border: '1px solid #93c5fd' }
-                      : { background: '#f1f5f9', color: '#64748b', border: '1px solid #cbd5e1' };
+                  const isLead = a?.category === 'leading';
+                  const prioStyle = isLead
+                    ? a.leadDir === 'bear'
+                      ? { background: '#ecfdf5', color: '#047857', border: '1px solid #6ee7b7' }
+                      : { background: '#fff1f2', color: '#be123c', border: '1px solid #fda4af' }
+                    : prio === 'P0'
+                    ? { background: '#dc2626', color: '#ffffff', border: '1px solid #b91c1c' }
+                    : prio === 'P1'
+                    ? { background: '#eff6ff', color: '#1d4ed8', border: '1px solid #93c5fd' }
+                    : { background: '#f1f5f9', color: '#64748b', border: '1px solid #cbd5e1' };
 
                   return (
                     <div

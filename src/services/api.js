@@ -2096,8 +2096,9 @@ async function refreshAll(silent){
   if (errs.length < pool.length) stampData();
   if (errs.length){ st.className='db-status err'; st.textContent='部分未更新 → ' + errs.join('；'); }
   else { st.className='db-status'; st.innerHTML = '行情已更新 <b>' + nowStr() + '</b>　·　来源：腾讯实时行情 + 腾讯前复权K线（日/周/月/分钟）+ 腾讯逐笔明细'; }
-  checkPriceAlerts();    // 到价提醒：标题栏永远生效，桌面通知需授权
-  checkMarketAlerts();   // 大盘异动：5 分钟窗口 + 按振幅标准化
+  checkPriceAlerts();      // 到价提醒：标题栏永远生效，桌面通知需授权
+  checkIntradayAnomalies();// 分时异动 + 3维及以上主力先导强共振 P1 流水
+  checkMarketAlerts();     // 大盘异动：5 分钟窗口 + 按振幅标准化
   autoSnapshot();      // 收盘后自动落一条快照，省得忘记点
 }
 
@@ -2858,6 +2859,16 @@ const _priceAlertCd = (() => {
   return {};
 })();
 const _anomCooldown = {};
+const _leadAlertCd = (() => {
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      const raw = JSON.parse(sessionStorage.getItem('t-lead-alert-cd') || '{}');
+      if (raw && typeof raw === 'object') return raw;
+    }
+  } catch (_) {}
+  return {};
+})();
+let _leadAlertDay = '';
 const _quoteRing = {};
 let _quoteRingDay = '';
 const _mktSnapRing = {};
@@ -2871,6 +2882,14 @@ function savePriceAlertCd() {
   } catch (_) {}
 }
 
+function saveLeadAlertCd() {
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem('t-lead-alert-cd', JSON.stringify(_leadAlertCd));
+    }
+  } catch (_) {}
+}
+
 function shouldFirePriceAlert(cdKey, priority, now = Date.now(), cdMs = PRICE_ALERT_CD_MS) {
   const prev = _priceAlertCd[cdKey];
   const rank = PRIO_RANK[priority] || 1;
@@ -2879,6 +2898,22 @@ function shouldFirePriceAlert(cdKey, priority, now = Date.now(), cdMs = PRICE_AL
   }
   _priceAlertCd[cdKey] = { at: now, rank };
   savePriceAlertCd();
+  return true;
+}
+
+/* 3维/4维先导强共振 15 分钟同向防刷屏冷却；若由 3 维升级为 4 维满贯共振允许额外升档提醒一次 */
+function shouldFireLeadResonanceAlert(cdKey, hits, now = Date.now(), cdMs = ANOM_ALERT_CD_MS) {
+  const today = todayStr();
+  if (_leadAlertDay !== today) {
+    Object.keys(_leadAlertCd).forEach((k) => delete _leadAlertCd[k]);
+    _leadAlertDay = today;
+  }
+  const prev = _leadAlertCd[cdKey];
+  if (prev && prev.day === today && now - prev.at < cdMs && hits <= (prev.hits || 3)) {
+    return false;
+  }
+  _leadAlertCd[cdKey] = { at: now, hits, day: today };
+  saveLeadAlertCd();
   return true;
 }
 
@@ -3132,8 +3167,11 @@ export function checkIntradayAnomalies(targetPool = null){
     Object.keys(_quoteRing).forEach((k) => delete _quoteRing[k]);
     Object.keys(_anomCooldown).forEach((k) => delete _anomCooldown[k]);
     Object.keys(_priceAlertCd).forEach((k) => delete _priceAlertCd[k]);
+    Object.keys(_leadAlertCd).forEach((k) => delete _leadAlertCd[k]);
     savePriceAlertCd();
+    saveLeadAlertCd();
     _quoteRingDay = today;
+    _leadAlertDay = today;
   }
 
   const triggered = [];
@@ -3301,8 +3339,150 @@ export function checkIntradayAnomalies(targetPool = null){
     }
   });
 
+  const leadTriggered = checkLeadingResonanceAlerts(list, { now, deferTone: true });
+  if (leadTriggered.length > 0) {
+    triggered.push(...leadTriggered);
+    if (!muted && (!highestTone || PRIO_RANK.P1 > PRIO_RANK[highestTone])) {
+      highestTone = 'P1';
+    }
+  }
+
   if (highestTone && !muted) {
     try { playAlertTone(highestTone); } catch (_) {}
+  }
+  return triggered;
+}
+
+/**
+ * 3 维及以上主力先导强共振自动推送盘中 P1 提醒流水（零额外网络请求）：
+ * - 多头强共振：bullHits >= 3 且 score >= 45（如 压单暗吸 + 横盘OBV新高 + 逆势抗跌弹簧 / 拆单暗吸）
+ * - 空头强共振：bearHits >= 3 且 score <= -45（如 托单诱多 + 横盘OBV下沉 + 跟跌不跟涨 / 脉冲砸单）
+ * - 同股同向 15 分钟冷却去重；若 15 分钟内由 3 维进一步升级为 4 维满贯共振，允许升档再提醒一次
+ */
+export function checkLeadingResonanceAlerts(targetPool = null, options = {}) {
+  const list = Array.isArray(targetPool) ? targetPool : pool;
+  if (!Array.isArray(list) || !list.length) return [];
+
+  const now = typeof options.now === 'number' ? options.now : Date.now();
+  const deferTone = Boolean(options.deferTone);
+  if (options.resetCooldown) {
+    Object.keys(_leadAlertCd).forEach((k) => delete _leadAlertCd[k]);
+    saveLeadAlertCd();
+  }
+
+  const muted = isAlertMuted();
+  const triggered = [];
+  let firedAnyP1 = false;
+
+  list.forEach((s) => {
+    if (!s) return;
+    const code6 = String(s.code || '').replace(/\D/g, '').padStart(6, '0');
+    const px = +s.price || 0;
+    const pc = +s.prevClose || 0;
+    const held = (+s.shares || 0) > 0;
+    if (!code6 || !(px > 0) || !(pc > 0)) return;
+
+    if (s._leadResonance && s._leadResonance.at && now - s._leadResonance.at > 12 * 60 * 1000) {
+      delete s._leadResonance;
+    }
+
+    let lm = null;
+    try {
+      lm = computeLeadingMomentum(s, now);
+    } catch (_) {
+      return;
+    }
+    if (!lm || !lm.ready) return;
+
+    const isBull = (lm.bullHits || 0) >= 3 && lm.score >= 45;
+    const isBear = !isBull && (lm.bearHits || 0) >= 3 && lm.score <= -45;
+    if (!isBull && !isBear) return;
+
+    const hits = isBull ? lm.bullHits : lm.bearHits;
+    const dir = isBull ? 'bull' : 'bear';
+    let c = null;
+    try { c = calc(s); } catch (_) {}
+
+    const targetPx = isBull ? (c?.inA > 0 ? c.inA : px) : (c?.outA > 0 ? c.outA : px);
+    const label = isBull ? `${hits}维先导强共振` : `${hits}维诱多暗出`;
+    const badge = isBull
+      ? `🔥 P1·${hits}维先导强共振(${lm.scoreTxt})`
+      : `🚨 P1·${hits}维诱多暗出(${lm.scoreTxt})`;
+    const tagJoin = Array.isArray(lm.tags) && lm.tags.length ? lm.tags.join(' + ') : lm.shortTag;
+    const actionHint = isBull
+      ? (c?.inA > 0
+          ? `（参考低吸 ¥${f2(c.inA)}${c?.tp1 > 0 ? ` / 有效止盈 ¥${f2(c.tp1)}` : ''}）`
+          : '')
+      : (held && c?.outA > 0
+          ? `（持仓盯紧 ¥${f2(c.outA)} 倒T锁盈，严禁低吸）`
+          : '（盘口诱多暗出，暂停正T低吸防接盘）');
+    const summary = `[${tagJoin}] 先导动能 ${lm.scoreTxt}${actionHint} — ${lm.summary}`;
+    const timeStr = new Date(now).toLocaleTimeString('zh-CN', { hour12: false });
+
+    const leadAlert = {
+      type: isBull ? 'lead_bull_resonance' : 'lead_bear_resonance',
+      priority: 'P1',
+      dir,
+      hits,
+      score: lm.score,
+      scoreTxt: lm.scoreTxt,
+      tags: lm.tags || [],
+      label,
+      badge,
+      targetPx,
+      time: timeStr,
+      at: now,
+      summary,
+    };
+    s._leadResonance = leadAlert;
+
+    const cdKey = `${code6}|lead_${dir}`;
+    if (!shouldFireLeadResonanceAlert(cdKey, hits, now, ANOM_ALERT_CD_MS)) {
+      return;
+    }
+
+    triggered.push({ stock: s, leadAlert });
+
+    if (!muted) {
+      firedAnyP1 = true;
+      pushSystemAlertRecord({
+        id: now + Math.random(),
+        category: 'leading',
+        priority: 'P1',
+        anomalyType: leadAlert.type,
+        leadDir: dir,
+        hits,
+        leadScore: lm.score,
+        leadScoreTxt: lm.scoreTxt,
+        tags: lm.tags || [],
+        time: timeStr,
+        name: s.name || code6,
+        code: code6,
+        label,
+        price: px,
+        target: targetPx,
+        summary,
+      });
+
+      const toastMsg = `${badge} · ${s.name || code6} 现价 ¥${px.toFixed(2)}（${tagJoin}）`;
+      if (isBull) toastOk(toastMsg);
+      else toastWarn(toastMsg);
+
+      if (typeof document !== 'undefined' && !String(document.title || '').startsWith('🚨')) {
+        document.title = `${isBull ? '🔥' : '🎯'}${s.name || code6} ${label} ${lm.scoreTxt}`;
+      }
+      try {
+        if (typeof window !== 'undefined' && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          new Notification(`${badge}: ${s.name || code6} (¥${px.toFixed(2)})`, {
+            body: summary,
+          });
+        }
+      } catch (_) {}
+    }
+  });
+
+  if (firedAnyP1 && !muted && !deferTone) {
+    try { playAlertTone('P1'); } catch (_) {}
   }
   return triggered;
 }
@@ -3428,6 +3608,75 @@ export function simulateIntradayAnomaly(targetPool = null){
     summary: anom.summary,
   });
   return { code6, name, anom };
+}
+
+/* 盘后/非交易时段一键演练 3 维主力先导强共振 P1 提醒（交替模拟多头暗吸强共振与空头诱多暗出共振） */
+let _simLeadToggle = 0;
+export function simulateLeadingResonanceAlert(targetPool = null){
+  const list = Array.isArray(targetPool) && targetPool.length ? targetPool : pool;
+  const target = (list || []).find((s) => +s.shares > 0) || (list || [])[0];
+  const now = Date.now();
+  const isBull = (_simLeadToggle++ % 2) === 0;
+  const code6 = target ? String(target.code || '').padStart(6, '0') : '605128';
+  const name = target ? (target.name || code6) : '示例标的';
+  const px = target && +target.price > 0 ? +target.price : 25.60;
+  let c = null;
+  try { if (target) c = calc(target); } catch (_) {}
+
+  const score = isBull ? 84 : -78;
+  const scoreTxt = isBull ? '+84' : '-78';
+  const tags = isBull
+    ? ['🔥 压单暗吸', '🚀 横盘OBV新高', '🛡️ 逆势抗跌弹簧']
+    : ['🪤 托单诱多', '⚠️ 横盘OBV下沉', '🥀 跟跌不跟涨'];
+  const label = isBull ? '3维先导强共振' : '3维诱多暗出';
+  const badge = isBull ? '🔥 P1·3维先导强共振(演练)' : '🚨 P1·3维诱多暗出(演练)';
+  const targetPx = isBull ? (c?.inA > 0 ? c.inA : +(px * 0.992).toFixed(2)) : (c?.outA > 0 ? c.outA : +(px * 1.012).toFixed(2));
+  const summary = isBull
+    ? `[演练][${tags.join(' + ')}] 先导动能 ${scoreTxt}，股价未急拉前主力暗中吃货+能量潮创日内新高（参考低吸 ¥${f2(targetPx)}）`
+    : `[演练][${tags.join(' + ')}] 先导动能 ${scoreTxt}，下方垫大托单护盘而内盘与OBV同步暗出（盯紧 ¥${f2(targetPx)} 倒T锁盈）`;
+  const leadAlert = {
+    type: isBull ? 'lead_bull_resonance' : 'lead_bear_resonance',
+    priority: 'P1',
+    dir: isBull ? 'bull' : 'bear',
+    hits: 3,
+    score,
+    scoreTxt,
+    tags,
+    label,
+    badge,
+    targetPx,
+    time: nowStr(),
+    at: now,
+    isDrill: true,
+    summary,
+  };
+
+  if (target) {
+    target._leadResonance = leadAlert;
+  }
+  try { playAlertTone('P1', true); } catch (_) {}
+  if (isBull) toastOk(`${badge} · ${name} ¥${px.toFixed(2)}（${scoreTxt}）`);
+  else toastWarn(`${badge} · ${name} ¥${px.toFixed(2)}（${scoreTxt}）`);
+
+  pushSystemAlertRecord({
+    id: now + Math.random(),
+    category: 'leading',
+    priority: 'P1',
+    anomalyType: leadAlert.type,
+    leadDir: leadAlert.dir,
+    hits: 3,
+    leadScore: score,
+    leadScoreTxt: scoreTxt,
+    tags,
+    time: leadAlert.time,
+    name,
+    code: code6,
+    label,
+    price: px,
+    target: targetPx,
+    summary,
+  });
+  return { code6, name, leadAlert };
 }
 
 /* 持仓与做T降本核算：从台账 LOG 真实聚合该标的累计已实现做T净收益与笔数 */
