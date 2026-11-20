@@ -658,6 +658,13 @@ export default function BattleCardGrid({
                   </div>
                   <b className={`bc-lm-val lv-${leadMom.level}`}>{leadMom.scoreTxt}</b>
                 </div>
+                {Array.isArray(leadMom.tags) && leadMom.tags.length > 1 && (
+                  <div className="bc-lm-tags">
+                    {leadMom.tags.map((tg) => (
+                      <span key={tg} className="bc-lm-subtag">{tg}</span>
+                    ))}
+                  </div>
+                )}
                 {leadMom.hasNotableSignal && (
                   <div className="bc-lm-desc">{leadMom.summary}</div>
                 )}

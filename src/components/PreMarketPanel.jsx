@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { fetchBatchNoticeRisk } from '../services/api.js';
+import { fetchBatchNoticeRisk, computeAuctionSignalLead } from '../services/api.js';
 import { getAuctionTier } from '../services/auction.js';
 import { f2 } from '../services/utils.js';
 
@@ -66,7 +66,7 @@ export default function PreMarketPanel({
     loadNotices();
   }, [loadNotices]);
 
-  // 集合竞价速览行（持仓排前，按高开/低开绝对幅度突出异动）
+  // 集合竞价速览行（持仓排前，融合 09:20 锁单未匹配抢筹与弱转强先导信号）
   const auctionRows = useMemo(() => {
     return (pool || [])
       .map((s) => {
@@ -77,6 +77,7 @@ export default function PreMarketPanel({
         const gapPct = pc > 0 && open > 0 ? ((open - pc) / pc) * 100 : 0;
         const chgPct = pc > 0 && px > 0 ? ((px - pc) / pc) * 100 : 0;
         const tier = getAuctionTier(gapPct);
+        const aucLead = computeAuctionSignalLead(s);
         const isHolding = (s.shares || 0) > 0;
         const nInfo = noticeData?.items?.[code6] || null;
         return {
@@ -90,6 +91,7 @@ export default function PreMarketPanel({
           gapPct,
           chgPct,
           tier,
+          aucLead,
           nInfo,
         };
       })
@@ -136,6 +138,7 @@ export default function PreMarketPanel({
   const highOpenCnt = auctionRows.filter((r) => r.gapPct >= 1.5).length;
   const lowOpenCnt = auctionRows.filter((r) => r.gapPct <= -1.5).length;
   const nukeCnt = auctionRows.filter((r) => r.gapPct <= -4.0).length;
+  const rushLeadCnt = auctionRows.filter((r) => (r.aucLead?.score || 0) >= 15).length;
 
   return (
     <div className={`premarket-wrap ${redAlerts.length > 0 ? 'has-red' : ''}`}>
@@ -148,6 +151,11 @@ export default function PreMarketPanel({
 
           <span className="pm-stat">
             高开 <b className="up">{highOpenCnt}</b> · 低开 <b className="down">{lowOpenCnt}</b>
+            {rushLeadCnt > 0 && (
+              <span style={{ color: '#b91c1c', fontWeight: 700 }}>
+                {' '}· 🔥 抢筹/弱转强 {rushLeadCnt}
+              </span>
+            )}
             {nukeCnt > 0 && <span className="pm-nuke"> · 🚨 深水核按钮 {nukeCnt}</span>}
           </span>
 
@@ -262,6 +270,21 @@ export default function PreMarketPanel({
                     </td>
                     <td className="num">{r.vr > 0 ? `${r.vr.toFixed(2)}x` : '—'}</td>
                     <td>
+                      {r.aucLead?.tag && (
+                        <span
+                          className="pm-tier-pill"
+                          style={{
+                            marginRight: '5px',
+                            fontWeight: 800,
+                            color: r.aucLead.score > 0 ? '#b91c1c' : '#047857',
+                            borderColor: r.aucLead.score > 0 ? '#fca5a5' : '#6ee7b7',
+                            background: r.aucLead.score > 0 ? '#fff1f2' : '#ecfdf5',
+                          }}
+                          title={r.aucLead.desc}
+                        >
+                          {r.aucLead.tag}
+                        </span>
+                      )}
                       <span
                         className="pm-tier-pill"
                         style={{ color: r.tier.color, borderColor: r.tier.color }}
@@ -269,7 +292,9 @@ export default function PreMarketPanel({
                         {r.tier.tag}
                       </span>
                       <span className="pm-tier-tip">
-                        {r.gapPct >= 5
+                        {r.aucLead?.desc
+                          ? r.aucLead.desc
+                          : r.gapPct >= 5
                           ? '高开防兑现，冲高不板先倒T'
                           : r.gapPct >= 1.5
                           ? '强势高开，回踩分时黄线看承接'

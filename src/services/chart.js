@@ -3,7 +3,7 @@
    ============================================================ */
 
 import { f2, f3, pct, money, fvol, calcTBreakeven, todayStr } from './utils.js';
-import { maArr, bollArr, rsiArr, macdArr, m5Slot, calc, computeExperimentalATRGrid, computeExperimentalStockDNA } from './api.js';
+import { maArr, bollArr, rsiArr, macdArr, m5Slot, calc, computeExperimentalATRGrid, computeExperimentalStockDNA, buildIntradayObvSeries } from './api.js';
 import { pool } from './state.js';
 
 /* ===================== 图表引擎（Canvas 手绘，零依赖 · 多周期） =====================
@@ -26,6 +26,7 @@ export const _hover = {};                       // 每张图的悬停索引
 export function setHover(id, idx) { _hover[id] = idx; }
 export const OV_DEF = { ma:'均线', boll:'BOLL', box:'箱体', cost:'成本', sr:'支撑压力' };
 export const SUB_DEF = { macd:'MACD', rsi:'RSI' };
+export const SUB_RT_DEF = { obv:'分时OBV', vr:'放量倍数' };
 export const OV_RT_DEF = {
   book: '五档盘口',
   bench: '大盘对比',
@@ -1155,41 +1156,137 @@ function drawRt(cv, s, min, ctx, L){
   });
   ctx.fillStyle = CH.mute; ctx.textAlign = 'left'; ctx.fillText('分时量', PL+1, v0+8);
 
-  // 11) 第 2 副图位：分时放量倍数（÷前 5 日同刻均量）
+  // 11) 第 2 副图位：支持一键切换「分时OBV能量潮先行（默认）」与「放量倍数（÷前5日同刻均量）」
   ctx.strokeStyle = '#e5e7eb'; ctx.beginPath(); ctx.moveTo(PL, s1+.5); ctx.lineTo(W-PR, s1+.5); ctx.stroke();
-  const _vslots = (s._vm && s._vm.ok && s._vm.slots) ? s._vm.slots : null;
-  const avgV = pts.reduce((a,p)=>a+p.vol,0)/pts.length || 1;
-  const expCache = {};
-  const expOf = t => {
-    if (!_vslots) return avgV;
-    if (expCache[t] != null) return expCache[t];
-    const mm = (+t.slice(0,2))*60 + (+t.slice(2,4));
-    const slotKey = typeof m5Slot === 'function' ? m5Slot(mm) : null;
-    const bv = (slotKey && _vslots) ? _vslots[slotKey] : 0;
-    return (expCache[t] = (bv > 0 ? bv/5 : avgV));
-  };
-  const ratioOf = p => { const e = expOf(p.t); return e > 0 ? p.vol/e : 0; };
-  const rMax = Math.max(3, Math.ceil(Math.max(...pts.map(ratioOf))));
-  const RY2 = r => s1 - Math.min(r, rMax)/rMax*(s1-s0);
-  [1, 2, 3].forEach(r=>{
-    if (r > rMax) return;
-    ctx.strokeStyle = r === 1 ? '#c9d2dd' : '#f1f5f9';
-    ctx.beginPath(); ctx.moveTo(PL, RY2(r)+.5); ctx.lineTo(W-PR, RY2(r)+.5); ctx.stroke();
-    ctx.fillStyle = r === 1 ? CH.txt : CH.mute; ctx.textAlign='left';
-    ctx.fillText(r + '×', W-PR+5, RY2(r));
-  });
-  pts.forEach((p,i)=>{
-    const r = ratioOf(p), yy = RY2(r), pp = i > 0 ? pts[i-1].price : prev;
-    ctx.fillStyle = p.price >= pp ? CH.up : CH.dn; ctx.globalAlpha = .52;
-    ctx.fillRect(X(i)-unitBarW/2, yy, unitBarW, s1-yy);
-    ctx.globalAlpha = 1;
-  });
-  ctx.fillStyle = CH.mute; ctx.textAlign = 'left';
-  const subTitle = isNarrow
-    ? (_vslots ? '放量倍数(÷5日同刻均量, 1×常态)' : '放量倍数(÷当日均量)')
-    : (_vslots ? '放量倍数（该分钟量 ÷ 前5日同一时段均量，1× = 常态）'
-               : '放量倍数（该分钟量 ÷ 当日均量 —— 早盘天然偏高，基准未取到）');
-  ctx.fillText(subTitle, PL+1, s0+8);
+  const rtSub = s.rtSub || 'obv';
+  if (rtSub === 'obv') {
+    const is20 = String(s.code || '').startsWith('30') || String(s.code || '').startsWith('68');
+    const obvInfo = buildIntradayObvSeries(pts, prev, +s.avg || prev, is20);
+    const obvArr = obvInfo.obv;
+    const ema10 = obvInfo.ema10;
+    const allVals = [...obvArr, ...ema10, 0];
+    let oMin = Math.min(...allVals);
+    let oMax = Math.max(...allVals);
+    if (oMax - oMin < 10) { oMax += 10; oMin -= 10; }
+    const padO = (oMax - oMin) * 0.12;
+    oMin -= padO;
+    oMax += padO;
+    const OY = v => (s1 - 3) - ((v - oMin) / ((oMax - oMin) || 1)) * ((s1 - 3) - (s0 + 14));
+
+    // 零轴与前高突破颈线
+    if (0 >= oMin && 0 <= oMax) {
+      const yZero = OY(0);
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.beginPath(); ctx.moveTo(PL, yZero + 0.5); ctx.lineTo(W - PR, yZero + 0.5); ctx.stroke();
+    }
+    if (pts.length >= 18 && obvInfo.priorMax >= oMin && obvInfo.priorMax <= oMax) {
+      const yPrior = OY(obvInfo.priorMax);
+      ctx.save();
+      ctx.strokeStyle = obvInfo.obvNewHigh ? 'rgba(220, 38, 38, 0.55)' : '#cbd5e1';
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.moveTo(PL, yPrior + 0.5); ctx.lineTo(W - PR, yPrior + 0.5); ctx.stroke();
+      ctx.restore();
+    }
+
+    // 近15分钟窄幅箱体横盘蓄势/暗出高亮底色
+    if (obvInfo.isTightBox && pts.length >= 15) {
+      const xStart = X(Math.max(0, pts.length - 15));
+      const xEnd = X(pts.length - 1);
+      ctx.save();
+      ctx.fillStyle = obvInfo.winObvNetRatio >= 0
+        ? 'rgba(249, 115, 22, 0.10)'
+        : 'rgba(16, 185, 129, 0.10)';
+      ctx.fillRect(xStart, s0 + 13, Math.max(6, xEnd - xStart), s1 - s0 - 15);
+      ctx.restore();
+    }
+
+    // EMA10 慢线 + 实时 OBV 主曲线
+    if (ema10.length >= 2) {
+      ctx.save();
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ema10.forEach((v, i) => { const yy = OY(v); if (i === 0) ctx.moveTo(X(i), yy); else ctx.lineTo(X(i), yy); });
+      ctx.stroke();
+      ctx.restore();
+    }
+    const curObv = obvArr[obvArr.length - 1] || 0;
+    const curEma = ema10[ema10.length - 1] || 0;
+    const obvCol = curObv >= curEma ? '#dc2626' : '#0891b2';
+    ctx.save();
+    ctx.strokeStyle = obvCol;
+    ctx.lineWidth = 1.45;
+    ctx.beginPath();
+    obvArr.forEach((v, i) => { const yy = OY(v); if (i === 0) ctx.moveTo(X(i), yy); else ctx.lineTo(X(i), yy); });
+    ctx.stroke();
+    if (obvInfo.obvNewHigh) {
+      const lx = X(pts.length - 1);
+      const ly = OY(curObv);
+      ctx.fillStyle = '#dc2626';
+      ctx.beginPath(); ctx.arc(lx, ly, 3.2, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+
+    // 右轴手数刻度
+    const fmtObv = v => {
+      const abs = Math.abs(v);
+      const sg = v > 0 ? '+' : v < 0 ? '-' : '';
+      if (abs >= 10000) return sg + (abs / 10000).toFixed(1) + '万';
+      return sg + Math.round(abs);
+    };
+    ctx.fillStyle = CH.mute; ctx.textAlign = 'left';
+    ctx.fillText(fmtObv(oMax - padO), W - PR + 4, s0 + 18);
+    ctx.fillText(fmtObv(oMin + padO), W - PR + 4, s1 - 8);
+
+    const obvHead = isNarrow
+      ? '分时OBV(橙EMA10·虚线前高)'
+      : '分时OBV能量潮（红/青=累计主动量，橙线=EMA10，虚线=前高颈线）';
+    ctx.fillStyle = CH.mute;
+    ctx.fillText(obvHead, PL + 1, s0 + 8);
+    if (obvInfo.isTightBox && obvInfo.obvNewHigh) {
+      const tagTxt = '🚀 窄幅蓄势·OBV先行新高';
+      const tw = ctx.measureText(tagTxt).width + 8;
+      chipText(ctx, tagTxt, Math.max(PL + 4, W - PR - tw - 4), s0 + 8, '#b91c1c', '#fee2e2');
+    } else if (obvInfo.isTightBox && obvInfo.obvNewLow) {
+      const tagTxt = '⚠️ 横盘OBV暗中下沉';
+      const tw = ctx.measureText(tagTxt).width + 8;
+      chipText(ctx, tagTxt, Math.max(PL + 4, W - PR - tw - 4), s0 + 8, '#047857', '#d1fae5');
+    }
+  } else {
+    const _vslots = (s._vm && s._vm.ok && s._vm.slots) ? s._vm.slots : null;
+    const avgV = pts.reduce((a,p)=>a+p.vol,0)/pts.length || 1;
+    const expCache = {};
+    const expOf = t => {
+      if (!_vslots) return avgV;
+      if (expCache[t] != null) return expCache[t];
+      const mm = (+t.slice(0,2))*60 + (+t.slice(2,4));
+      const slotKey = typeof m5Slot === 'function' ? m5Slot(mm) : null;
+      const bv = (slotKey && _vslots) ? _vslots[slotKey] : 0;
+      return (expCache[t] = (bv > 0 ? bv/5 : avgV));
+    };
+    const ratioOf = p => { const e = expOf(p.t); return e > 0 ? p.vol/e : 0; };
+    const rMax = Math.max(3, Math.ceil(Math.max(...pts.map(ratioOf))));
+    const RY2 = r => s1 - Math.min(r, rMax)/rMax*(s1-s0);
+    [1, 2, 3].forEach(r=>{
+      if (r > rMax) return;
+      ctx.strokeStyle = r === 1 ? '#c9d2dd' : '#f1f5f9';
+      ctx.beginPath(); ctx.moveTo(PL, RY2(r)+.5); ctx.lineTo(W-PR, RY2(r)+.5); ctx.stroke();
+      ctx.fillStyle = r === 1 ? CH.txt : CH.mute; ctx.textAlign='left';
+      ctx.fillText(r + '×', W-PR+5, RY2(r));
+    });
+    pts.forEach((p,i)=>{
+      const r = ratioOf(p), yy = RY2(r), pp = i > 0 ? pts[i-1].price : prev;
+      ctx.fillStyle = p.price >= pp ? CH.up : CH.dn; ctx.globalAlpha = .52;
+      ctx.fillRect(X(i)-unitBarW/2, yy, unitBarW, s1-yy);
+      ctx.globalAlpha = 1;
+    });
+    ctx.fillStyle = CH.mute; ctx.textAlign = 'left';
+    const subTitle = isNarrow
+      ? (_vslots ? '放量倍数(÷5日同刻均量, 1×常态)' : '放量倍数(÷当日均量)')
+      : (_vslots ? '放量倍数（该分钟量 ÷ 前5日同一时段均量，1× = 常态）'
+                 : '放量倍数（该分钟量 ÷ 当日均量 —— 早盘天然偏高，基准未取到）');
+    ctx.fillText(subTitle, PL+1, s0+8);
+  }
 
   // 12) 固定全天时间轴刻度（无论早盘几点，始终展示 09:30 ~ 11:30/13:00 ~ 15:00 全天比例）
   const sessionTicks = isNarrow
@@ -1363,6 +1460,7 @@ export function chartLegendHTML(s){
   if (p === 'rt'){
     const bName = s._rtSignals?.benchName || '大盘';
     out.push(it2('价格线', CH.up, CH.dn), it('均价线', CH.avg), it(`${bName}对比(虚线)`, '#64748b'), it2('分时量', CH.up, CH.dn));
+    if ((s.rtSub || 'obv') === 'obv') out.push(it('分时OBV', '#dc2626'), it('OBV·EMA10', '#f59e0b'));
     if (+s.cost > 0) out.push(it('持仓成本', CH.cost));
     if (+s.bePrice > 0) out.push(it('做T保本', '#d97706'));
     out.push(it('推荐买区(红带)', 'rgba(220,38,38,0.40)'), it('推荐卖区(绿带)', 'rgba(22,163,74,0.40)'));

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { drawChart, chartMeta, chartLegendHTML, chartStat, PERIODS, PERIOD_LABEL, P_MAIN, P_MORE, OV_DEF, OV_RT_DEF, SUB_DEF, setHover } from '../services/chart.js';
+import { drawChart, chartMeta, chartLegendHTML, chartStat, PERIODS, PERIOD_LABEL, P_MAIN, P_MORE, OV_DEF, OV_RT_DEF, SUB_DEF, SUB_RT_DEF, setHover } from '../services/chart.js';
 import { loadChart, loadDD, computeLeadingMomentum } from '../services/api.js';
 import { f2, copyPlain } from '../services/utils.js';
 
@@ -124,12 +124,8 @@ function OrderBook5Panel({ stock, book5, onPickLevel }) {
               )}
               <i className="lm-zero" />
             </div>
-            {(leadMom.orderTag || leadMom.obvTag) && (
-              <div className="ob5-mom-sub">
-                {[leadMom.orderTag, leadMom.obvTag]
-                  .filter((v, idx, arr) => Boolean(v) && arr.indexOf(v) === idx)
-                  .join(' · ')}
-              </div>
+            {Array.isArray(leadMom.tags) && leadMom.tags.length > 0 && (
+              <div className="ob5-mom-sub">{leadMom.tags.join(' · ')}</div>
             )}
           </div>
         )}
@@ -193,6 +189,7 @@ export default function ChartCanvas({
   const ov = stock.ov || { ma: 1, boll: 1, box: 1, cost: 1, sr: 0 };
   const ovRt = Object.assign({ book: 1, bench: 1, cost: 1, be: 1, zones: 1, signal: 1, actual: 1, radar: 1 }, stock.ovRt || {});
   const subKind = stock.sub || 'macd';
+  const rtSubKind = stock.rtSub || 'obv';
   const activeBook5 = stock._book5 || stock._k?.rt?.min?.book5 || null;
 
   const handlePickBookLevel = useCallback(
@@ -247,7 +244,7 @@ export default function ChartCanvas({
       window.removeEventListener('resize', handleResize);
       if (ro) ro.disconnect();
     };
-  }, [renderCanvas, stock, tradeLogs, stock.p, stock.ov, stock.ovRt, stock.sub, stock._k, stock._book5, stock.bePrice, stock.cost]);
+  }, [renderCanvas, stock, tradeLogs, stock.p, stock.ov, stock.ovRt, stock.sub, stock.rtSub, stock._k, stock._book5, stock.bePrice, stock.cost]);
 
   const clearCrosshair = useCallback(() => {
     const cv = canvasRef.current;
@@ -301,6 +298,16 @@ export default function ChartCanvas({
     renderCanvas();
     if (onUpdateStock) {
       onUpdateStock({ ...stock, sub: s });
+    }
+  };
+
+  // 切换分时副图指标（分时OBV能量潮 / 放量倍数）
+  const handleChangeRtSub = (k) => {
+    if (k === rtSubKind) return;
+    stock.rtSub = k;
+    renderCanvas();
+    if (onUpdateStock) {
+      onUpdateStock({ ...stock, rtSub: k });
     }
   };
 
@@ -467,6 +474,19 @@ export default function ChartCanvas({
                 type="button"
                 className={`chip ov ${ovRt[k] ? 'on' : ''}`}
                 onClick={() => handleToggleOverlayRt(k)}
+                style={{ fontSize: '11px', padding: '2px 8px' }}
+              >
+                {label}
+              </button>
+            ))}
+            <span className="sp" style={{ width: '1px', height: '14px', background: 'var(--line)', margin: '0 4px' }}></span>
+            <span className="lbl" style={{ fontSize: '11.5px', color: 'var(--mute)', fontWeight: 600 }}>副图</span>
+            {Object.entries(SUB_RT_DEF).map(([k, label]) => (
+              <button
+                key={k}
+                type="button"
+                className={`chip sb ${rtSubKind === k ? 'on' : ''}`}
+                onClick={() => handleChangeRtSub(k)}
                 style={{ fontSize: '11px', padding: '2px 8px' }}
               >
                 {label}
