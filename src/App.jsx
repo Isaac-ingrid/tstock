@@ -14,7 +14,7 @@ import DiagnosisPage from './views/DiagnosisPage.jsx';
 import BoardPage from './views/BoardPage.jsx';
 import IgnitionPage from './views/IgnitionPage.jsx';
 import PerfPage from './views/PerfPage.jsx';
-import { QuickTModal, StockReasonModal, TradingClockModal, ToastHost, OvernightBanner, AlertCenterModal } from './components/Modals.jsx';
+import { QuickTModal, StockReasonModal, TradingClockModal, ToastHost, OvernightBanner, AlertCenterModal, P0EmergencyBanner } from './components/Modals.jsx';
 import PostMarketModal from './components/PostMarketModal.jsx';
 import PwaInstallModal, { usePwaManager, PwaInstallBanner } from './components/PwaInstallModal.jsx';
 
@@ -2125,6 +2125,12 @@ export default function App() {
         accept="application/json,.json"
         style={{ display: 'none' }}
         onChange={handleImportFile}
+      />
+
+      <P0EmergencyBanner
+        pool={pool}
+        onJumpCard={handleSelectStock}
+        onOpenQuickT={(stock, dir, px, qty) => setQuickTModal({ open: true, stock, defaultDir: dir, defaultPx: px, defaultQty: qty })}
       />
 
       <OvernightBanner

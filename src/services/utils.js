@@ -130,6 +130,7 @@ export function soundChime(freq = 660, dur = 0.18) {
   if (!audioCtx) warmAudio();
   if (!audioCtx) return;
   try {
+    if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
     const osc = audioCtx.createOscillator();
     const g = audioCtx.createGain();
     osc.connect(g);
@@ -139,6 +140,48 @@ export function soundChime(freq = 660, dur = 0.18) {
     g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
     osc.start();
     osc.stop(audioCtx.currentTime + dur);
+  } catch (_) {}
+}
+
+/**
+ * 分级交易提醒音效（P0 持仓救命双促警报 / P1 右侧确认双音阶 / P2 静默不打扰）
+ */
+export function playAlertTone(priority = 'P1', forcePlay = false) {
+  if (priority === 'P2') return;
+  if (!forcePlay) {
+    try {
+      const raw = localStorage.getItem('t-alert-enabled');
+      if (raw !== null && JSON.parse(raw) === false) return;
+    } catch (_) {}
+  }
+  if (!audioCtx) warmAudio();
+  if (!audioCtx) return;
+  try {
+    if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+    const t0 = audioCtx.currentTime;
+    const notes =
+      priority === 'P0'
+        ? [
+            { freq: 880, offset: 0, dur: 0.13, gain: 0.18, type: 'triangle' },
+            { freq: 660, offset: 0.15, dur: 0.12, gain: 0.15, type: 'triangle' },
+            { freq: 988, offset: 0.31, dur: 0.22, gain: 0.20, type: 'triangle' },
+          ]
+        : [
+            { freq: 587.33, offset: 0, dur: 0.12, gain: 0.12, type: 'sine' },
+            { freq: 783.99, offset: 0.13, dur: 0.18, gain: 0.14, type: 'sine' },
+          ];
+    notes.forEach((n) => {
+      const osc = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      osc.type = n.type || 'sine';
+      osc.connect(g);
+      g.connect(audioCtx.destination);
+      osc.frequency.setValueAtTime(n.freq, t0 + n.offset);
+      g.gain.setValueAtTime(n.gain, t0 + n.offset);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + n.offset + n.dur);
+      osc.start(t0 + n.offset);
+      osc.stop(t0 + n.offset + n.dur);
+    });
   } catch (_) {}
 }
 

@@ -75,18 +75,43 @@ export function buildActionSignal(stock, { sentiment = null, noticeRisk = null, 
       headline = `分时5分钟爆量急拉 +${activeAnomaly.deltaPct}%，追高易吃日内回落面`;
       triggerText = `等回踩分时均线 ¥${f2(+stock.avg || c.inA)} 不破再接`;
     } else if (c.ignitionActive) {
-      kind = 'buy';
-      badge = '🚀 爆发买点 · 可跟随';
-      headline = '放量站稳 MA20 突破均线，主升拐点确立';
-      triggerText = `回踩 ¥${f2(c.inA)} 附近低吸 · 止损 ¥${f2(c.slA)}`;
+      if (c.buyGate?.stage === 'FALLING_HOLD') {
+        kind = 'warn';
+        badge = '🟡 到买区急跌 · 等止跌确认';
+        headline = c.buyGate.desc;
+        triggerText = `买区 ¥${f2(c.inA)} 等缩量走平再接 · 止损 ¥${f2(c.slA)}`;
+      } else {
+        kind = 'buy';
+        badge = c.buyGate?.confirmed ? '🔴 右侧确认买点 · 主升跟随' : '🚀 爆发买点 · 挂单等回踩';
+        headline = c.buyGate?.confirmed ? `${c.buyGate.desc}（站稳 MA20 主升拐点确立）` : '放量站稳 MA20 突破均线，主升拐点确立';
+        triggerText = `回踩 ¥${f2(c.inA)} 低吸 · 扣费有效止盈 ¥${f2(c.tp1)} · 止损 ¥${f2(c.slA)}`;
+      }
     } else if (c.mode === 'BUY') {
-      const isNearBuy = distBuyPct != null && distBuyPct <= 1.2;
-      kind = 'buy';
-      badge = isNearBuy ? '✅ 当前买点 · 可低吸' : '🎯 接近买点 · 挂单等';
-      headline = isNearBuy
-        ? `缩量回踩到位，现价已进入低吸区（目标 ¥${f2(c.inA)}）`
-        : `缩量回踩趋势良好，距第一买点 ¥${f2(c.inA)} 仅差 ${Math.abs(distBuyPct || 0).toFixed(1)}%`;
-      triggerText = `一买 ¥${f2(c.inA)} / 二买 ¥${f2(c.inB)} · 止损 ¥${f2(c.slA)}`;
+      const bgStage = c.buyGate?.stage || 'IDLE';
+      if (bgStage === 'FALLING_HOLD') {
+        kind = 'warn';
+        badge = '🟡 到买区未止跌 · 禁接飞刀';
+        headline = c.buyGate.desc;
+        triggerText = `观察位 ¥${f2(c.inA)} 等分时缩量拐头再挂单 · 止损 ¥${f2(c.slA)}`;
+      } else if (bgStage === 'CONFIRMED_BUY') {
+        kind = 'buy';
+        badge = '🔴 右侧确认买点 · 可执行';
+        headline = `${c.buyGate.desc}${c.channelShiftTag ? `（${c.channelShiftTag}）` : ''}`;
+        triggerText = `一买 ¥${f2(c.inA)} / 二买 ¥${f2(c.inB)} → 净利止盈 ¥${f2(c.tp1)} · 止损 ¥${f2(c.slA)}`;
+      } else if (bgStage === 'AT_ZONE_WATCH') {
+        kind = 'wait';
+        badge = '🟡 已入买区 · 待拐头确认';
+        headline = c.buyGate.desc;
+        triggerText = `买区 ¥${f2(c.inA)}~${f2(c.inB)} · 确认企稳后再入场`;
+      } else {
+        const isNearBuy = distBuyPct != null && distBuyPct <= 1.2;
+        kind = 'buy';
+        badge = isNearBuy ? '🎯 临近买区 · 预备盯盘' : '🎯 偏买趋势 · 挂单等回踩';
+        headline = isNearBuy
+          ? `缩量回踩接近低吸带（距 ¥${f2(c.inA)} 差 ${Math.abs(distBuyPct || 0).toFixed(2)}%），等到位止跌确认`
+          : `缩量回踩趋势良好，关注回踩第一买点 ¥${f2(c.inA)}${c.channelShiftTag ? `（${c.channelShiftTag}）` : ''}`;
+        triggerText = `一买 ¥${f2(c.inA)} / 二买 ¥${f2(c.inB)} · 止损 ¥${f2(c.slA)}`;
+      }
     } else if (c.mode === 'CUT' || chg >= 5.0 || (c.vsAvg != null && c.vsAvg >= 2.5)) {
       kind = 'warn';
       badge = '⚠️ 非买点 · 偏高勿追';
@@ -119,22 +144,37 @@ export function buildActionSignal(stock, { sentiment = null, noticeRisk = null, 
       badge = '💥 卖点 · 炸板回落锁盈';
       headline = activeAnomaly.summary;
       triggerText = `优先减仓锁住利润，严禁在炸板回落途中补仓`;
-    } else if (c.mode === 'CUT' || c.sellFlyTriggered || (activeAnomaly?.type === 'rocket_up' && px >= c.outA * 0.995)) {
+    } else if (c.sellGate?.stage === 'STRONG_HOLD_RUN' && channelDisc?.channelMode === 'UP') {
+      kind = 'buy';
+      badge = '🟣 越卖区强攻 · 延后止盈防卖飞';
+      headline = c.sellGate.desc;
+      triggerText = `底仓格局拿稳，若跌破分时均线 ¥${f2(+stock.avg || c.outA)} 再锁盈`;
+    } else if (c.sellGate?.confirmed || c.mode === 'CUT' || c.sellFlyTriggered || (activeAnomaly?.type === 'rocket_up' && px >= c.outA * 0.995)) {
       kind = 'sell';
-      badge = activeAnomaly?.type === 'rocket_up' ? '🚀 急拉卖点 · 分批高抛' : '🔴 当前卖点 · 高抛兑现';
-      headline = activeAnomaly?.type === 'rocket_up'
+      badge = c.sellGate?.confirmed
+        ? '🟢 右侧确认卖点 · 果断高抛'
+        : activeAnomaly?.type === 'rocket_up'
+        ? '🚀 急拉卖区 · 分批高抛'
+        : '🟠 已入卖区 · 盯紧滞涨兑现';
+      headline = c.sellGate?.confirmed
+        ? c.sellGate.desc
+        : activeAnomaly?.type === 'rocket_up'
         ? `分时爆量急拉 +${activeAnomaly.deltaPct}% 逼近压力区，顺势分批倒T高抛`
         : c.sellFlyTriggered
-        ? '已逼近/越过卖飞线，冲高分批锁盈（不追回）'
-        : `进入 6 格以上亢奋区（${chg >= 0 ? '+' : ''}${chg.toFixed(1)}%），逢高只减不接`;
-      triggerText = `第一卖点 ¥${f2(c.outA)} / 第二卖点 ¥${f2(c.outB)}`;
+        ? '已逼近/越过卖飞线，冲高滞涨分批锁盈（不追回）'
+        : `进入 6 格以上亢奋区（${chg >= 0 ? '+' : ''}${chg.toFixed(1)}%），逢滞涨只减不接`;
+      triggerText = `第一卖点 ¥${f2(c.outA)} / 第二卖点 ¥${f2(c.outB)}${c.tValidOutPx > 0 ? ` · 净赚0.8%线 ¥${f2(c.tValidOutPx)}` : ''}`;
     } else if (c.mode === 'REV') {
       const isNearSell = distSellPct != null && distSellPct <= 1.2;
       kind = 'sell';
-      badge = isNearSell ? '🔴 当前卖点 · 倒T高抛' : '🟠 偏卖点 · 反弹先卖';
+      badge = c.sellGate?.confirmed
+        ? '🟢 右侧确认卖点 · 倒T高抛'
+        : isNearSell
+        ? '🟠 已入卖区 · 等滞涨高抛'
+        : '🟠 偏卖点 · 反弹先卖';
       headline = c.bear
         ? '日线空头压制，反弹到压力区先倒T降仓'
-        : '无量拉升/分时顶背离，先高抛再等回落接回';
+        : (c.sellGate?.desc || '无量拉升/分时顶背离，先高抛再等回落接回');
       triggerText = `高抛 ¥${f2(c.outA)} / ¥${f2(c.outB)} → 接回 ¥${f2(c.bkA)}`;
     } else if (activeAnomaly?.type === 'waterfall_down') {
       kind = 'warn';
@@ -177,20 +217,34 @@ export function buildActionSignal(stock, { sentiment = null, noticeRisk = null, 
         badge = '🔴 情绪红灯 · 禁正T仅倒T';
         headline = `全市场红灯退潮（炸板率 ${sentiment.brokenRate ?? '—'}%），暂停正T低吸`;
         triggerText = `逢反抽 ¥${f2(c.outA)} 先倒T降仓`;
+      } else if (c.buyGate?.stage === 'FALLING_HOLD') {
+        kind = 'warn';
+        badge = '🟡 到买区未止跌 · 暂缓正T';
+        headline = c.buyGate.desc;
+        triggerText = `等分时缩量止跌拐头再挂 ¥${f2(c.inA)} · 止损 ¥${f2(c.slA)}`;
       } else {
-        const isNearBuy = distBuyPct != null && distBuyPct <= 1.2;
-        kind = 'buy';
-        badge = c.ignitionActive
+        const isConfirmed = Boolean(c.buyGate?.confirmed);
+        const isAtZone = c.buyGate?.stage === 'AT_ZONE_WATCH';
+        kind = isAtZone ? 'wait' : 'buy';
+        badge = isConfirmed
+          ? (channelDisc?.channelMode === 'UP' ? '🔴 上升通道 · 右侧确认加仓/正T' : '🔴 右侧确认买点 · 执行正T')
+          : isAtZone
+          ? '🟡 已入买区 · 待拐头确认'
+          : c.ignitionActive
           ? '🚀 强攻买点 · 顺势正T'
           : channelDisc?.channelMode === 'UP'
-          ? (isNearBuy ? '📈 上升通道 · 回调加仓/正T' : '📈 上升通道 · 挂单低吸')
-          : (isNearBuy ? '🟢 当前买点 · 低吸正T' : '🟢 偏买点 · 挂单正T');
-        headline = c.ignitionActive
+          ? '📈 上升通道 · 挂单等回踩'
+          : '🟢 偏买点 · 挂单等回踩';
+        headline = isConfirmed
+          ? `${c.buyGate.desc}${c.channelShiftTag ? `（${c.channelShiftTag}）` : ''}`
+          : isAtZone
+          ? c.buyGate.desc
+          : c.ignitionActive
           ? '放量站稳 MA20 突破，底仓拿稳并顺势做正T'
           : channelDisc?.channelMode === 'UP'
           ? '大盘上升通道趋势完好，逢缩量回踩顺势加仓或正T，拉长格局扩大战果'
           : '缩量回踩支撑，可轻仓低吸做日内正T（14:50前必平，勿变隔夜加仓）';
-        triggerText = `低吸 ¥${f2(c.inA)} → 目标 ¥${f2(c.tp1)} · 止损 ¥${f2(c.slA)}`;
+        triggerText = `低吸 ¥${f2(c.inA)} → 净利止盈 ¥${f2(c.tp1)} · 止损 ¥${f2(c.slA)}`;
       }
     } else {
       kind = hasRedNotice || isTiltLocked || channelDisc?.forbidAddPosition ? 'warn' : 'wait';

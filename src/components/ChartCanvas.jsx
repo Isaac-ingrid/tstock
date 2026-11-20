@@ -26,7 +26,7 @@ export default function ChartCanvas({
   // 周期合法性校验（防旧缓存或错误传参污染）
   const curPeriod = VALID_PERIODS.includes(stock.p) ? stock.p : 'day';
   const ov = stock.ov || { ma: 1, boll: 1, box: 1, cost: 1, sr: 0 };
-  const ovRt = Object.assign({ cost: 1, be: 1, zones: 1, signal: 1, actual: 1, radar: 1 }, stock.ovRt || {});
+  const ovRt = Object.assign({ bench: 1, cost: 1, be: 1, zones: 1, signal: 1, actual: 1, radar: 1 }, stock.ovRt || {});
   const subKind = stock.sub || 'macd';
 
   const syncRtSummary = useCallback(() => {
@@ -135,6 +135,23 @@ export default function ChartCanvas({
     const g = cv._geo;
     const r = cv.getBoundingClientRect();
     const x = clientX - r.left;
+    if (g.kind === 'line' && Array.isArray(g.ptSlots) && g.ptSlots.length > 0) {
+      const targetSlot = ((x - g.PL) / (g.innerW || 1)) * 240;
+      const maxSlot = g.ptSlots[g.ptSlots.length - 1] ?? 0;
+      if (!clampToBounds && (targetSlot < -4 || targetSlot > maxSlot + 6)) {
+        return -1;
+      }
+      let bestIdx = 0;
+      let bestDiff = Infinity;
+      for (let i = 0; i < g.ptSlots.length; i++) {
+        const diff = Math.abs(g.ptSlots[i] - targetSlot);
+        if (diff <= bestDiff) {
+          bestDiff = diff;
+          bestIdx = i;
+        }
+      }
+      return bestIdx;
+    }
     let idx = g.kind === 'bar'
       ? Math.floor((x - g.PL) / g.bw)
       : Math.round(((x - g.PL) / (g.innerW || 1)) * (g.n - 1));
@@ -144,6 +161,33 @@ export default function ChartCanvas({
       idx = -1;
     }
     return idx;
+  };
+
+  // 点击分时图上的推荐买点/卖点圆点，一键拉起做T快捷面板并带入该圆点价格
+  const handleCanvasClick = (e) => {
+    if (curPeriod !== 'rt' || !onOpenQuickT) return;
+    const cv = canvasRef.current;
+    if (!cv || !cv._geo || cv._geo.kind !== 'line') return;
+    const g = cv._geo;
+    const recs = g.recPoints || [];
+    if (!recs.length || !Array.isArray(g.ptSlots)) return;
+    const rect = cv.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    let best = null;
+    let bestDist = 16; // 16px 命中半径
+    recs.forEach((sig) => {
+      const sx = g.PL + (Math.max(0, Math.min(240, g.ptSlots[sig.idx] ?? 0)) / 240) * (g.innerW || 1);
+      const sy = g.y1 - ((sig.px - g.yLo) / ((g.yHi - g.yLo) || 1)) * (g.y1 - g.y0);
+      const dist = Math.hypot(mx - sx, my - sy);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = sig;
+      }
+    });
+    if (best) {
+      onOpenQuickT(stock, best.type === 'BUY' ? '正T' : '倒T', f2(best.px));
+    }
   };
 
   const handleMouseMove = (e) => {
@@ -378,6 +422,7 @@ export default function ChartCanvas({
           id={`kln-${poolIndex}`}
           ref={canvasRef}
           data-ki={poolIndex}
+          onClick={handleCanvasClick}
           onMouseMove={handleMouseMove}
           onMouseLeave={handleMouseLeave}
           onTouchStart={handleTouchStart}

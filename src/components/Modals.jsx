@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { f2, money, getTodayTStatus, toastWarn } from '../services/utils.js';
+import { f2, money, getTodayTStatus, toastWarn, playAlertTone } from '../services/utils.js';
 import { calc } from '../services/api.js';
 import { evaluateChannelHoldingDiscipline } from '../services/risk.js';
 
@@ -1202,7 +1202,7 @@ function AlertCenterModalInner({
       return [];
     }
   });
-  const [filterCat, setFilterCat] = useState('all'); // 'all' | 'anomaly' | 'price'
+  const [filterCat, setFilterCat] = useState('all'); // 'all' | 'P0' | 'P1' | 'P2'
 
   useEffect(() => {
     const handleAlerts = (e) => {
@@ -1217,12 +1217,18 @@ function AlertCenterModalInner({
     setAlertList([]);
   };
 
-  const anomalyCount = alertList.filter((a) => a.category === 'anomaly').length;
-  const priceCount = alertList.filter((a) => a.category !== 'anomaly').length;
+  const inferPriority = (a) => {
+    if (a?.priority === 'P0' || a?.priority === 'P1' || a?.priority === 'P2') return a.priority;
+    if (a?.category === 'anomaly' && a?.anomalyType !== 'rocket_up') return 'P0';
+    return 'P1';
+  };
+
+  const p0Count = alertList.filter((a) => inferPriority(a) === 'P0').length;
+  const p1Count = alertList.filter((a) => inferPriority(a) === 'P1').length;
+  const p2Count = alertList.filter((a) => inferPriority(a) === 'P2').length;
   const filteredAlerts = alertList.filter((a) => {
-    if (filterCat === 'anomaly') return a.category === 'anomaly';
-    if (filterCat === 'price') return a.category !== 'anomaly';
-    return true;
+    if (filterCat === 'all') return true;
+    return inferPriority(a) === filterCat;
   });
 
   // 实时扫描自选池股票到买卖点的距离
@@ -1313,7 +1319,7 @@ function AlertCenterModalInner({
             )}
           </div>
 
-          {/* 2. 分时放量急拉 / 跳水异动雷达与一键演练 */}
+          {/* 2. 三级防刷屏提醒规则与一键演练 / 试听 */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -1328,32 +1334,70 @@ function AlertCenterModalInner({
           }}>
             <div style={{ flex: '1 1 220px', minWidth: 0 }}>
               <div style={{ fontWeight: 700, color: '#6b21a8', fontSize: '13px' }}>
-                ⚡ 分时放量急拉 / 跳水 / 冲板炸板雷达（10分钟冷却防刷屏）
+                🛡️ 15分钟防乒乓刷屏冷却 + P0 / P1 / P2 三级声音视觉分级
               </div>
-              <div style={{ fontSize: '11.5px', color: 'var(--sub)', marginTop: '2px' }}>
-                自动捕获 5 分钟急涨/急跌 ≥1.8%（20cm ≥2.5%）且分钟量能脉冲 ≥1.8×、涨停炸板回落及大盘 5 分钟急杀，并在作战卡片顶部亮起警示条。
+              <div style={{ fontSize: '11.5px', color: 'var(--sub)', marginTop: '2px', lineHeight: 1.5 }}>
+                <b>🚨 P0 持仓救命级</b>（跌破止损/炸板/跳水/首阴清仓）：三连急促警报 + 顶栏常驻红条；
+                <b> 🎯 P1 确认执行级</b>（右侧拐头确认买卖点）：双音阶清脆提示；
+                <b> 👀 P2 观察预备级</b>（刚进观察区未拐头）：仅静默记入流水，不发声打断看盘。
               </div>
             </div>
-            {onSimulateAnomaly && (
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
               <button
                 type="button"
-                onClick={() => onSimulateAnomaly()}
+                onClick={() => playAlertTone('P0', true)}
                 style={{
-                  padding: '6px 12px',
-                  fontSize: '11.5px',
+                  padding: '5px 9px',
+                  fontSize: '11px',
                   fontWeight: 700,
-                  whiteSpace: 'nowrap',
                   cursor: 'pointer',
                   borderRadius: '6px',
-                  border: '1px solid #a855f7',
-                  background: '#fff',
-                  color: '#7e22ce'
+                  border: '1px solid #fca5a5',
+                  background: '#fef2f2',
+                  color: '#dc2626'
                 }}
-                title="交替模拟放量急拉与放量跳水，立即测试蜂鸣声、气泡、卡片警示条与下方流水"
+                title="试听 P0 持仓救命级三连警报音"
               >
-                🧪 演练分时异动
+                🔊 试听P0
               </button>
-            )}
+              <button
+                type="button"
+                onClick={() => playAlertTone('P1', true)}
+                style={{
+                  padding: '5px 9px',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  borderRadius: '6px',
+                  border: '1px solid #93c5fd',
+                  background: '#eff6ff',
+                  color: '#1d4ed8'
+                }}
+                title="试听 P1 右侧确认级双音阶提示音"
+              >
+                🎵 试听P1
+              </button>
+              {onSimulateAnomaly && (
+                <button
+                  type="button"
+                  onClick={() => onSimulateAnomaly()}
+                  style={{
+                    padding: '5px 10px',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    whiteSpace: 'nowrap',
+                    cursor: 'pointer',
+                    borderRadius: '6px',
+                    border: '1px solid #a855f7',
+                    background: '#fff',
+                    color: '#7e22ce'
+                  }}
+                  title="交替模拟放量急拉(P1)与放量跳水(P0)，立即验证声音、顶栏应急红条与下方流水"
+                >
+                  🧪 演练异动
+                </button>
+              )}
+            </div>
           </div>
 
           {/* 3. 桌面通知与 14:40 尾盘风控演练双栏 */}
@@ -1372,7 +1416,7 @@ function AlertCenterModalInner({
                 <div style={{ fontWeight: 700, color: notifyActive ? '#389e0d' : '#d48806', fontSize: '12.5px' }}>
                   {notifyActive ? '🟢 桌面弹窗已授权' : '🟡 桌面通知未授权'}
                 </div>
-                <div style={{ fontSize: '11px', color: 'var(--sub)' }}>切到后台也能收到异动弹窗</div>
+                <div style={{ fontSize: '11px', color: 'var(--sub)' }}>仅 P0 / P1 触发桌面弹窗，P2 静默防骚扰</div>
               </div>
               {!notifyActive && onToggleNotify && (
                 <button
@@ -1428,14 +1472,14 @@ function AlertCenterModalInner({
           {/* 4. 自选池实时临界买卖点监测 */}
           <div style={{ marginBottom: '16px' }}>
             <h4 style={{ fontSize: '13px', marginBottom: '8px', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span>🎯 自选股近邻关键价位距离一览</span>
-              <span style={{ fontSize: '11px', color: 'var(--mute)', fontWeight: 400 }}>（偏差 ≤ 0.4% 自动报警，点击直达卡片）</span>
+              <span>🎯 自选股近邻关键价位与双门禁状态</span>
+              <span style={{ fontSize: '11px', color: 'var(--mute)', fontWeight: 400 }}>（同档位 15 分钟冷却防抖，点击直达卡片）</span>
             </h4>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '8px' }}>
               {poolNearList.map(item => {
                 const n = item.nearest;
                 if (!n) return null;
-                const isNear = n.absDev <= 0.4;
+                const isNear = n.absDev <= 0.45;
                 return (
                   <div
                     key={item.code}
@@ -1480,17 +1524,18 @@ function AlertCenterModalInner({
             </div>
           </div>
 
-          {/* 5. 今日已触发异动与到价流水记录（支持分类筛选） */}
+          {/* 5. 今日已触发异动与到价流水记录（支持 P0 / P1 / P2 分级筛选） */}
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
                 <h4 style={{ fontSize: '13px', margin: 0, color: 'var(--text)' }}>
                   📋 今日预警流水
                 </h4>
                 {[
                   { key: 'all', label: `全部 (${alertList.length})` },
-                  { key: 'anomaly', label: `⚡ 盘中异动 (${anomalyCount})` },
-                  { key: 'price', label: `🎯 到价提醒 (${priceCount})` },
+                  { key: 'P0', label: `🚨 P0救命 (${p0Count})` },
+                  { key: 'P1', label: `🎯 P1确认 (${p1Count})` },
+                  { key: 'P2', label: `👀 P2预备 (${p2Count})` },
                 ].map((tab) => (
                   <button
                     key={tab.key}
@@ -1516,31 +1561,37 @@ function AlertCenterModalInner({
             </div>
 
             {filteredAlerts.length > 0 ? (
-              <div className="alert-list" style={{ maxHeight: '190px', overflowY: 'auto', border: '1px solid var(--line)', borderRadius: '8px', background: '#fff' }}>
+              <div className="alert-list" style={{ maxHeight: '195px', overflowY: 'auto', border: '1px solid var(--line)', borderRadius: '8px', background: '#fff' }}>
                 {filteredAlerts.map(a => {
-                  const isAnom = a.category === 'anomaly';
-                  const tagStyle = isAnom
-                    ? a.anomalyType === 'rocket_up'
-                      ? { background: '#fef2f2', color: '#cf1322', border: '1px solid #fca5a5' }
-                      : a.anomalyType === 'waterfall_down'
-                      ? { background: '#ecfdf5', color: '#15803d', border: '1px solid #86efac' }
-                      : { background: '#fff7ed', color: '#c2410c', border: '1px solid #fdba74' }
-                    : undefined;
+                  const prio = inferPriority(a);
+                  const prioStyle =
+                    prio === 'P0'
+                      ? { background: '#dc2626', color: '#ffffff', border: '1px solid #b91c1c' }
+                      : prio === 'P1'
+                      ? { background: '#eff6ff', color: '#1d4ed8', border: '1px solid #93c5fd' }
+                      : { background: '#f1f5f9', color: '#64748b', border: '1px solid #cbd5e1' };
 
                   return (
-                    <div key={a.id} className="alert-row">
+                    <div
+                      key={a.id}
+                      className="alert-row"
+                      style={{ cursor: a.code ? 'pointer' : 'default' }}
+                      onClick={() => {
+                        if (a.code && onJumpCard) {
+                          onJumpCard(a.code);
+                          onClose();
+                        }
+                      }}
+                    >
                       <span className="ah">{a.time}</span>
-                      <span className="ak k-price" style={tagStyle}>{a.label}</span>
+                      <span className="ak k-price" style={{ ...prioStyle, fontWeight: 700 }}>
+                        {prio}·{a.label}
+                      </span>
                       <span className="ad">
-                        {isAnom ? (
-                          <>
-                            <b>{a.name}</b> 现价 ¥{f2(a.price)} · {a.summary || `${a.deltaPct > 0 ? '+' : ''}${a.deltaPct}%`}
-                          </>
-                        ) : (
-                          <>
-                            <b>{a.name}</b> 现价 ¥{f2(a.price)} 触及【{a.label} ¥{f2(a.target)}】（差 {((a.dev || 0) * 100).toFixed(2)}%）
-                          </>
-                        )}
+                        <b>{a.name}</b> 现价 ¥{f2(a.price)} ·{' '}
+                        {a.summary
+                          ? a.summary
+                          : `触及【${a.label} ¥${f2(a.target)}】（偏差 ${((a.dev || 0) * 100).toFixed(2)}%）`}
                       </span>
                     </div>
                   );
@@ -1548,8 +1599,8 @@ function AlertCenterModalInner({
               </div>
             ) : (
               <div style={{ padding: '16px', textAlign: 'center', color: 'var(--mute)', background: 'var(--surface2)', borderRadius: '8px', fontSize: '12.5px' }}>
-                当前分类暂无预警记录。<br />
-                可点击上方「🧪 演练分时异动」立即体验放量急拉与跳水预警全链路闭环。
+                当前分级暂无预警记录。<br />
+                可点击上方「🔊 试听P0 / 🎵 试听P1 / 🧪 演练异动」立即体验三级声音与视觉分级闭环。
               </div>
             )}
           </div>
@@ -1559,6 +1610,140 @@ function AlertCenterModalInner({
             知道了
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* 6. 顶栏常驻 P0 持仓救命级应急横幅（止损破位 / 冲板炸板 / 持仓跳水 / 首阴清仓令） */
+export function P0EmergencyBanner({ pool = [], onJumpCard, onOpenQuickT }) {
+  const [activeP0, setActiveP0] = useState(null);
+  const [dismissedIds, setDismissedIds] = useState(() => new Set());
+
+  useEffect(() => {
+    const onP0 = (e) => {
+      const item = e?.detail;
+      if (item && item.priority === 'P0') {
+        setActiveP0(item);
+      }
+    };
+    window.addEventListener('t-p0-emergency', onP0);
+    return () => window.removeEventListener('t-p0-emergency', onP0);
+  }, []);
+
+  if (!activeP0 || dismissedIds.has(activeP0.id)) return null;
+
+  const matchedStock = (pool || []).find(
+    (s) => String(s.code || '').padStart(6, '0') === String(activeP0.code || '').padStart(6, '0')
+  );
+
+  const dismiss = () => {
+    setDismissedIds((prev) => {
+      const next = new Set(prev);
+      next.add(activeP0.id);
+      return next;
+    });
+  };
+
+  return (
+    <div
+      role="alert"
+      style={{
+        margin: '8px auto 0',
+        maxWidth: '1280px',
+        padding: '9px 14px',
+        borderRadius: '10px',
+        background: 'linear-gradient(90deg, #991b1b, #dc2626)',
+        color: '#ffffff',
+        boxShadow: '0 4px 14px rgba(220, 38, 38, 0.28)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '10px',
+        fontSize: '12.5px',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', flex: '1 1 280px' }}>
+        <span style={{
+          padding: '2px 7px',
+          borderRadius: '99px',
+          background: '#fef08a',
+          color: '#991b1b',
+          fontWeight: 800,
+          fontSize: '11px',
+        }}>
+          🚨 P0 持仓风控令
+        </span>
+        <b>{activeP0.name} ({activeP0.code})</b>
+        <span style={{ fontFamily: 'ui-monospace,Consolas,monospace', fontWeight: 700 }}>
+          现价 ¥{f2(activeP0.price)}
+        </span>
+        <span style={{ opacity: 0.96 }}>
+          {activeP0.summary || `触及【${activeP0.label}】¥${f2(activeP0.target)}`}
+        </span>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        {matchedStock && onOpenQuickT && (
+          <button
+            type="button"
+            onClick={() => {
+              onOpenQuickT(matchedStock, '直接卖出', f2(activeP0.price));
+              dismiss();
+            }}
+            style={{
+              padding: '4px 10px',
+              borderRadius: '6px',
+              border: 'none',
+              background: '#ffffff',
+              color: '#b91c1c',
+              fontWeight: 800,
+              fontSize: '11.5px',
+              cursor: 'pointer',
+            }}
+          >
+            ⚡ 立即减仓/止损
+          </button>
+        )}
+        {activeP0.code && onJumpCard && (
+          <button
+            type="button"
+            onClick={() => {
+              onJumpCard(activeP0.code);
+              dismiss();
+            }}
+            style={{
+              padding: '4px 10px',
+              borderRadius: '6px',
+              border: '1px solid rgba(255,255,255,0.65)',
+              background: 'rgba(255,255,255,0.14)',
+              color: '#ffffff',
+              fontWeight: 700,
+              fontSize: '11.5px',
+              cursor: 'pointer',
+            }}
+          >
+            查看分时
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={dismiss}
+          style={{
+            padding: '4px 8px',
+            borderRadius: '6px',
+            border: 'none',
+            background: 'transparent',
+            color: '#fee2e2',
+            fontWeight: 700,
+            fontSize: '11.5px',
+            cursor: 'pointer',
+          }}
+          title="确认已知晓本条 P0 警报"
+        >
+          已知晓 ✕
+        </button>
       </div>
     </div>
   );

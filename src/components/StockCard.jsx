@@ -1480,11 +1480,49 @@ export default function StockCard({
           )}
         </div>
 
-        {/* 判定条与买卖点指令 */}
+        {/* 判定条与买卖点指令（融合到价预备与分时右侧拐头确认双门禁） */}
         <div className={`verdict v-${mbd[0]}`}>
           <div className="dot"></div>
           <div className="txt" style={{ flex: 1 }}>
-            <div style={{ fontWeight: 700, fontSize: '13px', marginBottom: '3px' }}>{c.title}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: '3px' }}>
+              <span style={{ fontWeight: 700, fontSize: '13px' }}>{c.title}</span>
+              {c.channelShiftTag && (
+                <span style={{ fontSize: '11px', padding: '1px 6px', borderRadius: '4px', background: '#eff6ff', color: '#1d4ed8', fontWeight: 600 }}>
+                  {c.channelShiftTag}
+                </span>
+              )}
+              {c.buyGate?.label && (
+                <span style={{
+                  fontSize: '11px',
+                  padding: '1px 7px',
+                  borderRadius: '4px',
+                  fontWeight: 700,
+                  background: c.buyGate.confirmed ? '#fef2f2' : '#fffbeb',
+                  color: c.buyGate.confirmed ? '#dc2626' : '#b45309',
+                  border: `1px solid ${c.buyGate.confirmed ? '#fecaca' : '#fde68a'}`,
+                }}>
+                  {c.buyGate.label}
+                </span>
+              )}
+              {c.sellGate?.label && (
+                <span style={{
+                  fontSize: '11px',
+                  padding: '1px 7px',
+                  borderRadius: '4px',
+                  fontWeight: 700,
+                  background: c.sellGate.confirmed ? '#f0fdf4' : c.sellGate.stage === 'STRONG_HOLD_RUN' ? '#faf5ff' : '#fff7ed',
+                  color: c.sellGate.confirmed ? '#15803d' : c.sellGate.stage === 'STRONG_HOLD_RUN' ? '#7e22ce' : '#c2410c',
+                  border: `1px solid ${c.sellGate.confirmed ? '#bbf7d0' : c.sellGate.stage === 'STRONG_HOLD_RUN' ? '#e9d5ff' : '#fed7aa'}`,
+                }}>
+                  {c.sellGate.label}
+                </span>
+              )}
+            </div>
+            {(c.buyGate?.desc || c.sellGate?.desc) && (
+              <div style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text)', marginBottom: '3px' }}>
+                🎯 分时双门禁：{c.buyGate?.desc || c.sellGate?.desc}
+              </div>
+            )}
             {c.detail ? (
               <div
                 style={{ fontSize: '12px', lineHeight: 1.6, opacity: 0.95 }}
@@ -1500,7 +1538,7 @@ export default function StockCard({
         <div className="levels">
           <div className={`lv buy ${c.mode === 'BUY' ? '' : 'off'}`}>
             <div className="k">
-              <span>正T 买入区（先买后卖）</span>
+              <span>正T 买入区（{c.buyGate?.confirmed ? '已右侧确认' : '到价等拐头'}）</span>
               <button className="pill-act" onClick={() => onOpenQuickT(stock, '正T', f2(c.inA))}>⚡ 记买</button>
             </div>
             <div className="v">{f2(c.inA)} — {f2(c.inB)}</div>
@@ -1508,15 +1546,15 @@ export default function StockCard({
           </div>
           <div className={`lv sell ${c.mode === 'BUY' ? '' : 'off'}`}>
             <div className="k">
-              <span>正T 止盈目标</span>
+              <span>正T 有效止盈（扣税费净利垫）</span>
               <button className="pill-act" onClick={() => onOpenQuickT(stock, '正T', f2(c.tp1))}>⚡ 记止盈</button>
             </div>
             <div className="v">{f2(c.tp1)} / {f2(c.tp2)}</div>
-            <div className="d">约 +{c.gain1.toFixed(1)}% ~ +{c.gain2.toFixed(1)}%</div>
+            <div className="d">约 +{c.gain1.toFixed(1)}% ~ +{c.gain2.toFixed(1)}%{c.tValidOutPx > 0 ? ` · 保底净赚线 ¥${f2(c.tValidOutPx)}` : ''}</div>
           </div>
           <div className={`lv stop ${c.mode === 'BUY' ? '' : 'off'}`}>
             <div className="k">
-              <span>正T 止损（-1.5%）</span>
+              <span>正T 止损（动态ATR防守）</span>
               <button className="pill-act" onClick={() => onOpenQuickT(stock, '正T', f2(c.slA))}>⚡ 记止损</button>
             </div>
             <div className="v">{f2(c.slA)} / {f2(c.slB)}</div>
@@ -1524,11 +1562,11 @@ export default function StockCard({
           </div>
           <div className={`lv sell ${(c.mode === 'REV' || c.mode === 'CUT') ? '' : 'off'}`}>
             <div className="k">
-              <span>倒T 卖出区（先卖后买）</span>
+              <span>倒T 卖出区（{c.sellGate?.confirmed ? '滞涨确认兑现' : '冲高滞涨再卖'}）</span>
               <button className="pill-act" onClick={() => onOpenQuickT(stock, '倒T', f2(c.outA))}>⚡ 记卖</button>
             </div>
             <div className="v">{f2(c.outA)} — {f2(c.outB)}</div>
-            <div className="d">无量冲高时减T仓</div>
+            <div className="d">无量冲高/破均线减T仓</div>
           </div>
           <div className={`lv buy ${(c.mode === 'REV' || c.mode === 'CUT') ? '' : 'off'}`}>
             <div className="k">

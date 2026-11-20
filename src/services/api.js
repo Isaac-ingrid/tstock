@@ -2,8 +2,9 @@
    A股做T执行台 · 行情数据与技术分析引擎 (api.js)
    ============================================================ */
 
-import { f2, f3, pct, money, money$, fmtIn, fvol, GRID, STOP, FLY, toast, toastOk, toastWarn, toastErr, soundChime, AUTO_FIELDS } from './utils.js';
+import { f2, f3, pct, money, money$, fmtIn, fvol, GRID, STOP, FLY, toast, toastOk, toastWarn, toastErr, soundChime, playAlertTone, AUTO_FIELDS } from './utils.js';
 import { ALERT_CENTER, saveAlerts, stampData, pool, LOG, SNAP } from './state.js';
+import { evaluateChannelHoldingDiscipline } from './risk.js';
 import { chartInd, chartEntry, chartMeta } from './chart.js';
 import { APP_PAGE_TITLE } from '../data/site.js';
 
@@ -846,6 +847,47 @@ export function calcDD(recs){
            xlNetv:netv('xl'), lNetv:netv('l'), mNetv:netv('m'), sNetv:netv('s') };
 }
 
+/* 按股票代码匹配对应同期基准指数（科创50 / 创业板指 / 深证成指 / 上证指数） */
+export function benchmarkIndexForStock(sOrCode){
+  const raw = typeof sOrCode === 'object' ? (sOrCode?.code || '') : String(sOrCode || '');
+  const code6 = String(raw).replace(/\D/g, '').padStart(6, '0');
+  if (code6.startsWith('68')) return { tcode: 'sh000688', name: '科创50' };
+  if (code6.startsWith('30')) return { tcode: 'sz399006', name: '创业板' };
+  if (code6.startsWith('00')) return { tcode: 'sz399001', name: '深成指' };
+  return { tcode: 'sh000001', name: '上证' };
+}
+
+const _benchMinCache = {};
+const _benchInflight = {};
+const BENCH_MIN_TTL = 25000;
+
+export async function fetchBenchMinute(sOrCode, force = false){
+  const bm = benchmarkIndexForStock(sOrCode);
+  const now = Date.now();
+  const cached = _benchMinCache[bm.tcode];
+  if (!force && cached && now - cached.at < BENCH_MIN_TTL) {
+    return cached.data;
+  }
+  if (_benchInflight[bm.tcode]) {
+    return _benchInflight[bm.tcode];
+  }
+  const job = fetchMinute(bm.tcode)
+    .then((mn) => {
+      if (mn && Array.isArray(mn.pts) && mn.pts.length > 0 && mn.prev > 0) {
+        const data = { tcode: bm.tcode, name: bm.name, date: mn.date || '', prev: mn.prev, pts: mn.pts };
+        _benchMinCache[bm.tcode] = { at: Date.now(), data };
+        return data;
+      }
+      return cached ? cached.data : null;
+    })
+    .catch(() => (cached ? cached.data : null))
+    .finally(() => {
+      delete _benchInflight[bm.tcode];
+    });
+  _benchInflight[bm.tcode] = job;
+  return job;
+}
+
 /* 图表数据装载：按当前周期取数并缓存。日K 直接复用 loadStock 已维护的 s._ks。 */
 const CK_TTL = 45000;
 export async function loadChart(s, force){
@@ -858,7 +900,20 @@ export async function loadChart(s, force){
   const ttl = p === 'rt' ? 20000 : CK_TTL;
   if (!force && c && now - c.at < ttl) return c;
   if (p === 'rt'){
-    s._k[p] = chartEntry('line', { min: await fetchMinute(s.tcode) });
+    const [minData, benchData] = await Promise.all([
+      fetchMinute(s.tcode),
+      fetchBenchMinute(s, false),
+    ]);
+    if (minData && benchData) {
+      minData.bench = benchData;
+    }
+    if (minData && Array.isArray(minData.pts)) {
+      const mnDate = String(minData.date || '').replace(/\D/g, '').slice(0, 8);
+      if (mnDate === todayStr().replace(/-/g, '')) {
+        s._rtPts = minData.pts;
+      }
+    }
+    s._k[p] = chartEntry('line', { min: minData });
   } else if (p === 'day'){
     if (!s._ks || !s._ks.length){
       try { s._ks = await fetchKline(s.tcode); } catch(_) { s._ks = []; }
@@ -871,15 +926,16 @@ export async function loadChart(s, force){
   }
   return s._k[p];
 }
-/* 极速单票刷新（供 8 秒盯盘聚焦使用）：仅并发拉取实时行情 + 分时分钟线，不重拉全量日K */
+/* 极速单票刷新（供 8 秒盯盘聚焦使用）：仅并发拉取实时行情 + 分时分钟线 + 同期指数基准，不重拉全量日K */
 export async function refreshSingleFastRt(s){
   if (!s) return s;
   if (!s.tcode && s.code) s.tcode = s.secid ? tencentCode(s.secid) : tcodeFromCode(s.code);
   if (!s.tcode) return s;
   const tc = s.tcode;
-  const [qRes, minRes] = await Promise.allSettled([
+  const [qRes, minRes, benchRes] = await Promise.allSettled([
     fetchQuotes([tc]),
     fetchMinute(tc),
+    fetchBenchMinute(s, false),
   ]);
   if (qRes.status === 'fulfilled' && qRes.value && qRes.value[tc] && qRes.value[tc].prevClose) {
     const q = qRes.value[tc];
@@ -907,6 +963,9 @@ export async function refreshSingleFastRt(s){
     Object.assign(s, upd);
   }
   if (minRes.status === 'fulfilled' && minRes.value && Array.isArray(minRes.value.pts)) {
+    if (benchRes.status === 'fulfilled' && benchRes.value) {
+      minRes.value.bench = benchRes.value;
+    }
     s._k = s._k || {};
     s._k['rt'] = chartEntry('line', { min: minRes.value });
     const mnDate = String(minRes.value.date || '').replace(/\D/g, '').slice(0, 8);
@@ -2078,17 +2137,61 @@ export function calc(s){
     gate3 += ` · 5分${vm.label}(${vm.r3 != null ? vm.r3.toFixed(2) : '—'}×)`;
   }
 
-  // ---- 确定价位：以"现价所处格位"为锚，上下各取两格（每日自动跟随，无需手调） ----
+  // ---- 确定价位：融合大盘双通道与龙头身位动态偏移 + 真实税费有效止盈垫 ----
+  const me = (MKT && MKT.gate) ? MKT.gate : null;
+  const mktLevelPre = me ? me.level : 'NA';
+  const isUpChannel = mktLevelPre === 'OK';
+  const isDownChannel = mktLevelPre === 'BAD' || mktLevelPre === 'WARN';
+  const isFrontLeader = bull && (
+    s.leaderRole === 'DRAGON' ||
+    s.leaderRole === 'FRONT_CORE' ||
+    String(s.strategyTag || '').includes('龙') ||
+    String(s.memo || '').includes('龙') ||
+    (chg >= 2.0 && +s.avg > 0 && +s.price >= +s.avg * 0.996)
+  );
+
   const gNow = chg / effGrid;
   const kUp1 = Math.floor(gNow) + 1, kUp2 = kUp1 + 1;   // 现价上方两格 = 压力位
   const kDn1 = Math.ceil(gNow)  - 1, kDn2 = kDn1 - 1;   // 现价下方两格 = 支撑位
-  const inA  = L(kDn1), inB = L(kDn2);                  // 正T买入区
-  const outA = L(kUp1), outB = L(kUp2);                 // 倒T卖出区
+  let inA  = L(kDn1), inB = L(kDn2);                    // 正T买入区
+  let outA = L(kUp1), outB = L(kUp2);                   // 倒T卖出区
+  let channelShiftTag = '';
+
+  if (isUpChannel && (isFrontLeader || bull) && +s.avg > 0 && +s.price > 0) {
+    // 上升通道前排核心票往往回踩分时均价线即企稳拉起，适度上移第一买点防踏空
+    const vwapAnchor = clampPx(Math.min(+s.price * 0.998, +s.avg * 0.9965));
+    if (vwapAnchor > inA && (!floorPx || vwapAnchor >= floorPx)) {
+      inB = clampPx(Math.min(vwapAnchor * (1 - effGrid / 120), inA));
+      inA = vwapAnchor;
+      channelShiftTag = '📈 上升前排·买点贴均线';
+    }
+  } else if (isDownChannel && pc > 0) {
+    // 弱势/下跌通道：买点下移只接极端分歧，卖点前移见好就收
+    inA = clampPx(inA * (1 - (effGrid * 0.35) / 100));
+    inB = clampPx(inB * (1 - (effGrid * 0.35) / 100));
+    if (+s.price > 0) {
+      outA = clampPx(Math.max(+s.price * 1.004, outA * (1 - (effGrid * 0.25) / 100)));
+    }
+    channelShiftTag = '🛡️ 弱势通道·严进快出';
+  }
+
   const bkA  = inA, bkB = inB;                          // 倒T接回位
+  const shPre = Math.round(+s.shares || 0);
+  const tPreLots = Math.floor((shPre - Math.round(shPre * 0.7)) / 100) * 100;
+  const calcLot = Math.max(100, tPreLots >= 300 ? Math.floor(tPreLots / 300) * 100 : (tPreLots >= 100 ? 100 : 500));
+  const refBuyPx = (+s.cost > 0 && +s.price > 0 && Math.abs(+s.cost - +s.price) / +s.price <= 0.08)
+    ? +s.cost
+    : (inA > 0 ? inA : (+s.price || pc || 10));
+  const buyCommEst = Math.max(5, refBuyPx * calcLot * 0.00025);
+  const netTargetAmt = refBuyPx * calcLot * 0.008;      // 扣双向佣金+印花税后净赚 ≥0.8% 有效止盈垫
+  const tValidOutPx = refBuyPx > 0
+    ? clampPx(Math.ceil(((refBuyPx * calcLot + buyCommEst + netTargetAmt + 5) / (calcLot * (1 - 0.0005))) * 100) / 100)
+    : 0;
+
   const tp1Pct = Math.max(0.025, (effGrid * 2.0) / 100);
   const tp2Pct = Math.max(0.045, (effGrid * 3.5) / 100);
-  const tp1  = clampPx(inA * (1 + tp1Pct));             // 正T第一止盈（按动态步长 2 格起）
-  const tp2  = clampPx(inA * (1 + tp2Pct));             // 正T第二止盈（按动态步长 3.5 格起，恒高于 tp1）
+  const tp1  = clampPx(Math.max(inA * (1 + tp1Pct), tValidOutPx)); // 正T第一止盈（保底覆盖税费+0.8%净利）
+  const tp2  = clampPx(Math.max(tp1 * 1.012, inA * (1 + tp2Pct))); // 正T第二止盈（恒高于 tp1）
   const slA  = clampPx(inA * (1 - effStop)), slB = clampPx(inB * (1 - effStop));
   const fly  = clampPx(outA * (1 + FLY));               // 卖飞线
   const gain1 = inA > 0 ? (tp1 - inA) / inA * 100 : 0;
@@ -2140,9 +2243,8 @@ export function calc(s){
   }
 
   // ---- 闸门4：市场环境（外生约束，可一票否决正T） ----
-  const me = (MKT && MKT.gate) ? MKT.gate : null;
   let gate4 = '数据未加载（点上方「刷新全部」或等待自动取数）';
-  let g4cls = 'wait', mktLevel = me ? me.level : 'NA';
+  let g4cls = 'wait', mktLevel = mktLevelPre;
   if (me){
     if (me.level === 'OK')        { gate4 = '市场环境中性偏多，不构成额外约束'; g4cls='ok'; }
     else if (me.level === 'WARN') { gate4 = '指数在 MA20 下方 → 做T仓位减半、止损从紧'; g4cls='warn'; }
@@ -2166,28 +2268,23 @@ export function calc(s){
       (ta.v20 != null && +s.price < ta.v20 && ta.ma20Rising === false && ta.arrange === '空头排列') ||
       (ta.breaks && ta.breaks.some(b => b.lv === '严重' && b.t.includes('跌破20日箱底')));
 
-    // 1) 严重破位硬熔断优先检查，绝不允许被“爆发点”绕过
     if (isSevereBreak) {
       brokenLock = true;
       breakDesc = (ta.breaks && ta.breaks.find(b => b.lv === '严重')?.t) || '跌破20日箱底或MA20生命线';
       if (mode === 'BUY') {
-        mode = 'REV'; // 强制转为倒T
+        mode = 'REV';
         vcls = 'v-warn';
         title = '⛔ 技术形态破位走坏 —— 触发防套锁，严禁正T低吸！';
         detail = `现价已【${breakDesc}】，下方支撑彻底失效并转化为上方沉重阻力。在此单边阴跌途中严禁盲目接飞刀做正T！已锁定买入建议，仅允许反弹抽到 <b>${f2(outA)} ~ ${f2(outB)}</b> 时倒T减仓避险。`;
       }
-    }
-    // 2) 爆发点判定（仅在大盘非 BAD、未严重破位且日内空间达标时生效）
-    else if (ta.ignition && mktLevel !== 'BAD' && grid >= 3) {
+    } else if (ta.ignition && mktLevel !== 'BAD' && grid >= 3) {
       ignitionActive = true;
       ignitionTag = ta.ignition.tag;
       mode = 'BUY';
       vcls = 'v-buy';
       title = '🚀 放量爆发点确立 —— 站稳 MA20 反包，顺势正T！';
       detail = `${ta.ignition.desc} 且大盘与箱体无系统性破位，顺势执行正T进攻，止损严格守 ${f2(slA)}。`;
-    }
-    // 3) 阴跌止跌十字星 / 金针探底 / 极致地量（大盘非 BAD 且未严重破位时提示拐点准备）
-    else if (ta.reversal && mktLevel !== 'BAD') {
+    } else if (ta.reversal && mktLevel !== 'BAD') {
       reversalActive = true;
       reversalTag = ta.reversal.tag;
       if (mode === 'BUY' || mode === 'WAIT') {
@@ -2195,6 +2292,124 @@ export function calc(s){
         detail = `${ta.reversal.desc}。允许在止跌支撑 ¥${f2(ta.reversal.support)} 附近以极轻仓（10%）试探性做正T，跌破该低点严格执行止损。`;
       }
     }
+  }
+
+  // ---- 闸门6：「价格到位预备 + 分时拐头右侧确认」双门禁 ----
+  const pxCur = +s.price || 0;
+  const rtPts = Array.isArray(s._rtPts) && s._rtPts.length >= 4 ? s._rtPts : null;
+  const nearBuy = pxCur > 0 && inA > 0 && pxCur <= inA * 1.006 && pxCur >= (slA > 0 ? slA * 0.992 : 0);
+  const approachingBuy = !nearBuy && pxCur > 0 && inA > 0 && ((pxCur - inA) / inA) <= 0.012 && pxCur >= inA;
+
+  const fallingFast = Boolean(
+    (s._anomaly && s._anomaly.type === 'waterfall_down') ||
+    (vm && vm.state === 'breakdown') ||
+    (rtPts && rtPts.length >= 4 &&
+      rtPts[rtPts.length - 1].price < rtPts[rtPts.length - 2].price &&
+      rtPts[rtPts.length - 2].price <= rtPts[rtPts.length - 3].price &&
+      rtPts[rtPts.length - 1].price < rtPts[rtPts.length - 4].price * 0.9965)
+  );
+
+  let rightTurnUp = false;
+  if (!fallingFast) {
+    if (rtPts && rtPts.length >= 4) {
+      const tail = rtPts.slice(-5);
+      const minP = Math.min(...tail.map((x) => x.price));
+      const lastP = rtPts[rtPts.length - 1];
+      const prev1P = rtPts[rtPts.length - 2];
+      rightTurnUp =
+        lastP.price >= prev1P.price &&
+        lastP.price >= minP * 1.0012 &&
+        (lastP.vol <= (rtPts[rtPts.length - 3]?.vol || lastP.vol) * 1.4 ||
+          (lastP.avg > 0 && lastP.price >= lastP.avg * 0.999));
+    } else if (vm && vm.state === 'pullback' && vsAvg != null && vsAvg >= -1.2) {
+      rightTurnUp = true;
+    }
+  }
+
+  let buyGate = { stage: 'IDLE', confirmed: false, label: '', desc: '' };
+  if (nearBuy && rightTurnUp && !brokenLock && !bear && mktLevel !== 'BAD') {
+    buyGate = {
+      stage: 'CONFIRMED_BUY',
+      confirmed: true,
+      label: '🔴 右侧确认买点',
+      desc: '已触及买区且分时缩量止跌拐头，可执行分批挂买',
+    };
+  } else if (nearBuy && fallingFast) {
+    buyGate = {
+      stage: 'FALLING_HOLD',
+      confirmed: false,
+      label: '🟡 到价急跌·禁急接',
+      desc: '虽已跌入买区但分时仍在顺势下杀，等走平拐头再接',
+    };
+  } else if (nearBuy) {
+    buyGate = {
+      stage: 'AT_ZONE_WATCH',
+      confirmed: false,
+      label: '🟡 已入买区·等拐头',
+      desc: '现价已进入买点带，盯紧下一分钟止跌抬升或收回均价线',
+    };
+  } else if (approachingBuy) {
+    buyGate = {
+      stage: 'APPROACHING_BUY',
+      confirmed: false,
+      label: '🎯 临近买区·预备',
+      desc: `距第一买点 ¥${f2(inA)} 仅差 ${(((pxCur - inA) / inA) * 100).toFixed(2)}%，准备盯盘`,
+    };
+  }
+
+  const nearSell = pxCur > 0 && outA > 0 && pxCur >= outA * 0.995;
+  const approachingSell = !nearSell && pxCur > 0 && outA > 0 && ((outA - pxCur) / outA) <= 0.010 && pxCur <= outA;
+  const limitBrokenOrRoll = Boolean(
+    (s._anomaly && s._anomaly.type === 'limit_broken') ||
+    (vm && vm.state === 'diverge') ||
+    (rtPts && rtPts.length >= 4 && (() => {
+      const tail = rtPts.slice(-6);
+      const maxP = Math.max(...tail.map((x) => x.price));
+      const lastP = rtPts[rtPts.length - 1];
+      const prev1P = rtPts[rtPts.length - 2];
+      return (lastP.price <= maxP * 0.9972 && lastP.price <= prev1P.price) ||
+        (lastP.avg > 0 && lastP.price < lastP.avg * 0.999);
+    })())
+  );
+  const strongSurgeHold = Boolean(
+    nearSell &&
+    !limitBrokenOrRoll &&
+    ((ceilPx > 0 && pxCur >= ceilPx * 0.992) ||
+      (rtPts && rtPts.length >= 4 &&
+        rtPts[rtPts.length - 1].price >= rtPts[rtPts.length - 2].price &&
+        rtPts[rtPts.length - 1].price >= (rtPts[rtPts.length - 1].avg || 0) * 1.003 &&
+        vr >= 1.2))
+  );
+
+  let sellGate = { stage: 'IDLE', confirmed: false, label: '', desc: '' };
+  if ((nearSell && limitBrokenOrRoll) || (s._anomaly && s._anomaly.type === 'limit_broken')) {
+    sellGate = {
+      stage: 'CONFIRMED_SELL',
+      confirmed: true,
+      label: '🟢 右侧确认卖点',
+      desc: '已触及压力卖区且分时冲高滞涨回落，果断分批高抛锁盈',
+    };
+  } else if (strongSurgeHold) {
+    sellGate = {
+      stage: 'STRONG_HOLD_RUN',
+      confirmed: false,
+      label: '🟣 越卖区强攻·防卖飞',
+      desc: '虽已越过第一卖点但分时量价齐升站稳均线，可延后止盈等拐头再兑现',
+    };
+  } else if (nearSell) {
+    sellGate = {
+      stage: 'AT_SELL_WATCH',
+      confirmed: false,
+      label: '🟠 已入卖区·盯滞涨',
+      desc: '现价已进入卖区，若冲高无量或跌破分时均线立即分批高抛',
+    };
+  } else if (approachingSell) {
+    sellGate = {
+      stage: 'APPROACHING_SELL',
+      confirmed: false,
+      label: '🟠 临近卖区·预备',
+      desc: `距第一卖点 ¥${f2(outA)} 仅差 ${(((outA - pxCur) / outA) * 100).toFixed(2)}%，预备锁盈`,
+    };
   }
 
   // ---- 仓位（七底三仓 · A股整百股/手实盘约束） ----
@@ -2212,6 +2427,7 @@ export function calc(s){
   return { pc, amp, grid, effGrid, effStop, chg, vr, vsAvg, vm, trend, bull, bear, heavy, light,
            gate1, g1cls, gate2, gate3, gate4, g4cls, mktLevel, mode, vcls, title, detail,
            inA, inB, tp1, tp2, slA, slB, outA, outB, bkA, bkB, fly,
+           tValidOutPx, channelShiftTag, buyGate, sellGate, isFrontLeader,
            gain1, gain2, sh, base, t, t1, tLots, t1Lots, cap, sellFlyTriggered,
            brokenLock, breakDesc, reversalActive, reversalTag, ignitionActive, ignitionTag };
 }
@@ -2465,14 +2681,45 @@ export async function loadResearch(s, force){
 }
 
 
-/* ===================== 价格到位提醒 & 盘中分时异动雷达 ===================== */
-const NEAR_PCT = 0.004;
-const _hitSeen = {};
+/* ===================== 价格到位提醒 & 盘中分时异动雷达（15分钟冷却防抖 + P0/P1/P2 三级分级） ===================== */
+const NEAR_PCT = 0.0045;
+const PRICE_ALERT_CD_MS = 15 * 60 * 1000; // 同股同档位 15 分钟防乒乓刷屏冷却
+const ANOM_ALERT_CD_MS = 15 * 60 * 1000;  // 盘中异动 15 分钟同向冷却
+const PRIO_RANK = { P2: 1, P1: 2, P0: 3 };
+
+const _priceAlertCd = (() => {
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      const raw = JSON.parse(sessionStorage.getItem('t-price-alert-cd') || '{}');
+      if (raw && typeof raw === 'object') return raw;
+    }
+  } catch (_) {}
+  return {};
+})();
 const _anomCooldown = {};
 const _quoteRing = {};
 let _quoteRingDay = '';
 const _mktSnapRing = {};
 const _mktAlertCd = {};
+
+function savePriceAlertCd() {
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem('t-price-alert-cd', JSON.stringify(_priceAlertCd));
+    }
+  } catch (_) {}
+}
+
+function shouldFirePriceAlert(cdKey, priority, now = Date.now(), cdMs = PRICE_ALERT_CD_MS) {
+  const prev = _priceAlertCd[cdKey];
+  const rank = PRIO_RANK[priority] || 1;
+  if (prev && now - prev.at < cdMs && rank <= (prev.rank || 1)) {
+    return false;
+  }
+  _priceAlertCd[cdKey] = { at: now, rank };
+  savePriceAlertCd();
+  return true;
+}
 
 function isAlertMuted(){
   try {
@@ -2486,10 +2733,13 @@ function isAlertMuted(){
 function pushSystemAlertRecord(entry){
   try {
     const hist = JSON.parse(localStorage.getItem('t-system-alerts') || '[]');
-    const updated = [entry, ...(Array.isArray(hist) ? hist : [])].slice(0, 60);
+    const updated = [entry, ...(Array.isArray(hist) ? hist : [])].slice(0, 80);
     localStorage.setItem('t-system-alerts', JSON.stringify(updated));
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('t-alert-triggered', { detail: updated }));
+      if (entry && entry.priority === 'P0') {
+        window.dispatchEvent(new CustomEvent('t-p0-emergency', { detail: entry }));
+      }
     }
     return updated;
   } catch (_) {
@@ -2506,69 +2756,210 @@ export function checkPriceAlerts(targetPool = null){
   }
   const list = Array.isArray(targetPool) ? targetPool : pool;
   if (!Array.isArray(list) || !list.length) return;
-  const hits = [];
-  list.forEach(s=>{
+  const now = Date.now();
+  const candidates = [];
+
+  list.forEach((s) => {
     const p = +s.price;
     if (!p) return;
-    let c; try{ c = calc(s); }catch(_){ return; }
-    const levels = [
-      ['买点', c.inA],
-      ['第二买点', c.inB],
-      ['卖点', c.outA],
-      ['卖飞线', c.fly],
-    ];
-    if (+s.shares > 0 && c.slA > 0) {
-      levels.push(['止损线', c.slA]);
+    const code6 = String(s.code || '').replace(/\D/g, '').padStart(6, '0');
+    const held = (+s.shares || 0) > 0;
+    let c;
+    try { c = calc(s); } catch (_) { return; }
+
+    // 1) 持仓止损红线检查（最高优先级 P0）
+    if (held && c.slA > 0 && p <= c.slA * (1 + NEAR_PCT * 0.5)) {
+      const dev = Math.abs(p - c.slA) / c.slA;
+      candidates.push({
+        cdKey: `${code6}|stop`,
+        code: code6,
+        name: s.name || code6,
+        priority: 'P0',
+        label: '触及止损线',
+        lv: c.slA,
+        p,
+        dev,
+        summary: `持仓跌破/触及防守止损线 ¥${f2(c.slA)}，严防深套，请按纪律执行止损或反抽减仓`,
+      });
     }
-    levels.forEach(pair=>{
-      const label = pair[0], lv = +pair[1];
-      if (!lv) return;
-      const dev = Math.abs(p - lv) / lv;
-      if (dev <= NEAR_PCT) hits.push({ key: s.code + '|' + label, name: s.name, label, lv, p, dev });
-    });
+
+    // 2) 持仓双通道实战纪律 P0 检查（首阴清仓令 / 14:40后 T+1 收绿止损令）
+    if (held) {
+      try {
+        const disc = evaluateChannelHoldingDiscipline({ stock: s, tradeLogs: LOG });
+        if (disc?.isFirstYinAfterStreak) {
+          candidates.push({
+            cdKey: `${code6}|first_yin`,
+            code: code6,
+            name: s.name || code6,
+            priority: 'P0',
+            label: '首阴清仓令',
+            lv: c.outA || p,
+            p,
+            dev: 0,
+            cdMs: 30 * 60 * 1000,
+            summary: `弱势通道前 ${disc.prevRedStreak} 日连红后今日转阴（首阴），严防利润回撤，果断锁润清仓`,
+          });
+        } else if (disc?.isT1Day && disc.liveChg <= -0.25 && disc.isNearOrAfterClose) {
+          candidates.push({
+            cdKey: `${code6}|t1_cut`,
+            code: code6,
+            name: s.name || code6,
+            priority: 'P0',
+            label: 'T+1收绿砍仓令',
+            lv: p,
+            p,
+            dev: 0,
+            cdMs: 30 * 60 * 1000,
+            summary: '弱势通道建仓次日尾盘仍收绿，拒绝幻想第3天反包，果断砍仓换强',
+          });
+        }
+      } catch (_) {}
+    }
+
+    // 3) 买点与卖点双门禁分级提醒（右侧确认为 P1 响铃；仅进入观察区未拐头为 P2 静默记录）
+    if (c.inA > 0) {
+      const devBuy1 = Math.abs(p - c.inA) / c.inA;
+      if (c.buyGate?.confirmed) {
+        candidates.push({
+          cdKey: `${code6}|buy1`,
+          code: code6,
+          name: s.name || code6,
+          priority: 'P1',
+          label: '右侧确认买点',
+          lv: c.inA,
+          p,
+          dev: devBuy1,
+          summary: `${c.buyGate.desc}（参考买价 ¥${f2(c.inA)}，有效止盈 ¥${f2(c.tp1)}，止损 ¥${f2(c.slA)}）`,
+        });
+      } else if (devBuy1 <= NEAR_PCT) {
+        candidates.push({
+          cdKey: `${code6}|buy1`,
+          code: code6,
+          name: s.name || code6,
+          priority: 'P2',
+          label: c.buyGate?.stage === 'FALLING_HOLD' ? '到买区急跌禁接' : '进入买区待拐头',
+          lv: c.inA,
+          p,
+          dev: devBuy1,
+          summary: c.buyGate?.desc || `现价触及买区 ¥${f2(c.inA)}，等待分时缩量止跌拐头确认`,
+        });
+      }
+    }
+
+    if (c.inB > 0 && Math.abs(p - c.inB) / c.inB <= NEAR_PCT) {
+      const devBuy2 = Math.abs(p - c.inB) / c.inB;
+      candidates.push({
+        cdKey: `${code6}|buy2`,
+        code: code6,
+        name: s.name || code6,
+        priority: c.buyGate?.confirmed ? 'P1' : 'P2',
+        label: c.buyGate?.confirmed ? '二买右侧确认' : '触及第二买区',
+        lv: c.inB,
+        p,
+        dev: devBuy2,
+        summary: `触及第二支撑买区 ¥${f2(c.inB)}（${c.buyGate?.confirmed ? '分时已止跌拐头' : '观察止跌信号'}）`,
+      });
+    }
+
+    if (c.outA > 0) {
+      const devSell1 = Math.abs(p - c.outA) / c.outA;
+      if (c.sellGate?.confirmed && held) {
+        candidates.push({
+          cdKey: `${code6}|sell1`,
+          code: code6,
+          name: s.name || code6,
+          priority: 'P1',
+          label: '右侧确认卖点',
+          lv: c.outA,
+          p,
+          dev: devSell1,
+          summary: `${c.sellGate.desc}（第一卖点 ¥${f2(c.outA)}${c.tValidOutPx > 0 ? `，扣费净赚线 ¥${f2(c.tValidOutPx)}` : ''}）`,
+        });
+      } else if (devSell1 <= NEAR_PCT) {
+        candidates.push({
+          cdKey: `${code6}|sell1`,
+          code: code6,
+          name: s.name || code6,
+          priority: 'P2',
+          label: c.sellGate?.stage === 'STRONG_HOLD_RUN' ? '越卖区强攻观察' : '进入卖区盯滞涨',
+          lv: c.outA,
+          p,
+          dev: devSell1,
+          summary: c.sellGate?.desc || `现价进入压力卖区 ¥${f2(c.outA)}，盯紧分时是否冲高滞涨`,
+        });
+      }
+    }
+
+    if (held && c.fly > 0 && Math.abs(p - c.fly) / c.fly <= NEAR_PCT) {
+      const devFly = Math.abs(p - c.fly) / c.fly;
+      candidates.push({
+        cdKey: `${code6}|fly`,
+        code: code6,
+        name: s.name || code6,
+        priority: 'P1',
+        label: '触及卖飞线',
+        lv: c.fly,
+        p,
+        dev: devFly,
+        summary: `已触及卖飞保护线 ¥${f2(c.fly)}，倒T筹码严禁追高接回`,
+      });
+    }
   });
-  hits.sort((a,b)=>a.dev - b.dev);
+
+  candidates.sort((a, b) => (PRIO_RANK[b.priority] - PRIO_RANK[a.priority]) || (a.dev - b.dev));
+
+  const activeTitleHit = candidates.find((h) => h.priority === 'P0' || h.priority === 'P1');
   if (typeof document !== 'undefined') {
-    document.title = hits.length
-      ? '⚡' + hits[0].name + ' ' + hits[0].p.toFixed(2) + ' 触及' + hits[0].label
+    document.title = activeTitleHit
+      ? `${activeTitleHit.priority === 'P0' ? '🚨' : '🎯'}${activeTitleHit.name} ${activeTitleHit.p.toFixed(2)} ${activeTitleHit.label}`
       : APP_PAGE_TITLE;
   }
-  const freshHits = hits.filter(h=>!_hitSeen[h.key]);
-  if (freshHits.length > 0) {
-    try { soundChime(); } catch (_) {}
-  }
-  freshHits.forEach(h=>{
-    _hitSeen[h.key] = 1;
-    const msg = h.name + ' ' + h.p.toFixed(2) + ' 已到「' + h.label + ' ' + h.lv.toFixed(2) + '」（差 ' + (h.dev*100).toFixed(2) + '%）';
-    toastWarn(msg);
+
+  let highestFiredTone = null;
+  candidates.forEach((h) => {
+    if (!shouldFirePriceAlert(h.cdKey, h.priority, now, h.cdMs || PRICE_ALERT_CD_MS)) return;
+
     pushSystemAlertRecord({
-      id: Date.now() + Math.random(),
+      id: now + Math.random(),
       category: 'price',
+      priority: h.priority,
       time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
       name: h.name,
-      code: h.key.split('|')[0],
+      code: h.code,
       label: h.label,
       price: h.p,
       target: h.lv,
       dev: h.dev,
+      summary: h.summary,
     });
-    try {
-      if (typeof window !== 'undefined' && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-        new Notification(`⚡ 做T到价提醒: ${h.name} 触及${h.label}`, {
-          body: `现价 ¥${h.p.toFixed(2)}，目标位 ¥${h.lv.toFixed(2)}，偏差 ${(h.dev*100).toFixed(2)}%`
-        });
+
+    if (h.priority === 'P0' || h.priority === 'P1') {
+      if (!highestFiredTone || PRIO_RANK[h.priority] > PRIO_RANK[highestFiredTone]) {
+        highestFiredTone = h.priority;
       }
-    } catch (_) {}
+      const msg = `${h.priority === 'P0' ? '🚨' : '🎯'} ${h.name} ¥${h.p.toFixed(2)} · ${h.label}（${h.summary}）`;
+      if (h.priority === 'P0') toastErr(msg);
+      else toastWarn(msg);
+
+      try {
+        if (typeof window !== 'undefined' && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          new Notification(`${h.priority === 'P0' ? '🚨 P0持仓风控' : '🎯 P1确认信号'}: ${h.name} ${h.label}`, {
+            body: h.summary,
+          });
+        }
+      } catch (_) {}
+    }
   });
-  Object.keys(_hitSeen).forEach(k=>{ if (!hits.some(h=>h.key === k)) delete _hitSeen[k]; });
+
+  if (highestFiredTone) {
+    try { playAlertTone(highestFiredTone); } catch (_) {}
+  }
 }
 
 /**
- * 盘中分时异动雷达：零额外网络请求复用 s._rtPts（当日1分钟分时序列）+ 报价环形缓冲兜底
- * 自动捕获三类高危/高优短线异动：
- *   1. 🚀 放量急拉（4~5分钟急涨 ≥1.8%/2.5% 且分钟量能脉冲 ≥1.8× 均量，站上分时均线）
- *   2. 🌊 放量跳水（4~5分钟急跌 ≤-1.8%/-2.5% 且放量宣泄或跌穿分时均线 ≥0.8%）
- *   3. 💥 冲板回落（日内最高触及涨停板后炸板回落 ≥2.0%/3.2%）
+ * 盘中分时异动雷达：零额外网络请求复用 s._rtPts + 报价环形缓冲兜底
+ * 支持 15 分钟同向冷却与 P0(持仓炸板/跳水) / P1(持仓急拉或自选暴跌) / P2(普通自选急拉) 分级
  */
 export function checkIntradayAnomalies(targetPool = null){
   const list = Array.isArray(targetPool) ? targetPool : pool;
@@ -2579,11 +2970,14 @@ export function checkIntradayAnomalies(targetPool = null){
   if (_quoteRingDay !== today) {
     Object.keys(_quoteRing).forEach((k) => delete _quoteRing[k]);
     Object.keys(_anomCooldown).forEach((k) => delete _anomCooldown[k]);
+    Object.keys(_priceAlertCd).forEach((k) => delete _priceAlertCd[k]);
+    savePriceAlertCd();
     _quoteRingDay = today;
   }
 
   const triggered = [];
   const muted = isAlertMuted();
+  let highestTone = null;
 
   list.forEach((s) => {
     if (!s) return;
@@ -2592,14 +2986,13 @@ export function checkIntradayAnomalies(targetPool = null){
     const pc = +s.prevClose || 0;
     const hi = +s.high || px;
     const avgPx = +s.avg || px;
+    const held = (+s.shares || 0) > 0;
     if (!code6 || !(px > 0) || !(pc > 0)) return;
 
-    // 清理超过 12 分钟的过期异动角标
     if (s._anomaly && s._anomaly.at && now - s._anomaly.at > 12 * 60 * 1000) {
       delete s._anomaly;
     }
 
-    // 维护轻量级实时报价环形窗口（保留近 8 分钟快照，供无 _rtPts 时兜底计算）
     const ring = _quoteRing[code6] || (_quoteRing[code6] = []);
     if (!ring.length || now - ring[ring.length - 1].at >= 6000) {
       ring.push({ at: now, price: px, vol: +s.vol || 0, avg: avgPx });
@@ -2627,7 +3020,6 @@ export function checkIntradayAnomalies(targetPool = null){
         deltaPct = ((px - refPrice) / refPrice) * 100;
         hasWindow = true;
       }
-      // 剔除 09:30~09:31 集合竞价脉冲，计算盘中常态分钟均量与最新 2 分钟爆发倍数
       const normVols = pts
         .slice(0, -2)
         .filter((p) => p && String(p.t) > '0931' && +p.vol >= 0)
@@ -2661,6 +3053,7 @@ export function checkIntradayAnomalies(targetPool = null){
     if (touchedLimit && dropFromHiPct <= brokenDropPct) {
       anom = {
         type: 'limit_broken',
+        priority: held ? 'P0' : 'P1',
         label: '冲板回落',
         badge: '💥 冲板炸板回落',
         level: 'danger',
@@ -2673,6 +3066,7 @@ export function checkIntradayAnomalies(targetPool = null){
     } else if (hasWindow && deltaPct <= dnFastPct && (volBurst >= 1.6 || vsAvgPct <= -0.8)) {
       anom = {
         type: 'waterfall_down',
+        priority: held ? 'P0' : 'P1',
         label: '放量跳水',
         badge: '🌊 分时放量跳水',
         level: 'danger',
@@ -2685,6 +3079,7 @@ export function checkIntradayAnomalies(targetPool = null){
     } else if (hasWindow && deltaPct >= upFastPct && volBurst >= 1.8 && (avgPx <= 0 || px >= avgPx * 0.998)) {
       anom = {
         type: 'rocket_up',
+        priority: held ? 'P1' : 'P2',
         label: '放量急拉',
         badge: '🚀 分时放量急拉',
         level: 'surge',
@@ -2700,20 +3095,17 @@ export function checkIntradayAnomalies(targetPool = null){
 
     s._anomaly = { ...anom, at: now };
     const cdKey = `${code6}|${anom.type}`;
-    if (_anomCooldown[cdKey] && now - _anomCooldown[cdKey] < 10 * 60 * 1000) {
-      return; // 10 分钟同向去重冷却
+    if (_anomCooldown[cdKey] && now - _anomCooldown[cdKey] < ANOM_ALERT_CD_MS) {
+      return; // 15 分钟同向去重冷却
     }
     _anomCooldown[cdKey] = now;
     triggered.push({ stock: s, anom });
 
     if (!muted) {
-      const toastMsg = `${anom.badge} · ${s.name || code6} 现价 ¥${px.toFixed(2)}（${anom.summary}）`;
-      if (anom.type === 'rocket_up') toastOk(toastMsg);
-      else toastErr(toastMsg);
-
       pushSystemAlertRecord({
         id: now + Math.random(),
         category: 'anomaly',
+        priority: anom.priority,
         anomalyType: anom.type,
         time: anom.time,
         name: s.name || code6,
@@ -2726,21 +3118,30 @@ export function checkIntradayAnomalies(targetPool = null){
         summary: anom.summary,
       });
 
-      if (typeof document !== 'undefined') {
-        document.title = `${anom.type === 'rocket_up' ? '🚀' : '🚨'}${s.name || code6} ${anom.label} ${anom.deltaPct > 0 ? '+' : ''}${anom.deltaPct}%`;
-      }
-      try {
-        if (typeof window !== 'undefined' && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-          new Notification(`${anom.badge}: ${s.name || code6} (¥${px.toFixed(2)})`, {
-            body: anom.summary,
-          });
+      if (anom.priority === 'P0' || anom.priority === 'P1') {
+        if (!highestTone || PRIO_RANK[anom.priority] > PRIO_RANK[highestTone]) {
+          highestTone = anom.priority;
         }
-      } catch (_) {}
+        const toastMsg = `${anom.badge} · ${s.name || code6} 现价 ¥${px.toFixed(2)}（${anom.summary}）`;
+        if (anom.type === 'rocket_up') toastOk(toastMsg);
+        else toastErr(toastMsg);
+
+        if (typeof document !== 'undefined') {
+          document.title = `${anom.priority === 'P0' ? '🚨' : '🚀'}${s.name || code6} ${anom.label} ${anom.deltaPct > 0 ? '+' : ''}${anom.deltaPct}%`;
+        }
+        try {
+          if (typeof window !== 'undefined' && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+            new Notification(`${anom.badge}: ${s.name || code6} (¥${px.toFixed(2)})`, {
+              body: anom.summary,
+            });
+          }
+        } catch (_) {}
+      }
     }
   });
 
-  if (triggered.length > 0 && !muted) {
-    try { soundChime(); } catch (_) {}
+  if (highestTone && !muted) {
+    try { playAlertTone(highestTone); } catch (_) {}
   }
   return triggered;
 }
@@ -2750,6 +3151,7 @@ export function checkMarketAlerts(){
   if (!MKT || !Array.isArray(MKT.idx) || !MKT.idx.length) return;
   const now = Date.now();
   const muted = isAlertMuted();
+  const hasAnyHolding = Array.isArray(pool) && pool.some((s) => (+s?.shares || 0) > 0);
   const rules = {
     sh000001: { dropThr: -0.45 },
     sz399006: { dropThr: -0.80 },
@@ -2775,12 +3177,14 @@ export function checkMarketAlerts(){
       if (_mktAlertCd[cdKey] && now - _mktAlertCd[cdKey] < 15 * 60 * 1000) return;
       _mktAlertCd[cdKey] = now;
       if (!muted) {
+        const prio = hasAnyHolding ? 'P0' : 'P1';
         const summary = `${item.label} 5分钟急挫 ${dPct.toFixed(2)}%（现报 ${item.price.toFixed(2)}），谨防泥沙俱下，暂停正T低吸`;
         toastErr(`🚨 大盘急杀预警 · ${summary}`);
-        try { soundChime(); } catch (_) {}
+        try { playAlertTone(prio); } catch (_) {}
         pushSystemAlertRecord({
           id: now + Math.random(),
           category: 'anomaly',
+          priority: prio,
           anomalyType: 'market_plunge',
           time: nowStr(),
           name: item.label,
@@ -2796,7 +3200,7 @@ export function checkMarketAlerts(){
   });
 }
 
-/* 盘后/非交易时段一键演练分时异动提醒（交替模拟放量急拉与放量跳水，验证卡片横幅+声音+通知中心闭环） */
+/* 盘后/非交易时段一键演练分时异动提醒（交替模拟 P1 放量急拉与 P0 放量跳水，验证顶栏应急红条+三级音效+流水闭环） */
 let _simToggle = 0;
 export function simulateIntradayAnomaly(targetPool = null){
   const list = Array.isArray(targetPool) && targetPool.length ? targetPool : pool;
@@ -2809,11 +3213,13 @@ export function simulateIntradayAnomaly(targetPool = null){
   const deltaPct = isUp ? 2.46 : -2.35;
   const volBurst = isUp ? 3.2 : 2.7;
   const refPrice = +(px / (1 + deltaPct / 100)).toFixed(2);
+  const prio = isUp ? 'P1' : 'P0';
   const anom = isUp
     ? {
         type: 'rocket_up',
+        priority: 'P1',
         label: '放量急拉',
-        badge: '🚀 分时放量急拉(演练)',
+        badge: '🚀 P1·分时放量急拉(演练)',
         level: 'surge',
         deltaPct,
         volBurst,
@@ -2825,8 +3231,9 @@ export function simulateIntradayAnomaly(targetPool = null){
       }
     : {
         type: 'waterfall_down',
+        priority: 'P0',
         label: '放量跳水',
-        badge: '🌊 分时放量跳水(演练)',
+        badge: '🚨 P0·持仓放量跳水(演练)',
         level: 'danger',
         deltaPct,
         volBurst,
@@ -2834,19 +3241,20 @@ export function simulateIntradayAnomaly(targetPool = null){
         time: nowStr(),
         at: now,
         isDrill: true,
-        summary: `[演练] 近5分钟放量急跌 ${deltaPct}%（分钟量能 ${volBurst}×），抛压宣泄中严禁接飞刀`,
+        summary: `[演练] 近5分钟放量急跌 ${deltaPct}%（分钟量能 ${volBurst}×），抛压宣泄中严禁接飞刀，优先执行止损防守`,
       };
 
   if (target) {
     target._anomaly = anom;
   }
-  try { soundChime(); } catch (_) {}
+  try { playAlertTone(prio, true); } catch (_) {}
   if (isUp) toastOk(`${anom.badge} · ${name} ¥${px.toFixed(2)}`);
   else toastErr(`${anom.badge} · ${name} ¥${px.toFixed(2)}`);
 
   pushSystemAlertRecord({
     id: now + Math.random(),
     category: 'anomaly',
+    priority: prio,
     anomalyType: anom.type,
     time: anom.time,
     name,
