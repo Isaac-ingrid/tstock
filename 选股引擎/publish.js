@@ -266,8 +266,13 @@ const payload = {
   },
 };
 
-/* ---------- 落盘（同时写入 data 与 public/data，确保 Next.js 实时同步） ---------- */
+/* ---------- 落盘（同时写入 data、public/data 与已构建的 out/dist 静态目录，确保本地与线上实时同步） ---------- */
 const DIRS = [DATA, path.join(__dirname, '..', 'public', 'data')];
+for (const staticDir of ['out', 'dist']) {
+  if (fs.existsSync(path.join(__dirname, '..', staticDir))) {
+    DIRS.push(path.join(__dirname, '..', staticDir, 'data'));
+  }
+}
 for (const dir of DIRS) {
   try {
     fs.mkdirSync(dir, { recursive: true });

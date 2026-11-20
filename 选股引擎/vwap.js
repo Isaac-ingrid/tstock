@@ -9,25 +9,95 @@
  * 尾盘专用（供 tail.js 用，收盘选股不读）：high / closeStrength / tailVolShare / tailTimeShare / tailIntensity
  *   tailIntensity = 14:00 后成交占比 ÷ 14:00 后分钟数占比，>1 表示尾盘放量，无 14:00 后数据时为 null
  */
+const API_BASE = process.env.STOCK_API_BASE || 'http://127.0.0.1:18765';
 const TENCENT = (code) => `https://web.ifzq.gtimg.cn/appstock/app/minute/query?code=${code}`;
 const EM = (secid, ndays = 1) =>
   `https://push2his.eastmoney.com/api/qt/stock/trends2/get?secid=${secid}` +
   `&fields1=f1,f2,f3,f4,f5,f6,f7,f8&fields2=f51,f53,f56,f58&iscr=0&ndays=${ndays}`;
 
-const secid = (code) => (code.startsWith('sh') ? '1.' : '0.') + code.replace(/^(sh|sz|bj)/, '');
+const normTcode = (code) => {
+  const s = String(code || '').trim();
+  const m = /^(\d{6})\.(SH|SZ|BJ)$/i.exec(s);
+  if (m) {
+    const p = m[2].toUpperCase();
+    return (p === 'SH' ? 'sh' : p === 'SZ' ? 'sz' : 'bj') + m[1];
+  }
+  if (/^(sh|sz|bj)\d{6}$/i.test(s)) return s.toLowerCase();
+  if (/^\d{6}$/.test(s)) {
+    return (s.startsWith('6') ? 'sh' : s.startsWith('9') || s.startsWith('4') || s.startsWith('8') ? 'bj' : 'sz') + s;
+  }
+  return s.toLowerCase();
+};
 
-async function getJson(url, retry = 2) {
+const isIndexCode = (tcode) => /^sh000\d{3}$/.test(tcode) || /^sz399\d{3}$/.test(tcode);
+const secid = (code) => {
+  const t = normTcode(code);
+  return (t.startsWith('sh') ? '1.' : '0.') + t.replace(/^(sh|sz|bj)/, '');
+};
+
+let localGatewayDownUntil = 0;
+
+async function getJson(url, retry = 2, timeoutMs = 6000) {
   let err;
   for (let i = 0; i < retry; i++) {
     try {
+      const referer = url.includes('eastmoney')
+        ? 'https://quote.eastmoney.com/'
+        : url.includes('sina.')
+          ? 'https://finance.sina.com.cn/'
+          : 'https://gu.qq.com/';
       const res = await fetch(url, {
-        headers: { 'User-Agent': 'Mozilla/5.0', Referer: url.includes('eastmoney') ? 'https://quote.eastmoney.com/' : 'https://gu.qq.com/' },
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+          Referer: referer,
+          Accept: 'application/json, text/plain, */*',
+        },
+        signal: AbortSignal.timeout(timeoutMs),
       });
+      if (!res.ok) {
+        const statusErr = new Error(`HTTP ${res.status}`);
+        if (res.status === 501 || res.status === 403) statusErr.noRetry = true;
+        throw statusErr;
+      }
       const txt = new TextDecoder('utf-8').decode(Buffer.from(await res.arrayBuffer()));
       return JSON.parse(txt);
-    } catch (e) { err = e; await new Promise((r) => setTimeout(r, 200)); }
+    } catch (e) {
+      err = e;
+      if (e && e.noRetry) break;
+      if (i + 1 < retry) await new Promise((r) => setTimeout(r, 200));
+    }
   }
   throw err;
+}
+
+let activeLocalBase = null;
+
+async function callLocalBackend(relPath, timeoutMs = 6000) {
+  if (Date.now() < localGatewayDownUntil) return null;
+  const altBase = API_BASE.includes(':18765') ? API_BASE.replace(':18765', ':8000') : null;
+  const bases = activeLocalBase
+    ? [activeLocalBase]
+    : [API_BASE, altBase].filter(Boolean);
+  let allRefused = true;
+  for (const base of bases) {
+    try {
+      const data = await getJson(`${base}${relPath}`, 1, timeoutMs);
+      activeLocalBase = base;
+      return data;
+    } catch (e) {
+      const refused = e && (e.code === 'ECONNREFUSED' || String(e.cause?.code || '').includes('ECONNREFUSED'));
+      if (!refused) allRefused = false;
+    }
+  }
+  if (allRefused) {
+    activeLocalBase = null;
+    localGatewayDownUntil = Date.now() + 60 * 1000;
+  }
+  return null;
+}
+
+async function getViaLocalGateway(upstreamUrl, timeoutMs = 6000) {
+  return callLocalBackend(`/api/proxy?url=${encodeURIComponent(upstreamUrl)}`, timeoutMs);
 }
 
 function summarize(pts) {
@@ -90,7 +160,7 @@ const normDate = (d) => {
 };
 
 async function fromTencent(code) {
-  const j = await getJson(TENCENT(code));
+  const j = (await getViaLocalGateway(TENCENT(code), 5000)) || (await getJson(TENCENT(code), 2, 5000));
   const node = j?.data?.[code]?.data;
   const arr = node?.data;
   if (!Array.isArray(arr) || !arr.length) return null;
@@ -110,8 +180,20 @@ async function fromTencent(code) {
   return r ? { ...r, date: normDate(node?.date) || null } : null;
 }
 
+let emTrendFailStreak = 0;
+let emTrendPausedUntil = 0;
+
 async function fromEastmoney(code) {
-  const j = await getJson(EM(secid(code)));
+  if (Date.now() < emTrendPausedUntil) return null;
+  let j;
+  try {
+    j = await getJson(EM(secid(code)), 1, 3500);
+    emTrendFailStreak = 0;
+  } catch (e) {
+    emTrendFailStreak += 1;
+    if (emTrendFailStreak >= 3) emTrendPausedUntil = Date.now() + 5 * 60 * 1000;
+    throw e;
+  }
   const arr = j?.data?.trends;
   if (!Array.isArray(arr) || !arr.length) return null;
   const pts = [], seen = new Set();
@@ -143,4 +225,110 @@ async function vwapCheck(code) {
   return null;
 }
 
-module.exports = { vwapCheck };
+/* ---------------- 统一日K与分钟K客户端（复用本地后端多源防501网关 + 内存缓存 + 东财熔断） ---------------- */
+const dailyCache = new Map();
+let emKlineFailStreak = 0;
+let emKlinePausedUntil = 0;
+
+async function fetchDailyKline(code, count = 90) {
+  const tcode = normTcode(code);
+  const reqN = Math.max(30, Number(count) || 90);
+
+  const hit = dailyCache.get(tcode);
+  if (hit && hit.reqCount >= reqN && hit.bars.length) {
+    return hit.bars.slice(-reqN);
+  }
+
+  // ① 主源：调用本地后端 /api/stock/klines（自动兼容本机 :18765 与线上 :8000）
+  const j = await callLocalBackend(`/api/stock/klines?code=${encodeURIComponent(tcode)}&period=day&count=${reqN}`, 7000);
+  if (Array.isArray(j?.bars) && j.bars.length) {
+    const bars = j.bars
+      .map((b) => ({
+        date: String(b.date).slice(0, 10),
+        open: +b.open,
+        close: +b.close,
+        high: +b.high,
+        low: +b.low,
+        vol: +(b.vol || 0),
+        amount: +(b.amount || 0),
+      }))
+      .filter((b) => b.date && Number.isFinite(b.close) && b.close > 0);
+    if (bars.length) {
+      dailyCache.set(tcode, { reqCount: reqN, bars });
+      return bars.slice(-reqN);
+    }
+  }
+
+  // ② 离线独立运行备源：东财短超时 + 连续 3 次失败熔断（杜绝 300s 挂死）
+  const isIdx = isIndexCode(tcode);
+  if (Date.now() >= emKlinePausedUntil) {
+    try {
+      const emUrl =
+        `https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=${secid(tcode)}` +
+        `&fields1=f1,f2,f3&fields2=f51,f52,f53,f54,f55,f56,f57&klt=101&fqt=${isIdx ? 0 : 1}&end=20500101&lmt=${reqN}`;
+      const j = await getJson(emUrl, 1, 3500);
+      const kl = j?.data?.klines;
+      if (Array.isArray(kl) && kl.length) {
+        emKlineFailStreak = 0;
+        const bars = kl
+          .map((line) => {
+            const p = String(line).split(',');
+            return {
+              date: p[0].slice(0, 10),
+              open: +p[1],
+              close: +p[2],
+              high: +p[3],
+              low: +p[4],
+              vol: +(p[5] || 0),
+              amount: +(p[6] || 0),
+            };
+          })
+          .filter((b) => b.date && Number.isFinite(b.close) && b.close > 0);
+        if (bars.length) {
+          dailyCache.set(tcode, { reqCount: reqN, bars });
+          return bars.slice(-reqN);
+        }
+      }
+    } catch {
+      emKlineFailStreak += 1;
+      if (emKlineFailStreak >= 3) emKlinePausedUntil = Date.now() + 5 * 60 * 1000;
+    }
+  }
+
+  return null;
+}
+
+async function fetchDailyKlineRows(code, count = 30) {
+  const bars = await fetchDailyKline(code, count);
+  if (!bars || !bars.length) return [];
+  return bars.map((b) => [
+    b.date,
+    String(b.open),
+    String(b.close),
+    String(b.high),
+    String(b.low),
+    String(b.vol),
+  ]);
+}
+
+async function fetchMinuteKline(code, period = 'm30', count = 800) {
+  const tcode = normTcode(code);
+  const mkBase = TENCENT(tcode).split('/minute/')[0];
+  const upstream = `${mkBase}/kline/mkline?param=${tcode},${period},,${count}`;
+  const gw = await getViaLocalGateway(upstream, 6500);
+  if (gw?.data?.[tcode]?.[period]?.length) {
+    return gw.data[tcode][period];
+  }
+  try {
+    const j = await getJson(upstream, 1, 5000);
+    if (j?.data?.[tcode]?.[period]?.length) return j.data[tcode][period];
+  } catch { /* 下一源 */ }
+  return null;
+}
+
+module.exports = {
+  vwapCheck,
+  fetchDailyKline,
+  fetchDailyKlineRows,
+  fetchMinuteKline,
+};

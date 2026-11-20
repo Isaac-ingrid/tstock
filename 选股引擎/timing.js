@@ -20,21 +20,11 @@ const SLOTS = [
 ];
 const SLOT_NAME = Object.fromEntries(SLOTS);
 
-async function getJson(url, retry = 3) {
-  let err;
-  for (let i = 0; i < retry; i++) {
-    try {
-      const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0', Referer: 'https://gu.qq.com/' } });
-      return JSON.parse(new TextDecoder('utf-8').decode(Buffer.from(await res.arrayBuffer())));
-    } catch (e) { err = e; await new Promise((r) => setTimeout(r, 300 * (i + 1))); }
-  }
-  throw err;
-}
+const { fetchMinuteKline } = require('./vwap');
 
 async function m30(code) {
   try {
-    const j = await getJson(`https://ifzq.gtimg.cn/appstock/app/kline/mkline?param=${code},m30,,800`);
-    const arr = j?.data?.[code]?.m30;
+    const arr = await fetchMinuteKline(code, 'm30', 800);
     if (!Array.isArray(arr) || arr.length < 40) return null;
     // 按日聚合：{ '2026-10-30': [ {slot, open, high, low, close}, ... ] }
     const byDay = {};

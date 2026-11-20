@@ -22,7 +22,9 @@ const fs = require('fs');
 const path = require('path');
 
 const OUT_DIR = path.join(__dirname, 'out');
-const TODAY = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' }); // YYYY-MM-DD
+const dateCliArg = process.argv.find((a) => /^\d{4}-\d{2}-\d{2}$/.test(a))
+  || (process.argv.includes('--date') ? process.argv[process.argv.indexOf('--date') + 1] : null);
+const TODAY = dateCliArg || new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' }); // YYYY-MM-DD
 
 /* ---------------- 配置 ---------------- */
 const CFG = {
@@ -62,7 +64,9 @@ async function getJson(url, encoding = 'utf-8', retry = 3) {
           Referer: sameHost ? 'https://quote.eastmoney.com/' : 'https://gu.qq.com/',
           Accept: '*/*',
         },
+        signal: AbortSignal.timeout(8000),
       });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const buf = Buffer.from(await res.arrayBuffer());
       let text;
       try { text = new TextDecoder(encoding).decode(buf); } catch { text = buf.toString('latin1'); }
@@ -218,14 +222,10 @@ async function fetchAll({ force = false } = {}) {
 const { detectBearishKlineRisk } = require('./backtest');
 
 async function klineCheck(code, board, name) {
-  const url = `https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=${code},day,,,90,qfq`;
-  let j;
-  try { j = await getJson(url); } catch { return { ok: false, reason: 'K线请求失败' }; }
-  const d = j?.data?.[code];
-  const arr = d?.qfqday || d?.day;
-  if (!Array.isArray(arr) || arr.length < 20) return { ok: false, reason: 'K线不足' };
-
-  const bars = arr.map((r) => ({ date: r[0], open: +r[1], close: +r[2], high: +r[3], low: +r[4], vol: +r[5] || 0 }));
+  const rawBars = await fetchDailyKline(code, 100);
+  if (!rawBars) return { ok: false, reason: 'K线请求失败' };
+  const bars = rawBars.filter((b) => b.date <= TODAY).slice(-90);
+  if (bars.length < 20) return { ok: false, reason: 'K线不足' };
   const effLimit = /ST/i.test(name) ? 5 : LIMIT_OF[board];
   let hit = null;
   const scan = bars.slice(-31, -1); // 近 30 个交易日，不含今日
@@ -260,8 +260,8 @@ async function klineCheck(code, board, name) {
   };
 }
 
-/* ---------------- 分时：VWAP（双源，见 vwap.js） ---------------- */
-const { vwapCheck } = require('./vwap');
+/* ---------------- 分时：VWAP + 日K统一源（见 vwap.js） ---------------- */
+const { vwapCheck, fetchDailyKline } = require('./vwap');
 
 /* ---------------- 打分 ---------------- */
 const { scoreStock } = require('./score');
@@ -338,13 +338,33 @@ const { scoreStock } = require('./score');
   const pool = [...new Set([...hardPass, ...loose].map((s) => s.code))].slice(0, 400);
   const map = Object.fromEntries(all.map((s) => [s.code, s]));
   const results = [];
+  const cachedVwMap = (() => {
+    const m = new Map();
+    for (const fn of [`${TODAY}.rescored.json`, `${TODAY}.json`]) {
+      const p = path.join(OUT_DIR, fn);
+      if (!fs.existsSync(p)) continue;
+      try {
+        const j = JSON.parse(fs.readFileSync(p, 'utf8'));
+        for (const r of (j.rows || j.results || [])) {
+          if (r?.code && r?.vw && (!r.vw.date || r.vw.date === TODAY)) {
+            if (!m.has(r.code)) m.set(r.code, r.vw);
+          }
+        }
+      } catch {}
+    }
+    return m;
+  })();
+
   for (const code of pool) {
     const s = map[code];
     const board = boardOf(code);
     const kl = await klineCheck(code, board, s.name);
     const rec = { ...s, board, kl, vw: null, score: 0, verdict: '放弃', parts: null };
     if (kl.ok) {
-      rec.vw = await vwapCheck(code);
+      const liveVw = await vwapCheck(code);
+      rec.vw = (liveVw && (!liveVw.date || liveVw.date === TODAY))
+        ? liveVw
+        : (cachedVwMap.get(code) || null);
       const sc = scoreStock({ ...s, kl, vw: rec.vw });
       Object.assign(rec, { parts: sc.parts, score: sc.total, verdict: sc.verdict });
     }
@@ -373,6 +393,11 @@ const { scoreStock } = require('./score');
       r.score.toString(), r.verdict,
     ];
     console.log(cells.map((x, i) => String(x).padEnd(W[i])).join(''));
+  }
+
+  if (pool.length > 0 && passed.length === 0 && results.every((r) => r.kl?.reason === 'K线请求失败')) {
+    console.error(`\n✗ 候选池 ${pool.length} 只标的日K请求 100% 失败（接口拦截或网络中断），拒绝用空结果覆盖 ${TODAY} 台账！`);
+    process.exit(3);
   }
 
   fs.mkdirSync(OUT_DIR, { recursive: true });

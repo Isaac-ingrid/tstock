@@ -23,51 +23,11 @@ const norm = (c) => {
 };
 const secid = (code) => (norm(code).startsWith('sh') ? '1.' : '0.') + norm(code).replace(/^(sh|sz|bj)/, '');
 
-async function getJson(url, retry = 3) {
-  let err;
-  for (let i = 0; i < retry; i++) {
-    try {
-      const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0', Referer: 'https://quote.eastmoney.com/' } });
-      return JSON.parse(new TextDecoder('utf-8').decode(Buffer.from(await res.arrayBuffer())));
-    } catch (e) { err = e; await new Promise((r) => setTimeout(r, 250 * (i + 1))); }
-  }
-  throw err;
-}
+const { fetchDailyKline } = require('./vwap');
 
 async function kline(code) {
-  const c = norm(code);
-  // ① 东财前复权（字段最全，本次被限流则跳过）
-  try {
-    const url = `https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=${secid(c)}` +
-      `&fields1=f1,f2,f3&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&end=20500101&lmt=130`;
-    const j = await getJson(url, 1);
-    const arr = j?.data?.klines || [];
-    if (arr.length >= 70) {
-      return arr.map((x) => {
-        const f = x.split(',');
-        return { date: f[0], open: +f[1], close: +f[2], high: +f[3], low: +f[4], vol: +f[5], amount: +f[6], chg: +f[8], turnover: +f[10] };
-      });
-    }
-  } catch { /* 落下一源 */ }
-
-  // ② 腾讯前复权
-  try {
-    const j = await getJson(`https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=${c},day,,,130,qfq`, 2);
-    const d = j?.data?.[c];
-    const arr = d?.qfqday || d?.day;
-    if (arr && arr.length >= 70) {
-      return arr.map((r) => ({ date: r[0], open: +r[1], close: +r[2], high: +r[3], low: +r[4], vol: +r[5] }));
-    }
-  } catch { /* 落下一源 */ }
-
-  // ③ 新浪（不复权，除权日会跳空，仅作兜底）
-  try {
-    const arr = await getJson(`https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol=${c}&scale=240&ma=no&datalen=130`, 2);
-    if (Array.isArray(arr) && arr.length >= 70) {
-      return arr.map((r) => ({ date: r.day, open: +r.open, close: +r.close, high: +r.high, low: +r.low, vol: +r.volume }));
-    }
-  } catch { /* 全失败 */ }
-  return null;
+  const bars = await fetchDailyKline(norm(code), 130);
+  return Array.isArray(bars) && bars.length >= 70 ? bars : null;
 }
 
 const ma = (bars, n, i = bars.length - 1) => {
@@ -86,7 +46,11 @@ function atr(bars, n = 14) {
 }
 
 (async function main() {
-  const pool = JSON.parse(fs.readFileSync(path.join(OUT, 'steady-pool.json'), 'utf8'));
+  fs.mkdirSync(OUT, { recursive: true });
+  const poolPath = fs.existsSync(path.join(OUT, 'steady-pool.json'))
+    ? path.join(OUT, 'steady-pool.json')
+    : path.join(__dirname, 'steady-pool.json');
+  const pool = JSON.parse(fs.readFileSync(poolPath, 'utf8'));
   console.log(`稳健池 ${pool.length} 只，拉取日K…`);
 
   const rows = [];

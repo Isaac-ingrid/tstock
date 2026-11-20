@@ -24,14 +24,17 @@ const { PROJECT_ROOT, ENGINE_DIR, DATA_DIR, todayStr, isWeekend, log, runScript,
 
 async function main() {
   const force = process.argv.includes('--force');
-  const today = todayStr();
-  const isFriday = new Date().getDay() === 5 || process.argv.includes('--force-steady');
+  const dateArg = process.argv.find((a) => /^\d{4}-\d{2}-\d{2}$/.test(a))
+    || (process.argv.includes('--date') ? process.argv[process.argv.indexOf('--date') + 1] : null);
+  const today = dateArg || todayStr();
+  const isFriday = new Date(`${today}T12:00:00+08:00`).getDay() === 5 || process.argv.includes('--force-steady');
+  const dayArgs = dateArg ? [dateArg] : [];
 
   log(`════════════════════════════════════════════════════════════`);
   log(`🚀 [15:10 定时任务] 启动收盘选股、回算、预案与发布完整流水线 (${today})`);
   log(`════════════════════════════════════════════════════════════`);
 
-  if (isWeekend() && !force) {
+  if (!dateArg && isWeekend() && !force) {
     log(`⚠️ 今日是周末非交易日，跳过收盘选股流水线（使用 --force 可强制运行）`);
     return;
   }
@@ -40,36 +43,54 @@ async function main() {
 
   try {
     // 1. 全市场扫描
-    log(`[1/9] 全市场扫描与收盘定盘 (engine.js)...`);
-    runScript('engine.js');
+    log(`[1/9] 全市场扫描与收盘定盘 (engine.js ${dayArgs.join(' ')})...`);
+    runScript('engine.js', dayArgs);
 
     // 2. 台账双轨收益回算
     log(`[2/9] 回算历史选股 T+1~T+20 收益台账 (returns.js)...`);
     runScript('returns.js');
 
-    // 3. 今日候选报告
-    log(`[3/9] 生成当日候选报告页面 (report.js)...`);
-    runScript('report.js');
+    // 3. 今日候选报告（可选静态页，异常不阻断契约发布）
+    try {
+      log(`[3/9] 生成当日候选报告页面 (report.js)...`);
+      runScript('report.js', dayArgs);
+    } catch (repErr) {
+      log(`⚠️ 生成当日候选报告失败（不影响契约发布）: ${repErr.message}`, 'WARN');
+    }
 
     // 4. 明日做T挂单计划
     log(`[4/9] 计算明日做T网格价位与多重风控闸门 (plan.js)...`);
-    runScript('plan.js');
+    runScript('plan.js', dayArgs);
 
-    // 5. 挂单计划可视化
-    log(`[5/9] 生成明日做T挂单计划报告 (plan-report.js)...`);
-    runScript('plan-report.js');
+    // 5. 挂单计划可视化（可选静态页，异常不阻断契约发布）
+    try {
+      log(`[5/9] 生成明日做T挂单计划报告 (plan-report.js)...`);
+      runScript('plan-report.js');
+    } catch (planRepErr) {
+      log(`⚠️ 生成挂单计划报告失败（不影响契约发布）: ${planRepErr.message}`, 'WARN');
+    }
 
-    // 6. 选股工作台看板
-    log(`[6/9] 更新全景看板 (dashboard.js)...`);
-    runScript('dashboard.js');
-
-    // 7. 稳健型底仓（每周五或指定强制运行）
-    if (isFriday) {
-      log(`[7/9] 今日为周五，全量更新稳健底仓候选 (steady.js & steady-report.js)...`);
+    // 6. 稳健型底仓（每周五例行更新，或本地缺失 steady.json 时自动初始化兜底）
+    const steadyJsonPath = path.join(ENGINE_DIR, 'out', 'steady.json');
+    const needSteadyInit = !fs.existsSync(steadyJsonPath);
+    if (isFriday || needSteadyInit) {
+      log(`[6/9] ${isFriday ? '今日为周五例行重选' : '检测到本地缺少 steady.json 自动触发初始化兜底'}，更新稳健底仓候选 (steady.js)...`);
       runScript('steady.js');
-      runScript('steady-report.js');
+      try {
+        runScript('steady-report.js');
+      } catch (stRepErr) {
+        log(`⚠️ 生成稳健底仓报告页失败（不影响契约发布）: ${stRepErr.message}`, 'WARN');
+      }
     } else {
-      log(`[7/9] 周一至周四复用最新稳健底仓，跳过稳健重选。`);
+      log(`[6/9] 周一至周四复用最新稳健底仓 (${steadyJsonPath})，跳过稳健重选。`);
+    }
+
+    // 7. 选股工作台看板（放于 steady.js 之后，确保 steady.json 已就绪；缺失历史回测文件时不阻断发布）
+    try {
+      log(`[7/9] 更新全景看板 (dashboard.js)...`);
+      runScript('dashboard.js');
+    } catch (dashErr) {
+      log(`⚠️ 更新全景看板页面失败（不影响契约发布）: ${dashErr.message}`, 'WARN');
     }
 
     // 8. 选股历史建档与收益跟踪

@@ -21,25 +21,13 @@ const T1 = 1.0, T2 = 2.0;  // 主副目标
 const date = process.argv[2] || new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' });
 const picks = JSON.parse(fs.readFileSync(path.join(LEDGER, `picks-${date}.json`), 'utf8'));
 
-async function getJson(url, retry = 3) {
-  let err;
-  for (let i = 0; i < retry; i++) {
-    try {
-      const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0', Referer: 'https://gu.qq.com/' } });
-      return JSON.parse(new TextDecoder('utf-8').decode(Buffer.from(await res.arrayBuffer())));
-    } catch (e) { err = e; await new Promise((r) => setTimeout(r, 250 * (i + 1))); }
-  }
-  throw err;
-}
+const { fetchDailyKline } = require('./vwap');
 
 async function kline(code, n = 70) {
-  try {
-    const j = await getJson(`https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=${code},day,,,${n},qfq`);
-    const d = j?.data?.[code];
-    const arr = d?.qfqday || d?.day;
-    if (!Array.isArray(arr) || arr.length < 25) return null;
-    return arr.map((r) => ({ date: r[0], open: +r[1], close: +r[2], high: +r[3], low: +r[4], vol: +r[5] }));
-  } catch { return null; }
+  const raw = await fetchDailyKline(code, n + 10);
+  if (!Array.isArray(raw)) return null;
+  const bars = raw.filter((b) => b.date <= date).slice(-n);
+  return bars.length >= 25 ? bars : null;
 }
 
 const ma = (b, n) => { const w = b.slice(-n); return w.reduce((a, c) => a + c.close, 0) / w.length; };

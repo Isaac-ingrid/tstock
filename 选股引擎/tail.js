@@ -75,7 +75,9 @@ async function getJson(url, encoding = 'utf-8', retry = 3) {
           Referer: url.includes('eastmoney') ? 'https://quote.eastmoney.com/' : 'https://gu.qq.com/',
           Accept: '*/*',
         },
+        signal: AbortSignal.timeout(8000),
       });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const buf = Buffer.from(await res.arrayBuffer());
       let text;
       try { text = new TextDecoder(encoding).decode(buf); } catch { text = buf.toString('latin1'); }
@@ -219,13 +221,9 @@ async function fetchSnapshot({ force = true } = {}) {
 const { detectBearishKlineRisk } = require('./backtest');
 
 async function klineCheck(code, board, name) {
-  const url = `https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=${code},day,,,90,qfq`;
-  let j;
-  try { j = await getJson(url); } catch { return { ok: false, reason: 'K线请求失败', klineRisk: { risky: false, reasons: [] } }; }
-  const d = j?.data?.[code];
-  const arr = d?.qfqday || d?.day;
-  if (!Array.isArray(arr) || arr.length < 10) return { ok: false, reason: 'K线不足', klineRisk: { risky: false, reasons: [] } };
-  const bars = arr.map((r) => ({ date: r[0], open: +r[1], close: +r[2], high: +r[3], low: +r[4], vol: +r[5] || 0 }));
+  const bars = await fetchDailyKline(code, 90);
+  if (!bars) return { ok: false, reason: 'K线请求失败', klineRisk: { risky: false, reasons: [] } };
+  if (bars.length < 10) return { ok: false, reason: 'K线不足', klineRisk: { risky: false, reasons: [] } };
   /* 末根若是今天（盘中未收盘），剔除，只用已收盘的历史算涨停史与风控 */
   const hist = bars.at(-1).date === TODAY ? bars.slice(0, -1) : bars;
   const effLimit = /ST/i.test(name) ? 5 : LIMIT_OF[board];
@@ -245,7 +243,7 @@ async function klineCheck(code, board, name) {
   return { ok: true, hit, pullback: +(((hit.close - last) / hit.close) * 100).toFixed(2), brokeLow: last < hit.low, klineRisk };
 }
 
-const { vwapCheck } = require('./vwap');
+const { vwapCheck, fetchDailyKline } = require('./vwap');
 
 /* ---------------- 打分：尾盘强度为主，涨停史只占 5 分 ----------------
  * 尾盘量能密度用「相对当日全市场中位数」打分，不用绝对值：

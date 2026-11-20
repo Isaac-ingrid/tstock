@@ -6,15 +6,48 @@ const fs = require('fs');
 const path = require('path');
 
 const OUT = path.join(__dirname, 'out');
-const rd = (f) => JSON.parse(fs.readFileSync(path.join(OUT, f), 'utf8'));
+const rd = (f, fallback = null) => {
+  const p = path.join(OUT, f);
+  if (!fs.existsSync(p) && fallback !== null) return fallback;
+  return JSON.parse(fs.readFileSync(p, 'utf8'));
+};
+
+const emptyHold = { 开盘: 0, 超额: 0, 中位: 0, 胜率: 0, 基准: 0 };
+const emptyVar = (name) => ({
+  name,
+  pickDays: 0,
+  obs: 0,
+  byHold: { 'T+1': emptyHold, 'T+2': emptyHold, 'T+3': emptyHold, 'T+5': emptyHold },
+});
+const defaultTiming = {
+  used: 1,
+  baseDays: 1,
+  baseHit1: 0,
+  baseFirst1: 0,
+  slots: [
+    ['1000', '09:30–10:00'], ['1030', '10:00–10:30'], ['1100', '10:30–11:00'], ['1130', '11:00–11:30'],
+    ['1330', '13:00–13:30'], ['1400', '13:30–14:00'], ['1430', '14:00–14:30'], ['1500', '14:30–15:00'],
+  ],
+  slotStat: Object.fromEntries(['1000', '1030', '1100', '1130', '1330', '1400', '1430', '1500'].map((s) => [s, { high: 0, hit1: 0 }])),
+  baseSlot: Object.fromEntries(['1000', '1030', '1100', '1130', '1330', '1400', '1430', '1500'].map((s) => [s, { high: 0 }])),
+  gapStat: [],
+};
+const defaultBt = {
+  summary: {
+    A: emptyVar('基线打分版'),
+    B: emptyVar('+VWAP严筛'),
+    C: emptyVar('+环境过滤'),
+    D: emptyVar('+双过滤'),
+  },
+};
 
 // 自动识别 out/ 下最新的扫描日与挂单计划文件，避免每天改日期
 const latestOf = (re) => fs.readdirSync(OUT).filter((f) => re.test(f)).sort().pop();
 const day = rd(latestOf(/^\d{4}-\d{2}-\d{2}\.json$/));
 const plan = rd(latestOf(/^plan-\d{4}-\d{2}-\d{2}\.json$/));
-const timing = rd('timing.json');
-const bt = rd('backtest-v3.json');
-const steady = rd('steady.json');
+const timing = rd('timing.json', defaultTiming);
+const bt = rd('backtest-v3.json', defaultBt);
+const steady = rd('steady.json', { pool: 0, fit: 0, top: [], rows: [] });
 
 const f2 = (v) => (v === null || v === undefined ? '—' : Number(v).toFixed(2));
 const sgn = (v) => (v > 0 ? '+' : '') + Number(v).toFixed(2);

@@ -540,13 +540,44 @@ async def stock_strategy_perf(
 
 @app.post("/api/stock/strategy_snapshot")
 async def stock_strategy_snapshot(request: Request) -> dict[str, object]:
-    """触发一次全策略建档快照并更新 data/strategy_ledger.json（需登录权限）"""
-    _require_user(request)
+    """触发一次全策略建档快照并更新 data/strategy_ledger.json（本机定时任务免鉴权，外部需登录）"""
+    client_host = (request.client.host if request.client else "") or ""
+    if client_host not in ("127.0.0.1", "::1", "localhost"):
+        _require_user(request)
     try:
         http_client = getattr(request.app.state, "http", None)
         return await snapshot_strategies(http_client=http_client)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"策略建档失败: {exc}") from exc
+
+
+@app.get("/api/stock/klines")
+async def stock_klines(
+    request: Request,
+    code: str = Query(..., min_length=6, max_length=12),
+    period: str = Query("day"),
+    count: int = Query(120, ge=5, le=1200),
+) -> dict[str, object]:
+    """统一多源前复权 K 线接口（供选股引擎、回算台账与前端共用，内置缓存与防 501 容灾）"""
+    from backend.market_data import to_tcode
+
+    tc = to_tcode(code)
+    klt_map = {"day": 101, "week": 102, "month": 103}
+    p = period if period in klt_map else "day"
+    bars = await fetch_em_klines(
+        request.app.state.http,
+        to_em_secid(tc),
+        klt=klt_map[p],
+        lmt=count,
+        tcode_fallback=tc,
+    )
+    return {
+        "ok": bool(bars),
+        "code": tc,
+        "period": p,
+        "count": len(bars),
+        "bars": bars,
+    }
 
 
 @app.get("/api/stock/ignition_pool")

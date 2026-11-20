@@ -10,7 +10,8 @@ const latestPlan = fs.readdirSync(path.join(__dirname, 'out'))
   .pop();
 const P = JSON.parse(fs.readFileSync(path.join(__dirname, 'out', latestPlan), 'utf8'));
 const { env, rows, baseDate } = P;
-const T = JSON.parse(fs.readFileSync(path.join(__dirname, 'out', 'timing.json'), 'utf8'));
+const timingPath = path.join(__dirname, 'out', 'timing.json');
+const T = fs.existsSync(timingPath) ? JSON.parse(fs.readFileSync(timingPath, 'utf8')) : {};
 const gapStat = T.gapStat || [];
 
 const f2 = (v) => Number(v).toFixed(2);

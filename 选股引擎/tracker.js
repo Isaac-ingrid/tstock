@@ -43,7 +43,8 @@ async function fetchQuotes(tcodes) {
     const chunk = tcodes.slice(i, i + batchSize);
     try {
       const res = await fetch('https://qt.gtimg.cn/q=' + chunk.join(','), {
-        headers: { 'User-Agent': 'Mozilla/5.0', Referer: 'https://gu.qq.com/' }
+        headers: { 'User-Agent': 'Mozilla/5.0', Referer: 'https://gu.qq.com/' },
+        signal: AbortSignal.timeout(8000),
       });
       const text = new TextDecoder('gbk').decode(await res.arrayBuffer());
       const lines = text.trim().split(';').filter(Boolean);
@@ -176,13 +177,12 @@ function getNextWeekFriday(dateStr) {
   return `${y}-${m}-${dt}`;
 }
 
+const { fetchDailyKlineRows } = require('./vwap');
+
 // 批量抓取单只股票的近期日K线
 async function fetchKlines(tcode) {
   try {
-    const url = `https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${tcode},day,,,15,qfq`;
-    const res = await fetch(url);
-    const json = await res.json();
-    return json.data?.[tcode]?.qfqday || json.data?.[tcode]?.day || [];
+    return await fetchDailyKlineRows(tcode, 25);
   } catch (e) {
     return [];
   }
