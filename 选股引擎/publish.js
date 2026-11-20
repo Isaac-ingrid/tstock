@@ -99,13 +99,27 @@ const env = envRaw
   ? {
       level: envRaw.level,                       // OK / WARN / BAD
       text: envRaw.text,
+      channelMode: envRaw.channelMode || (envRaw.level === 'OK' ? 'UP' : 'DOWN'),
+      channelGuide: envRaw.channelGuide || (
+        envRaw.level === 'OK'
+          ? '上升通道：逢缩量回调顺势加仓，沿 MA5/MA10 拉长格局扩大战果，不轻易下车'
+          : '下跌/弱势通道：严禁浮亏补仓摊平！建仓次日收绿果断割肉换票；连红 3 天主动减仓，出现首阴收盘清仓'
+      ),
       canNewLongT: envRaw.level !== 'BAD',       // BAD 时禁止新开正T
       posFactor: envRaw.level === 'OK' ? 1 : envRaw.level === 'WARN' ? 0.5 : 0,
       indices: (envRaw.dual || []).filter((x) => x.ok).map((x) => ({
         name: x.key, role: x.role, close: x.close, ma20: x.ma20, ma60: x.ma60, vsMa20: x.vsMa20,
       })),
     }
-  : { level: 'UNKNOWN', text: '缺少 plan-*.json，未做环境判定', canNewLongT: false, posFactor: 0, indices: [] };
+  : {
+      level: 'UNKNOWN',
+      text: '缺少 plan-*.json，未做环境判定',
+      channelMode: 'DOWN',
+      channelGuide: '环境未知按弱势防守：严禁浮亏补仓，次日收绿止损',
+      canNewLongT: false,
+      posFactor: 0,
+      indices: [],
+    };
 
 /* ---------- 历史总账与战绩追踪 ---------- */
 const recAll = readJson(path.join(LEDGER, 'recommendations_all.json'), []);
@@ -120,6 +134,16 @@ const shortList = (plan?.rows || []).map((r) => {
   const tcode = norm(r.code);
   const buy = r.expOpen != null ? +r.expOpen.toFixed(2) : null;
   const rec = recMap.get(six(tcode));
+  const sectorTag = r.sector ? `${r.sector}${r.sectorLabel ? `（${r.sectorLabel}）` : ''}` : '';
+  const dynamicReasons = [
+    ...(r.roleLabel ? [`${r.roleLabel}：${sectorTag || '前排辨识度核心'}，拒绝后排补涨跟风`] : []),
+    ...(rec?.whyReasons || [
+      `⚡ 涨停基因：近30日 ${r.limitUpCount30d || 1} 次涨停，未破起涨支撑`,
+      '🛡️ 主力控盘：分时均价线上方承接稳健',
+      '🎯 明确做T预案：具备日内低吸高抛价位空间',
+    ]),
+  ].slice(0, 4);
+
   return {
     code: six(tcode),
     tcode,
@@ -128,6 +152,14 @@ const shortList = (plan?.rows || []).map((r) => {
     poolLabel: '短线做T',
     score: r.score,
     verdict: r.verdict,
+    sector: r.sector || '',
+    sectorTier: r.sectorTier || '',
+    sectorLabel: r.sectorLabel || '',
+    leaderRole: r.leaderRole || '',
+    roleLabel: r.roleLabel || '',
+    chgRankInSector: r.chgRankInSector ?? null,
+    amtRankInSector: r.amtRankInSector ?? null,
+    limitUpCount30d: r.limitUpCount30d ?? null,
     price: r.pc,
     amp: r.amp,
     volRatio: r.volRatio,
@@ -144,16 +176,12 @@ const shortList = (plan?.rows || []).map((r) => {
     action: env.canNewLongT ? r.action : '暂停（环境否决正T）',
     gates: { amp: r.g1, trend: r.g2, vol: r.g3 },     // 三闸门判定明细
     reviewDate: null,                                // 只有入选池时才需要复核日
-    whyReasons: rec?.whyReasons || [
-      '⚡ 涨停基因：突破平台或强势封板放量',
-      '🛡️ 主力控盘：分时均价线上方运行时间长',
-      '🎯 明确做T预案：具备日内低吸高抛价位空间'
-    ],
+    whyReasons: dynamicReasons,
     riskCheck: rec?.riskCheck || {
       status: 'safe',
       statusText: '🟢 未见重大恶性利空',
       risks: [],
-      highlights: ['非ST标的，无退市警示', '流通市值适中，流动性正常']
+      highlights: ['非ST标的，无退市警示', '已通过前排身位核验，非后排补涨跟风']
     },
     retOpen: rec?.retOpen ?? null,
     totalReturnWithT: rec?.totalReturnWithT ?? null,

@@ -5,6 +5,7 @@
 import { f2, f3, pct, money, money2, todayStr, toast, toastOk, toastWarn, toastErr, copyPlain, soundChime, FEE, LCOLS, LS_KEYS } from './utils.js';
 import { pool, savePool, LOG, saveLog } from './state.js';
 import { calc, MKT } from './api.js';
+import { evaluateChannelHoldingDiscipline } from './risk.js';
 
 export function logNet(r){
   const b=+r.buy||0, s=+r.sell||0, q=+r.qty||0;
@@ -297,10 +298,39 @@ export function auditTradeExecution({
     tagSet.add('early_exit');
   }
 
+  // 8) 🩸 下跌通道浮亏死补 & 🥀 弱势连红3天贪婪追买（三步实战铁律审计）
+  const discSnap = hitPool ? evaluateChannelHoldingDiscipline(hitPool, { mktLevel }) : null;
+  const holdingFloatPct =
+    hitPool && +hitPool.shares > 0 && +hitPool.cost > 0 && buyPx > 0
+      ? +(((buyPx - +hitPool.cost) / +hitPool.cost) * 100).toFixed(2)
+      : (discSnap?.floatPct ?? 0);
+  const redStreak = discSnap?.redStreak ?? 0;
+
+  if (mktLevel !== 'OK' && mktLevel !== 'NA') {
+    if (
+      (dir === '买入加仓' || (dir === '直接买入' && hitPool && +hitPool.shares > 0)) &&
+      +hitPool?.cost > 0 &&
+      buyPx < +hitPool.cost * 0.99
+    ) {
+      tagSet.add('averaging_down');
+    }
+    if (isOpeningBuy && redStreak >= 3) {
+      tagSet.add('hold_past_3red');
+    }
+  }
+
   const finalTags = Array.from(tagSet);
 
-  // 自动校准计划内/外：若出现追高、逆市、报复性交易或窄幅乱T且用户未强行指定，归为计划外
-  const severeAutoTags = ['fomo_chase', 'against_trend', 'revenge_trade', 'impulse_t'];
+  // 自动校准计划内/外：若出现追高、逆市、浮亏死补、三连阳追买、报复性交易或窄幅乱T且用户未强行指定，归为计划外
+  const severeAutoTags = [
+    'fomo_chase',
+    'against_trend',
+    'revenge_trade',
+    'impulse_t',
+    'averaging_down',
+    'hold_past_3red',
+    'backrow_laggard',
+  ];
   const resolvedPlan =
     plan === '计划外' || (!plan && finalTags.some((t) => severeAutoTags.includes(t)))
       ? '计划外'
@@ -312,12 +342,16 @@ export function auditTradeExecution({
   let score = 100;
   if (resolvedPlan === '计划外') score -= 12;
   if (tagSet.has('fomo_chase') || tagSet.has('late_chase')) score -= 18;
+  if (tagSet.has('averaging_down')) score -= 24;
+  if (tagSet.has('hold_past_3red')) score -= 18;
+  if (tagSet.has('t1_illusion_hold')) score -= 18;
+  if (tagSet.has('backrow_laggard')) score -= 16;
   if (tagSet.has('no_stoploss') || tagSet.has('t_to_add')) score -= 22;
   if (tagSet.has('against_trend')) score -= 18;
   if (tagSet.has('revenge_trade')) score -= 22;
   if (tagSet.has('impulse_t')) score -= 14;
   if (tagSet.has('heavy_gamble')) score -= 15;
-  if (tagSet.has('early_exit')) score -= 8;
+  if (tagSet.has('early_exit')) score -= (mktLevel === 'OK' ? 12 : 5);
   if (buyDevPct !== null && dir !== '倒T' && buyDevPct > 0.8 && !tagSet.has('fomo_chase')) {
     score -= Math.min(12, Math.round((buyDevPct - 0.5) * 6));
   }
@@ -329,6 +363,8 @@ export function auditTradeExecution({
     alphaNet,
     buyDevPct,
     sellDevPct,
+    holdingFloatPct,
+    redStreak,
     mistakeTags: finalTags,
     plan: resolvedPlan,
     basis: basis || (resolvedPlan === '计划外' ? '盘中主观脉冲' : '量化网格信号'),

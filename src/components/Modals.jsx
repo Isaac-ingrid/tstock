@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { f2, money, getTodayTStatus, toastWarn } from '../services/utils.js';
 import { calc } from '../services/api.js';
+import { evaluateChannelHoldingDiscipline } from '../services/risk.js';
 
 /* 1. 快捷记T弹窗（含单日防上头熔断锁保护：锁买不锁卖） */
 export function QuickTModal({ modalData, tradeLogs = [], tiltState = null, onClose, onConfirm }) {
@@ -67,6 +68,10 @@ function QuickTModalInner({ modalData, tradeLogs = [], tiltState = null, onClose
 
   let c = null;
   try { c = calc(stock); } catch (_) {}
+  const channelDisc = evaluateChannelHoldingDiscipline(stock, {
+    tradeLogs,
+    mktLevel: c?.mktLevel || '',
+  });
 
   const b = parseFloat(buyPx) || 0;
   const s = parseFloat(sellPx) || 0;
@@ -112,6 +117,15 @@ function QuickTModalInner({ modalData, tradeLogs = [], tiltState = null, onClose
       if (b <= 0 || q <= 0) {
         alert('请输入正确的买入价格与股数');
         return;
+      }
+      if (totalHeld > 0 && channelDisc?.forbidAddPosition) {
+        if (!window.confirm(`${channelDisc.forbidReason}\n\n确定仍要强行逆势补仓（将自动记入复盘违规审计）吗？`)) {
+          return;
+        }
+      } else if (totalHeld > 0 && channelDisc?.warn3Red) {
+        if (!window.confirm(`${channelDisc.warn3RedReason}\n\n确定仍要在连红高潮区继续加仓吗？`)) {
+          return;
+        }
       }
       onConfirm({
         stock,
@@ -197,6 +211,22 @@ function QuickTModalInner({ modalData, tradeLogs = [], tiltState = null, onClose
               <b>🛑 单日防上头熔断保护中：</b>{(tiltState?.reasons || []).join('；')}。
               <br />
               系统已自动锁定「🟢 正T」与「📥 买入」，<b>「📤 卖出(减/清)」与「🔴 倒T高抛」保持畅通</b>。
+            </div>
+          )}
+
+          {!isTiltLocked && (isDirectBuy || dir === '正T') && (channelDisc?.forbidAddPosition || channelDisc?.warn3Red) && (
+            <div style={{
+              padding: '8px 11px',
+              marginBottom: '12px',
+              borderRadius: '7px',
+              background: channelDisc.forbidAddPosition ? '#fef2f2' : '#fff7ed',
+              border: `1px solid ${channelDisc.forbidAddPosition ? '#f87171' : '#fb923c'}`,
+              color: channelDisc.forbidAddPosition ? '#991b1b' : '#9a3412',
+              fontSize: '11.5px',
+              lineHeight: 1.55
+            }}>
+              <b>{channelDisc.forbidAddPosition ? '🩸 浮亏逆势补仓高危拦截：' : '🔥 弱势连红 3 天止盈提醒：'}</b>
+              {channelDisc.forbidAddPosition ? channelDisc.forbidReason : channelDisc.warn3RedReason}
             </div>
           )}
 

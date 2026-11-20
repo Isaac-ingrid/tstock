@@ -279,12 +279,42 @@ export default function SelectionSection({
         key={data.code6}
         className={`sel-chip ${vCls} ${have ? 'in-pool' : ''}`}
         onClick={() => onOpenReason(r, have)}
-        title={`点击查看入选理由与量化支撑\n${data.isLive ? `【今日09:25实时竞价定盘】\n开盘价: ¥${f2(data.liveOpen)}  昨收: ¥${f2(data.livePrev)}\n跳空幅度: ${rGap >= 0 ? '+' : ''}${rGap.toFixed(2)}% (${rTier?.tag})\n冲高预期: +${rTier?.space}%  +2%触及率: ${rTier?.hit2}%\n竞价量比: ${data.vr ? data.vr.toFixed(2) + '倍' : '—'}${pat ? `\n竞价形态: ${pat.tag} - ${pat.title}` : ''}${rig && rig.status !== 'none' ? `\n涨停硬度: ${rig.label} (评分:${rig.score})` : ''}` : '点击查看详情'}`}
+        title={`点击查看入选理由与量化支撑${r.sector ? `\n所属板块: ${r.sector}${r.sectorLabel ? ` (${r.sectorLabel})` : ''}` : ''}${r.roleLabel ? `\n板块身位: ${r.roleLabel}${r.chgRankInSector ? ` · 板块涨幅第${r.chgRankInSector}/成交第${r.amtRankInSector}` : ''}` : ''}\n${data.isLive ? `【今日09:25实时竞价定盘】\n开盘价: ¥${f2(data.liveOpen)}  昨收: ¥${f2(data.livePrev)}\n跳空幅度: ${rGap >= 0 ? '+' : ''}${rGap.toFixed(2)}% (${rTier?.tag})\n冲高预期: +${rTier?.space}%  +2%触及率: ${rTier?.hit2}%\n竞价量比: ${data.vr ? data.vr.toFixed(2) + '倍' : '—'}${pat ? `\n竞价形态: ${pat.tag} - ${pat.title}` : ''}${rig && rig.status !== 'none' ? `\n涨停硬度: ${rig.label} (评分:${rig.score})` : ''}` : '点击查看详情'}`}
       >
         <span className="sc-name">{r.name}</span>
         <span className="sc-code">{data.code6}</span>
         <span className="sc-score">{r.score || 80}分</span>
         <span className="sc-vd">{r.verdict || '观察'}</span>
+        {r.sector && (
+          <span
+            style={{
+              fontSize: '10px',
+              padding: '1px 5px',
+              borderRadius: '4px',
+              background: r.sectorTier === 'HOT' ? '#fff1f0' : 'var(--surface2)',
+              color: r.sectorTier === 'HOT' ? '#cf1322' : 'var(--sub)',
+              border: `1px solid ${r.sectorTier === 'HOT' ? '#ffa39e' : 'var(--line)'}`,
+              fontWeight: r.sectorTier === 'HOT' ? 700 : 500,
+            }}
+          >
+            {r.sectorTier === 'HOT' ? '🔥' : ''}{r.sector}
+          </span>
+        )}
+        {r.roleLabel && (
+          <span
+            style={{
+              fontSize: '10px',
+              padding: '1px 5px',
+              borderRadius: '4px',
+              background: r.leaderRole === 'dragon' ? '#fef3c7' : r.leaderRole === 'core' ? '#e0f2fe' : '#f1f5f9',
+              color: r.leaderRole === 'dragon' ? '#92400e' : r.leaderRole === 'core' ? '#075985' : '#475569',
+              border: `1px solid ${r.leaderRole === 'dragon' ? '#fcd34d' : r.leaderRole === 'core' ? '#7dd3fc' : '#cbd5e1'}`,
+              fontWeight: 700,
+            }}
+          >
+            {r.roleLabel}
+          </span>
+        )}
         {rTier && (
           <span
             className="sc-auc"
@@ -425,10 +455,37 @@ export default function SelectionSection({
               </label>
             </div>
 
+            {/* 三步实战体系 · 大盘双通道总纲提示条 */}
+            <div
+              style={{
+                margin: '8px 0 10px',
+                padding: '7px 11px',
+                borderRadius: '7px',
+                fontSize: '12px',
+                lineHeight: 1.55,
+                background: env.level === 'OK' ? '#ecfdf5' : '#fff7ed',
+                border: `1px solid ${env.level === 'OK' ? '#a7f3d0' : '#fed7aa'}`,
+                color: env.level === 'OK' ? '#065f46' : '#9a3412',
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+            >
+              <b>{env.level === 'OK' ? '📈 上升通道 · 格局模式：' : '🛡️ 下跌/弱势通道 · 保命铁律：'}</b>
+              <span>
+                {env.channelGuide || (
+                  env.level === 'OK'
+                    ? '逢回调顺势加仓，沿 MA5/MA10 拉长格局扩大战果，勿轻易下车；只做持续板块前排龙头/中军。'
+                    : '下跌通道不存在踏空！严禁浮亏补仓摊平 · 建仓次日收绿直接割肉换票 · 连红3天必减仓/首阴清仓 · 已自动剔除看A做B后排补涨。'
+                )}
+              </span>
+            </div>
+
             {/* 短线候选芯片群 */}
             <div className="sel-group-title">
-              <span>🎯 短线做T候选（精选突破与量价配合）</span>
-              <span style={{ fontSize: '11.5px', color: 'var(--mute)' }}>展示今日 09:25 实时集合竞价定盘跳空幅度与档位</span>
+              <span>🎯 短线做T候选（主线持续板块 · 前排龙头与容量中军精选）</span>
+              <span style={{ fontSize: '11.5px', color: 'var(--mute)' }}>已剔除后排补涨跟风 · 展示今日 09:25 实时竞价跳空</span>
             </div>
             <div className="sel-chips" id="selChipsShort">
               {displayShort.length > 0 ? (

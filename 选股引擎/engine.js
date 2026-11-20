@@ -31,6 +31,8 @@ const CFG = {
   // 硬门槛
   chgMin: 3, chgMax: 5,
   capMin: 30, capMax: 200,
+  coreCapMax: 800,           // 板块成交前3的容量中军放宽上限（亿，如亨通模式）
+  coreMinAmount: 8e8,        // 容量中军当日最低成交额门槛（8亿）
   volRatioMin: 1,
   turnoverMin: 5, turnoverMax: 10,
   excludeBoard: ['创业板', '科创板', '北交所'],   // 统一 10cm 主板口径（剔除 20cm 创业/科创与 30cm 北交所）
@@ -79,13 +81,13 @@ async function getJson(url, encoding = 'utf-8', retry = 3) {
   throw lastErr;
 }
 
-/* ---------------- 全市场快照（分页 + 分域名轮换 + 本地缓存） ---------------- */
+/* ---------------- 全市场快照（分页 + 分域名轮换 + 本地缓存 + f100 行业板块） ---------------- */
 const EM_HOSTS = [1, 2, 7, 8, 9, 21, 25, 32, 40, 60, 82, 90];
 const emHost = () => `${EM_HOSTS[Math.floor(Math.random() * EM_HOSTS.length)]}.push2.eastmoney.com`;
 const EM_QS =
   'po=1&np=1&fltt=2&invt=2&fid=f3&pz=100' +
   '&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23' +
-  '&fields=f2,f3,f6,f8,f10,f12,f14,f15,f16,f18,f20';
+  '&fields=f2,f3,f6,f8,f10,f12,f14,f15,f16,f18,f20,f100';
 
 const CACHE = path.join(OUT_DIR, `snapshot-${TODAY}.json`);
 
@@ -104,7 +106,188 @@ function mapRow(d) {
     high: d.f15,
     low: d.f16,
     prevClose: d.f18,
+    sector: d.f100 && d.f100 !== '-' ? String(d.f100).trim() : '',
   };
+}
+
+/* 为缺少 f100 板块字段的历史缓存快照轻量补齐行业归属 */
+async function hydrateMissingSectors(rows) {
+  const hasCount = rows.filter((r) => r.sector).length;
+  if (hasCount >= Math.min(4500, rows.length * 0.88)) return rows;
+  try {
+    const secQs = 'po=1&np=1&fltt=2&invt=2&fid=f12&pz=100&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23&fields=f12,f100';
+    const first = await getJson(`https://${emHost()}/api/qt/clist/get?${secQs}&pn=1`, 'utf-8', 2);
+    const total = first?.data?.total || 0;
+    if (!total) return rows;
+    const secMap = new Map();
+    for (const d of (first?.data?.diff || [])) {
+      if (d.f12 && d.f100 && d.f100 !== '-') secMap.set(String(d.f12), String(d.f100).trim());
+    }
+    const pages = Math.ceil(total / 100);
+    let pn = 2;
+    const worker = async () => {
+      while (pn <= pages) {
+        const curPn = pn++;
+        try {
+          const j = await getJson(`https://${emHost()}/api/qt/clist/get?${secQs}&pn=${curPn}`, 'utf-8', 2);
+          for (const d of (j?.data?.diff || [])) {
+            if (d.f12 && d.f100 && d.f100 !== '-') secMap.set(String(d.f12), String(d.f100).trim());
+          }
+        } catch {}
+      }
+    };
+    await Promise.all(Array.from({ length: 5 }, worker));
+    if (secMap.size >= 500) {
+      rows.forEach((r) => {
+        if (!r.sector && secMap.has(r.raw)) r.sector = secMap.get(r.raw);
+      });
+      if (fs.existsSync(CACHE)) {
+        try {
+          const prev = JSON.parse(fs.readFileSync(CACHE, 'utf8'));
+          fs.writeFileSync(CACHE, JSON.stringify({ ...prev, rows }));
+        } catch {}
+      }
+      console.log(`  ✓ 已补齐行业板块归属：${secMap.size} 只`);
+    }
+  } catch {}
+  return rows;
+}
+
+/* 第二步 & 第三步：统计板块持续性梯队 + 识别前排龙头/容量中军 vs 看A做B后排补涨 */
+function buildSectorStats(all) {
+  const hotThemeSet = new Set();
+  const herdPath = path.join(__dirname, '..', 'data', 'herd_pool.json');
+  if (fs.existsSync(herdPath)) {
+    try {
+      const hp = JSON.parse(fs.readFileSync(herdPath, 'utf8'));
+      const clusters = hp.clusters || hp.themes || hp.boards || [];
+      for (const c of clusters) {
+        const nm = String(c.name || c.theme || c.board || '').trim();
+        if (nm && (c.days >= 2 || (c.count || c.ztCount || 0) >= 2 || (c.score || 0) >= 70)) {
+          hotThemeSet.add(nm);
+        }
+      }
+    } catch {}
+  }
+
+  const bySec = new Map();
+  for (const s of all) {
+    if (!s.sector || !s.name || /ST/i.test(s.name) || /^N|^C/.test(s.name)) continue;
+    if (!bySec.has(s.sector)) bySec.set(s.sector, []);
+    bySec.get(s.sector).push(s);
+  }
+
+  const stockMap = new Map();
+  const hotSectors = [];
+  for (const [sec, list] of bySec.entries()) {
+    const n = list.length;
+    if (!n) continue;
+    let ztCount = 0;
+    let strongCount = 0;
+    let upCount = 0;
+    let sumChg = 0;
+    for (const s of list) {
+      const lim = LIMIT_OF[boardOf(s.code)] || 10;
+      if (s.chgPct >= lim - 0.4) ztCount += 1;
+      if (s.chgPct >= 3.0 && s.volRatio > 1.0) strongCount += 1;
+      if (s.chgPct > 0) upCount += 1;
+      sumChg += s.chgPct || 0;
+    }
+    const upRatio = upCount / n;
+    const avgChg = sumChg / n;
+    const isHerdHot = [...hotThemeSet].some((t) => sec.includes(t) || t.includes(sec));
+
+    let tier = 'NEUTRAL';
+    let tierLabel = '普通轮动';
+    if ((ztCount >= 2 && upRatio >= 0.50) || (strongCount >= 7 && avgChg >= 1.1) || isHerdHot) {
+      tier = 'HOT';
+      tierLabel = '🔥主线持续';
+      hotSectors.push({ sector: sec, ztCount, strongCount, avgChg: +avgChg.toFixed(2) });
+    } else if (ztCount >= 1 || (strongCount >= 3 && avgChg >= 0.25)) {
+      tier = 'ACTIVE';
+      tierLabel = '📈板块活跃';
+    } else if (ztCount === 0 && strongCount <= 1 && avgChg < -0.2) {
+      tier = 'COLD';
+      tierLabel = '❄️孤狼散乱';
+    }
+
+    const byChg = [...list].sort((a, b) => (b.chgPct || 0) - (a.chgPct || 0));
+    const byAmt = [...list].sort((a, b) => (b.amount || 0) - (a.amount || 0));
+    const topChg = byChg[0]?.chgPct || 0;
+    const topName = byChg[0]?.name || '';
+    const chgRankMap = new Map(byChg.map((x, idx) => [x.code, idx + 1]));
+    const amtRankMap = new Map(byAmt.map((x, idx) => [x.code, idx + 1]));
+
+    for (const s of list) {
+      const chgRank = chgRankMap.get(s.code) || n;
+      const amtRank = amtRankMap.get(s.code) || n;
+      stockMap.set(s.code, {
+        sector: sec,
+        sectorSize: n,
+        ztCount,
+        strongCount,
+        upRatio: +upRatio.toFixed(2),
+        avgChg: +avgChg.toFixed(2),
+        tier,
+        tierLabel,
+        topChg,
+        topName,
+        chgRank,
+        amtRank,
+        amtPctile: +(amtRank / n).toFixed(3),
+      });
+    }
+  }
+
+  hotSectors.sort((a, b) => b.ztCount - a.ztCount || b.avgChg - a.avgChg);
+  return { stockMap, hotCount: hotSectors.length, hotSectors: hotSectors.slice(0, 8) };
+}
+
+function classifyLeaderRole(s, kl, sm) {
+  const zt30 = kl?.limitUpCount30d || 0;
+  const streak30 = kl?.maxStreak30d || 0;
+  const ret20 = kl?.ret20d || 0;
+
+  // 1) 👑 身位龙：30日内 >=2 次涨停（连板或双响炮老龙回马枪），或在活跃/主线板块涨幅排前 2 且具备涨停基因
+  if (zt30 >= 2 || streak30 >= 2 || (sm && (sm.tier === 'HOT' || sm.tier === 'ACTIVE') && sm.chgRank <= 2 && zt30 >= 1)) {
+    return { role: 'dragon', label: '👑身位龙', isBackRowLaggard: false };
+  }
+
+  // 2) 🏛️ 容量中军：板块内成交额排前 2 且成交额 >= 5 亿，兼具趋势或中大市值承接力（亨通模式）
+  if ((s.amount || 0) >= 5e8 && sm && sm.amtRank <= 2 && (s.totalCap >= 100 || kl?.isBull)) {
+    return { role: 'core', label: '🏛️容量中军', isBackRowLaggard: false };
+  }
+
+  // 3) 🚫 严禁看A做B买后排补涨：同板块已有前排涨停或大涨领头羊 (>=7%)，但该股涨幅与成交额双双居后排且无多板历史身位
+  if (
+    sm &&
+    (sm.ztCount >= 1 || sm.topChg >= 7.0) &&
+    sm.chgRank > 5 &&
+    (sm.topChg - s.chgPct) >= 3.8 &&
+    sm.amtRank > 5 &&
+    sm.amtPctile > 0.20 &&
+    zt30 <= 1 &&
+    ret20 < 8
+  ) {
+    return {
+      role: 'backrow',
+      label: '🚫后排补涨',
+      isBackRowLaggard: true,
+      reason: `同板块领涨 ${sm.topName}(+${sm.topChg.toFixed(1)}%)，该股涨幅排第${sm.chgRank}/成交排第${sm.amtRank}，属看A做B后排跟风`,
+    };
+  }
+
+  // 4) ⚡ 主线前排：涨幅或成交额居板块前 5（或前 15%）
+  if (sm && (sm.chgRank <= 5 || sm.amtRank <= 4 || sm.amtPctile <= 0.15)) {
+    return { role: 'front', label: '⚡前排核心', isBackRowLaggard: false };
+  }
+
+  // 5) 🐺 散乱独苗
+  if (!sm || sm.tier === 'COLD') {
+    return { role: 'lone', label: '🐺板块独苗', isBackRowLaggard: false };
+  }
+
+  return { role: 'relay', label: '🎯分歧回踩', isBackRowLaggard: false };
 }
 
 const isTodaySnapshot = (filename) =>
@@ -115,6 +298,7 @@ async function fetchAll({ force = false } = {}) {
     const cached = JSON.parse(fs.readFileSync(CACHE, 'utf8'));
     if (cached?.rows?.length > 3000) {
       console.log(`（使用本地快照缓存 ${CACHE}，共 ${cached.rows.length} 只；加 --force 重新拉取）`);
+      await hydrateMissingSectors(cached.rows);
       return { rows: cached.rows, isFallback: false, fallbackFile: null };
     }
   }
@@ -228,34 +412,50 @@ async function klineCheck(code, board, name) {
   if (bars.length < 20) return { ok: false, reason: 'K线不足' };
   const effLimit = /ST/i.test(name) ? 5 : LIMIT_OF[board];
   let hit = null;
+  let limitUpCount30d = 0;
+  let curStreak = 0;
+  let maxStreak30d = 0;
   const scan = bars.slice(-31, -1); // 近 30 个交易日，不含今日
   for (let i = 1; i < scan.length; i++) {
     const prev = scan[i - 1].close;
     const cur = scan[i];
     const chg = (cur.close / prev - 1) * 100;
-    if (chg >= effLimit - 0.35 && Math.abs(cur.close - cur.high) < Math.max(0.005, prev * 0.001)) {
+    const isZt = chg >= effLimit - 0.35 && Math.abs(cur.close - cur.high) < Math.max(0.005, prev * 0.001);
+    if (isZt) {
       hit = { date: cur.date, low: cur.low, close: cur.close, chg: +chg.toFixed(2) };
+      limitUpCount30d += 1;
+      curStreak += 1;
+      if (curStreak > maxStreak30d) maxStreak30d = curStreak;
+    } else {
+      curStreak = 0;
     }
   }
   if (!hit) return { ok: false, reason: '30日内无涨停' };
 
   const last = bars[bars.length - 1].close;
+  const base20 = bars[Math.max(0, bars.length - 21)].close;
+  const ret20d = base20 > 0 ? +(((last / base20) - 1) * 100).toFixed(2) : 0;
   const brokeLow = last < hit.low;
   const ma = (n) => bars.slice(-n).reduce((acc, b) => acc + b.close, 0) / n;
   const ma5 = ma(5), ma10 = ma(10), ma20 = ma(20);
   const isBear = ma5 < ma10 && ma10 < ma20 && last < ma5;
+  const isBull = ma5 > ma10 && ma10 > ma20 && last > ma5;
   const klineRisk = detectBearishKlineRisk(bars, bars.length - 1, effLimit);
 
-  if (brokeLow) return { ok: false, reason: '已跌破涨停日低点', hit, brokeLow: true, isBear, klineRisk };
-  if (isBear) return { ok: false, reason: '日线空头排列反压', hit, brokeLow: false, isBear: true, klineRisk };
-  if (klineRisk.risky) return { ok: false, reason: `顶部见顶K线(${klineRisk.reasons.join('/')})`, hit, brokeLow: false, isBear: false, klineRisk };
+  if (brokeLow) return { ok: false, reason: '已跌破涨停日低点', hit, limitUpCount30d, maxStreak30d, ret20d, brokeLow: true, isBear, isBull, klineRisk };
+  if (isBear) return { ok: false, reason: '日线空头排列反压', hit, limitUpCount30d, maxStreak30d, ret20d, brokeLow: false, isBear: true, isBull, klineRisk };
+  if (klineRisk.risky) return { ok: false, reason: `顶部见顶K线(${klineRisk.reasons.join('/')})`, hit, limitUpCount30d, maxStreak30d, ret20d, brokeLow: false, isBear: false, isBull, klineRisk };
 
   return {
     ok: true,
     hit,
+    limitUpCount30d,
+    maxStreak30d,
+    ret20d,
     pullback: +(((hit.close - last) / hit.close) * 100).toFixed(2), // 正=涨停后回落
     brokeLow: false,
     isBear: false,
+    isBull,
     klineRisk,
   };
 }
@@ -305,15 +505,22 @@ const { scoreStock } = require('./score');
   funnel[`⑦ 换手 ${CFG.turnoverMin}–${CFG.turnoverMax}%`] = cur.length;
   const hardPass = cur.slice();
 
-  /* 打分版放宽集（按贴近黄金区间 4% 涨幅 & 7.5% 换手排序，防截断丢失 3%~4% 优质股） */
+  /* 第二步：板块持续性与板块内成交/涨幅排位聚合（关联 herd_pool 主线共振） */
+  const sectorMeta = buildSectorStats(all);
+
+  /* 打分版放宽集（兼顾 30~200 亿弹性龙头回踩 与 200~800 亿高成交额容量中军，如亨通模式） */
   const loose = all
     .filter((s) => {
       if (!known(s) || /ST/i.test(s.name)) return false;
       if (CFG.excludeBoard.includes(boardOf(s.code))) return false;
-      if (s.totalCap < CFG.capMin || s.totalCap > CFG.capMax) return false;
+      const sm = sectorMeta.stockMap.get(s.code);
+      const isCapacityCore = s.totalCap > CFG.capMax && s.totalCap <= (CFG.coreCapMax || 800) &&
+        (s.amount || 0) >= (CFG.coreMinAmount || 8e8) && (sm?.amtRank ?? 99) <= 3;
+      if (s.totalCap < CFG.capMin || (s.totalCap > CFG.capMax && !isCapacityCore)) return false;
       if (s.chgPct < CFG.looseChgMin || s.chgPct > CFG.looseChgMax) return false;
       if (s.volRatio <= CFG.looseVolRatioMin) return false;
-      if (s.turnover < CFG.looseTurnoverMin) return false;
+      const minTurn = isCapacityCore ? 2.0 : CFG.looseTurnoverMin;
+      if (s.turnover < minTurn) return false;
       return true;
     })
     .sort((a, b) => {
@@ -332,12 +539,13 @@ const { scoreStock } = require('./score');
   }
   console.log('═'.repeat(70));
   console.log(`\n严格版（前五步）幸存：${hardPass.length} 只` + (hardPass.length ? '：' + hardPass.map((s) => `${s.name}(${s.chgPct}%)`).join('、') : ''));
-  console.log(`打分版放宽集：${loose.length} 只`);
+  console.log(`打分版放宽集（含主线容量中军）：${loose.length} 只｜识别主线持续板块 ${sectorMeta.hotCount} 个`);
 
-  /* 精筛：涨停史 → VWAP */
+  /* 精筛：涨停史 → 板块持续性 & 龙头去后排 → VWAP */
   const pool = [...new Set([...hardPass, ...loose].map((s) => s.code))].slice(0, 400);
   const map = Object.fromEntries(all.map((s) => [s.code, s]));
   const results = [];
+  let backrowFilteredCount = 0;
   const cachedVwMap = (() => {
     const m = new Map();
     for (const fn of [`${TODAY}.rescored.json`, `${TODAY}.json`]) {
@@ -359,37 +567,64 @@ const { scoreStock } = require('./score');
     const s = map[code];
     const board = boardOf(code);
     const kl = await klineCheck(code, board, s.name);
-    const rec = { ...s, board, kl, vw: null, score: 0, verdict: '放弃', parts: null };
+    const sm = sectorMeta.stockMap.get(code) || null;
+    const roleInfo = classifyLeaderRole(s, kl, sm);
+    const rec = {
+      ...s,
+      board,
+      sector: sm?.sector || s.sector || '',
+      sectorTier: sm?.tier || 'NEUTRAL',
+      sectorLabel: sm?.tierLabel || '普通轮动',
+      chgRankInSector: sm?.chgRank ?? null,
+      amtRankInSector: sm?.amtRank ?? null,
+      leaderRole: roleInfo.role,
+      roleLabel: roleInfo.label,
+      isBackRowLaggard: roleInfo.isBackRowLaggard,
+      backRowReason: roleInfo.reason || '',
+      kl,
+      vw: null,
+      score: 0,
+      verdict: '放弃',
+      parts: null,
+    };
     if (kl.ok) {
-      const liveVw = await vwapCheck(code);
-      rec.vw = (liveVw && (!liveVw.date || liveVw.date === TODAY))
-        ? liveVw
-        : (cachedVwMap.get(code) || null);
-      const sc = scoreStock({ ...s, kl, vw: rec.vw });
+      if (roleInfo.isBackRowLaggard) {
+        backrowFilteredCount += 1;
+        rec.kl = { ...kl, backrowVeto: roleInfo.reason };
+      } else {
+        const liveVw = await vwapCheck(code);
+        rec.vw = (liveVw && (!liveVw.date || liveVw.date === TODAY))
+          ? liveVw
+          : (cachedVwMap.get(code) || null);
+      }
+      const sc = scoreStock(rec);
       Object.assign(rec, { parts: sc.parts, score: sc.total, verdict: sc.verdict });
     }
     results.push(rec);
   }
 
-  const passed = results.filter((r) => r.kl.ok).sort((a, b) => b.score - a.score);
+  const passed = results
+    .filter((r) => r.kl.ok && !r.isBackRowLaggard && r.verdict !== '放弃')
+    .sort((a, b) => b.score - a.score);
   const strictPass = passed.filter((r) => r.vw && r.vw.strictPass);
 
-  console.log(`\n通过涨停史 + VWAP 复核：${passed.length} 只｜其中「VWAP 始终不破」严格达标：${strictPass.length} 只`);
+  console.log(`\n通过涨停史 + 龙头身位 + VWAP 复核：${passed.length} 只（已主动剔除「看A做B」后排补涨跟风 ${backrowFilteredCount} 只）｜严格VWAP达标：${strictPass.length} 只`);
   if (!strictPass.length) {
     console.log('  ⚠ 严格六步法（Step6 = 全天不破均价线）今日零候选 —— 与评估预判一致。');
   }
 
   const show = passed.slice(0, limitN);
-  const W = [10, 9, 6, 7, 6, 7, 8, 9, 9, 11, 7, 5, 6];
-  const H = ['名称', '代码', '板块', '涨幅%', '量比', '换手%', '总市值', '在线%', '破线分', '涨停日', '回落%', '得分', '结论'];
-  console.log('\n' + '─'.repeat(103));
+  const W = [10, 9, 10, 10, 7, 6, 7, 8, 8, 9, 7, 5, 6];
+  const H = ['名称', '代码', '所属板块', '身位', '涨幅%', '量比', '换手%', '总市值', '在线%', '涨停日', '回落%', '得分', '结论'];
+  console.log('\n' + '─'.repeat(110));
   console.log(H.map((h, i) => h.padEnd(W[i])).join(''));
-  console.log('─'.repeat(103));
+  console.log('─'.repeat(110));
   for (const r of show) {
     const cells = [
-      r.name.slice(0, 5), r.code, r.board, r.chgPct.toFixed(2), r.volRatio.toFixed(2),
+      r.name.slice(0, 5), r.code, (r.sector || r.board).slice(0, 5), (r.roleLabel || '').replace(/^[^\u4e00-\u9fa5]+/, '').slice(0, 4),
+      r.chgPct.toFixed(2), r.volRatio.toFixed(2),
       r.turnover.toFixed(2), r.totalCap.toFixed(0), (r.vw?.onlineRatio ?? '-').toString(),
-      (r.vw?.belowAfter10 ?? '-').toString(), r.kl.hit.date.slice(5), r.kl.pullback.toFixed(1),
+      r.kl.hit.date.slice(5), r.kl.pullback.toFixed(1),
       r.score.toString(), r.verdict,
     ];
     console.log(cells.map((x, i) => String(x).padEnd(W[i])).join(''));
@@ -404,7 +639,10 @@ const { scoreStock } = require('./score');
   const file = path.join(OUT_DIR, `${TODAY}.json`);
   fs.writeFileSync(file, JSON.stringify({
     date: TODAY, generatedAt: new Date().toISOString(),
-    total: all.length, funnel, hardPass: hardPass.map((s) => s.code),
+    total: all.length, funnel,
+    backrowFilteredCount,
+    hotSectors: sectorMeta.hotSectors,
+    hardPass: hardPass.map((s) => s.code),
     strictPass: strictPass.map((r) => r.code),
     results: passed,
   }, null, 2));
@@ -420,14 +658,23 @@ const { scoreStock } = require('./score');
     const picks = {
       date: TODAY,
       generatedAt: new Date().toISOString(),
-      note: '引擎当日输出；score/verdict 为打分版结论。收益回算只认这份清单。',
+      note: '引擎当日输出；含板块持续性与前排龙头身位过滤（已剔除后排补涨跟风）。',
       funnel,
+      backrowFilteredCount,
       picks: passed.map((r) => ({
         code: r.code, name: r.name, board: r.board,
+        sector: r.sector || '',
+        sectorTier: r.sectorTier || '',
+        sectorLabel: r.sectorLabel || '',
+        leaderRole: r.leaderRole || '',
+        roleLabel: r.roleLabel || '',
+        chgRankInSector: r.chgRankInSector ?? null,
+        amtRankInSector: r.amtRankInSector ?? null,
         chgPct: r.chgPct, volRatio: r.volRatio, turnover: r.turnover,
         totalCap: +r.totalCap.toFixed(1), amount: r.amount,
         score: r.score, verdict: r.verdict, parts: r.parts,
         limitUpDate: r.kl?.hit?.date || null,
+        limitUpCount30d: r.kl?.limitUpCount30d ?? 1,
         pullback: r.kl?.pullback ?? null,
         vwapOnline: r.vw?.onlineRatio ?? null,
         vwapBreachAfter10: r.vw?.belowAfter10 ?? null,

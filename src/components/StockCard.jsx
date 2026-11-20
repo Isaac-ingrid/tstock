@@ -4,6 +4,7 @@ import { calc, posCalc, computeTA, rsCalc, drawRS, computeExperimentalATRGrid, c
 import { getAuctionTier, computeAuctionPattern, computeLimitUpRigidity, computeNextDayExitDecision } from '../services/auction.js';
 import ChartCanvas from './ChartCanvas.jsx';
 import TechAndResearchSection from './TechAndResearchSection.jsx';
+import { evaluateChannelHoldingDiscipline } from '../services/risk.js';
 
 export const MODE_BADGE = {
   BUY: ['buy', '正T'],
@@ -79,6 +80,10 @@ export default function StockCard({
     }
   })();
   const todayT = getTodayTStatus(stock, effectiveTradeLogs);
+  const channelDisc = evaluateChannelHoldingDiscipline(stock, {
+    tradeLogs: effectiveTradeLogs,
+    mktLevel: c.mktLevel,
+  });
 
   // 14:40 尾盘清T预警触发判定 (14:40~15:00 或开启演练模拟)
   const isTailRiskTime = (() => {
@@ -213,11 +218,20 @@ export default function StockCard({
     trialCostDiff = trialNewCost - oldCost;
   }
 
-  // 执行买入建仓或加仓（支持加权平均均价重算与流水写入）
+  // 执行买入建仓或加仓（支持加权平均均价重算、双通道禁逆势补仓拦截与流水写入）
   const handleExecuteBuy = () => {
     if (!isBuyInputValid) {
       toastErr('请输入有效的买入股数与买入价格');
       return;
+    }
+    if (oldShares > 0 && channelDisc?.forbidAddPosition) {
+      if (!window.confirm(`${channelDisc.forbidReason}\n\n确定仍要强行逆势补仓（将自动记入复盘违规审计）吗？`)) {
+        return;
+      }
+    } else if (oldShares > 0 && channelDisc?.warn3Red) {
+      if (!window.confirm(`${channelDisc.warn3RedReason}\n\n确定仍要在连红高潮区继续加仓吗？`)) {
+        return;
+      }
     }
     if (onBuyStock) {
       onBuyStock({ stock, qty: inputBuyQty, buy: inputBuyPx });
@@ -441,6 +455,36 @@ export default function StockCard({
             🚨 尾盘清T ({todayT.unclosedShares}股)
           </span>
         )}
+        {hasHoldings && channelDisc?.alert && (
+          <span
+            className="snap-tag"
+            style={{
+              background:
+                channelDisc.alert.kind === 'danger'
+                  ? '#fef2f2'
+                  : channelDisc.alert.kind === 'warn'
+                  ? '#fff7ed'
+                  : '#ecfdf5',
+              borderColor:
+                channelDisc.alert.kind === 'danger'
+                  ? '#fca5a5'
+                  : channelDisc.alert.kind === 'warn'
+                  ? '#fdba74'
+                  : '#86efac',
+              color:
+                channelDisc.alert.kind === 'danger'
+                  ? '#991b1b'
+                  : channelDisc.alert.kind === 'warn'
+                  ? '#9a3412'
+                  : '#065f46',
+              fontWeight: 700,
+              fontSize: '11px',
+            }}
+            title={channelDisc.alert.text}
+          >
+            {channelDisc.alert.badge}
+          </span>
+        )}
         <span
           className="snap-tag"
           style={{
@@ -470,11 +514,16 @@ export default function StockCard({
           <button
             type="button"
             className="mini"
-            style={{ color: '#1677ff', borderColor: '#91caff', background: '#e6f4ff', fontWeight: 700 }}
+            style={{
+              color: channelDisc?.forbidAddPosition ? '#991b1b' : '#1677ff',
+              borderColor: channelDisc?.forbidAddPosition ? '#fca5a5' : '#91caff',
+              background: channelDisc?.forbidAddPosition ? '#fef2f2' : '#e6f4ff',
+              fontWeight: 700,
+            }}
             onClick={() => onOpenQuickT(stock, '直接买入', f2(stock.price), hasHoldings ? 500 : 1000)}
-            title="直接买入建仓或加仓（自动计算加权平均持仓成本）"
+            title={channelDisc?.forbidAddPosition ? channelDisc.forbidReason : '直接买入建仓或加仓（自动计算加权平均持仓成本）'}
           >
-            📥 买入{hasHoldings ? '/加仓' : ''}
+            {channelDisc?.forbidAddPosition ? '🚫 禁逆势补仓' : `📥 买入${hasHoldings ? '/加仓' : ''}`}
           </button>
           {hasHoldings && (
             todayT.sellableShares > 0 ? (

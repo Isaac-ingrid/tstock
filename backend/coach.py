@@ -61,6 +61,10 @@ MISTAKE_LABEL_MAP = {
     "revenge_trade": "😡 报复性交易",
     "lone_wolf": "🐺 孤狼单打一日游",
     "late_chase": "🥀 滞后接盘高潮棒",
+    "averaging_down": "🩸 下跌通道浮亏死补",
+    "hold_past_3red": "🥀 弱势连红三日贪婪不减",
+    "t1_illusion_hold": "🪞 T+1收绿幻想反包",
+    "backrow_laggard": "🗑️ 看A做B买后排补涨",
 }
 
 
@@ -236,20 +240,43 @@ def build_quant_rule_review(
             unplanned_count += 1
             env_score -= 3.5
 
+        raw_set = {str(x) for x in tags_raw}
+        holding_float_pct = float(t.get("holdingFloatPct") or 0.0)
+        red_streak = int(float(t.get("redStreak") or 0))
+
+        # 自动侦测「下跌通道浮亏死补」与「弱势连红3天贪婪追买」
+        if env_level in ("WARN", "BAD"):
+            if dir_name in ("买入加仓", "直接买入") and holding_float_pct <= -1.0 and "averaging_down" not in raw_set:
+                raw_set.add("averaging_down")
+                tag_labels.append(MISTAKE_LABEL_MAP.get("averaging_down", "🩸 下跌通道浮亏死补"))
+            if red_streak >= 3 and dir_name in ("买入加仓", "正T", "直接买入") and "hold_past_3red" not in raw_set:
+                raw_set.add("hold_past_3red")
+                tag_labels.append(MISTAKE_LABEL_MAP.get("hold_past_3red", "🥀 弱势连红三日贪婪不减"))
+
         for lb in tag_labels:
             mistake_counter[lb] = mistake_counter.get(lb, 0) + 1
 
-        raw_set = {str(x) for x in tags_raw}
         lbl_joined = " ".join(tag_labels)
 
         if "fomo_chase" in raw_set or "late_chase" in raw_set or "追高" in lbl_joined or "接盘" in lbl_joined:
             buy_score -= 6.5
+        if "backrow_laggard" in raw_set or "后排" in lbl_joined:
+            buy_score -= 7.0
+        if "lone_wolf" in raw_set or "孤狼" in lbl_joined:
+            buy_score -= 5.0
         if "impulse_t" in raw_set or "冲动" in lbl_joined:
             buy_score -= 4.5
         if "early_exit" in raw_set or "卖飞" in lbl_joined:
-            sell_score -= 5.0
+            sell_score -= 3.0 if env_level != "OK" else 6.5  # 上升通道过早卖飞重罚，弱势通道落袋轻罚
+        if "hold_past_3red" in raw_set or "连红三日" in lbl_joined:
+            sell_score -= 7.5
         if "no_stoploss" in raw_set or "死扛" in lbl_joined:
             stop_score -= 8.0
+        if "averaging_down" in raw_set or "浮亏死补" in lbl_joined:
+            stop_score -= 8.5
+            env_score -= 4.5
+        if "t1_illusion_hold" in raw_set or "幻想反包" in lbl_joined:
+            stop_score -= 7.5
         if "t_to_add" in raw_set or "变加仓" in lbl_joined:
             stop_score -= 6.5
         if "against_trend" in raw_set or "逆市" in lbl_joined:
@@ -382,20 +409,32 @@ def build_quant_rule_review(
         psych_lines.append(f"- **交易员自省印证**：你在笔记中提到 *“{user_notes.strip()}”*，建议将其固化为明日盘前硬约束。")
 
     sop_rules: List[str] = []
+    if env_level == "OK":
+        sop_rules.append(
+            "1. **上升通道 · 格局与顺势加仓铁律**：当前双指数站稳均线（上升通道），主线前排龙头与容量中军沿 `MA5 / MA10` 拉长格局时间扩大战果，逢分时均线或五日线缩量回踩顺势加仓，切忌赚两三个点就轻易下车卖飞。"
+        )
+    else:
+        sop_rules.append(
+            f"1. **下跌/弱势通道 · 保命铁律（当前 {env_level} · 不存在踏空！）**：① **严禁浮亏补仓摊平**（杜绝一路跌一路补）；② **T+1 收盘审判**：建仓次日盘中跌了不急补不乱割，收盘若仍收绿直接割肉换票，绝不幻想第3天反包；③ **三连阳兑现**：建仓收红后连红满 3 天必须主动减仓，最迟出现**首阴收盘无条件清仓**！"
+        )
+
     if b_sc < 20:
-        sop_rules.append("1. **严控买点偏离红线（≤ +0.5%）**：正T挂单只准预埋在 `inA / inB` 或分时均线下方缩量回踩处，现价高于推荐买点 +0.8% 以上一律放弃不追。")
+        sop_rules.append(
+            "2. **选股严禁「看A做B」买后排补涨**：只做有持续性主线板块的前排身位龙或成交前二的容量中军，同板块已有涨停先锋时绝不因畏高去买后排跟风股；正T只预埋在 `inA / inB` 缩量回踩处。"
+        )
     else:
-        sop_rules.append("1. **延续分批低吸节奏**：继续保持在分时均线下方缩量企稳接第一份，振幅不足 3 格（约 3.8%）的织布票全天免战。")
+        sop_rules.append(
+            "2. **聚焦持续性主线前排**：延续先选持续性板块、再锁前排核心的选股纪律，振幅不足 3 格或散乱独苗板块全天免战。"
+        )
 
-    if st_sc < 20:
-        sop_rules.append("2. **执行无条件硬止损与 14:40 清T铁律**：跌破系统 `slA (-1.5%)` 止损线 60 秒内无条件市价砍仓；日内正T仓位 14:50 前无论盈亏必须平出，绝不变被动加仓。")
+    if st_sc < 20 or s_sc < 20:
+        sop_rules.append(
+            "3. **硬止损与连涨止盈闭环**：跌破系统 `slA` 止损线或 T+1 收绿无条件离场，日内正T仓位 14:50 前必须平出，绝不让做T演变成被动死扛加仓。"
+        )
     else:
-        sop_rules.append("2. **锁死单日熔断底线**：保持当前止损果断度，若单日连续止损达 2 笔或账户回撤触及 2.0%，立即开启作战台熔断锁停手休息。")
-
-    if e_sc < 20 or env_level in ("BAD", "WARN"):
-        sop_rules.append(f"3. **服从大盘环境闸门（当前环境：{env_level} · {env_text}）**：指数位于 MA20 下方时单笔 T 仓砍半，只做冲高先卖的「倒T」，严禁逆市满手接飞刀。")
-    else:
-        sop_rules.append("3. **止盈分批落袋防坐过山车**：触及第一止盈位 `tp1` 先兑现 50% 锁住规费与底润，剩余仓位设移动保本线博弈 `tp2`。")
+        sop_rules.append(
+            "3. **锁死单日熔断底线**：保持当前纪律执行力，单日连续止损达 2 笔或账户回撤触及 2.0% 时立即开启作战台熔断锁休息。"
+        )
 
     review_md = (
         f"### 🎯 一句话犀利定性\n"
@@ -404,10 +443,10 @@ def build_quant_rule_review(
         f"- **综合得分**: **{total_score} 分**（平仓胜率 {win_rate:.0f}% ｜ 实盘净额 `{'+' if total_net >= 0 else ''}¥{total_net:.2f}`"
         f"{f' ｜ 系统SOP基准 `+{total_sys_net:.0f}` 元' if duel_count > 0 and total_sys_net >= 0 else (f' ｜ 系统SOP基准 `{total_sys_net:.0f}` 元' if duel_count > 0 else '')}）\n"
         f"- **四维分项剖析**:\n"
-        f"  - **买点时机分**：`{b_sc} / 25`（检验是否严格回踩低吸、有无追高脉冲）\n"
-        f"  - **卖点与止盈分**：`{s_sc} / 25`（检验分批止盈兑现度、有无过早卖飞）\n"
-        f"  - **止损硬纪律分**：`{st_sc} / 25`（检验破位止损执行力、有无死扛或做T变加仓）\n"
-        f"  - **大局观与仓位分**：`{e_sc} / 25`（检验大盘环境匹配度、计划执行率与防报复交易）\n\n"
+        f"  - **买点与龙头身位分**：`{b_sc} / 25`（检验是否聚焦前排龙头回踩、有无追高或看A做B买后排）\n"
+        f"  - **卖点与三连阳止盈分**：`{s_sc} / 25`（检验弱势连红3天减仓/首阴清仓、上升期有无过早卖飞）\n"
+        f"  - **止损与禁逆势补仓分**：`{st_sc} / 25`（检验 T+1 收绿止损、破位执行力与有无浮亏死补摊平）\n"
+        f"  - **大盘通道与仓位分**：`{e_sc} / 25`（检验上升/下跌双通道仓位匹配度与防报复交易）\n\n"
         f"### 🔍 逐笔实操切片诊断\n"
         + "\n".join(slice_lines)
         + "\n\n### 🧠 交易心魔与心理博弈剖析\n"
@@ -421,7 +460,7 @@ def build_quant_rule_review(
         "engine": "quant_rule",
         "aiConfigured": False,
         "date": date,
-        "model": "内置量化规则教练 v2 (零延迟本地引擎)",
+        "model": "内置量化规则教练 v3 (三步实战体系双通道引擎)",
         "latencyMs": 1,
         "totalTrades": len(trades),
         "totalNet": round(total_net, 2),
@@ -439,15 +478,16 @@ def build_quant_rule_review(
 
 COACH_SYSTEM_PROMPT = """你是由顶级对冲基金操盘手与资深A股游资共同打造的「智策战情室 · 顶级职业交易教练 (AI Trading Coach)」。
 你的职责：以犀利、客观、专业、不留情面的实战视角，对交易员今日的实盘操作进行深度复盘诊断。
-你深刻理解：
-1. A股交易制度与做T本质：日内做T以回踩VWAP分时均价线为准绳，绝不追高，破位坚决止损，绝不让做T变成被动隔夜加仓；
-2. 大盘环境闸门：大盘破位MA20（BAD环境）时逆市开仓九死一生，宁缺毋滥；
-3. 交易心魔与人性弱点：贪婪（追高天花板）、恐惧（刚回调就抢跑割肉）、侥幸（破位死扛不认输）、报复性交易（亏钱后冲动开仓试图翻本）；
-4. 人机对决与摩擦成本：必须明确计算由于交易员“主观情绪犯错（未按系统推荐点位挂单）”造成的真金白银亏损（即主观情绪摩擦损耗）；
-5. A股情绪模因与玄学共振：深刻理解东方系、日/阳字辈、华字辈、龙蛇生肖、中字头等名字字辈炒作背后的行为金融学本质（低成本共识与模因溢价）。对交易进行「五维共振」检验（个股 × 板块/宗族 × 指数 × 情绪 × 空间梯队），警惕孤狼单打（板块无跟风、一日游）与滞后接盘（高潮末期最后一棒）。
+你严格奉行「三步实战铁律」进行审计：
+1. 第一步看大盘定双通道时钟：
+   - 上升通道（OK）：逢回调顺势加仓，拉长格局时间扩大战果，严防拿震荡思维过早卖飞主升大牛股；
+   - 下跌/弱势通道（WARN/BAD）：不存在踏空！严禁浮亏向下补仓摊平（防一路跌一路补深套）；建仓次日盘中跌了不急补不乱割，收盘若仍收绿必须果断割肉换票（绝不幻想第3天反包）；建仓收红后若连红满3天必须主动减仓，最多格局到收盘首阴无条件清仓，严防第4天核按钮闷杀；
+2. 第二步选持续性板块：只做有持续资金流入与梯队效应的主线板块，警惕孤狼单打一日游；
+3. 第三步只买前排龙头、严禁看A做B买后排补涨：前排涨得多跌得少接力多，后排跟风跌得多涨得少，绝不因畏高龙头而买后排垃圾；
+4. 日内做T与人机对决：日内做T以回踩VWAP分时均价线为准绳，绝不让做T变成被动隔夜加仓，精确核算主观情绪摩擦损耗。
 
-请根据用户提供的交易流水、盘面数据、计划偏离度%、失误归因、玄学字辈共振背景与心得，给出结构化、深度透彻的复盘诊断报告。
-报告语气：如严师般冷静、客观、直指命门，但同时给出清晰、可执行的下一步修正SOP。"""
+请根据用户提供的交易流水、盘面数据、计划偏离度%、失误归因与心得，给出结构化、深度透彻的复盘诊断报告。
+报告语气：如严师般冷静、客观、直指命门，给出清晰、可执行的下一步修正SOP。"""
 
 
 async def generate_coach_review(

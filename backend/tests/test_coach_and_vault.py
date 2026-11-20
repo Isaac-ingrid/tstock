@@ -180,6 +180,44 @@ class TestCoachAndUserVault(unittest.IsolatedAsyncioTestCase):
         )
         self.assertGreaterEqual(res["disciplineScore"], 95)
         self.assertEqual(res["frictionLoss"], 0.0)
+        self.assertIn("上升通道", res["review"])
+
+    def test_down_channel_averaging_down_and_3red_audit(self) -> None:
+        res = build_quant_rule_review(
+            trades=[
+                {
+                    "stock": "招商轮船 (601872)",
+                    "track": "short_swing",
+                    "dir": "买入加仓",
+                    "buy": 7.20,
+                    "sell": 0.0,
+                    "qty": 2000,
+                    "net": -5.0,
+                    "plan": "计划外",
+                    "holdingFloatPct": -6.8,
+                    "mistakeTags": ["backrow_laggard"],
+                },
+                {
+                    "stock": "某连涨股 (002582)",
+                    "track": "short_swing",
+                    "dir": "买入加仓",
+                    "buy": 10.5,
+                    "sell": 0.0,
+                    "qty": 1000,
+                    "net": -5.0,
+                    "plan": "计划外",
+                    "redStreak": 3,
+                    "mistakeTags": [],
+                },
+            ],
+            date="2026-11-19",
+            market_env={"level": "BAD", "text": "双指数破位下跌通道"},
+        )
+        self.assertTrue(res["ok"])
+        self.assertLess(res["disciplineScore"], 60)
+        self.assertIn("下跌通道浮亏死补", res["review"])
+        self.assertIn("弱势连红三日贪婪不减", res["review"])
+        self.assertIn("不存在踏空", res["review"])
 
 
 if __name__ == "__main__":

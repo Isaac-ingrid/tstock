@@ -1,20 +1,26 @@
 import React, { useState } from 'react';
 import { calc, posCalc } from '../services/api.js';
 import { f2, money, getTodayTStatus, copyPlain, toastWarn } from '../services/utils.js';
+import { evaluateChannelHoldingDiscipline } from '../services/risk.js';
 
 /**
  * 根据「自选观察」vs「实盘持仓」分别生成清晰、直白的买卖点判定结论：
  * - 自选（shares === 0）：明确回答「现在是不是买点？」+ 目标低吸价/止损价
  * - 持仓（shares > 0）：明确回答「现在是卖点、买点、止损还是持股观望？」+ 浮盈与触发价
- * - 统一联动全市场情绪红灯总阀、盘前公告高危排雷、盘中分时异动（急拉/跳水/冲板回落）及单日防上头熔断锁
+ * - 统一联动全市场情绪红灯总阀、盘前公告高危排雷、盘中分时异动（急拉/跳水/冲板回落）、单日防上头熔断锁与双通道持仓铁律
  */
-export function buildActionSignal(stock, { sentiment = null, noticeRisk = null, tiltState = null } = {}) {
+export function buildActionSignal(stock, { sentiment = null, noticeRisk = null, tiltState = null, tradeLogs = [] } = {}) {
   const pc = +stock.prevClose || 0;
   const px = +stock.price || pc;
   const chg = pc > 0 ? ((px - pc) / pc) * 100 : 0;
   const pos = posCalc(stock);
   const c = calc(stock);
   const hasPos = pos.sh > 0;
+  const channelDisc = evaluateChannelHoldingDiscipline(stock, {
+    tradeLogs,
+    sentiment,
+    mktLevel: c.mktLevel,
+  });
 
   const hasRedNotice = noticeRisk?.riskLevel === '高风险' && (noticeRisk.redFlags || []).length > 0;
   const redNoticeTag = hasRedNotice ? (noticeRisk.redFlags[0]?.tag || '高危公告') : '';
@@ -135,6 +141,21 @@ export function buildActionSignal(stock, { sentiment = null, noticeRisk = null, 
       badge = '🌊 分时跳水 · 暂禁接飞刀';
       headline = activeAnomaly.summary;
       triggerText = `严禁急跌中补仓，等5分钟缩量止跌后再看 ¥${f2(c.inA)}`;
+    } else if (channelDisc?.isFirstYinAfterStreak) {
+      kind = 'sell';
+      badge = `⚡ 卖点 · 连红${channelDisc.prevRedStreak}天首阴清仓`;
+      headline = `下跌通道前 ${channelDisc.prevRedStreak} 日连红后今日转阴（首阴），严防盈利大幅回撤，收盘果断清仓`;
+      triggerText = `优先市价/反抽 ¥${f2(c.outA)} 锁润清仓 · 严禁补仓`;
+    } else if (channelDisc?.warn3Red) {
+      kind = 'sell';
+      badge = `🔥 卖点 · 连红${channelDisc.redStreak}天必减仓`;
+      headline = `弱势通道已连红 ${channelDisc.redStreak} 天进入高潮衰竭区，主动减仓 50%+ 防第4天闷杀跌停`;
+      triggerText = `分批止盈 ¥${f2(c.outA)} / ¥${f2(c.outB)} · 禁追高加仓`;
+    } else if (channelDisc?.isT1Day && channelDisc.liveChg <= -0.25 && channelDisc.isNearOrAfterClose) {
+      kind = 'stop';
+      badge = '✂️ 卖点 · T+1收绿果断砍仓';
+      headline = '下跌通道建仓次日收盘仍下跌，拒绝幻想第 3 天反包，果断止损换票（下跌无踏空）';
+      triggerText = `尾盘/收盘纪律离场 · 严禁向下补仓摊平`;
     } else if (c.mode === 'BUY' || c.ignitionActive) {
       if (hasRedNotice) {
         kind = 'stop';
@@ -146,6 +167,11 @@ export function buildActionSignal(stock, { sentiment = null, noticeRisk = null, 
         badge = '🛑 熔断期 · 禁正T仅可减仓';
         headline = '已触发单日防上头熔断锁，锁定正T低吸加仓，仅允许减仓或倒T高抛';
         triggerText = `反抽压力 ¥${f2(c.outA)} · 止损防守 ¥${f2(c.slA)}`;
+      } else if (channelDisc?.forbidAddPosition) {
+        kind = 'warn';
+        badge = '🩸 浮亏禁补 · 严防深套';
+        headline = `弱势通道当前浮亏 ${channelDisc.floatPct.toFixed(1)}%，严禁逆势向下补仓摊平（防一路跌一路补）`;
+        triggerText = `反抽 ¥${f2(c.outA)} 先倒T降仓 · 跌破 ¥${f2(c.slA)} 止损`;
       } else if (isRedSentiment) {
         kind = 'warn';
         badge = '🔴 情绪红灯 · 禁正T仅倒T';
@@ -156,23 +182,35 @@ export function buildActionSignal(stock, { sentiment = null, noticeRisk = null, 
         kind = 'buy';
         badge = c.ignitionActive
           ? '🚀 强攻买点 · 顺势正T'
+          : channelDisc?.channelMode === 'UP'
+          ? (isNearBuy ? '📈 上升通道 · 回调加仓/正T' : '📈 上升通道 · 挂单低吸')
           : (isNearBuy ? '🟢 当前买点 · 低吸正T' : '🟢 偏买点 · 挂单正T');
         headline = c.ignitionActive
           ? '放量站稳 MA20 突破，底仓拿稳并顺势做正T'
-          : '缩量回踩支撑，可低吸做正T摊薄成本';
-        triggerText = `低吸 ¥${f2(c.inA)} → T出目标 ¥${f2(c.tp1)} · 止损 ¥${f2(c.slA)}`;
+          : channelDisc?.channelMode === 'UP'
+          ? '大盘上升通道趋势完好，逢缩量回踩顺势加仓或正T，拉长格局扩大战果'
+          : '缩量回踩支撑，可轻仓低吸做日内正T（14:50前必平，勿变隔夜加仓）';
+        triggerText = `低吸 ¥${f2(c.inA)} → 目标 ¥${f2(c.tp1)} · 止损 ¥${f2(c.slA)}`;
       }
     } else {
-      kind = hasRedNotice || isTiltLocked ? 'warn' : 'wait';
+      kind = hasRedNotice || isTiltLocked || channelDisc?.forbidAddPosition ? 'warn' : 'wait';
       badge = hasRedNotice
         ? `⚠️ 持仓预警 · 公告(${redNoticeTag})`
         : isTiltLocked
         ? '🔒 熔断观察 · 禁买可卖'
+        : channelDisc?.forbidAddPosition
+        ? '🩸 弱势浮亏 · 禁补等反抽'
+        : channelDisc?.channelMode === 'UP'
+        ? '🦁 上升通道 · 锁仓格局'
         : '⏳ 持股观望 · 区间震荡';
       headline = hasRedNotice
         ? `近35天检出【${redNoticeTag}】，切勿加仓，反抽择机减仓`
         : isTiltLocked
         ? '单日防上头熔断保护中，底仓只设止损/止盈不加仓'
+        : channelDisc?.forbidAddPosition
+        ? `弱势通道浮亏 ${channelDisc.floatPct.toFixed(1)}%，严禁补仓摊平，反抽压力位优先减仓`
+        : channelDisc?.channelMode === 'UP'
+        ? '大盘上升通道沿 MA5/MA10 拿稳底仓让利润奔跑，勿轻易下车卖飞'
         : (c.grid < 3
           ? `振幅仅 ${c.amp.toFixed(1)}%，差价难覆盖税费，底仓不动`
           : '未触发买卖阈值，持仓等待触及上下格位');
@@ -194,6 +232,7 @@ export function buildActionSignal(stock, { sentiment = null, noticeRisk = null, 
     redNoticeTag,
     activeAnomaly,
     isTiltLocked,
+    channelDisc,
   };
 }
 
@@ -399,8 +438,8 @@ export default function BattleCardGrid({
         const isFocused = activeCode6 === code6;
         const isShort = s.tier === 'short' || s.poolTag === '短线';
         const noticeRisk = noticeRisks?.[code6] || null;
-        const sig = buildActionSignal(s, { sentiment, noticeRisk, tiltState });
-        const { c, pos, chg, px, hasPos, activeAnomaly, isTiltLocked } = sig;
+        const sig = buildActionSignal(s, { sentiment, noticeRisk, tiltState, tradeLogs });
+        const { c, pos, chg, px, hasPos, activeAnomaly, isTiltLocked, channelDisc } = sig;
         const chgCls = chg > 0 ? 'up' : chg < 0 ? 'down' : '';
         const tStatus = hasPos ? getTodayTStatus(s, tradeLogs) : null;
         const isEditingMemo = editingMemoCode === code6;
@@ -459,6 +498,47 @@ export default function BattleCardGrid({
                 {tStatus.t1LockedShares > 0 && !tStatus.isFirstDayLocked && (
                   <span className="bc-t1-lock">今日新买锁定 {tStatus.t1LockedShares} 股</span>
                 )}
+              </div>
+            )}
+
+            {/* 上升/下跌双通道持仓纪律实时告警条（浮亏禁补 / T+1收绿砍 / 连红3天减 / 首阴清仓 / 顺势格局） */}
+            {hasPos && channelDisc?.alert && (
+              <div
+                style={{
+                  margin: '5px 0',
+                  padding: '5px 8px',
+                  borderRadius: '6px',
+                  fontSize: '11.5px',
+                  lineHeight: 1.45,
+                  background:
+                    channelDisc.alert.kind === 'danger'
+                      ? '#fef2f2'
+                      : channelDisc.alert.kind === 'warn'
+                      ? '#fff7ed'
+                      : channelDisc.alert.kind === 'ok'
+                      ? '#ecfdf5'
+                      : '#f8fafc',
+                  border: `1px solid ${
+                    channelDisc.alert.kind === 'danger'
+                      ? '#fca5a5'
+                      : channelDisc.alert.kind === 'warn'
+                      ? '#fdba74'
+                      : channelDisc.alert.kind === 'ok'
+                      ? '#86efac'
+                      : '#cbd5e1'
+                  }`,
+                  color:
+                    channelDisc.alert.kind === 'danger'
+                      ? '#991b1b'
+                      : channelDisc.alert.kind === 'warn'
+                      ? '#9a3412'
+                      : channelDisc.alert.kind === 'ok'
+                      ? '#065f46'
+                      : '#334155',
+                }}
+              >
+                <b>{channelDisc.alert.badge}：</b>
+                <span>{channelDisc.alert.text}</span>
               </div>
             )}
 

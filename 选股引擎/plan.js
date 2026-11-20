@@ -99,8 +99,8 @@ const ma = (b, n) => { const w = b.slice(-n); return w.reduce((a, c) => a + c.cl
     const posPct = p.verdict === '可做' ? 30 : p.verdict === '小做' ? 15 : 0;
     const pos = envLevel === 'WARN' ? Math.round(posPct / 2) : envLevel === 'BAD' ? 0 : posPct;
 
-    // 综合放行判定
-    let action = '按计划挂单';
+    // 综合放行判定（结合大盘上升/下跌通道切换执行口令）
+    let action = envLevel === 'OK' ? '按计划挂单（顺均线格局）' : '按计划挂单（次日收绿必砍）';
     if (envLevel === 'BAD') action = '暂停（环境否决正T）';
     else if (g2.c === 'bad') action = '只做倒T';
     else if (g1.c === 'wait') action = '放弃（振幅不足）';
@@ -110,6 +110,16 @@ const ma = (b, n) => { const w = b.slice(-n); return w.reduce((a, c) => a + c.cl
       code: p.code, name: p.name, score: p.score, verdict: p.verdict,
       pc, amp: +amp.toFixed(2), grid: +grid.toFixed(1), bull, bear,
       volRatio: p.volRatio, vwapOnline: p.vwapOnline, turnover: p.turnover,
+      sector: p.sector || '',
+      sectorTier: p.sectorTier || '',
+      sectorLabel: p.sectorLabel || '',
+      leaderRole: p.leaderRole || '',
+      roleLabel: p.roleLabel || '',
+      chgRankInSector: p.chgRankInSector ?? null,
+      amtRankInSector: p.amtRankInSector ?? null,
+      limitUpDate: p.limitUpDate || null,
+      limitUpCount30d: p.limitUpCount30d ?? null,
+      pullback: p.pullback ?? null,
       expOpen: +expOpen.toFixed(2), sell1: +sell1.toFixed(2), sell2: +sell2.toFixed(2), stop: +stop.toFixed(2),
       pos, action, g1, g2, g3,
     });
@@ -119,7 +129,7 @@ const ma = (b, n) => { const w = b.slice(-n); return w.reduce((a, c) => a + c.cl
 
   // 总仓位归一：严格遵循环境总仓上限（OK 80% / WARN 50% / BAD 0%），单票上限 30%，杜绝多只标的合计超 100%
   const maxTotalPos = envLevel === 'OK' ? 80 : envLevel === 'WARN' ? 50 : 0;
-  const activeRows = rows.filter((r) => r.pos > 0 && r.action === '按计划挂单');
+  const activeRows = rows.filter((r) => r.pos > 0 && r.action.startsWith('按计划挂单'));
   const rawTotalPos = activeRows.reduce((acc, r) => acc + r.pos, 0);
   if (rawTotalPos > maxTotalPos && maxTotalPos > 0) {
     const scale = maxTotalPos / rawTotalPos;
@@ -127,7 +137,7 @@ const ma = (b, n) => { const w = b.slice(-n); return w.reduce((a, c) => a + c.cl
       r.pos = Math.min(30, Math.max(5, Math.floor((r.pos * scale) / 5) * 5));
     });
   }
-  const active = rows.filter((r) => r.pos > 0 && r.action === '按计划挂单');
+  const active = rows.filter((r) => r.pos > 0 && r.action.startsWith('按计划挂单'));
 
   for (const x of envIdx) {
     console.log(x.ok ? `  ${x.key} ${x.close}｜MA20 ${x.ma20}（${x.vsMa20}%）｜MA60 ${x.ma60}` : `  ${x.key} 取数失败`);
@@ -141,7 +151,17 @@ const ma = (b, n) => { const w = b.slice(-n); return w.reduce((a, c) => a + c.cl
       (r.pos + '%').padEnd(6) + r.action);
   }
 
+  const channelMode = envLevel === 'OK' ? 'UP' : 'DOWN';
+  const channelGuide = channelMode === 'UP'
+    ? '上升通道：逢缩量回调顺势加仓，沿 MA5/MA10 拉长格局扩大战果，不轻易下车'
+    : '下跌/弱势通道：严禁浮亏补仓摊平！建仓次日收绿果断割肉换票；连红 3 天主动减仓，出现首阴收盘清仓';
+
   fs.writeFileSync(path.join(__dirname, 'out', `plan-${date}.json`),
-    JSON.stringify({ date, baseDate: picks.date, env: { level: envLevel, text: envText, idx: iClose, ma20: iMa20, ma60: iMa60, dual: envIdx }, rows }, null, 1));
+    JSON.stringify({
+      date,
+      baseDate: picks.date,
+      env: { level: envLevel, text: envText, channelMode, channelGuide, idx: iClose, ma20: iMa20, ma60: iMa60, dual: envIdx },
+      rows,
+    }, null, 1));
   console.log(`\n→ out/plan-${date}.json`);
 })();

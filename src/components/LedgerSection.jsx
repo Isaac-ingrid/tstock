@@ -5,15 +5,19 @@ import { resolveSystemBenchmark, auditTradeExecution, computeDisciplineScorecard
 
 /* 结构化交易失误归因基因字典 */
 export const MISTAKE_DICTIONARY = [
+  { id: 'averaging_down', category: '逆势深套', name: '下跌通道浮亏死补', icon: '🩸', desc: '弱势/下跌通道中对浮亏持仓一路跌一路补摊平成本，短线试错演变成深套股东' },
+  { id: 'hold_past_3red', category: '贪婪回撤', name: '弱势连红三日贪婪不减', icon: '🥀', desc: '下跌通道反抽连红满 3 天未主动减仓锁盈，或出现首阴未清仓导致吃跌停回撤' },
+  { id: 't1_illusion_hold', category: '侥幸幻想', name: 'T+1收绿幻想反包', icon: '🪞', desc: '弱势通道建仓次日收盘仍下跌却不果断割肉换票，幻想第 3 天反包越套越深' },
+  { id: 'backrow_laggard', category: '选股失误', name: '看A做B买后排补涨', icon: '🗑️', desc: '畏高前排真龙头去买同板块后排补涨跟风股，结果前排抗跌、后排先大跌' },
   { id: 'fomo_chase', category: '买入心理', name: '追高天花板', icon: '🚀', desc: '未等缩量回踩，看到分时拉升冲动追买在全天高位或越过倒T高抛线' },
   { id: 'no_stoploss', category: '纪律执行', name: '破位死扛不认输', icon: '🛡️', desc: '触及纪律止损位心存侥幸不斩仓，亏损扩大后才被迫割肉' },
   { id: 't_to_add', category: '定位混乱', name: '做T做反变加仓', icon: '🔄', desc: '正T买入后未冲高，尾盘舍不得平仓导致日内T仓变成隔夜加仓' },
-  { id: 'early_exit', category: '持股耐心', name: '过早卖飞大肉', icon: '🕊️', desc: '分时均线平稳未破，远低于第一止盈位就恐慌抛光，错失日内主波段' },
+  { id: 'early_exit', category: '持股耐心', name: '过早卖飞大肉', icon: '🕊️', desc: '上升通道趋势完好未破均线，赚一点小钱就恐慌下车卖飞主升大肉' },
   { id: 'against_trend', category: '大局观', name: '逆市顶风作案', icon: '🚨', desc: '大盘环境亮红灯 BAD（双破 MA20/60）或个股触发破位锁时强行做多' },
   { id: 'heavy_gamble', category: '仓位控制', name: '短线重仓单赌', icon: '💣', desc: '单笔短线仓位过重，导致盘中心态严重变形' },
   { id: 'impulse_t', category: '节奏失序', name: '无量冲动乱T', icon: '⚡', desc: '日内振幅不足 2.6 格、无量织布时强行开仓磨损手续费' },
   { id: 'revenge_trade', category: '心态失衡', name: '报复性交易', icon: '💢', desc: '当日连续亏损后急于翻本，盲目逆向高频开新仓' },
-  { id: 'lone_wolf', category: '共振失误', name: '孤狼单打一日游', icon: '🐺', desc: '板块或同字辈宗族无跟风，单兵脉冲自拉自唱，次日熄火被套' },
+  { id: 'lone_wolf', category: '共振失误', name: '孤狼单打一日游', icon: '🐺', desc: '板块无持续性梯队跟风，单兵脉冲自拉自唱，次日熄火被套' },
   { id: 'late_chase', category: '节奏失序', name: '滞后接盘高潮棒', icon: '⏰', desc: '全网明牌高潮狂欢时才后知后觉追高，接在主力分歧出货末端' },
 ];
 
