@@ -114,14 +114,55 @@ async function main() {
       }
     }
 
-    // 还原受 Git 跟踪的运行期数据文件，防止盘中写入阻塞 git pull
-    spawnSync('git', ['checkout', '--', 'data/', '选股引擎/ledger/'], {
-      cwd: ROOT,
-      stdio: 'ignore',
-    });
+    // 清理已失效的 worktree 引用，防止残留沙箱阻塞切分支
+    spawnSync('git', ['worktree', 'prune'], { cwd: ROOT, stdio: 'ignore' });
 
-    runInherit('git', ['fetch', 'origin', 'main']);
-    runInherit('git', ['pull', '--ff-only', 'origin', 'main']);
+    if (IS_LINUX) {
+      // 线上生产机作为纯消费端：已备份实时池数据，清理受跟踪文件改动后强制切回并锁定 origin/main
+      spawnSync('git', ['checkout', '--', '.'], { cwd: ROOT, stdio: 'ignore' });
+      runInherit('git', ['fetch', 'origin', 'main']);
+      const curBranchRes = spawnSync('git', ['symbolic-ref', '--quiet', '--short', 'HEAD'], {
+        cwd: ROOT,
+        encoding: 'utf8',
+      });
+      const curBranch = curBranchRes.status === 0 ? String(curBranchRes.stdout || '').trim() : '';
+      if (curBranch !== 'main') {
+        warn(`检测到当前不在 main 分支 (${curBranch || 'detached HEAD'})，正在自动切回 main...`);
+      }
+      runInherit('git', ['checkout', '-B', 'main', 'origin/main']);
+      runInherit('git', ['branch', '--set-upstream-to=origin/main', 'main']);
+
+      // 自动清理残留的 otto/* 沙箱分支，保持线上分支列表干净唯一
+      const brOut = runText('git', ['for-each-ref', '--format=%(refname:short)', 'refs/heads/otto/']);
+      for (const staleBr of brOut.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)) {
+        const delRes = spawnSync('git', ['branch', '-D', staleBr], { cwd: ROOT, stdio: 'ignore' });
+        if (delRes.status === 0) {
+          ok(`已自动清理残留沙箱分支: ${staleBr}`);
+        }
+      }
+      ok('已锁定分支 main -> origin/main');
+    } else {
+      // 本地开发机：仅还原运行期数据文件，保留未提交代码，安全快进对齐 origin/main
+      spawnSync('git', ['checkout', '--', 'data/', '选股引擎/ledger/'], {
+        cwd: ROOT,
+        stdio: 'ignore',
+      });
+      runInherit('git', ['fetch', 'origin', 'main']);
+      const curBranchRes = spawnSync('git', ['symbolic-ref', '--quiet', '--short', 'HEAD'], {
+        cwd: ROOT,
+        encoding: 'utf8',
+      });
+      const curBranch = curBranchRes.status === 0 ? String(curBranchRes.stdout || '').trim() : '';
+      if (curBranch !== 'main') {
+        warn(`检测到当前不在 main 分支 (${curBranch || 'detached HEAD'})，正在切回 main...`);
+        runInherit('git', ['checkout', 'main']);
+      }
+      spawnSync('git', ['branch', '--set-upstream-to=origin/main', 'main'], {
+        cwd: ROOT,
+        stdio: 'ignore',
+      });
+      runInherit('git', ['pull', '--ff-only', 'origin', 'main']);
+    }
 
     // 恢复线上实时跟踪池与策略账本
     for (const keepRel of ['data/herd_pool.json', 'data/strategy_ledger.json', 'data/ignition_latest.json']) {
