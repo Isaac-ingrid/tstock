@@ -653,6 +653,93 @@ const nowStr = ()=> new Date().toLocaleTimeString('zh-CN',{hour12:false});
 
 /* 实时行情（腾讯）：现价 / 昨收 / 开高低 / 分时均线 / 量比
    字段下标已逐项核对（88 个字段挤在一行，取错一位不报错、只静默算错） */
+/* 解析腾讯 qt 数组中的五档买卖盘口、委比委差、内外盘与涨跌停封单额 */
+export function parseOrderBook5(f) {
+  if (!Array.isArray(f) || f.length < 29) return null;
+  const price = +f[3] || 0;
+  const prevClose = +f[4] || 0;
+  const outer = +f[7] || 0;
+  const inner = +f[8] || 0;
+  const ceiling = +f[47] || 0;
+  const floor = +f[48] || 0;
+  const CN_NUM = ['一', '二', '三', '四', '五'];
+
+  const bids = [1, 2, 3, 4, 5].map((lv) => ({
+    level: lv,
+    side: 'bid',
+    label: `买${CN_NUM[lv - 1]}`,
+    price: +f[7 + lv * 2] || 0,
+    vol: Math.max(0, Math.round(+f[8 + lv * 2] || 0)),
+  }));
+  const asks = [1, 2, 3, 4, 5].map((lv) => ({
+    level: lv,
+    side: 'ask',
+    label: `卖${CN_NUM[lv - 1]}`,
+    price: +f[17 + lv * 2] || 0,
+    vol: Math.max(0, Math.round(+f[18 + lv * 2] || 0)),
+  }));
+
+  const bidVolSum = bids.reduce((a, x) => a + x.vol, 0);
+  const askVolSum = asks.reduce((a, x) => a + x.vol, 0);
+  const totalVol = bidVolSum + askVolSum;
+  if (totalVol <= 0 && price <= 0) return null;
+
+  const weiCha = bidVolSum - askVolSum;
+  const weiBi = totalVol > 0 ? +(((bidVolSum - askVolSum) / totalVol) * 100).toFixed(1) : 0;
+  const bidRatio = totalVol > 0 ? Math.max(4, Math.min(96, Math.round((bidVolSum / totalVol) * 100))) : 50;
+  const maxLvVol = Math.max(1, ...bids.map((x) => x.vol), ...asks.map((x) => x.vol));
+  const wallThreshold = Math.max(500, Math.round((totalVol / 10) * 2.2));
+
+  let sealType = null;
+  let sealVol = 0;
+  let sealAmt = 0;
+  const b1 = bids[0];
+  const a1 = asks[0];
+  if (
+    askVolSum === 0 &&
+    b1.vol > 0 &&
+    b1.price > 0 &&
+    ((ceiling > 0 && Math.abs(b1.price - ceiling) <= 0.015) ||
+      (prevClose > 0 && (b1.price - prevClose) / prevClose >= 0.094))
+  ) {
+    sealType = 'UP';
+    sealVol = b1.vol;
+    sealAmt = Math.round(b1.vol * 100 * b1.price);
+  } else if (
+    bidVolSum === 0 &&
+    a1.vol > 0 &&
+    a1.price > 0 &&
+    ((floor > 0 && Math.abs(a1.price - floor) <= 0.015) ||
+      (prevClose > 0 && (a1.price - prevClose) / prevClose <= -0.094))
+  ) {
+    sealType = 'DOWN';
+    sealVol = a1.vol;
+    sealAmt = Math.round(a1.vol * 100 * a1.price);
+  }
+
+  return {
+    price,
+    prevClose,
+    outer,
+    inner,
+    ceiling,
+    floor,
+    bids,
+    asks,
+    bidVolSum,
+    askVolSum,
+    weiCha,
+    weiBi,
+    bidRatio,
+    maxLvVol,
+    wallThreshold,
+    sealType,
+    sealVol,
+    sealAmt,
+    updatedAt: String(f[30] || ''),
+  };
+}
+
 export async function fetchQuotes(codes){
   const url = T_Q + codes.join(',');
   const r = await fetchT(url, 7000);
@@ -668,12 +755,10 @@ export async function fetchQuotes(codes){
     out[m[1]] = { name:f[1], code:f[2], price:px, prevClose:+f[4], open:+f[5],
                   high:+f[33], low:+f[34], avg:+f[51], vr:+f[49],
                   ceiling:+f[47], floor:+f[48], amp:+f[43], time:f[30],
-                  /* 下面几个字段下标同样是逐项核对过的：38 换手率% / 39 PE(TTM) / 44 流通市值亿
-                     / 46 市净率 / 72 流通股本(股) / 7 外盘 / 8 内盘 / 6 成交量手 / 37 成交额万 
-                     / 9 买一价 / 10 买一量(手) / 19 卖一价 / 20 卖一量(手) */
                   to:+f[38], pe:+f[39], mcap:+f[44], pb:+f[46], floatSh:+f[72],
                   outer:+f[7], inner:+f[8], vol:+f[6], amt:+f[37],
-                  b1_p:+f[9], b1_v:+f[10], a1_p:+f[19], a1_v:+f[20] };
+                  b1_p:+f[9], b1_v:+f[10], a1_p:+f[19], a1_v:+f[20],
+                  book5: parseOrderBook5(f) };
   });
   return out;
 }
@@ -763,6 +848,7 @@ export async function fetchMinute(tcode){
   const raw = (dd && dd.data) || [];
   const qt = (node && node.qt && node.qt[tcode]) || [];
   const prev = +qt[4] || 0;
+  const book5 = parseOrderBook5(qt);
   const pts = [];
   let lv = 0, la = 0;
   raw.forEach(s=>{
@@ -774,7 +860,7 @@ export async function fetchMinute(tcode){
     lv = cv; la = ca;
     pts.push({ t, price:px, vol, amt, avg: cv > 0 ? ca/(cv*100) : px });
   });
-  return { date:(dd && dd.date) || '', prev, pts };
+  return { date:(dd && dd.date) || '', prev, pts, book5 };
 }
 
 /* 逐笔明细由独立后端代取，前端只解析腾讯返回的赋值文本，不再动态注入第三方脚本。 */
@@ -907,6 +993,9 @@ export async function loadChart(s, force){
     if (minData && benchData) {
       minData.bench = benchData;
     }
+    if (minData && minData.book5) {
+      s._book5 = minData.book5;
+    }
     if (minData && Array.isArray(minData.pts)) {
       const mnDate = String(minData.date || '').replace(/\D/g, '').slice(0, 8);
       if (mnDate === todayStr().replace(/-/g, '')) {
@@ -955,16 +1044,22 @@ export async function refreshSingleFastRt(s){
       vr: q.vr || 1,
       ceiling: q.ceiling || s.ceiling || 0,
       floor: q.floor || s.floor || 0,
+      outer: q.outer || s.outer || 0,
+      inner: q.inner || s.inner || 0,
       vol: q.vol || s.vol || 0,
       amt: q.amt || s.amt || 0,
       _t: nowStr(),
     };
     AUTO_FIELDS.forEach((k) => { if (man[k]) delete upd[k]; });
     Object.assign(s, upd);
+    if (q.book5) s._book5 = q.book5;
   }
   if (minRes.status === 'fulfilled' && minRes.value && Array.isArray(minRes.value.pts)) {
     if (benchRes.status === 'fulfilled' && benchRes.value) {
       minRes.value.bench = benchRes.value;
+    }
+    if (!s._book5 && minRes.value.book5) {
+      s._book5 = minRes.value.book5;
     }
     s._k = s._k || {};
     s._k['rt'] = chartEntry('line', { min: minRes.value });
@@ -1656,6 +1751,7 @@ export async function loadStock(s){
   };
   AUTO_FIELDS.forEach(k=>{ if (man[k]) delete upd[k]; });   // 代码/名称始终同步
   Object.assign(s, upd);
+  if (q.book5) s._book5 = q.book5;
 
   // 日K 单独取，失败只标记不报错（均线 / K线图 / 指标 全部共用这一份数据）
   let maOk = false;
@@ -2786,7 +2882,7 @@ export function checkPriceAlerts(targetPool = null){
     // 2) 持仓双通道实战纪律 P0 检查（首阴清仓令 / 14:40后 T+1 收绿止损令）
     if (held) {
       try {
-        const disc = evaluateChannelHoldingDiscipline({ stock: s, tradeLogs: LOG });
+        const disc = evaluateChannelHoldingDiscipline(s, { tradeLogs: LOG });
         if (disc?.isFirstYinAfterStreak) {
           candidates.push({
             cdKey: `${code6}|first_yin`,

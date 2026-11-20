@@ -27,6 +27,7 @@ export function setHover(id, idx) { _hover[id] = idx; }
 export const OV_DEF = { ma:'均线', boll:'BOLL', box:'箱体', cost:'成本', sr:'支撑压力' };
 export const SUB_DEF = { macd:'MACD', rsi:'RSI' };
 export const OV_RT_DEF = {
+  book: '五档盘口',
   bench: '大盘对比',
   cost: '持仓成本',
   be: '做T保本',
@@ -761,8 +762,8 @@ function drawRt(cv, s, min, ctx, L){
   }
   const prev = (min.prev || +s.prevClose || pts[0].price);
 
-  // 分时做T叠加开关与保本价准备（新增默认开启的大盘对比线 bench）
-  const ovRt = Object.assign({ bench: 1, cost: 1, be: 1, zones: 1, signal: 1, actual: 1, radar: 1 }, s.ovRt || {});
+  // 分时做T叠加开关与保本价准备（新增默认开启的五档盘口 book 与大盘对比线 bench）
+  const ovRt = Object.assign({ book: 1, bench: 1, cost: 1, be: 1, zones: 1, signal: 1, actual: 1, radar: 1 }, s.ovRt || {});
   s.ovRt = ovRt;
   const cost = +s.cost || 0;
   let bePrice = +s.bePrice || 0;

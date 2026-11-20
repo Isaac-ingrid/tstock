@@ -2208,4 +2208,234 @@
   border-color: #cbd5e1;
 }
 
+/* ============================================================
+   分时图右侧实时五档买卖盘口厚度墙 (.kline-rt-split / .ob5-panel)
+   ============================================================ */
+.kline-rt-split {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+}
+
+.kline-rt-split .kline-canvas-wrap {
+  flex: 1 1 0%;
+  min-width: 0;
+}
+
+.ob5-panel {
+  width: 204px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--line, #e2e8f0);
+  background: #fcfcfd;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 6px 8px;
+  font-size: 11.5px;
+  user-select: none;
+}
+
+.ob5-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.ob5-title {
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.ob5-subhint {
+  font-size: 10px;
+  color: var(--mute);
+}
+
+.ob5-seal-banner {
+  padding: 3px 6px;
+  border-radius: 5px;
+  font-size: 10.5px;
+  font-weight: 800;
+  margin-bottom: 5px;
+  text-align: center;
+  line-height: 1.35;
+}
+
+.ob5-seal-banner.is-up {
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  color: #dc2626;
+}
+
+.ob5-seal-banner.is-down {
+  background: #ecfdf5;
+  border: 1px solid #86efac;
+  color: #059669;
+}
+
+.ob5-weibi-box {
+  margin-bottom: 5px;
+}
+
+.ob5-weibi-top {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10.5px;
+  color: var(--sub);
+  margin-bottom: 2px;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.ob5-weibi-bar {
+  display: flex;
+  height: 5px;
+  border-radius: 99px;
+  overflow: hidden;
+  background: #10b981;
+}
+
+.ob5-weibi-bid {
+  height: 100%;
+  background: #ef4444;
+  transition: width 0.2s ease;
+}
+
+.ob5-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5px;
+}
+
+.ob5-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 30px 1fr auto;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  cursor: pointer;
+  overflow: hidden;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  line-height: 1.35;
+  transition: background 0.12s ease;
+}
+
+.ob5-row:hover {
+  background: #eff6ff;
+}
+
+.ob5-row.is-empty {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.ob5-bar {
+  position: absolute;
+  right: 0;
+  top: 1px;
+  bottom: 1px;
+  border-radius: 3px 0 0 3px;
+  pointer-events: none;
+  transition: width 0.2s ease;
+}
+
+.ob5-bar.ask {
+  background: rgba(16, 185, 129, 0.14);
+}
+
+.ob5-bar.ask.wall {
+  background: rgba(16, 185, 129, 0.27);
+}
+
+.ob5-bar.bid {
+  background: rgba(239, 68, 68, 0.14);
+}
+
+.ob5-bar.bid.wall {
+  background: rgba(239, 68, 68, 0.27);
+}
+
+.ob5-lbl {
+  position: relative;
+  z-index: 1;
+  font-family: var(--font-sans, system-ui, sans-serif);
+  font-size: 10.5px;
+  color: var(--mute);
+}
+
+.ob5-px {
+  position: relative;
+  z-index: 1;
+  font-weight: 700;
+  font-size: 11.5px;
+}
+
+.ob5-vol {
+  position: relative;
+  z-index: 1;
+  font-size: 11px;
+  color: var(--text);
+  text-align: right;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.ob5-wall-tag {
+  font-size: 9.5px;
+  padding: 0 3px;
+  border-radius: 3px;
+  font-weight: 800;
+  font-family: var(--font-sans, system-ui, sans-serif);
+}
+
+.ob5-wall-tag.ask {
+  background: #d1fae5;
+  color: #047857;
+}
+
+.ob5-wall-tag.bid {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.ob5-mid-divider {
+  margin: 4px 0;
+  padding: 3px 5px;
+  border-top: 1px dashed var(--line, #cbd5e1);
+  border-bottom: 1px dashed var(--line, #cbd5e1);
+  background: var(--surface, #fff);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  font-size: 10.5px;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+@media (max-width: 680px) {
+  .kline-rt-split {
+    flex-direction: column;
+  }
+  .ob5-panel {
+    width: 100%;
+    border-left: none;
+    border-top: 1px solid var(--line, #e2e8f0);
+    padding: 8px 12px;
+  }
+  .ob5-book-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .ob5-mid-divider {
+    margin: 4px 0 6px;
+  }
+}
+
+
 

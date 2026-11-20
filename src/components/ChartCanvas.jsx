@@ -1,9 +1,140 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { drawChart, chartMeta, chartLegendHTML, chartStat, PERIODS, PERIOD_LABEL, P_MAIN, P_MORE, OV_DEF, OV_RT_DEF, SUB_DEF, setHover } from '../services/chart.js';
 import { loadChart, loadDD } from '../services/api.js';
-import { f2 } from '../services/utils.js';
+import { f2, copyPlain } from '../services/utils.js';
 
 const VALID_PERIODS = ['rt', 'day', 'week', 'month', 'm1', 'm5', 'm15', 'm30', 'm60'];
+
+function fmtBookLots(v) {
+  const n = Math.abs(Number(v) || 0);
+  const sign = Number(v) < 0 ? '-' : '';
+  if (n >= 10000) return `${sign}${(n / 10000).toFixed(n >= 100000 ? 1 : 2)}万`;
+  return `${sign}${Math.round(n)}`;
+}
+
+function fmtSealAmt(amt) {
+  const n = Math.abs(Number(amt) || 0);
+  if (n >= 1e8) return `${(n / 1e8).toFixed(2)}亿`;
+  if (n >= 1e4) return `${Math.round(n / 1e4).toLocaleString('zh-CN')}万`;
+  return `${Math.round(n)}元`;
+}
+
+function OrderBook5Panel({ stock, book5, onPickLevel }) {
+  const pc = +(book5?.prevClose || stock.prevClose || 0);
+  const curPx = +(book5?.price || stock.price || pc || 0);
+  const chgPct = pc > 0 && curPx > 0 ? ((curPx - pc) / pc) * 100 : 0;
+  const pxColor = (p) => {
+    if (!(p > 0) || !(pc > 0)) return 'var(--mute)';
+    if (p > pc + 0.0001) return 'var(--up, #d32f2f)';
+    if (p < pc - 0.0001) return 'var(--down, #0a7f42)';
+    return 'var(--text)';
+  };
+
+  if (!book5) {
+    return (
+      <aside className="ob5-panel" aria-label="实时五档盘口">
+        <div className="ob5-head">
+          <span className="ob5-title">📋 五档盘口</span>
+          <span className="ob5-subhint">同步中…</span>
+        </div>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--mute)', fontSize: '11px', textAlign: 'center', padding: '12px 4px' }}>
+          正在拉取实时买一至买五 / 卖一至卖五挂单…
+        </div>
+      </aside>
+    );
+  }
+
+  const asksTopDown = [...(book5.asks || [])].reverse();
+  const bidsTopDown = book5.bids || [];
+  const maxV = Math.max(1, book5.maxLvVol || 1);
+  const wallThr = book5.wallThreshold || 999999;
+
+  const renderRow = (lv) => {
+    const active = lv.price > 0 && lv.vol > 0;
+    const widthPct = active ? Math.min(100, Math.max(4, (lv.vol / maxV) * 100)) : 0;
+    const isWall = active && lv.vol >= wallThr;
+    return (
+      <div
+        key={`${lv.side}-${lv.level}`}
+        className={`ob5-row ${active ? '' : 'is-empty'}`}
+        onClick={() => active && onPickLevel && onPickLevel(lv)}
+        title={active ? `点击带入${lv.label}价格 ¥${f2(lv.price)}（挂单量 ${lv.vol} 手）` : `${lv.label}暂无挂单`}
+      >
+        {widthPct > 0 && (
+          <div
+            className={`ob5-bar ${lv.side}${isWall ? ' wall' : ''}`}
+            style={{ width: `${widthPct}%` }}
+          />
+        )}
+        <span className="ob5-lbl">{lv.label}</span>
+        <span className="ob5-px" style={{ color: active ? pxColor(lv.price) : 'var(--mute)' }}>
+          {lv.price > 0 ? f2(lv.price) : '—'}
+        </span>
+        <span className="ob5-vol">
+          {isWall && (
+            <span className={`ob5-wall-tag ${lv.side}`}>
+              {lv.side === 'ask' ? '压' : '托'}
+            </span>
+          )}
+          <span>{active ? fmtBookLots(lv.vol) : '—'}</span>
+        </span>
+      </div>
+    );
+  };
+
+  return (
+    <aside className="ob5-panel" aria-label="实时五档盘口">
+      <div>
+        <div className="ob5-head">
+          <span className="ob5-title">📋 实时五档</span>
+          <span className="ob5-subhint">点价快捷带单</span>
+        </div>
+
+        {book5.sealType === 'UP' && (
+          <div className="ob5-seal-banner is-up" title={`涨停买一封单 ${book5.sealVol} 手`}>
+            🔥 涨停封单 {fmtSealAmt(book5.sealAmt)} ({fmtBookLots(book5.sealVol)}手)
+          </div>
+        )}
+        {book5.sealType === 'DOWN' && (
+          <div className="ob5-seal-banner is-down" title={`跌停卖一封单 ${book5.sealVol} 手`}>
+            ❄️ 跌停封单 {fmtSealAmt(book5.sealAmt)} ({fmtBookLots(book5.sealVol)}手)
+          </div>
+        )}
+
+        <div className="ob5-weibi-box" title={`总委买 ${book5.bidVolSum} 手 / 总委卖 ${book5.askVolSum} 手`}>
+          <div className="ob5-weibi-top">
+            <span style={{ color: book5.weiBi >= 0 ? 'var(--up, #d32f2f)' : 'var(--down, #0a7f42)', fontWeight: 700 }}>
+              委比 {book5.weiBi >= 0 ? '+' : ''}{book5.weiBi.toFixed(1)}%
+            </span>
+            <span>
+              差 {book5.weiCha >= 0 ? '+' : ''}{fmtBookLots(book5.weiCha)}手
+            </span>
+          </div>
+          <div className="ob5-weibi-bar">
+            <div className="ob5-weibi-bid" style={{ width: `${book5.bidRatio}%` }} />
+          </div>
+        </div>
+      </div>
+
+      <div className="ob5-book-grid">
+        <div className="ob5-rows">{asksTopDown.map(renderRow)}</div>
+
+        <div className="ob5-mid-divider" title="现价与内外盘主动成交对比（外盘=主动吃卖盘，内盘=主动砸买盘）">
+          <b style={{ color: pxColor(curPx) }}>
+            ¥{curPx > 0 ? f2(curPx) : '—'} ({chgPct >= 0 ? '+' : ''}{chgPct.toFixed(2)}%)
+          </b>
+          <span style={{ color: 'var(--mute)', fontSize: '10px' }}>
+            {book5.outer > 0 || book5.inner > 0
+              ? `外${fmtBookLots(book5.outer)}/内${fmtBookLots(book5.inner)}`
+              : '单位:手'}
+          </span>
+        </div>
+
+        <div className="ob5-rows">{bidsTopDown.map(renderRow)}</div>
+      </div>
+    </aside>
+  );
+}
 
 export default function ChartCanvas({
   stock,
@@ -15,6 +146,7 @@ export default function ChartCanvas({
   onToggleFastRefresh,
 }) {
   const canvasRef = useRef(null);
+  const canvasWrapRef = useRef(null);
   const lastSigKeyRef = useRef('');
   const touchTrackRef = useRef({ x: 0, y: 0, mode: null });
   const [loading, setLoading] = useState(false);
@@ -26,8 +158,24 @@ export default function ChartCanvas({
   // 周期合法性校验（防旧缓存或错误传参污染）
   const curPeriod = VALID_PERIODS.includes(stock.p) ? stock.p : 'day';
   const ov = stock.ov || { ma: 1, boll: 1, box: 1, cost: 1, sr: 0 };
-  const ovRt = Object.assign({ bench: 1, cost: 1, be: 1, zones: 1, signal: 1, actual: 1, radar: 1 }, stock.ovRt || {});
+  const ovRt = Object.assign({ book: 1, bench: 1, cost: 1, be: 1, zones: 1, signal: 1, actual: 1, radar: 1 }, stock.ovRt || {});
   const subKind = stock.sub || 'macd';
+  const activeBook5 = stock._book5 || stock._k?.rt?.min?.book5 || null;
+
+  const handlePickBookLevel = useCallback(
+    (lv) => {
+      if (!lv || !(lv.price > 0)) return;
+      const pxStr = f2(lv.price);
+      if (onOpenQuickT) {
+        const held = (+stock.shares || 0) > 0;
+        const defaultDir = held ? (lv.side === 'ask' ? '倒T' : '正T') : '直接买入';
+        onOpenQuickT(stock, defaultDir, pxStr);
+      } else {
+        copyPlain(pxStr, `✓ 已复制${lv.label}价格 ¥${pxStr}`);
+      }
+    },
+    [stock, onOpenQuickT]
+  );
 
   const syncRtSummary = useCallback(() => {
     const sig = stock._rtSignals || null;
@@ -57,8 +205,16 @@ export default function ChartCanvas({
     renderCanvas();
     const handleResize = () => renderCanvas();
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [renderCanvas, stock, tradeLogs, stock.p, stock.ov, stock.ovRt, stock.sub, stock._k, stock.bePrice, stock.cost]);
+    let ro = null;
+    if (typeof ResizeObserver !== 'undefined' && canvasWrapRef.current) {
+      ro = new ResizeObserver(() => renderCanvas());
+      ro.observe(canvasWrapRef.current);
+    }
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (ro) ro.disconnect();
+    };
+  }, [renderCanvas, stock, tradeLogs, stock.p, stock.ov, stock.ovRt, stock.sub, stock._k, stock._book5, stock.bePrice, stock.cost]);
 
   const clearCrosshair = useCallback(() => {
     const cv = canvasRef.current;
@@ -406,29 +562,39 @@ export default function ChartCanvas({
         </div>
       )}
 
-      {/* 3. 手绘 Canvas 画布（支持鼠标悬停 + 手机触屏单指横向拖动十字准星） */}
-      <div className="kline-canvas-wrap">
-        {touchPinned && (
-          <button
-            type="button"
-            className="kline-clear-crosshair"
-            onClick={clearCrosshair}
-            title="收起触屏十字准星，恢复最新一分钟实时值"
-          >
-            ✕ 收起十字线
-          </button>
-        )}
-        <canvas
-          id={`kln-${poolIndex}`}
-          ref={canvasRef}
-          data-ki={poolIndex}
-          onClick={handleCanvasClick}
-          onMouseMove={handleMouseMove}
-          onMouseLeave={handleMouseLeave}
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          style={{ width: '100%', display: 'block', cursor: 'crosshair', touchAction: 'pan-y', WebkitTapHighlightColor: 'transparent' }}
-        />
+      {/* 3. 手绘 Canvas 画布 + 分时右侧实时五档买卖盘口墙 */}
+      <div className={curPeriod === 'rt' && ovRt.book ? 'kline-rt-split' : undefined}>
+        <div className="kline-canvas-wrap" ref={canvasWrapRef}>
+          {touchPinned && (
+            <button
+              type="button"
+              className="kline-clear-crosshair"
+              onClick={clearCrosshair}
+              title="收起触屏十字准星，恢复最新一分钟实时值"
+            >
+              ✕ 收起十字线
+            </button>
+          )}
+          <canvas
+            id={`kln-${poolIndex}`}
+            ref={canvasRef}
+            data-ki={poolIndex}
+            onClick={handleCanvasClick}
+            onMouseMove={handleMouseMove}
+            onMouseLeave={handleMouseLeave}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            style={{ width: '100%', display: 'block', cursor: 'crosshair', touchAction: 'pan-y', WebkitTapHighlightColor: 'transparent' }}
+          />
+        </div>
+
+        {curPeriod === 'rt' && ovRt.book ? (
+          <OrderBook5Panel
+            stock={stock}
+            book5={activeBook5}
+            onPickLevel={handlePickBookLevel}
+          />
+        ) : null}
       </div>
 
       {/* 3b. 分时图买卖点与推荐区速览条 */}
