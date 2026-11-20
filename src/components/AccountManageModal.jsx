@@ -12,11 +12,18 @@ import {
   postMutateAuthUser,
 } from '../services/api.js';
 import { copyPlain, toastOk, toastErr } from '../services/utils.js';
+import DirectMoneyInput from './DirectMoneyInput.jsx';
 
 export default function AccountManageModal({
   open,
   onClose,
   currentUser,
+  totalAssets = 100000,
+  cash = 0,
+  initialCapital = 100000,
+  onUpdateTotalAssets,
+  onUpdateCash,
+  onUpdateInitialCapital,
   allowOpenRegister = true,
   onUpdateOpenRegister,
   vaultStatus,
@@ -303,6 +310,62 @@ export default function AccountManageModal({
                   </button>
                 </div>
               </div>
+
+              {(onUpdateTotalAssets || onUpdateCash || onUpdateInitialCapital) && (
+                <div style={{
+                  padding: '12px 14px',
+                  borderRadius: '10px',
+                  background: 'var(--surface2)',
+                  border: '1px solid var(--line)',
+                }}>
+                  <div style={{ fontSize: '12.5px', fontWeight: 700, marginBottom: '8px', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '4px' }}>
+                    <span>💰 账户资产与本金快速输入</span>
+                    <span style={{ fontSize: '11px', fontWeight: 400, color: 'var(--mute)' }}>直接输入数字回车即存，自动同步云金库</span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '8px' }}>
+                    {onUpdateTotalAssets && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span style={{ fontSize: '11.5px', color: 'var(--sub)' }}>实时账户总资产</span>
+                        <DirectMoneyInput
+                          value={totalAssets}
+                          onCommit={onUpdateTotalAssets}
+                          min={0}
+                          allowZero={true}
+                          size="md"
+                          ariaLabel="账号弹窗总资产输入"
+                        />
+                      </div>
+                    )}
+                    {onUpdateCash && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span style={{ fontSize: '11.5px', color: 'var(--sub)' }}>真实可用现金</span>
+                        <DirectMoneyInput
+                          value={cash}
+                          onCommit={onUpdateCash}
+                          min={0}
+                          allowZero={true}
+                          size="md"
+                          tone="cash"
+                          ariaLabel="账号弹窗可用现金输入"
+                        />
+                      </div>
+                    )}
+                    {onUpdateInitialCapital && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span style={{ fontSize: '11.5px', color: 'var(--sub)' }}>初始投入本金</span>
+                        <DirectMoneyInput
+                          value={initialCapital}
+                          onCommit={onUpdateInitialCapital}
+                          min={100}
+                          allowZero={false}
+                          size="md"
+                          ariaLabel="账号弹窗初始本金输入"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {isOwner && (
                 <div style={{

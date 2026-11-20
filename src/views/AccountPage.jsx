@@ -20,6 +20,7 @@ export default function AccountPage({
   onClearSnap,
   onUpdateTotalAssets,
   onUpdateCash,
+  onUpdateInitialCapital,
   onSelectStock,
   onJumpDiagnosis,
   onTabChange,
@@ -42,6 +43,7 @@ export default function AccountPage({
         onClearSnap={onClearSnap}
         onUpdateTotalAssets={onUpdateTotalAssets}
         onUpdateCash={onUpdateCash}
+        onUpdateInitialCapital={onUpdateInitialCapital}
         onSelectStock={onSelectStock}
         onJumpDiagnosis={onJumpDiagnosis}
         onTabChange={onTabChange}

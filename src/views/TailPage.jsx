@@ -11,6 +11,8 @@ export default function TailPage({
   actives,
   wbLatest,
   tiltState = null,
+  onUpdateTotalAssets,
+  onUpdateCash,
   onExecTailBuy,
   onExecTailExit,
   onRefreshContract,
@@ -28,6 +30,8 @@ export default function TailPage({
         actives={actives}
         wbLatest={wbLatest}
         tiltState={tiltState}
+        onUpdateTotalAssets={onUpdateTotalAssets}
+        onUpdateCash={onUpdateCash}
         onExecTailBuy={onExecTailBuy}
         onExecTailExit={onExecTailExit}
         onRefreshContract={onRefreshContract}

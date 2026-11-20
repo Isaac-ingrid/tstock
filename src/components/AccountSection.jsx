@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { f2, pct, money, todayStr } from '../services/utils.js';
 import { tRealOf } from '../services/api.js';
+import DirectMoneyInput from './DirectMoneyInput.jsx';
 
 export default function AccountSection({
   totalAssets = 100000,
@@ -18,33 +19,13 @@ export default function AccountSection({
   onClearSnap,
   onUpdateTotalAssets,
   onUpdateCash,
+  onUpdateInitialCapital,
   onSelectStock,
   onJumpDiagnosis,
   onTabChange,
 }) {
-  const [editingTotal, setEditingTotal] = useState(false);
-  const [newTotal, setNewTotal] = useState(totalAssets);
-
-  const [editingCash, setEditingCash] = useState(false);
-  const [newCash, setNewCash] = useState(cash);
   const [hoverIdx, setHoverIdx] = useState(null);
   const svgRef = useRef(null);
-
-  const handleSaveTotal = () => {
-    const val = parseFloat(newTotal);
-    if (Number.isFinite(val) && val > 0 && onUpdateTotalAssets) {
-      onUpdateTotalAssets(val);
-      setEditingTotal(false);
-    }
-  };
-
-  const handleSaveCash = () => {
-    const val = parseFloat(newCash);
-    if (Number.isFinite(val) && val >= 0 && onUpdateCash) {
-      onUpdateCash(val);
-      setEditingCash(false);
-    }
-  };
 
   const activeTails = useMemo(
     () => (tailActives || []).filter(t => t && t.status !== 'closed' && (+t.shares || 0) > 0),
@@ -211,81 +192,93 @@ export default function AccountSection({
 
         {/* 核心 5 维资金卡片 */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(195px, 1fr))', gap: '12px', marginBottom: '16px' }}>
-          {/* 1. 实时总资产 */}
+          {/* 1. 实时总资产（直接点击输入框输入，回车或失焦自动保存） */}
           <div className="card" style={{ padding: '14px', background: 'var(--surface2)', marginBottom: 0 }}>
-            <div style={{ fontSize: '12px', color: 'var(--sub)', display: 'flex', justifyContent: 'space-between' }}>
-              <span>实时账户总资产</span>
+            <div style={{ fontSize: '12px', color: 'var(--sub)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>实时账户总资产（直接输入）</span>
               <span className={summary.totalReturn >= 0 ? 'up' : 'down'} style={{ fontWeight: 700 }}>
                 {summary.totalReturn >= 0 ? '+' : ''}{summary.totalReturnPct.toFixed(2)}%
               </span>
             </div>
-            <div style={{ fontSize: '22px', fontWeight: 700, fontFamily: 'ui-monospace,Consolas,monospace', marginTop: '4px' }}>
-              {editingTotal ? (
-                <div style={{ display: 'inline-flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    className="acc-cal-input"
-                    value={newTotal}
-                    onChange={(e) => setNewTotal(e.target.value)}
-                    style={{ width: '115px', padding: '3px 6px', fontSize: '14px', borderRadius: '4px', border: '1px solid var(--line)' }}
-                  />
-                  <button type="button" className="primary" onClick={handleSaveTotal} style={{ padding: '2px 8px', fontSize: '11px', minHeight: '28px' }}>校准</button>
-                  <button type="button" onClick={() => setEditingTotal(false)} style={{ padding: '2px 8px', fontSize: '11px', minHeight: '28px' }}>取消</button>
-                </div>
-              ) : (
-                <span
-                  onClick={() => {
-                    setNewTotal(Math.round(totalAssets * 100) / 100);
-                    setEditingTotal(true);
-                  }}
-                  title="点击按券商总资产反推校准现金与初始本金"
-                  style={{ cursor: 'pointer' }}
-                >
-                  ¥{money(totalAssets)} <span style={{ fontSize: '11px', color: 'var(--accent)' }}>✎</span>
-                </span>
-              )}
+            <div style={{ marginTop: '6px' }}>
+              <DirectMoneyInput
+                value={totalAssets}
+                onCommit={onUpdateTotalAssets}
+                min={0}
+                allowZero={true}
+                size="hero"
+                ariaLabel="实时账户总资产输入"
+                title="直接点击输入券商账户总资产（支持如 200000 或 20w，回车或失焦自动保存）"
+              />
             </div>
-            <div style={{ fontSize: '11px', color: 'var(--mute)', marginTop: '4px' }}>
-              初始本金 ¥{money(summary.baseCap)} · 净盈亏{' '}
+            <div className="dm-preset-row">
+              {[50000, 100000, 200000, 500000, 1000000].map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  className={`dm-preset-chip ${Math.abs(totalAssets - preset) < 1 ? 'active' : ''}`}
+                  onClick={() => onUpdateTotalAssets && onUpdateTotalAssets(preset)}
+                >
+                  {preset >= 10000 ? `${preset / 10000}万` : preset}
+                </button>
+              ))}
+            </div>
+            <div style={{ fontSize: '11.5px', color: 'var(--mute)', marginTop: '6px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '4px' }}>
+              <span>初始本金</span>
+              <DirectMoneyInput
+                value={summary.baseCap}
+                onCommit={onUpdateInitialCapital || onUpdateTotalAssets}
+                min={100}
+                allowZero={false}
+                size="sm"
+                ariaLabel="初始投入本金输入"
+                title="点击直接修改初始投入本金（用于核算累计净盈亏与总收益率）"
+              />
+              <span>· 净盈亏</span>
               <b className={summary.totalReturn >= 0 ? 'up' : 'down'}>
                 {summary.totalReturn >= 0 ? '+' : ''}¥{money(summary.totalReturn)}
               </b>
             </div>
           </div>
 
-          {/* 2. 真实可用现金 */}
+          {/* 2. 真实可用现金（直接点击输入框输入） */}
           <div className="card" style={{ padding: '14px', background: 'var(--surface2)', marginBottom: 0 }}>
-            <div style={{ fontSize: '12px', color: 'var(--sub)' }}>真实可用现金（可挂买单）</div>
-            <div style={{ fontSize: '22px', fontWeight: 700, fontFamily: 'ui-monospace,Consolas,monospace', marginTop: '4px', color: 'var(--down)' }}>
-              {editingCash ? (
-                <div style={{ display: 'inline-flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    className="acc-cal-input"
-                    value={newCash}
-                    onChange={(e) => setNewCash(e.target.value)}
-                    style={{ width: '115px', padding: '3px 6px', fontSize: '14px', borderRadius: '4px', border: '1px solid var(--line)' }}
-                  />
-                  <button type="button" className="primary" onClick={handleSaveCash} style={{ padding: '2px 8px', fontSize: '11px', minHeight: '28px' }}>保存</button>
-                  <button type="button" onClick={() => setEditingCash(false)} style={{ padding: '2px 8px', fontSize: '11px', minHeight: '28px' }}>取消</button>
-                </div>
-              ) : (
-                <span
-                  onClick={() => {
-                    setNewCash(Math.round(cash * 100) / 100);
-                    setEditingCash(true);
-                  }}
-                  title="点击与券商可用余额对齐（银证转账或手工修正）"
-                  style={{ cursor: 'pointer' }}
-                >
-                  ¥{money(cash)} <span style={{ fontSize: '11px', color: 'var(--accent)' }}>✎</span>
-                </span>
-              )}
+            <div style={{ fontSize: '12px', color: 'var(--sub)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>真实可用现金（直接输入）</span>
+              <span style={{ fontSize: '11px', color: 'var(--mute)' }}>可挂买单</span>
             </div>
-            <div style={{ fontSize: '11px', color: 'var(--mute)', marginTop: '4px' }}>
-              独立持久记账，股价涨跌不再虚增/吞噬现金
+            <div style={{ marginTop: '6px' }}>
+              <DirectMoneyInput
+                value={cash}
+                onCommit={onUpdateCash}
+                min={0}
+                allowZero={true}
+                size="hero"
+                tone="cash"
+                ariaLabel="真实可用现金输入"
+                title="直接点击输入券商可用现金（支持如 85000 或 8.5w，回车或失焦自动保存）"
+              />
+            </div>
+            <div className="dm-preset-row">
+              {[
+                { label: '清零', val: 0 },
+                { label: '5万', val: 50000 },
+                { label: '10万', val: 100000 },
+                { label: '20万', val: 200000 },
+                { label: '50万', val: 500000 },
+              ].map((item) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  className={`dm-preset-chip ${Math.abs(cash - item.val) < 1 ? 'active' : ''}`}
+                  onClick={() => onUpdateCash && onUpdateCash(item.val)}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--mute)', marginTop: '6px' }}>
+              独立持久记账，股价涨跌不再虚增或吞噬现金
             </div>
           </div>
 

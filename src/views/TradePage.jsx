@@ -19,6 +19,11 @@ export default function TradePage({
   activeStockCode: externalActiveCode,
   onSelectStock: externalSelectStock,
   totalAssets = 100000,
+  cash = 0,
+  initialCapital = 100000,
+  onUpdateTotalAssets,
+  onUpdateCash,
+  onUpdateInitialCapital,
   wbLatest,
   dbStatus,
   tradeLogs = [],
@@ -87,6 +92,11 @@ export default function TradePage({
         onRelockTilt={onRelockTilt}
         activeStockCode={activeStockCode}
         totalAssets={totalAssets}
+        cash={cash}
+        initialCapital={initialCapital}
+        onUpdateTotalAssets={onUpdateTotalAssets}
+        onUpdateCash={onUpdateCash}
+        onUpdateInitialCapital={onUpdateInitialCapital}
         tradeLogs={tradeLogs}
         isTailAlertTime={isTailAlertTime}
         simTailAlert={simTailAlert}

@@ -333,19 +333,44 @@ function OrderSizingCalc({ stock, sig, totalAssets, posRules, totalMktVal = 0, a
       <div className="bcc-inputs">
         <label>
           <span>预算(元)</span>
-          <input type="number" inputMode="numeric" step="1000" value={budget} onChange={(e) => setBudget(e.target.value)} />
+          <input
+            type="text"
+            inputMode="decimal"
+            placeholder="如 20000"
+            value={budget}
+            onFocus={(e) => e.target.select()}
+            onChange={(e) => setBudget(e.target.value.replace(/[¥￥,\s]/g, ''))}
+          />
         </label>
         <label>
           <span>挂单价</span>
-          <input type="number" inputMode="decimal" step="0.01" value={entryPx} onChange={(e) => setEntryPx(e.target.value)} />
+          <input
+            type="text"
+            inputMode="decimal"
+            value={entryPx}
+            onFocus={(e) => e.target.select()}
+            onChange={(e) => setEntryPx(e.target.value)}
+          />
         </label>
         <label>
           <span>止损价</span>
-          <input type="number" inputMode="decimal" step="0.01" value={stopPx} onChange={(e) => setStopPx(e.target.value)} />
+          <input
+            type="text"
+            inputMode="decimal"
+            value={stopPx}
+            onFocus={(e) => e.target.select()}
+            onChange={(e) => setStopPx(e.target.value)}
+          />
         </label>
         <label>
           <span>止盈价</span>
-          <input type="number" inputMode="decimal" step="0.01" value={targetPx} onChange={(e) => setTargetPx(e.target.value)} />
+          <input
+            type="text"
+            inputMode="decimal"
+            value={targetPx}
+            onFocus={(e) => e.target.select()}
+            onChange={(e) => setTargetPx(e.target.value)}
+          />
         </label>
       </div>
 

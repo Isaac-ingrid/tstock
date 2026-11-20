@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { posCalc } from '../services/api.js';
 import { money } from '../services/utils.js';
+import DirectMoneyInput from './DirectMoneyInput.jsx';
 import {
   POS_RULES_KEY,
   DEFAULT_POS_RULES,
@@ -15,6 +16,11 @@ export default function PositionRiskBar({
   pool = [],
   tailActives = [],
   totalAssets = 100000,
+  cash = 0,
+  initialCapital = 100000,
+  onUpdateTotalAssets,
+  onUpdateCash,
+  onUpdateInitialCapital,
   sentiment = null,
   posRules = DEFAULT_POS_RULES,
   tiltState = null,
@@ -328,10 +334,63 @@ export default function PositionRiskBar({
             )}
           </div>
 
-          {/* 仓位与单日熔断纪律参数自定义 */}
+          {/* 账户资金基准直输 + 仓位与单日熔断纪律参数自定义 */}
           <div className="pr-rules">
+            {(onUpdateTotalAssets || onUpdateCash || onUpdateInitialCapital) && (
+              <div style={{ marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px dashed var(--line)' }}>
+                <div className="pr-sec-title" style={{ marginBottom: '8px' }}>
+                  <span>💰 账户资金基准（直接点击输入框敲数字，回车或失焦自动保存，支持 20w 快捷输入）</span>
+                </div>
+                <div className="pr-rule-grid">
+                  {onUpdateTotalAssets && (
+                    <label>
+                      <span>💼 实时账户总资产(元)</span>
+                      <DirectMoneyInput
+                        value={assets}
+                        onCommit={onUpdateTotalAssets}
+                        min={0}
+                        allowZero={true}
+                        size="rule"
+                        prefix="¥"
+                        ariaLabel="风控面板总资产输入"
+                      />
+                    </label>
+                  )}
+                  {onUpdateCash && (
+                    <label>
+                      <span>💵 真实可用现金(元)</span>
+                      <DirectMoneyInput
+                        value={cash}
+                        onCommit={onUpdateCash}
+                        min={0}
+                        allowZero={true}
+                        size="rule"
+                        tone="cash"
+                        prefix="¥"
+                        ariaLabel="风控面板可用现金输入"
+                      />
+                    </label>
+                  )}
+                  {onUpdateInitialCapital && (
+                    <label>
+                      <span>🏦 初始投入本金(元)</span>
+                      <DirectMoneyInput
+                        value={initialCapital || assets}
+                        onCommit={onUpdateInitialCapital}
+                        min={100}
+                        allowZero={false}
+                        size="rule"
+                        prefix="¥"
+                        ariaLabel="风控面板初始本金输入"
+                      />
+                    </label>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="pr-sec-title">
-              <span>⚙️ 仓位与防上头熔断参数（自动保存，全局实时生效）</span>
+              <span>⚙️ 仓位与防上头熔断参数（支持退格清空重输，回车或失焦实时保存）</span>
               <button
                 type="button"
                 className="bc-act-btn"
@@ -343,79 +402,107 @@ export default function PositionRiskBar({
             <div className="pr-rule-grid">
               <label>
                 <span>🟢 绿灯总仓上限(%)</span>
-                <input
-                  type="number"
+                <DirectMoneyInput
+                  value={posRules.greenMaxPct}
+                  onCommit={(v) => updateField('greenMaxPct', v)}
                   min={10}
                   max={100}
-                  step={5}
-                  value={posRules.greenMaxPct}
-                  onChange={(e) => updateField('greenMaxPct', e.target.value)}
+                  allowZero={false}
+                  formatThousand={false}
+                  prefix=""
+                  suffix="%"
+                  size="rule"
+                  ariaLabel="绿灯总仓上限"
                 />
               </label>
               <label>
                 <span>🟡 黄灯总仓上限(%)</span>
-                <input
-                  type="number"
+                <DirectMoneyInput
+                  value={posRules.yellowMaxPct}
+                  onCommit={(v) => updateField('yellowMaxPct', v)}
                   min={10}
                   max={100}
-                  step={5}
-                  value={posRules.yellowMaxPct}
-                  onChange={(e) => updateField('yellowMaxPct', e.target.value)}
+                  allowZero={false}
+                  formatThousand={false}
+                  prefix=""
+                  suffix="%"
+                  size="rule"
+                  ariaLabel="黄灯总仓上限"
                 />
               </label>
               <label>
                 <span>🔴 红灯总仓上限(%)</span>
-                <input
-                  type="number"
+                <DirectMoneyInput
+                  value={posRules.redMaxPct}
+                  onCommit={(v) => updateField('redMaxPct', v)}
                   min={0}
                   max={100}
-                  step={5}
-                  value={posRules.redMaxPct}
-                  onChange={(e) => updateField('redMaxPct', e.target.value)}
+                  allowZero={true}
+                  formatThousand={false}
+                  prefix=""
+                  suffix="%"
+                  size="rule"
+                  ariaLabel="红灯总仓上限"
                 />
               </label>
               <label>
                 <span>🎯 单票上限(%)</span>
-                <input
-                  type="number"
+                <DirectMoneyInput
+                  value={posRules.singleMaxPct}
+                  onCommit={(v) => updateField('singleMaxPct', v)}
                   min={5}
                   max={100}
-                  step={5}
-                  value={posRules.singleMaxPct}
-                  onChange={(e) => updateField('singleMaxPct', e.target.value)}
+                  allowZero={false}
+                  formatThousand={false}
+                  prefix=""
+                  suffix="%"
+                  size="rule"
+                  ariaLabel="单票仓位上限"
                 />
               </label>
               <label>
                 <span>🛡️ 单笔以损定仓(%)</span>
-                <input
-                  type="number"
+                <DirectMoneyInput
+                  value={posRules.riskPerTradePct}
+                  onCommit={(v) => updateField('riskPerTradePct', v)}
                   min={0.5}
                   max={5}
-                  step={0.5}
-                  value={posRules.riskPerTradePct}
-                  onChange={(e) => updateField('riskPerTradePct', e.target.value)}
+                  allowZero={false}
+                  formatThousand={false}
+                  prefix=""
+                  suffix="%"
+                  size="rule"
+                  ariaLabel="单笔以损定仓比例"
                 />
               </label>
               <label>
                 <span>🛑 单日连亏熔断(笔)</span>
-                <input
-                  type="number"
+                <DirectMoneyInput
+                  value={posRules.maxConsecLosses ?? DEFAULT_POS_RULES.maxConsecLosses}
+                  onCommit={(v) => updateField('maxConsecLosses', Math.round(v))}
                   min={1}
                   max={10}
-                  step={1}
-                  value={posRules.maxConsecLosses ?? DEFAULT_POS_RULES.maxConsecLosses}
-                  onChange={(e) => updateField('maxConsecLosses', e.target.value)}
+                  allowZero={false}
+                  formatThousand={false}
+                  prefix=""
+                  suffix="笔"
+                  size="rule"
+                  ariaLabel="单日连亏熔断笔数"
                 />
               </label>
               <label>
                 <span>📉 日回撤熔断(%)</span>
-                <input
-                  type="number"
+                <DirectMoneyInput
+                  value={posRules.dailyLossLimitPct ?? DEFAULT_POS_RULES.dailyLossLimitPct}
+                  onCommit={(v) => updateField('dailyLossLimitPct', v)}
                   min={0.5}
                   max={15}
-                  step={0.5}
-                  value={posRules.dailyLossLimitPct ?? DEFAULT_POS_RULES.dailyLossLimitPct}
-                  onChange={(e) => updateField('dailyLossLimitPct', e.target.value)}
+                  allowZero={false}
+                  formatThousand={false}
+                  prefix=""
+                  suffix="%"
+                  size="rule"
+                  ariaLabel="日回撤熔断比例"
                 />
               </label>
               <label style={{ justifyContent: 'space-between' }}>

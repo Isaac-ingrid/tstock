@@ -8,6 +8,7 @@ import PositionRiskBar, {
 } from './PositionRiskBar.jsx';
 import { posCalc } from '../services/api.js';
 import { money } from '../services/utils.js';
+import DirectMoneyInput from './DirectMoneyInput.jsx';
 
 export default function ConsoleSection({
   pool = [],
@@ -21,6 +22,11 @@ export default function ConsoleSection({
   onRelockTilt,
   activeStockCode,
   totalAssets = 100000,
+  cash = 0,
+  initialCapital = 100000,
+  onUpdateTotalAssets,
+  onUpdateCash,
+  onUpdateInitialCapital,
   tradeLogs = [],
   isTailAlertTime = false,
   simTailAlert = false,
@@ -160,8 +166,47 @@ export default function ConsoleSection({
         </div>
       </div>
 
-      {/* 精简版资金隔离条（1 行紧凑展示，点击即可过滤稳健/短线，不再占据半屏） */}
+      {/* 精简版资金隔离条（含总资产/可用现金直输 + 70%底仓/30%机动一键筛选） */}
       <div className="funding-strip">
+        <div className="fund-pill asset-edit" title="点击数字即可直接输入账户总资产或可用现金">
+          <span className="fp-title">💰 账户总账</span>
+          <span className="fp-meta" style={{ display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+            <span>
+              总资产{' '}
+              {onUpdateTotalAssets ? (
+                <DirectMoneyInput
+                  value={totalAssetsNum}
+                  onCommit={onUpdateTotalAssets}
+                  min={0}
+                  allowZero={true}
+                  size="sm"
+                  ariaLabel="作战台总资产输入"
+                  title="点击直接输入账户总资产（支持如 200000 或 20w，回车保存）"
+                />
+              ) : (
+                <b>¥{money(totalAssetsNum)}</b>
+              )}
+            </span>
+            <span>
+              现金{' '}
+              {onUpdateCash ? (
+                <DirectMoneyInput
+                  value={cash}
+                  onCommit={onUpdateCash}
+                  min={0}
+                  allowZero={true}
+                  size="sm"
+                  tone="cash"
+                  ariaLabel="作战台可用现金输入"
+                  title="点击直接输入可用现金（回车或失焦自动保存）"
+                />
+              ) : (
+                <b>¥{money(cash)}</b>
+              )}
+            </span>
+          </span>
+        </div>
+
         <div
           className={`fund-pill long ${tierFilter === 'long' ? 'active' : ''}`}
           onClick={() => setTierFilter((f) => (f === 'long' ? 'all' : 'long'))}
@@ -199,6 +244,11 @@ export default function ConsoleSection({
         pool={pool}
         tailActives={tailActives}
         totalAssets={totalAssetsNum}
+        cash={cash}
+        initialCapital={initialCapital}
+        onUpdateTotalAssets={onUpdateTotalAssets}
+        onUpdateCash={onUpdateCash}
+        onUpdateInitialCapital={onUpdateInitialCapital}
         sentiment={sentiment}
         posRules={posRules}
         tiltState={tiltState}

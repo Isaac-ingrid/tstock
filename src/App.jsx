@@ -49,7 +49,7 @@ import {
   triggerStrategySnapshot,
   MKT,
 } from './services/api.js';
-import { syncRuntimeState } from './services/state.js';
+import { syncRuntimeState, setAccountTotalAssets } from './services/state.js';
 import { registerChartLoader } from './services/chart.js';
 import { getTailBuyCandidates } from './services/tail.js';
 import { auditTradeExecution } from './services/ledger.js';
@@ -799,6 +799,63 @@ export default function App() {
   const cash = Math.max(0, Math.round(availableCash * 100) / 100);
   const totalAssets = Math.round((cash + marketValue) * 100) / 100;
   const posRate = totalAssets > 0 ? (marketValue / totalAssets) * 100 : 0;
+
+  /* 统一账户资金直输更新通道（总资产 / 可用现金 / 初始本金） */
+  const handleUpdateTotalAssets = useCallback(
+    (val) => {
+      const parsed = Number(val);
+      if (!Number.isFinite(parsed) || parsed < 0) return;
+      const targetTotal = Math.max(0, Math.round(parsed * 100) / 100);
+      if (targetTotal < marketValue) {
+        setAvailableCash(0);
+        cashRef.current = 0;
+        toastWarn(`当前持仓市值已达 ¥${money(marketValue)}，可用现金已置为 ¥0（实时总资产不低于持仓市值）`);
+        return;
+      }
+      const nextCash = Math.max(0, Math.round((targetTotal - marketValue) * 100) / 100);
+      const isCleanStart = marketValue === 0 && (tradeLogsRef.current || []).length === 0;
+      if (isCleanStart && targetTotal > 0) {
+        setInitialCapital(targetTotal);
+        initCapRef.current = targetTotal;
+        setAccountTotalAssets(targetTotal);
+      }
+      setAvailableCash(nextCash);
+      cashRef.current = nextCash;
+      toastOk(`✓ 实时总资产已更新为 ¥${money(targetTotal)}，可用现金同步为 ¥${money(nextCash)}`);
+    },
+    [marketValue]
+  );
+
+  const handleUpdateCash = useCallback(
+    (val) => {
+      const parsed = Number(val);
+      if (!Number.isFinite(parsed) || parsed < 0) return;
+      const nextCash = Math.max(0, Math.round(parsed * 100) / 100);
+      const isCleanStart =
+        marketValue === 0 &&
+        (tradeLogsRef.current || []).length === 0 &&
+        Math.abs((initCapRef.current || 0) - (cashRef.current || 0)) < 1;
+      if (isCleanStart && nextCash > 0) {
+        setInitialCapital(nextCash);
+        initCapRef.current = nextCash;
+        setAccountTotalAssets(nextCash);
+      }
+      setAvailableCash(nextCash);
+      cashRef.current = nextCash;
+      toastOk(`✓ 可用现金已更新为 ¥${money(nextCash)}，实时总资产同步为 ¥${money(nextCash + marketValue)}`);
+    },
+    [marketValue]
+  );
+
+  const handleUpdateInitialCapital = useCallback((val) => {
+    const parsed = Number(val);
+    if (!Number.isFinite(parsed) || parsed <= 0) return;
+    const nextInit = Math.max(100, Math.round(parsed * 100) / 100);
+    setInitialCapital(nextInit);
+    initCapRef.current = nextInit;
+    setAccountTotalAssets(nextInit);
+    toastOk(`✓ 初始投入本金已更新为 ¥${money(nextInit)}，净盈亏与总收益率已重算`);
+  }, []);
 
   /* 实时计算单日防上头熔断状态 */
   const tiltState = useMemo(
@@ -2036,8 +2093,11 @@ export default function App() {
         tailCount={tailCount}
         ledgerCount={tradeLogs.length}
         totalAssets={totalAssets}
+        cash={cash}
         marketValue={marketValue}
         posRate={posRate}
+        onUpdateTotalAssets={handleUpdateTotalAssets}
+        onUpdateCash={handleUpdateCash}
         clockPhase={clockPhase}
         quoteStamp={quoteStamp}
         isStale={isStale}
@@ -2094,6 +2154,11 @@ export default function App() {
             onRelockTilt={handleRelockTilt}
             activeStockCode={activeStockCode}
             totalAssets={totalAssets}
+            cash={cash}
+            initialCapital={initialCapital}
+            onUpdateTotalAssets={handleUpdateTotalAssets}
+            onUpdateCash={handleUpdateCash}
+            onUpdateInitialCapital={handleUpdateInitialCapital}
             tradeLogs={tradeLogs}
             isTailAlertTime={isTailAlertTime}
             simTailAlert={simTailAlert}
@@ -2165,6 +2230,8 @@ export default function App() {
             actives={tailActives}
             wbLatest={wbLatest}
             tiltState={tiltState}
+            onUpdateTotalAssets={handleUpdateTotalAssets}
+            onUpdateCash={handleUpdateCash}
             onExecTailBuy={handleExecTailBuy}
             onExecTailExit={handleExecTailExit}
             onRefreshContract={fetchContract}
@@ -2227,18 +2294,9 @@ export default function App() {
                 toast('快照已清空', 'info');
               }
             }}
-            onUpdateTotalAssets={(val) => {
-              const targetTotal = Math.max(0, Math.round(+val * 100) / 100);
-              const nextCash = Math.max(0, Math.round((targetTotal - marketValue) * 100) / 100);
-              setInitialCapital(targetTotal);
-              setAvailableCash(nextCash);
-              toastOk(`✓ 已校准账户总本金 ¥${money(targetTotal)}，当前可用现金已对齐为 ¥${money(nextCash)}`);
-            }}
-            onUpdateCash={(val) => {
-              const nextCash = Math.max(0, Math.round(+val * 100) / 100);
-              setAvailableCash(nextCash);
-              toastOk(`✓ 可用现金已更新为 ¥${money(nextCash)}，实时总资产同步为 ¥${money(nextCash + marketValue)}`);
-            }}
+            onUpdateTotalAssets={handleUpdateTotalAssets}
+            onUpdateCash={handleUpdateCash}
+            onUpdateInitialCapital={handleUpdateInitialCapital}
           />
         )}
 
@@ -2358,6 +2416,12 @@ export default function App() {
         open={accountModalOpen}
         onClose={() => setAccountModalOpen(false)}
         currentUser={currentUser}
+        totalAssets={totalAssets}
+        cash={cash}
+        initialCapital={initialCapital}
+        onUpdateTotalAssets={handleUpdateTotalAssets}
+        onUpdateCash={handleUpdateCash}
+        onUpdateInitialCapital={handleUpdateInitialCapital}
         allowOpenRegister={authState.allowOpenRegister}
         onUpdateOpenRegister={(val) => setAuthState(prev => ({ ...prev, allowOpenRegister: Boolean(val) }))}
         vaultStatus={vaultStatus}

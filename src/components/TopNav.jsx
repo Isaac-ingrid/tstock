@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { money } from '../services/utils.js';
 import { NAV_ROUTES } from '../data/site.js';
+import DirectMoneyInput from './DirectMoneyInput.jsx';
 
 export default function TopNav({
   activeTab,
@@ -9,8 +10,11 @@ export default function TopNav({
   tailCount,
   ledgerCount,
   totalAssets,
+  cash = 0,
   marketValue,
   posRate,
+  onUpdateTotalAssets = null,
+  onUpdateCash = null,
   clockPhase,
   quoteStamp,
   isStale,
@@ -227,22 +231,51 @@ export default function TopNav({
         </div>
       </div>
 
-      {/* 第二行：精简状态条（资产 + 盘中时钟 + 持仓/自选汇总入口，窄屏单行横滑不撑高） */}
+      {/* 第二行：精简状态条（资产/现金直输 + 盘中时钟 + 持仓/自选汇总入口，窄屏单行横滑不撑高） */}
       <div className="tb-row-sub">
         <div
           className="tb-acc-pill"
           id="tbAccPill"
-          title="点击跳转至账户总览与资金详情"
+          title="点击数字直接修改总资产/可用现金；点击「总览」查看净值曲线"
           onClick={() => onTabChange('/account')}
         >
           <span className="tb-acc-k">资产</span>
-          <b>¥{money(totalAssets)}</b>
+          {onUpdateTotalAssets ? (
+            <DirectMoneyInput
+              value={totalAssets}
+              onCommit={onUpdateTotalAssets}
+              min={0}
+              allowZero={true}
+              size="pill"
+              ariaLabel="顶栏实时总资产输入"
+              title="点击直接输入账户总资产（如 200000 或 20w，回车保存）"
+            />
+          ) : (
+            <b>¥{money(totalAssets)}</b>
+          )}
+          <span className="tb-acc-sep" />
+          <span className="tb-acc-k">现金</span>
+          {onUpdateCash ? (
+            <DirectMoneyInput
+              value={cash}
+              onCommit={onUpdateCash}
+              min={0}
+              allowZero={true}
+              size="pill"
+              tone="cash"
+              ariaLabel="顶栏可用现金输入"
+              title="点击直接输入可用现金（如 85000 或 8.5w，回车保存）"
+            />
+          ) : (
+            <b>¥{money(cash)}</b>
+          )}
           <span className="tb-acc-sep tb-acc-mkt" />
           <span className="tb-acc-k tb-acc-mkt">市值</span>
           <b className="tb-acc-mkt">¥{money(marketValue)}</b>
           <span className="tb-acc-sep" />
           <span className="tb-acc-k">仓位</span>
           <b>{posRate.toFixed(1)}%</b>
+          <span className="tb-acc-jump" title="进入账户总览与净值详情">总览 ›</span>
         </div>
 
         <div

@@ -10,6 +10,7 @@ import {
   loadLocalTrackedCodes,
 } from '../services/api.js';
 import { BoardStockActions } from './board/boardShared.jsx';
+import DirectMoneyInput from './DirectMoneyInput.jsx';
 
 export default function TailSection({
   pool = [],
@@ -18,6 +19,8 @@ export default function TailSection({
   actives = [],
   wbLatest,
   tiltState = null,
+  onUpdateTotalAssets = null,
+  onUpdateCash = null,
   onExecTailBuy,
   onExecTailExit,
   onRefreshContract,
@@ -327,17 +330,43 @@ export default function TailSection({
       )}
 
       <div className="tail-budget-strip">
-        <span>
-          当前总资产: <b>¥{Math.round(totalAssets || 0).toLocaleString('zh-CN')}</b>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+          当前总资产:{' '}
+          {onUpdateTotalAssets ? (
+            <DirectMoneyInput
+              value={totalAssets || 0}
+              onCommit={onUpdateTotalAssets}
+              min={100}
+              allowZero={false}
+              size="sm"
+              ariaLabel="尾盘页当前总资产输入"
+              title="点击直接修改当前总资产，10%潜伏预算实时重算"
+            />
+          ) : (
+            <b>¥{Math.round(totalAssets || 0).toLocaleString('zh-CN')}</b>
+          )}
         </span>
         <span className="tbs-dot">·</span>
         {cash != null && (
           <>
-            <span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
               可用现金:{' '}
-              <b style={{ color: cash >= tenPctBudget ? 'var(--down)' : 'var(--up)' }}>
-                ¥{Math.round(cash).toLocaleString('zh-CN')}
-              </b>
+              {onUpdateCash ? (
+                <DirectMoneyInput
+                  value={cash}
+                  onCommit={onUpdateCash}
+                  min={0}
+                  allowZero={true}
+                  size="sm"
+                  tone={cash >= tenPctBudget ? 'cash' : 'accent'}
+                  ariaLabel="尾盘页可用现金输入"
+                  title="点击直接修改可用现金"
+                />
+              ) : (
+                <b style={{ color: cash >= tenPctBudget ? 'var(--down)' : 'var(--up)' }}>
+                  ¥{Math.round(cash).toLocaleString('zh-CN')}
+                </b>
+              )}
             </span>
             <span className="tbs-dot">·</span>
           </>

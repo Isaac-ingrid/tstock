@@ -2022,3 +2022,190 @@
   }
 }
 
+/* ============================================================
+   全站通用账户资产与风控参数直输框 (.direct-money-wrap)
+   ============================================================ */
+.direct-money-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--surface);
+  border: 1px dashed var(--line2, #cbd5e1);
+  border-radius: 6px;
+  padding: 2px 7px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  cursor: text;
+  vertical-align: middle;
+}
+
+.direct-money-wrap:hover {
+  border-style: solid;
+  border-color: var(--accent, #2563eb);
+  background: #ffffff;
+}
+
+.direct-money-wrap.is-focused {
+  border-style: solid;
+  border-color: var(--accent, #2563eb);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
+  background: #ffffff;
+}
+
+.direct-money-wrap .dm-prefix,
+.direct-money-wrap .dm-suffix {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-weight: 700;
+  color: var(--mute);
+  user-select: none;
+  pointer-events: none;
+  line-height: 1;
+}
+
+.direct-money-wrap .direct-money-inp {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  min-height: 0 !important;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.25;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  pointer-events: auto !important;
+}
+
+.direct-money-wrap.dm-tone-cash .direct-money-inp,
+.direct-money-wrap.dm-tone-cash .dm-prefix {
+  color: var(--down, #0f9d58);
+}
+
+.direct-money-wrap.dm-tone-accent .direct-money-inp,
+.direct-money-wrap.dm-tone-accent .dm-prefix {
+  color: var(--accent, #2563eb);
+}
+
+/* 账户总览大字号主卡直输框 */
+.direct-money-wrap.dm-hero {
+  width: 100%;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border-style: solid;
+  border-color: var(--line2, #cbd5e1);
+  background: var(--surface, #fff);
+}
+.direct-money-wrap.dm-hero .dm-prefix {
+  font-size: 17px;
+}
+.direct-money-wrap.dm-hero .direct-money-inp {
+  width: 100%;
+  font-size: 21px;
+}
+
+/* 弹窗中等字号直输框 */
+.direct-money-wrap.dm-md {
+  width: 100%;
+  padding: 5px 9px;
+  border-radius: 7px;
+  border-style: solid;
+}
+.direct-money-wrap.dm-md .dm-prefix,
+.direct-money-wrap.dm-md .dm-suffix {
+  font-size: 13px;
+}
+.direct-money-wrap.dm-md .direct-money-inp {
+  width: 100%;
+  font-size: 14px;
+}
+
+/* 行内紧凑直输框（初始本金 / 作战台资金条 / 尾盘预算条） */
+.direct-money-wrap.dm-sm {
+  padding: 1px 6px;
+  border-radius: 5px;
+}
+.direct-money-wrap.dm-sm .dm-prefix,
+.direct-money-wrap.dm-sm .dm-suffix {
+  font-size: 11.5px;
+}
+.direct-money-wrap.dm-sm .direct-money-inp {
+  font-size: 12.5px;
+}
+
+/* 顶栏胶囊超紧凑直输框 */
+.direct-money-wrap.dm-pill {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.86);
+}
+.direct-money-wrap.dm-pill .dm-prefix {
+  font-size: 11px;
+}
+.direct-money-wrap.dm-pill .direct-money-inp {
+  font-size: 12px;
+}
+
+/* 仓位风控面板规则网格直输框 */
+.direct-money-wrap.dm-rule {
+  width: 100%;
+  min-height: 29px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border-style: solid;
+  border-color: var(--line, #e2e8f0);
+  background: var(--surface, #fff);
+}
+.direct-money-wrap.dm-rule .dm-prefix,
+.direct-money-wrap.dm-rule .dm-suffix {
+  font-size: 12px;
+}
+.direct-money-wrap.dm-rule .direct-money-inp {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  font-size: 13px;
+}
+
+/* 账户总览快捷金额档位按钮行 */
+.dm-preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 7px;
+}
+
+.dm-preset-chip {
+  padding: 2px 7px !important;
+  min-height: 22px !important;
+  font-size: 11px !important;
+  border-radius: 999px !important;
+  border: 1px solid var(--line, #e2e8f0) !important;
+  background: var(--surface, #fff) !important;
+  color: var(--sub) !important;
+  cursor: pointer;
+}
+
+.dm-preset-chip:hover,
+.dm-preset-chip.active {
+  border-color: var(--accent, #2563eb) !important;
+  color: var(--accent, #2563eb) !important;
+  background: #eff6ff !important;
+  font-weight: 700;
+}
+
+.tb-acc-jump {
+  font-size: 11px;
+  color: var(--accent, #2563eb);
+  font-weight: 600;
+  margin-left: 2px;
+  cursor: pointer;
+}
+
+.fund-pill.asset-edit {
+  background: linear-gradient(90deg, #f8fafc, #ffffff);
+  border-color: #cbd5e1;
+}
+
+
