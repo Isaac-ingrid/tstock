@@ -653,6 +653,45 @@ const nowStr = ()=> new Date().toLocaleTimeString('zh-CN',{hour12:false});
 
 /* 实时行情（腾讯）：现价 / 昨收 / 开高低 / 分时均线 / 量比
    字段下标已逐项核对（88 个字段挤在一行，取错一位不报错、只静默算错） */
+const _flowRing = {};
+let _flowRingDay = '';
+
+/* 记录每只个股盘口与内外盘增量快照环形缓冲（零额外请求，供压单暗吸/托单诱多先导引擎使用） */
+export function recordOrderFlowSample(codeRaw, book5, now = Date.now()) {
+  if (!book5 || !(book5.price > 0)) return;
+  const code6 = String(codeRaw || '').replace(/\D/g, '').padStart(6, '0');
+  if (!/^\d{6}$/.test(code6)) return;
+  const today = todayStr();
+  if (_flowRingDay !== today) {
+    Object.keys(_flowRing).forEach((k) => delete _flowRing[k]);
+    _flowRingDay = today;
+  }
+  const ring = _flowRing[code6] || (_flowRing[code6] = []);
+  const lastSnap = ring[ring.length - 1];
+  if (lastSnap && (book5.outer < lastSnap.outer || book5.inner < lastSnap.inner)) {
+    ring.length = 0; // 跨日清零重置保护
+  }
+  const curLast = ring[ring.length - 1];
+  const flowChanged = !curLast || book5.outer !== curLast.outer || book5.inner !== curLast.inner;
+  if (!curLast || now - curLast.at >= 4500 || flowChanged) {
+    ring.push({
+      at: now,
+      price: book5.price,
+      outer: book5.outer,
+      inner: book5.inner,
+      bidVolSum: book5.bidVolSum,
+      askVolSum: book5.askVolSum,
+      weiBi: book5.weiBi,
+    });
+    while (ring.length > 2 && now - ring[0].at > 10 * 60 * 1000) {
+      ring.shift();
+    }
+    if (ring.length > 48) {
+      ring.splice(0, ring.length - 48);
+    }
+  }
+}
+
 /* 解析腾讯 qt 数组中的五档买卖盘口、委比委差、内外盘与涨跌停封单额 */
 export function parseOrderBook5(f) {
   if (!Array.isArray(f) || f.length < 29) return null;
@@ -717,7 +756,7 @@ export function parseOrderBook5(f) {
     sealAmt = Math.round(a1.vol * 100 * a1.price);
   }
 
-  return {
+  const outBook = {
     price,
     prevClose,
     outer,
@@ -738,6 +777,10 @@ export function parseOrderBook5(f) {
     sealAmt,
     updatedAt: String(f[30] || ''),
   };
+  if (f[2]) {
+    recordOrderFlowSample(f[2], outBook);
+  }
+  return outBook;
 }
 
 export async function fetchQuotes(codes){
@@ -997,6 +1040,9 @@ export async function loadChart(s, force){
       s._book5 = minData.book5;
     }
     if (minData && Array.isArray(minData.pts)) {
+      if (minData.pts.length) {
+        s._lastSessionPts = minData.pts;
+      }
       const mnDate = String(minData.date || '').replace(/\D/g, '').slice(0, 8);
       if (mnDate === todayStr().replace(/-/g, '')) {
         s._rtPts = minData.pts;
@@ -1060,6 +1106,9 @@ export async function refreshSingleFastRt(s){
     }
     if (!s._book5 && minRes.value.book5) {
       s._book5 = minRes.value.book5;
+    }
+    if (minRes.value.pts.length) {
+      s._lastSessionPts = minRes.value.pts;
     }
     s._k = s._k || {};
     s._k['rt'] = chartEntry('line', { min: minRes.value });
@@ -1232,6 +1281,12 @@ export async function loadVolMin(s, force){
   let bars = (byDay[today] || []).map(b => ({ t:b.t, vol:b.vol, high:b.high, low:b.low, close:b.close, elapsed:5 }));
   try{
     const mn = await fetchMinute(tcode);
+    if (!s._book5 && mn && mn.book5) {
+      s._book5 = mn.book5;
+    }
+    if (mn && Array.isArray(mn.pts) && mn.pts.length) {
+      s._lastSessionPts = mn.pts;
+    }
     /* 关键守卫：开盘前 / 非交易日，分时接口会把「上一个交易日」的完整分时原样吐回来。
        不判日期就会拿昨天的量去比一个已经包含昨天的基准 —— r 恒等于 1，显示"量能常态"，
        完全是假象。所以日期不匹配时一律当作"今日还没有分时"。 */
@@ -3427,4 +3482,299 @@ export function isAShareTradingNow(now = new Date()) {
   const mins = now.getHours() * 60 + now.getMinutes();
   const wd = now.getDay();
   return wd >= 1 && wd <= 5 && ((mins >= 570 && mins <= 690) || (mins >= 780 && mins <= 900));
+}
+
+/**
+ * 实时主力先导动能双引擎（零额外请求，输出 -100 ~ +100 双向评分）：
+ * 1) 五档盘口 × 内外盘增量欺骗识别：「🔥 压单暗吸」（卖盘重压但主动外盘持续吃货） vs 「🪤 托单诱多」（买盘厚托但主动内盘暗中砸盘）
+ * 2) 分时窄幅横盘 × Intraday OBV 能量潮先行：「🚀 横盘OBV新高」（近15分钟窄幅蓄势而累计能量潮率先创日内新高） vs 「⚠️ 横盘OBV下沉」
+ */
+export function computeLeadingMomentum(s, now = Date.now()) {
+  if (!s || (!(s.price > 0) && !(s.prevClose > 0))) {
+    return {
+      ready: false,
+      score: 0,
+      level: 'neutral',
+      shortTag: '同步中',
+      badge: '—',
+      orderType: 'NONE',
+      obvType: 'NONE',
+      orderTag: '',
+      obvTag: '',
+      summary: '等待实时五档与分时数据同步',
+    };
+  }
+
+  const code6 = String(s.code || '').replace(/\D/g, '').padStart(6, '0');
+  const is20cm = code6.startsWith('30') || code6.startsWith('68');
+  const book5 = s._book5 || s._k?.rt?.min?.book5 || null;
+  const px = +(book5?.price || s.price || s.prevClose || 0);
+  const pc = +(book5?.prevClose || s.prevClose || px);
+  const avgPx = +s.avg || 0;
+
+  // ---- 引擎 1：五档盘口厚度与内外盘主动增量背离 ----
+  const outer = +(book5?.outer ?? s.outer ?? 0);
+  const inner = +(book5?.inner ?? s.inner ?? 0);
+  const ring = (_flowRingDay === todayStr() && _flowRing[code6]) ? _flowRing[code6] : [];
+
+  let dOuter = 0;
+  let dInner = 0;
+  let dPxPct = 0;
+  let isIncremental = false;
+  if (ring.length >= 2) {
+    const lastSnap = ring[ring.length - 1];
+    const refSnap =
+      ring.find((pt) => now - pt.at >= 25 * 1000 && now - pt.at <= 360 * 1000) || ring[0];
+    if (refSnap && lastSnap && lastSnap.outer >= refSnap.outer && lastSnap.inner >= refSnap.inner) {
+      dOuter = Math.max(0, lastSnap.outer - refSnap.outer);
+      dInner = Math.max(0, lastSnap.inner - refSnap.inner);
+      if (refSnap.price > 0) {
+        dPxPct = ((px - refSnap.price) / refSnap.price) * 100;
+      }
+      if (dOuter + dInner >= 30) {
+        isIncremental = true;
+      }
+    }
+  }
+
+  const flowTotal = isIncremental ? dOuter + dInner : outer + inner;
+  const activeBuyLots = isIncremental ? dOuter : outer;
+  const flowImb = flowTotal > 0 ? (isIncremental ? dOuter - dInner : outer - inner) / flowTotal : 0;
+  const buyShare = flowTotal > 0 ? Math.round((activeBuyLots / flowTotal) * 100) : 50;
+
+  const weiBi = book5 ? (+book5.weiBi || 0) : 0;
+  const wallThr = book5?.wallThreshold || 999999;
+  const maxAskWall = book5?.asks ? Math.max(0, ...book5.asks.map((a) => +a.vol || 0)) : 0;
+  const maxBidWall = book5?.bids ? Math.max(0, ...book5.bids.map((b) => +b.vol || 0)) : 0;
+  const hasAskWall = Boolean(book5 && (maxAskWall >= wallThr || weiBi <= -22));
+  const hasBidWall = Boolean(book5 && (maxBidWall >= wallThr || weiBi >= 22));
+
+  let orderType = 'NEUTRAL';
+  let orderTag = '';
+  let orderScore = 0;
+  let orderDesc = '';
+
+  if (book5?.sealType === 'UP') {
+    orderType = 'SEAL_UP';
+    orderTag = '🔥 封板锁筹';
+    orderScore = 58;
+    orderDesc = `涨停买一封单 ${book5.sealVol} 手锁住筹码`;
+  } else if (book5?.sealType === 'DOWN') {
+    orderType = 'SEAL_DOWN';
+    orderTag = '❄️ 跌停核封';
+    orderScore = -58;
+    orderDesc = `跌停卖一封单 ${book5.sealVol} 手压制流动性`;
+  } else if (
+    hasAskWall &&
+    weiBi <= -12 &&
+    flowImb >= (isIncremental ? 0.15 : 0.08) &&
+    dPxPct >= -0.45 &&
+    (avgPx <= 0 || px >= avgPx * 0.992)
+  ) {
+    orderType = 'STEALTH_BUY';
+    orderTag = '🔥 压单暗吸';
+    orderScore = Math.min(
+      58,
+      Math.round(32 + Math.min(14, Math.abs(weiBi) * 0.22) + Math.min(12, flowImb * 30))
+    );
+    orderDesc = `上方卖盘压单(委比${weiBi.toFixed(0)}%)制造抛压假象，${isIncremental ? '近期增量' : '盘中'}外盘占比${buyShare}%暗中吃货`;
+  } else if (
+    hasBidWall &&
+    weiBi >= 12 &&
+    flowImb <= (isIncremental ? -0.15 : -0.08) &&
+    dPxPct <= 0.45
+  ) {
+    orderType = 'TRAP_SELL';
+    orderTag = '🪤 托单诱多';
+    orderScore = -Math.min(
+      58,
+      Math.round(32 + Math.min(14, Math.abs(weiBi) * 0.22) + Math.min(12, Math.abs(flowImb) * 30))
+    );
+    orderDesc = `下方垫大托单(委比+${weiBi.toFixed(0)}%)护盘诱多，${isIncremental ? '近期增量' : '盘中'}内盘砸盘占比${100 - buyShare}%暗中派发`;
+  } else if (flowImb >= (isIncremental ? 0.22 : 0.14) && (avgPx <= 0 || px >= avgPx * 0.995)) {
+    orderType = 'SWEEP_BUY';
+    orderTag = isIncremental ? '⚡ 增量扫货' : '⚡ 外盘抢筹';
+    orderScore = Math.min(44, Math.round(18 + flowImb * 45 + Math.max(0, weiBi * 0.08)));
+    orderDesc = `${isIncremental ? '近期增量' : '全天'}主动外盘占比 ${buyShare}%，买力持续向上扫单`;
+  } else if (flowImb <= (isIncremental ? -0.22 : -0.14)) {
+    orderType = 'DUMP_SELL';
+    orderTag = isIncremental ? '🌊 增量砸盘' : '🌊 内盘宣泄';
+    orderScore = Math.max(-44, Math.round(-18 + flowImb * 45 + Math.min(0, weiBi * 0.08)));
+    orderDesc = `${isIncremental ? '近期增量' : '全天'}主动内盘占比 ${100 - buyShare}%，卖盘主动向下砸档`;
+  } else if (flowTotal > 0 || book5) {
+    orderScore = Math.round(flowImb * 26 + weiBi * 0.08);
+    orderDesc = book5
+      ? `委比${weiBi >= 0 ? '+' : ''}${weiBi.toFixed(0)}% · 主动外盘${buyShare}%`
+      : `主动外盘占比 ${buyShare}%`;
+  }
+
+  // ---- 引擎 2：分时窄幅横盘 × Intraday OBV 能量潮先行新高/背离 ----
+  const pts =
+    Array.isArray(s._rtPts) && s._rtPts.length >= 16
+      ? s._rtPts
+      : Array.isArray(s._k?.rt?.min?.pts) && s._k.rt.min.pts.length >= 16
+      ? s._k.rt.min.pts
+      : Array.isArray(s._lastSessionPts) && s._lastSessionPts.length >= 16
+      ? s._lastSessionPts
+      : [];
+
+  let obvType = 'NEUTRAL';
+  let obvTag = '';
+  let obvScore = 0;
+  let obvDesc = '';
+  let boxAmpPct = null;
+  let obvNewHigh = false;
+
+  if (pts.length >= 18) {
+    const obvArr = [];
+    let lastDir = pts[0].price >= pc ? 1 : -1;
+    let cum = (+pts[0].vol || 0) * (pts[0].price > pc ? 1 : pts[0].price < pc ? -1 : 0);
+    obvArr.push(cum);
+    for (let i = 1; i < pts.length; i++) {
+      const dp = (+pts[i].price || 0) - (+pts[i - 1].price || 0);
+      let dir = 0;
+      if (dp > 0.0001) {
+        dir = 1;
+        lastDir = 1;
+      } else if (dp < -0.0001) {
+        dir = -1;
+        lastDir = -1;
+      } else {
+        const refAvg = +pts[i].avg || avgPx || pc;
+        dir = (+pts[i].price || 0) >= refAvg ? (lastDir >= 0 ? 0.45 : 0.2) : (lastDir <= 0 ? -0.45 : -0.2);
+      }
+      cum += dir * (+pts[i].vol || 0);
+      obvArr.push(cum);
+    }
+
+    const W = 15;
+    const win = pts.slice(-W);
+    const prior = pts.slice(0, -W);
+    const validWinPx = win.map((p) => +p.price || 0).filter((v) => v > 0);
+    const boxHi = validWinPx.length ? Math.max(...validWinPx) : px;
+    const boxLo = validWinPx.length ? Math.min(...validWinPx) : px;
+    boxAmpPct = boxLo > 0 ? +(((boxHi - boxLo) / boxLo) * 100).toFixed(2) : 99;
+    const tightLimit = is20cm ? 1.85 : 1.25;
+    const isTightBox = boxAmpPct <= tightLimit;
+
+    const lastPt = pts[pts.length - 1];
+    const lastAvg = +lastPt.avg || avgPx || pc;
+    const curObv = obvArr[obvArr.length - 1];
+    const winStartObv = obvArr[Math.max(0, obvArr.length - W)];
+    const priorObvSlice = obvArr.slice(0, Math.max(1, obvArr.length - 5));
+    const priorObvMax = Math.max(...priorObvSlice);
+    const priorObvMin = Math.min(...priorObvSlice);
+    const priorPxMax = prior.length ? Math.max(...prior.map((p) => +p.price || 0)) : boxHi;
+    const winVolSum = win.reduce((a, p) => a + (+p.vol || 0), 0);
+    const winObvNetRatio = winVolSum > 0 ? (curObv - winStartObv) / winVolSum : 0;
+    obvNewHigh = curObv >= priorObvMax && curObv > winStartObv;
+    const obvNewLow = curObv <= priorObvMin && curObv < winStartObv;
+
+    if (
+      isTightBox &&
+      lastPt.price >= lastAvg * 0.994 &&
+      lastPt.price <= priorPxMax * 1.005 &&
+      ((obvNewHigh && winObvNetRatio >= 0.18) || winObvNetRatio >= 0.34)
+    ) {
+      obvType = 'OBV_COIL_HIGH';
+      obvTag = obvNewHigh ? '🚀 横盘OBV新高' : '🚀 窄幅蓄势吸筹';
+      obvScore = Math.min(
+        50,
+        Math.round(32 + (obvNewHigh ? 8 : 0) + Math.min(10, winObvNetRatio * 22))
+      );
+      obvDesc = `近15分窄幅横盘(${boxAmpPct.toFixed(2)}%)站稳均线，分时OBV${obvNewHigh ? '先行创日内新高' : '持续净流入'}蓄势`;
+    } else if (isTightBox && ((obvNewLow && winObvNetRatio <= -0.18) || winObvNetRatio <= -0.34)) {
+      obvType = 'OBV_COIL_DROP';
+      obvTag = '⚠️ 横盘OBV下沉';
+      obvScore = -Math.min(
+        48,
+        Math.round(30 + (obvNewLow ? 8 : 0) + Math.min(10, Math.abs(winObvNetRatio) * 22))
+      );
+      obvDesc = `近15分股价窄幅横盘(${boxAmpPct.toFixed(2)}%)，但分时OBV暗中下台阶净流出`;
+    } else if (!isTightBox && lastPt.price >= priorPxMax * 0.997 && winObvNetRatio <= -0.15) {
+      obvType = 'OBV_TOP_DIV';
+      obvTag = '⚠️ 冲高OBV背离';
+      obvScore = -24;
+      obvDesc = '现价贴近日内高点但近15分OBV净流出，量能未同步跟进';
+    } else {
+      obvScore = Math.round(
+        Math.max(
+          -22,
+          Math.min(22, winObvNetRatio * 34 + (obvNewHigh && lastPt.price >= lastAvg ? 6 : 0))
+        )
+      );
+      if (obvScore >= 14) {
+        obvTag = '📈 OBV抬升';
+        obvDesc = '近15分钟分时能量潮OBV稳步净流入';
+      } else if (obvScore <= -14) {
+        obvTag = '📉 OBV回落';
+        obvDesc = '近15分钟分时能量潮OBV偏净流出';
+      }
+    }
+  }
+
+  let score = orderScore + obvScore;
+  if (orderType === 'STEALTH_BUY' && obvType === 'OBV_COIL_HIGH') score += 12;
+  if (orderType === 'TRAP_SELL' && obvType === 'OBV_COIL_DROP') score -= 12;
+  score = Math.max(-100, Math.min(100, Math.round(score)));
+
+  const level =
+    score >= 45
+      ? 'strong_bull'
+      : score >= 18
+      ? 'bull'
+      : score <= -45
+      ? 'strong_bear'
+      : score <= -18
+      ? 'bear'
+      : 'neutral';
+
+  let shortTag = '⚖️ 多空均衡';
+  if (orderType === 'STEALTH_BUY' && obvType === 'OBV_COIL_HIGH') shortTag = '🔥 暗吸+OBV先行';
+  else if (orderType === 'TRAP_SELL' && obvType === 'OBV_COIL_DROP') shortTag = '🚨 诱多+OBV暗出';
+  else if (
+    orderType === 'STEALTH_BUY' ||
+    orderType === 'TRAP_SELL' ||
+    orderType === 'SEAL_UP' ||
+    orderType === 'SEAL_DOWN'
+  )
+    shortTag = orderTag;
+  else if (obvType === 'OBV_COIL_HIGH' || obvType === 'OBV_COIL_DROP' || obvType === 'OBV_TOP_DIV')
+    shortTag = obvTag;
+  else if (orderTag) shortTag = orderTag;
+  else if (obvTag) shortTag = obvTag;
+  else if (score >= 18) shortTag = '📈 先导偏多';
+  else if (score <= -18) shortTag = '📉 先导偏空';
+
+  const scoreTxt = score > 0 ? `+${score}` : `${score}`;
+  const badge = `${shortTag} ${scoreTxt}`;
+  const summary = [orderDesc, obvDesc].filter(Boolean).join('；') || '盘口挂单与主动成交暂处均衡区间';
+  const hasNotableSignal =
+    orderType === 'STEALTH_BUY' ||
+    orderType === 'TRAP_SELL' ||
+    obvType === 'OBV_COIL_HIGH' ||
+    obvType === 'OBV_COIL_DROP' ||
+    obvType === 'OBV_TOP_DIV';
+
+  return {
+    ready: Boolean(book5 || flowTotal > 0 || pts.length >= 18),
+    score,
+    scoreTxt,
+    level,
+    shortTag,
+    badge,
+    orderType,
+    obvType,
+    orderTag,
+    obvTag,
+    summary,
+    hasNotableSignal,
+    isIncremental,
+    dOuter,
+    dInner,
+    buyShare,
+    weiBi,
+    boxAmpPct,
+    obvNewHigh,
+  };
 }

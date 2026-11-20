@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { calc, posCalc } from '../services/api.js';
+import { calc, posCalc, computeLeadingMomentum } from '../services/api.js';
 import { f2, money, getTodayTStatus, copyPlain, toastWarn } from '../services/utils.js';
 import { evaluateChannelHoldingDiscipline } from '../services/risk.js';
 
@@ -15,6 +15,7 @@ export function buildActionSignal(stock, { sentiment = null, noticeRisk = null, 
   const chg = pc > 0 ? ((px - pc) / pc) * 100 : 0;
   const pos = posCalc(stock);
   const c = calc(stock);
+  const leadMom = computeLeadingMomentum(stock);
   const hasPos = pos.sh > 0;
   const channelDisc = evaluateChannelHoldingDiscipline(stock, {
     tradeLogs,
@@ -287,6 +288,7 @@ export function buildActionSignal(stock, { sentiment = null, noticeRisk = null, 
     activeAnomaly,
     isTiltLocked,
     channelDisc,
+    leadMom,
   };
 }
 
@@ -518,7 +520,7 @@ export default function BattleCardGrid({
         const isShort = s.tier === 'short' || s.poolTag === '短线';
         const noticeRisk = noticeRisks?.[code6] || null;
         const sig = buildActionSignal(s, { sentiment, noticeRisk, tiltState, tradeLogs });
-        const { c, pos, chg, px, hasPos, activeAnomaly, isTiltLocked, channelDisc } = sig;
+        const { c, pos, chg, px, hasPos, activeAnomaly, isTiltLocked, channelDisc, leadMom } = sig;
         const chgCls = chg > 0 ? 'up' : chg < 0 ? 'down' : '';
         const tStatus = hasPos ? getTodayTStatus(s, tradeLogs) : null;
         const isEditingMemo = editingMemoCode === code6;
@@ -630,6 +632,35 @@ export default function BattleCardGrid({
                   {activeAnomaly.volBurst ? ` · 量能${activeAnomaly.volBurst}×` : ''}
                   {activeAnomaly.time ? ` (${activeAnomaly.time.slice(0, 5)})` : ''}
                 </span>
+              </div>
+            )}
+
+            {/* 主力先导动能条（压单暗吸/托单诱多 × 分时窄幅横盘OBV先行） */}
+            {leadMom?.ready && (
+              <div className={`bc-lead-mom lv-${leadMom.level}`} title={leadMom.summary}>
+                <div className="bc-lm-row">
+                  <span className="bc-lm-lbl">⚡ 先导</span>
+                  <span className={`bc-lm-pill lv-${leadMom.level}`}>{leadMom.shortTag}</span>
+                  <div className="lm-track">
+                    {leadMom.score < 0 && (
+                      <div
+                        className="lm-fill-neg"
+                        style={{ width: `${Math.min(50, Math.abs(leadMom.score) / 2)}%` }}
+                      />
+                    )}
+                    {leadMom.score > 0 && (
+                      <div
+                        className="lm-fill-pos"
+                        style={{ width: `${Math.min(50, leadMom.score / 2)}%` }}
+                      />
+                    )}
+                    <i className="lm-zero" />
+                  </div>
+                  <b className={`bc-lm-val lv-${leadMom.level}`}>{leadMom.scoreTxt}</b>
+                </div>
+                {leadMom.hasNotableSignal && (
+                  <div className="bc-lm-desc">{leadMom.summary}</div>
+                )}
               </div>
             )}
 

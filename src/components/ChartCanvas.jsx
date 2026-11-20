@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { drawChart, chartMeta, chartLegendHTML, chartStat, PERIODS, PERIOD_LABEL, P_MAIN, P_MORE, OV_DEF, OV_RT_DEF, SUB_DEF, setHover } from '../services/chart.js';
-import { loadChart, loadDD } from '../services/api.js';
+import { loadChart, loadDD, computeLeadingMomentum } from '../services/api.js';
 import { f2, copyPlain } from '../services/utils.js';
 
 const VALID_PERIODS = ['rt', 'day', 'week', 'month', 'm1', 'm5', 'm15', 'm30', 'm60'];
@@ -82,6 +82,8 @@ function OrderBook5Panel({ stock, book5, onPickLevel }) {
     );
   };
 
+  const leadMom = computeLeadingMomentum(stock);
+
   return (
     <aside className="ob5-panel" aria-label="实时五档盘口">
       <div>
@@ -98,6 +100,37 @@ function OrderBook5Panel({ stock, book5, onPickLevel }) {
         {book5.sealType === 'DOWN' && (
           <div className="ob5-seal-banner is-down" title={`跌停卖一封单 ${book5.sealVol} 手`}>
             ❄️ 跌停封单 {fmtSealAmt(book5.sealAmt)} ({fmtBookLots(book5.sealVol)}手)
+          </div>
+        )}
+
+        {leadMom?.ready && (
+          <div className={`ob5-mom-box lv-${leadMom.level}`} title={leadMom.summary}>
+            <div className="ob5-mom-top">
+              <span className="ob5-mom-tag">{leadMom.shortTag}</span>
+              <span className={`ob5-mom-score lv-${leadMom.level}`}>{leadMom.scoreTxt}</span>
+            </div>
+            <div className="lm-track" aria-label={`主力先导动能 ${leadMom.scoreTxt}`}>
+              {leadMom.score < 0 && (
+                <div
+                  className="lm-fill-neg"
+                  style={{ width: `${Math.min(50, Math.abs(leadMom.score) / 2)}%` }}
+                />
+              )}
+              {leadMom.score > 0 && (
+                <div
+                  className="lm-fill-pos"
+                  style={{ width: `${Math.min(50, leadMom.score / 2)}%` }}
+                />
+              )}
+              <i className="lm-zero" />
+            </div>
+            {(leadMom.orderTag || leadMom.obvTag) && (
+              <div className="ob5-mom-sub">
+                {[leadMom.orderTag, leadMom.obvTag]
+                  .filter((v, idx, arr) => Boolean(v) && arr.indexOf(v) === idx)
+                  .join(' · ')}
+              </div>
+            )}
           </div>
         )}
 

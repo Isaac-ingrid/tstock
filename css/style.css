@@ -2437,5 +2437,209 @@
   }
 }
 
+/* ============================================================
+   主力先导动能条（双向零轴 -100 诱多暗出 ⟷ 0 ⟷ +100 暗吸蓄势）
+   ============================================================ */
+.lm-track {
+  position: relative;
+  height: 6px;
+  border-radius: 99px;
+  background: #e2e8f0;
+  overflow: hidden;
+  flex: 1 1 0%;
+  min-width: 48px;
+}
+
+.lm-fill-pos {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, #f97316 0%, #dc2626 100%);
+  border-radius: 0 99px 99px 0;
+  transition: width 0.25s ease;
+}
+
+.lm-fill-neg {
+  position: absolute;
+  right: 50%;
+  top: 0;
+  bottom: 0;
+  background: linear-gradient(270deg, #10b981 0%, #047857 100%);
+  border-radius: 99px 0 0 99px;
+  transition: width 0.25s ease;
+}
+
+.lm-zero {
+  position: absolute;
+  left: 50%;
+  top: -1px;
+  bottom: -1px;
+  width: 1.5px;
+  transform: translateX(-0.75px);
+  background: #475569;
+  pointer-events: none;
+}
+
+/* 五档盘口内嵌先导动能盒 */
+.ob5-mom-box {
+  margin-bottom: 5px;
+  padding: 4px 6px;
+  border-radius: 5px;
+  border: 1px solid var(--line, #e2e8f0);
+  background: #f8fafc;
+}
+
+.ob5-mom-box.lv-strong_bull {
+  background: #fff5f5;
+  border-color: #fca5a5;
+}
+
+.ob5-mom-box.lv-bull {
+  background: #fffaf5;
+  border-color: #fdba74;
+}
+
+.ob5-mom-box.lv-strong_bear {
+  background: #ecfdf5;
+  border-color: #6ee7b7;
+}
+
+.ob5-mom-box.lv-bear {
+  background: #f0fdf4;
+  border-color: #a7f3d0;
+}
+
+.ob5-mom-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  margin-bottom: 3px;
+}
+
+.ob5-mom-tag {
+  font-size: 10.5px;
+  font-weight: 800;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ob5-mom-score {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 10.5px;
+  font-weight: 800;
+  color: var(--sub);
+}
+
+.ob5-mom-score.lv-strong_bull,
+.ob5-mom-score.lv-bull,
+.bc-lm-val.lv-strong_bull,
+.bc-lm-val.lv-bull {
+  color: #dc2626;
+}
+
+.ob5-mom-score.lv-strong_bear,
+.ob5-mom-score.lv-bear,
+.bc-lm-val.lv-strong_bear,
+.bc-lm-val.lv-bear {
+  color: #059669;
+}
+
+.ob5-mom-sub {
+  margin-top: 2.5px;
+  font-size: 9.8px;
+  color: var(--mute);
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 作战台卡片内嵌先导动能条 */
+.bc-lead-mom {
+  margin: 5px 0 6px;
+  padding: 5px 8px;
+  border-radius: 7px;
+  border: 1px solid var(--line, #e5e7eb);
+  background: #f8fafc;
+}
+
+.bc-lead-mom.lv-strong_bull {
+  background: linear-gradient(90deg, #fff5f5 0%, #ffffff 100%);
+  border-color: #fca5a5;
+}
+
+.bc-lead-mom.lv-bull {
+  background: #fffaf5;
+  border-color: #fed7aa;
+}
+
+.bc-lead-mom.lv-strong_bear {
+  background: linear-gradient(90deg, #ecfdf5 0%, #ffffff 100%);
+  border-color: #6ee7b7;
+}
+
+.bc-lead-mom.lv-bear {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.bc-lm-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bc-lm-lbl {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--mute);
+  flex-shrink: 0;
+}
+
+.bc-lm-pill {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 0.5px 6px;
+  border-radius: 4px;
+  background: #e2e8f0;
+  color: #334155;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.bc-lm-pill.lv-strong_bull,
+.bc-lm-pill.lv-bull {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.bc-lm-pill.lv-strong_bear,
+.bc-lm-pill.lv-bear {
+  background: #d1fae5;
+  color: #047857;
+}
+
+.bc-lm-val {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 11.5px;
+  font-weight: 800;
+  min-width: 28px;
+  text-align: right;
+  color: var(--sub);
+  flex-shrink: 0;
+}
+
+.bc-lm-desc {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--sub);
+  line-height: 1.35;
+}
+
+
 
 
