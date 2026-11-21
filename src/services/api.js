@@ -2928,13 +2928,17 @@ function isAlertMuted(){
 
 function pushSystemAlertRecord(entry){
   try {
+    const stamped =
+      entry && typeof entry === 'object'
+        ? { date: entry.date || todayStr(), ...entry }
+        : entry;
     const hist = JSON.parse(localStorage.getItem('t-system-alerts') || '[]');
-    const updated = [entry, ...(Array.isArray(hist) ? hist : [])].slice(0, 80);
+    const updated = [stamped, ...(Array.isArray(hist) ? hist : [])].slice(0, 80);
     localStorage.setItem('t-system-alerts', JSON.stringify(updated));
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('t-alert-triggered', { detail: updated }));
-      if (entry && entry.priority === 'P0') {
-        window.dispatchEvent(new CustomEvent('t-p0-emergency', { detail: entry }));
+      if (stamped && stamped.priority === 'P0') {
+        window.dispatchEvent(new CustomEvent('t-p0-emergency', { detail: stamped }));
       }
     }
     return updated;
@@ -3594,6 +3598,8 @@ export function simulateIntradayAnomaly(targetPool = null){
 
   pushSystemAlertRecord({
     id: now + Math.random(),
+    date: todayStr(),
+    isDrill: true,
     category: 'anomaly',
     priority: prio,
     anomalyType: anom.type,
@@ -3660,6 +3666,8 @@ export function simulateLeadingResonanceAlert(targetPool = null){
 
   pushSystemAlertRecord({
     id: now + Math.random(),
+    date: todayStr(),
+    isDrill: true,
     category: 'leading',
     priority: 'P1',
     anomalyType: leadAlert.type,

@@ -735,7 +735,7 @@ export default function App() {
       lRef: (tradeLogs || []).map(x => `${x.id}:${(x.mistakeTags || []).join(',')}:${x.reflection || ''}`).join('|'),
       t: (tailActives || []).map(x => `${x.id}:${x.shares}:${x.cost}`),
       s: (snapshots || []).map(x => `${x.date}:${x.total}`),
-      eod: (eodArchives || []).map(x => `${x.date}:${x.archivedAt}`),
+      eod: (eodArchives || []).map(x => `${x.date}:${x.archivedAt}:${x.leadingReview?.totalCount || 0}:${x.leadingReview?.alignedCount || 0}`),
       r: posRules,
       ic: initialCapital,
       ac: Math.round(availableCash * 100) / 100,
@@ -1199,6 +1199,7 @@ export default function App() {
       grade: briefRes.grade,
       todayRealizedNet: briefRes.todayRealizedNet,
       frictionLoss: briefRes.frictionLoss,
+      leadingReview: briefRes.leadingReview,
       briefMarkdown: briefRes.briefMarkdown,
       vaultSynced: false,
     };
@@ -1210,9 +1211,13 @@ export default function App() {
     setEodArchives(prelimArchives);
     eodArchivesRef.current = prelimArchives;
 
+    const leadStepHint =
+      briefRes.leadingReview?.totalCount > 0
+        ? ` · 先导命中 ${briefRes.leadingReview.hitCount}/${briefRes.leadingReview.totalCount}`
+        : '';
     setEodSteps(prev => ({
       ...prev,
-      brief: { status: 'done', note: `纪律 ${briefRes.disciplineScore}分 · 简报已出炉` },
+      brief: { status: 'done', note: `纪律 ${briefRes.disciplineScore}分${leadStepHint} · 简报已出炉` },
       vault: { status: 'running', note: '正在落盘独立云金库…' },
     }));
 

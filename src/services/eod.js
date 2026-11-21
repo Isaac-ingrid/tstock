@@ -226,6 +226,335 @@ export function buildPostMarketSnapshot({
 }
 
 /**
+ * 盘后复盘核心评估：当日主力先导强共振 (3维/4维 P1) 信号命中回顾 × 实盘做T执行对照
+ * - 零前视偏差（Zero-Look-Behind）：仅统计信号触发时刻及之后的分时极值与收盘价，绝不把早盘前高算作午后信号命中
+ * - 自动剥离演练：自动剔除 isDrill / [演练] 模拟信号，确保实盘命中率干净真实
+ * - 四象限知行对照：顺向果断执行 / 守纪避坑观望 / 踏空好球 / 逆向违背先导
+ */
+export function evaluateLeadingResonanceReview({
+  date = todayStr(),
+  alertRecords = null,
+  pool = [],
+  todayLogs = [],
+} = {}) {
+  const rawAlerts = Array.isArray(alertRecords)
+    ? alertRecords
+    : (() => {
+        try {
+          if (typeof localStorage !== 'undefined') {
+            const parsed = JSON.parse(localStorage.getItem('t-system-alerts') || '[]');
+            return Array.isArray(parsed) ? parsed : [];
+          }
+        } catch (_) {}
+        return [];
+      })();
+
+  const fmtLocalDate = (ts) => {
+    const d = new Date(ts);
+    if (Number.isNaN(d.getTime())) return '';
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
+  const resolveAlertDate = (a) => {
+    if (a?.date && /^\d{4}-\d{2}-\d{2}$/.test(String(a.date))) return String(a.date);
+    if (typeof a?.id === 'number' && a.id > 1700000000000) return fmtLocalDate(Math.floor(a.id));
+    return '';
+  };
+
+  const isDrillAlert = (a) =>
+    Boolean(
+      a?.isDrill ||
+        String(a?.summary || '').trim().startsWith('[演练]') ||
+        String(a?.label || '').includes('演练')
+    );
+
+  const toHHMM = (timeStr) => {
+    const digits = String(timeStr || '').replace(/\D/g, '');
+    return digits.length >= 4 ? digits.slice(0, 4) : '';
+  };
+
+  const hhmmToMins = (hhmm) => {
+    if (!/^\d{4}$/.test(hhmm)) return null;
+    return +hhmm.slice(0, 2) * 60 + +hhmm.slice(2, 4);
+  };
+
+  const sameDayLeading = rawAlerts.filter(
+    (a) => a && a.category === 'leading' && resolveAlertDate(a) === date
+  );
+  const drillFilteredCount = sameDayLeading.filter(isDrillAlert).length;
+  const realSignals = sameDayLeading
+    .filter((a) => !isDrillAlert(a))
+    .slice()
+    .sort((a, b) => {
+      const ta = toHHMM(a.time);
+      const tb = toHHMM(b.time);
+      if (ta !== tb) return ta.localeCompare(tb);
+      return (+a.id || 0) - (+b.id || 0);
+    });
+
+  const poolMap = new Map();
+  (Array.isArray(pool) ? pool : []).forEach((s) => {
+    if (!s) return;
+    const c6 = String(s.code || '').replace(/\D/g, '').padStart(6, '0');
+    if (/^\d{6}$/.test(c6)) poolMap.set(c6, s);
+  });
+
+  const logsByCode = new Map();
+  (Array.isArray(todayLogs) ? todayLogs : []).forEach((lg) => {
+    if (!lg || (lg.date && lg.date !== date)) return;
+    let c6 = String(lg.code || '').replace(/\D/g, '').padStart(6, '0');
+    if (!/^\d{6}$/.test(c6) || c6 === '000000') {
+      const m = String(lg.stock || '').match(/(\d{6})/);
+      c6 = m ? m[1] : '';
+    }
+    if (!c6) return;
+    if (!logsByCode.has(c6)) logsByCode.set(c6, []);
+    logsByCode.get(c6).push(lg);
+  });
+
+  const BUY_DIRS = new Set(['正T', '做T', '买入建仓', '买入加仓', '直接买入', '尾盘买入']);
+  const SELL_DIRS = new Set(['倒T', '直接卖出', '清仓卖出', '尾盘平仓']);
+  const PURE_SELL_DIRS = new Set(['直接卖出', '清仓卖出']);
+
+  const compactDate = String(date || '').replace(/\D/g, '').slice(0, 8);
+  const countedNetLogIds = new Set();
+
+  let bullCount = 0;
+  let bearCount = 0;
+  let hitCount = 0;
+  let favorableSum = 0;
+  let alignedCount = 0;
+  let alignedNetSum = 0;
+  let missedCount = 0;
+  let contraryCount = 0;
+  let disciplinedPassCount = 0;
+
+  const items = realSignals.map((sig) => {
+    const code6 = String(sig.code || '').replace(/\D/g, '').padStart(6, '0');
+    const st = poolMap.get(code6) || null;
+    const dir = sig.leadDir === 'bear' || sig.anomalyType === 'lead_bear_resonance' ? 'bear' : 'bull';
+    if (dir === 'bull') bullCount += 1;
+    else bearCount += 1;
+
+    const trigPx = +sig.price > 0 ? +sig.price : +(st?.price || 0);
+    const closePx = +(st?.price || trigPx || 0);
+    const trigHHMM = toHHMM(sig.time);
+    const sigMins = hhmmToMins(trigHHMM);
+
+    let sessionPts = [];
+    if (Array.isArray(st?._rtPts) && st._rtPts.length > 0) {
+      sessionPts = st._rtPts;
+    } else if (
+      Array.isArray(st?._k?.rt?.min?.pts) &&
+      st._k.rt.min.pts.length > 0 &&
+      (!st._k.rt.min.date ||
+        String(st._k.rt.min.date).replace(/\D/g, '').slice(0, 8) === compactDate)
+    ) {
+      sessionPts = st._k.rt.min.pts;
+    }
+
+    const postPts = sessionPts.filter(
+      (pt) => pt && +pt.price > 0 && (!trigHHMM || String(pt.t || '').slice(0, 4) >= trigHHMM)
+    );
+    const hasPostMinuteTrack = postPts.length > 0;
+    const maxAfterPx = hasPostMinuteTrack
+      ? Math.max(closePx, ...postPts.map((p) => +p.price))
+      : closePx;
+    const minAfterPx = hasPostMinuteTrack
+      ? Math.min(closePx, ...postPts.map((p) => +p.price))
+      : closePx;
+
+    let hit = false;
+    let peakGainPct = 0;
+    let troughDropPct = 0;
+    let closeMovePct = 0;
+    let favorablePct = 0;
+    let outcomeNote = '暂无收盘对照价';
+
+    if (trigPx > 0 && closePx > 0) {
+      closeMovePct = +(((closePx - trigPx) / trigPx) * 100).toFixed(2);
+      if (dir === 'bull') {
+        peakGainPct = +(((maxAfterPx - trigPx) / trigPx) * 100).toFixed(2);
+        favorablePct = Math.max(peakGainPct, closeMovePct);
+        // 扣双向规费后具备日内净套利空间（脉冲 ≥+0.80% 或收盘稳涨 ≥+0.45%）判为命中
+        hit = peakGainPct >= 0.8 || closeMovePct >= 0.45;
+        outcomeNote = hasPostMinuteTrack
+          ? `信号后最高 ¥${f2(maxAfterPx)}(${peakGainPct >= 0 ? '+' : ''}${peakGainPct.toFixed(2)}%) · 收 ¥${f2(closePx)}(${closeMovePct >= 0 ? '+' : ''}${closeMovePct.toFixed(2)}%)`
+          : `收盘 ¥${f2(closePx)}(较触发 ${closeMovePct >= 0 ? '+' : ''}${closeMovePct.toFixed(2)}%)`;
+      } else {
+        troughDropPct = +(((minAfterPx - trigPx) / trigPx) * 100).toFixed(2);
+        favorablePct = +Math.max(-troughDropPct, -closeMovePct).toFixed(2);
+        // 空头诱多预警后回落 ≥0.80% 或收盘跌 ≥0.45% 判为预警命中
+        hit = troughDropPct <= -0.8 || closeMovePct <= -0.45;
+        outcomeNote = hasPostMinuteTrack
+          ? `信号后最低 ¥${f2(minAfterPx)}(${troughDropPct >= 0 ? '+' : ''}${troughDropPct.toFixed(2)}%) · 收 ¥${f2(closePx)}(${closeMovePct >= 0 ? '+' : ''}${closeMovePct.toFixed(2)}%)`
+          : `收盘 ¥${f2(closePx)}(较触发 ${closeMovePct >= 0 ? '+' : ''}${closeMovePct.toFixed(2)}%)`;
+      }
+    }
+
+    if (hit) hitCount += 1;
+    favorableSum += favorablePct;
+
+    const stockLogs = logsByCode.get(code6) || [];
+    const relevantLogs = stockLogs.filter((lg) => {
+      const lm = hhmmToMins(toHHMM(lg.time));
+      if (sigMins == null || lm == null) return true;
+      return lm >= sigMins - 3;
+    });
+
+    const bullExecLogs = relevantLogs.filter((lg) => BUY_DIRS.has(String(lg.dir || '')));
+    const bearExecLogs = relevantLogs.filter((lg) => SELL_DIRS.has(String(lg.dir || '')));
+    const pureSellLogs = relevantLogs.filter((lg) => PURE_SELL_DIRS.has(String(lg.dir || '')));
+
+    let execStatus = 'DISCIPLINED_PASS';
+    let execBadge = '🧘 观望未动';
+    let execDetail = '信号后未产生交易流水';
+    let tradeNet = 0;
+
+    if (dir === 'bull') {
+      if (bullExecLogs.length > 0) {
+        execStatus = 'ALIGNED_EXEC';
+        execBadge = '✅ 顺向低吸执行';
+        alignedCount += 1;
+        const first = bullExecLogs[0];
+        const totalQty = bullExecLogs.reduce((acc, x) => acc + (+x.qty || 0), 0);
+        const closedTrades = bullExecLogs.filter((x) => +x.sell > 0);
+        tradeNet = Math.round(
+          closedTrades.reduce((acc, x) => acc + (+x.net || 0), 0) * 100
+        ) / 100;
+        closedTrades.forEach((x) => {
+          const lid = x.id || `${x.time}-${x.qty}-${x.buy}`;
+          if (!countedNetLogIds.has(lid)) {
+            countedNetLogIds.add(lid);
+            alignedNetSum += +x.net || 0;
+          }
+        });
+        execDetail = `${first.dir} ${totalQty}股 · 买¥${f2(first.buy)}${
+          closedTrades.length > 0
+            ? ` · 净落袋 ${tradeNet >= 0 ? '+' : ''}¥${money(tradeNet)}`
+            : ' · 持仓待兑现'
+        }`;
+      } else if (
+        pureSellLogs.length > 0 &&
+        hit &&
+        +pureSellLogs[0].sell > 0 &&
+        +pureSellLogs[0].sell <= trigPx * 1.003
+      ) {
+        execStatus = 'CONTRARY_EXEC';
+        execBadge = '🚨 逆向地板卖飞';
+        contraryCount += 1;
+        execDetail = `${pureSellLogs[0].dir} ${pureSellLogs[0].qty}股 @¥${f2(
+          pureSellLogs[0].sell
+        )}（先导暗吸共振区过早抛售卖飞）`;
+      } else if (hit) {
+        execStatus = 'MISSED_OPPORTUNITY';
+        execBadge = '👀 踏空好球';
+        missedCount += 1;
+        execDetail = `先导看多共振已兑现(+${favorablePct.toFixed(2)}%)，盘中未出手低吸`;
+      } else {
+        execStatus = 'DISCIPLINED_PASS';
+        execBadge = '🧘 观望避险';
+        disciplinedPassCount += 1;
+        execDetail = `信号后未走出有效空间(${peakGainPct >= 0 ? '+' : ''}${peakGainPct.toFixed(
+          2
+        )}%)，未盲动省下规费`;
+      }
+    } else {
+      if (bearExecLogs.length > 0) {
+        execStatus = 'ALIGNED_EXEC';
+        execBadge = '✅ 顺向高抛锁盈';
+        alignedCount += 1;
+        const first = bearExecLogs[0];
+        const totalQty = bearExecLogs.reduce((acc, x) => acc + (+x.qty || 0), 0);
+        tradeNet = Math.round(
+          bearExecLogs.reduce((acc, x) => acc + (+x.net || 0), 0) * 100
+        ) / 100;
+        bearExecLogs.forEach((x) => {
+          const lid = x.id || `${x.time}-${x.qty}-${x.sell}`;
+          if (!countedNetLogIds.has(lid)) {
+            countedNetLogIds.add(lid);
+            alignedNetSum += +x.net || 0;
+          }
+        });
+        execDetail = `${first.dir} ${totalQty}股 · 卖¥${f2(first.sell)}${
+          tradeNet !== 0 ? ` · 净额 ${tradeNet >= 0 ? '+' : ''}¥${money(tradeNet)}` : ''
+        }`;
+      } else if (bullExecLogs.length > 0) {
+        execStatus = 'CONTRARY_EXEC';
+        execBadge = '🚨 逆向误接诱多';
+        contraryCount += 1;
+        const first = bullExecLogs[0];
+        execDetail = `${first.dir} ${first.qty}股 @¥${f2(
+          first.buy
+        )}（违背托单诱多/暗出预警逆势接盘）`;
+      } else {
+        execStatus = 'DISCIPLINED_PASS';
+        execBadge = hit ? '🛡️ 守纪避坑' : '🧘 观望未动';
+        disciplinedPassCount += 1;
+        execDetail = hit
+          ? `成功规避诱多回落(${troughDropPct.toFixed(2)}%)，严守纪律未接飞刀`
+          : '诱多预警后保持克制，未盲目开新买单';
+      }
+    }
+
+    const hitsDim = +sig.hits || 3;
+    const scoreNum = +sig.leadScore || 0;
+    const scoreTxt = sig.leadScoreTxt || (scoreNum > 0 ? `+${scoreNum}` : `${scoreNum}`);
+
+    return {
+      id: sig.id,
+      time: String(sig.time || '—').slice(0, 8),
+      code: code6,
+      name: sig.name || st?.name || code6,
+      dir,
+      hits: hitsDim,
+      label: sig.label || (dir === 'bull' ? `${hitsDim}维先导强共振` : `${hitsDim}维诱多暗出`),
+      score: scoreNum,
+      scoreTxt,
+      tags: Array.isArray(sig.tags) ? sig.tags : [],
+      triggerPrice: trigPx,
+      targetPrice: +sig.target || trigPx,
+      closePrice: closePx,
+      maxAfterPx,
+      minAfterPx,
+      hasPostMinuteTrack,
+      peakGainPct,
+      troughDropPct,
+      closeMovePct,
+      favorablePct,
+      hit,
+      outcomeNote,
+      execStatus,
+      execBadge,
+      execDetail,
+      tradeNet,
+    };
+  });
+
+  const totalCount = items.length;
+  const hitRate = totalCount > 0 ? Math.round((hitCount / totalCount) * 100) : null;
+  const avgFavorablePct =
+    totalCount > 0 ? Math.round((favorableSum / totalCount) * 100) / 100 : 0;
+
+  return {
+    date,
+    totalCount,
+    bullCount,
+    bearCount,
+    hitCount,
+    hitRate,
+    avgFavorablePct,
+    alignedCount,
+    alignedNetSum: Math.round(alignedNetSum * 100) / 100,
+    missedCount,
+    contraryCount,
+    disciplinedPassCount,
+    drillFilteredCount,
+    items,
+  };
+}
+
+/**
  * 步骤 4：生成结构化「今日收盘量化复盘与明日挂单简报」(兼容有交易日与零交易守纪日，离线亦 100% 可用)
  */
 export function buildEodBriefMarkdown({
@@ -238,6 +567,7 @@ export function buildEodBriefMarkdown({
   positionCheck,
   marketEnv = null,
   coachReview = null,
+  alertRecords = null,
 }) {
   const envLv = marketEnv?.level || MKT?.gate?.level || 'OK';
   const envTitle = String(marketEnv?.text || MKT?.gate?.title || '大盘常态震荡').replace(/<[^>]+>/g, '');
@@ -249,6 +579,13 @@ export function buildEodBriefMarkdown({
   const todayRealizedNet = Math.round(
     closedToday.reduce((acc, l) => acc + (+l.net || 0), 0) * 100
   ) / 100;
+
+  const leadingReview = evaluateLeadingResonanceReview({
+    date,
+    alertRecords,
+    pool,
+    todayLogs,
+  });
 
   const lines = [];
   lines.push(`# 🏁 【15:05 收盘归档与明日作战简报】· ${date}`);
@@ -323,7 +660,40 @@ export function buildEodBriefMarkdown({
   }
   lines.push('');
 
-  lines.push(`### 四、明日盘前挂单锚点预案（按今日收盘价动态测算）`);
+  lines.push(`### 四、盘中主力先导强共振命中回顾与做T执行对照`);
+  if (leadingReview.totalCount === 0) {
+    lines.push(
+      `- 📡 **今日无盘中 3维/4维主力先导强共振实盘触发**${
+        leadingReview.drillFilteredCount > 0
+          ? `（已自动过滤 ${leadingReview.drillFilteredCount} 条盘后演练记录，不计入实盘胜率）`
+          : ''
+      }：盘口未出现高确定性多维暗吸或诱多共振，按标准格位与均价线纪律执行即可。`
+    );
+  } else {
+    lines.push(
+      `- **信号命中总览**: 共触发 **${leadingReview.totalCount} 次** P1 先导强共振（多头暗吸 ${leadingReview.bullCount} 次 / 空头诱多 ${leadingReview.bearCount} 次）｜ 命中 **${leadingReview.hitCount}/${leadingReview.totalCount} (${leadingReview.hitRate}%)** ｜ 平均顺向空间 **+${leadingReview.avgFavorablePct.toFixed(2)}%**${
+        leadingReview.drillFilteredCount > 0
+          ? `（已过滤 ${leadingReview.drillFilteredCount} 条演练）`
+          : ''
+      }`
+    );
+    lines.push(
+      `- **知行合一对照**: ✅ 顺向执行 **${leadingReview.alignedCount} 次**${
+        leadingReview.alignedNetSum !== 0
+          ? `（关联平仓净额 **${leadingReview.alignedNetSum >= 0 ? '+' : ''}¥${money(leadingReview.alignedNetSum)}**）`
+          : ''
+      } ｜ 🛡️ 守纪避坑/观望 **${leadingReview.disciplinedPassCount} 次** ｜ 👀 踏空好球 **${leadingReview.missedCount} 次** ｜ 🚨 逆向违背 **${leadingReview.contraryCount} 次**`
+    );
+    leadingReview.items.forEach((it) => {
+      const tagTxt = it.tags.length ? ` [${it.tags.join(' + ')}]` : '';
+      lines.push(
+        `  - \`${it.time}\` **${it.name} (${it.code})** · ${it.dir === 'bull' ? '🔥' : '🚨'} **${it.label}(${it.scoreTxt})** 触发 ¥${f2(it.triggerPrice)}${tagTxt} → **${it.hit ? '🎯 命中' : '⚪ 未达标'}**（${it.outcomeNote}）｜ 实盘：**${it.execBadge}**（${it.execDetail}）`
+      );
+    });
+  }
+  lines.push('');
+
+  lines.push(`### 五、明日盘前挂单锚点预案（按今日收盘价动态测算）`);
   const planTargets = [
     ...positionCheck.holdingSummary,
     ...positionCheck.watchSummary.slice(0, 4),
@@ -346,5 +716,6 @@ export function buildEodBriefMarkdown({
     grade: todayLogs.length === 0 ? 'S · 宁缺毋滥' : sc.grade,
     todayRealizedNet,
     frictionLoss: sc.frictionLoss,
+    leadingReview,
   };
 }

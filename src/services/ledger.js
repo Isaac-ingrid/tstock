@@ -154,7 +154,7 @@ export function resolveSystemBenchmark({
     verdict = '底仓波段';
   }
 
-  if (!(sysBuy > 0) || !(sysSell1 > 0)) return { benchmark: null, calcSnap };
+  if (!(sysBuy > 0) || !(sysSell1 > 0)) return { benchmark: null, calcSnap, hitPool };
 
   const sysFee = qNum > 0 ? (sysBuy * qNum + sysSell1 * qNum) * 0.00055 : 0;
   const sysNet = qNum > 0 ? Math.round(((sysSell1 - sysBuy) * qNum - sysFee) * 100) / 100 : null;
@@ -170,6 +170,7 @@ export function resolveSystemBenchmark({
       sysNet,
     },
     calcSnap,
+    hitPool,
   };
 }
 
@@ -208,7 +209,7 @@ export function auditTradeExecution({
       ? 'short_swing'
       : 'long_t');
 
-  const { benchmark, calcSnap } = resolveSystemBenchmark({
+  const { benchmark, calcSnap, hitPool } = resolveSystemBenchmark({
     stock,
     stockText,
     code,

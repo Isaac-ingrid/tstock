@@ -5,7 +5,7 @@ const STEP_DEFS = [
   { key: 'quotes', num: '01', title: '同步收盘行情', desc: '拉取持仓/尾盘最新收盘价与指数' },
   { key: 'audit', num: '02', title: '核查未平T与隔夜仓', desc: '排查滞留T仓与次日早盘必平黑马' },
   { key: 'snapshot', num: '03', title: '归档今日净值快照', desc: '落盘总资产、仓位与单日涨跌' },
-  { key: 'brief', num: '04', title: '生成量化复盘简报', desc: '核算四维纪律分与明日挂单锚点' },
+  { key: 'brief', num: '04', title: '生成量化复盘简报', desc: '纪律分、先导命中对照与明日锚点' },
   { key: 'vault', num: '05', title: '双写本地磁盘金库', desc: '同步 user_vault.json 与按日备份' },
 ];
 
@@ -388,6 +388,190 @@ export default function PostMarketModal({
                   </div>
                 </div>
               </div>
+
+              {/* 🔥 当日主力先导强共振 × 做T知行对照可视化复盘卡 */}
+              {activeArchive.leadingReview && (
+                <div
+                  style={{
+                    background: activeArchive.leadingReview.totalCount > 0 ? '#fffaf5' : 'var(--surface2)',
+                    border: `1px solid ${activeArchive.leadingReview.totalCount > 0 ? '#fed7aa' : 'var(--line)'}`,
+                    borderRadius: '9px',
+                    padding: '12px 14px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '10px',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: '8px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <span style={{ fontWeight: 800, fontSize: '13.5px', color: '#9a3412' }}>
+                        🔥 当日主力先导强共振 × 做T知行对照
+                      </span>
+                      {activeArchive.leadingReview.totalCount > 0 ? (
+                        <>
+                          <span
+                            style={{
+                              fontSize: '11.5px',
+                              padding: '2px 8px',
+                              borderRadius: '999px',
+                              fontWeight: 800,
+                              background: '#ffedd5',
+                              color: '#c2410c',
+                              border: '1px solid #fdba74',
+                            }}
+                          >
+                            命中 {activeArchive.leadingReview.hitCount}/{activeArchive.leadingReview.totalCount} (
+                            {activeArchive.leadingReview.hitRate}%)
+                          </span>
+                          <span style={{ fontSize: '11.5px', color: '#7c2d12', fontWeight: 600 }}>
+                            平均顺向空间 +{Number(activeArchive.leadingReview.avgFavorablePct || 0).toFixed(2)}%
+                          </span>
+                        </>
+                      ) : (
+                        <span style={{ fontSize: '12px', color: 'var(--sub)' }}>
+                          今日盘中未触发 3维/4维主力先导强共振实盘信号
+                        </span>
+                      )}
+                      {activeArchive.leadingReview.drillFilteredCount > 0 && (
+                        <span style={{ fontSize: '11px', color: 'var(--mute)' }}>
+                          （已自动剔除 {activeArchive.leadingReview.drillFilteredCount} 条演练记录）
+                        </span>
+                      )}
+                    </div>
+
+                    {activeArchive.leadingReview.totalCount > 0 && (
+                      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', fontSize: '11.5px', fontWeight: 700 }}>
+                        <span
+                          style={{
+                            padding: '2px 7px',
+                            borderRadius: '6px',
+                            background: '#dcfce7',
+                            color: '#15803d',
+                          }}
+                        >
+                          ✅ 顺向执行 {activeArchive.leadingReview.alignedCount}
+                          {activeArchive.leadingReview.alignedNetSum !== 0
+                            ? ` (${activeArchive.leadingReview.alignedNetSum >= 0 ? '+' : ''}¥${money(activeArchive.leadingReview.alignedNetSum)})`
+                            : ''}
+                        </span>
+                        <span
+                          style={{
+                            padding: '2px 7px',
+                            borderRadius: '6px',
+                            background: '#eff6ff',
+                            color: '#1d4ed8',
+                          }}
+                        >
+                          🛡️ 守纪/观望 {activeArchive.leadingReview.disciplinedPassCount}
+                        </span>
+                        <span
+                          style={{
+                            padding: '2px 7px',
+                            borderRadius: '6px',
+                            background: '#fef3c7',
+                            color: '#b45309',
+                          }}
+                        >
+                          👀 踏空好球 {activeArchive.leadingReview.missedCount}
+                        </span>
+                        {activeArchive.leadingReview.contraryCount > 0 && (
+                          <span
+                            style={{
+                              padding: '2px 7px',
+                              borderRadius: '6px',
+                              background: '#fee2e2',
+                              color: '#b91c1c',
+                            }}
+                          >
+                            🚨 逆向违背 {activeArchive.leadingReview.contraryCount}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {activeArchive.leadingReview.totalCount > 0 && (
+                    <div style={{ overflowX: 'auto' }}>
+                      <table
+                        style={{
+                          width: '100%',
+                          borderCollapse: 'collapse',
+                          fontSize: '12px',
+                          background: '#fff',
+                          borderRadius: '7px',
+                          overflow: 'hidden',
+                        }}
+                      >
+                        <thead>
+                          <tr style={{ background: '#fff7ed', color: '#7c2d12', textAlign: 'left' }}>
+                            <th style={{ padding: '7px 9px', borderBottom: '1px solid #fed7aa', whiteSpace: 'nowrap' }}>触发时刻</th>
+                            <th style={{ padding: '7px 9px', borderBottom: '1px solid #fed7aa' }}>标的 / 共振维度</th>
+                            <th style={{ padding: '7px 9px', borderBottom: '1px solid #fed7aa' }}>触发价 → 信号后验证</th>
+                            <th style={{ padding: '7px 9px', borderBottom: '1px solid #fed7aa', whiteSpace: 'nowrap' }}>命中判定</th>
+                            <th style={{ padding: '7px 9px', borderBottom: '1px solid #fed7aa' }}>实盘做T执行对照</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(activeArchive.leadingReview.items || []).map((it, idx) => {
+                            const isBull = it.dir !== 'bear';
+                            const execBg =
+                              it.execStatus === 'ALIGNED_EXEC'
+                                ? '#f0fdf4'
+                                : it.execStatus === 'CONTRARY_EXEC'
+                                ? '#fef2f2'
+                                : it.execStatus === 'MISSED_OPPORTUNITY'
+                                ? '#fffbeb'
+                                : '#f8fafc';
+                            const execColor =
+                              it.execStatus === 'ALIGNED_EXEC'
+                                ? '#15803d'
+                                : it.execStatus === 'CONTRARY_EXEC'
+                                ? '#b91c1c'
+                                : it.execStatus === 'MISSED_OPPORTUNITY'
+                                ? '#b45309'
+                                : '#475569';
+                            return (
+                              <tr key={it.id || idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                <td style={{ padding: '7px 9px', fontFamily: 'monospace', whiteSpace: 'nowrap', color: 'var(--sub)' }}>
+                                  {it.time}
+                                </td>
+                                <td style={{ padding: '7px 9px' }}>
+                                  <div style={{ fontWeight: 700 }}>
+                                    {it.name} <span style={{ color: 'var(--mute)', fontFamily: 'monospace' }}>({it.code})</span>
+                                  </div>
+                                  <div style={{ fontSize: '11px', color: isBull ? '#c2410c' : '#0f766e', fontWeight: 700, marginTop: '2px' }}>
+                                    {isBull ? '🔥' : '🚨'} {it.label} ({it.scoreTxt})
+                                    {Array.isArray(it.tags) && it.tags.length > 0 ? ` · ${it.tags.join(' + ')}` : ''}
+                                  </div>
+                                </td>
+                                <td style={{ padding: '7px 9px', fontSize: '11.5px', lineHeight: 1.45 }}>
+                                  <div style={{ fontWeight: 700, fontFamily: 'monospace' }}>触发 ¥{f2(it.triggerPrice)}</div>
+                                  <div style={{ color: 'var(--sub)' }}>{it.outcomeNote}</div>
+                                </td>
+                                <td style={{ padding: '7px 9px', whiteSpace: 'nowrap', fontWeight: 800, color: it.hit ? '#15803d' : 'var(--mute)' }}>
+                                  {it.hit ? '🎯 命中' : '⚪ 未达标'}
+                                </td>
+                                <td style={{ padding: '7px 9px', background: execBg }}>
+                                  <div style={{ fontWeight: 800, color: execColor }}>{it.execBadge}</div>
+                                  <div style={{ fontSize: '11px', color: 'var(--sub)', marginTop: '2px' }}>{it.execDetail}</div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* 完整复盘简报正文 */}
               <div
