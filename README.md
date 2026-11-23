@@ -100,7 +100,7 @@ DEPLOY_USER=ubuntu bash deploy.sh
 
 `docs/deploy_nginx.conf` 是一份可直接替换的站点配置，主要处理这些事情：
 
-1. `location ~ /\. { deny all; }` —— 挡住 `.git` 与 `.env`。
+1. `location ^~ /.well-known/acme-challenge/` 放行同机 Otto 短期 IP 证书续期校验，`location ~ /\. { deny all; }` 拦截 `.git` 与 `.env` 等其余隐藏文件。
 2. `/stock-api/` —— 反向代理到 `127.0.0.1:8000` 的 FastAPI 服务。
 3. `gzip on` —— 压缩数据契约与前端资源。
 4. `data/` 与 `*.html` 走 `no-cache`，`/_next/static/` 使用哈希长缓存。
