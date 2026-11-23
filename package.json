@@ -9,6 +9,8 @@
     "dev": "node scripts/prepare-static.mjs && next dev --hostname 0.0.0.0",
     "build": "node scripts/prepare-static.mjs && next build",
     "test": "npm run build",
+    "test:calendar": "node timing_task/test_trade_calendar.js",
+    "test:backend": "python3 -m unittest discover -s backend/tests -p \"test_*.py\" -v",
     "backend": ".\\backend\\.venv\\Scripts\\python.exe -m uvicorn backend.app:app --host 127.0.0.1 --port 18765 --reload",
     "task:auction": "node timing_task/tasks/task_auction.js",
     "task:tail": "node timing_task/tasks/task_tail.js",
