@@ -33,21 +33,34 @@ from .trade_calendar import cn_now_str, cn_today, latest_or_current_trade_day, r
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 IGNITION_CACHE_FILE = DATA_DIR / "ignition_latest.json"
+ZT_HISTORY_CACHE_FILE = DATA_DIR / "zt_pool_history_cache.json"
+BOARD_LIST_CACHE_FILE = DATA_DIR / "board_list_cache.json"
 STRATEGY_LEDGER_FILE = DATA_DIR / "strategy_ledger.json"
 
 _LEDGER_FILE_LOCK = asyncio.Lock()
+_ZT_HISTORY_LOCK = asyncio.Lock()
+_INFLIGHT_SCANS_LOCK = asyncio.Lock()
+_INFLIGHT_SCANS: Dict[str, asyncio.Task] = {}
 
-RESULT_TTL = 150.0
+RESULT_TTL = 45.0
 ZT_DAY_TTL = 3600.0
+ZT_HIST_TTL = 43200.0
 NOTICE_TTL = 1800.0
 BOARD_LIST_TTL = 1800.0
-US_TTL = 180.0
+US_TTL = 120.0
 
 _RESULT_CACHE = BoundedTTLCache(maxsize=64, default_ttl=RESULT_TTL)
 _ZT_DAY_CACHE = BoundedTTLCache(maxsize=90, default_ttl=ZT_DAY_TTL)
 _NOTICE_CACHE = BoundedTTLCache(maxsize=512, default_ttl=NOTICE_TTL)
 _BOARD_LIST_CACHE = BoundedTTLCache(maxsize=16, default_ttl=BOARD_LIST_TTL)
 _US_CACHE = BoundedTTLCache(maxsize=32, default_ttl=US_TTL)
+
+_ZT_HISTORY_LOADED = False
+_ZT_HISTORY_MEM: Dict[str, List[dict]] = {}
+_NOTICE_FAIL_COUNT = 0
+_NOTICE_COOLDOWN_UNTIL = 0.0
+_EM_CLIST_FAIL_COUNT = 0
+_EM_CLIST_COOLDOWN_UNTIL = 0.0
 
 # 全市场扫描与单股体检共享的六维统一阈值（消除双轨漂移）
 IGNITION_RULES: Dict[str, float] = {
@@ -178,8 +191,9 @@ async def _fetch_em_klines(
     lmt: int,
     sem: Optional[asyncio.Semaphore] = None,
     tcode_fallback: Optional[str] = None,
+    ttl: float = 300.0,
 ) -> List[dict]:
-    """拉取东方财富前复权K线（委托 market_data 统一东财主用 + 腾讯回退与带上限缓存）。"""
+    """拉取前复权K线（委托 market_data 统一腾讯极速主用 + 东财熔断回退与超集切片缓存）。"""
     return await _gateway_fetch_em_klines(
         client,
         secid,
@@ -187,6 +201,7 @@ async def _fetch_em_klines(
         lmt=lmt,
         sem=sem,
         tcode_fallback=tcode_fallback,
+        ttl=ttl,
     )
 
 
@@ -195,18 +210,29 @@ async def _fetch_stock_notice_risk(
     code: str,
     sem: asyncio.Semaphore,
 ) -> dict:
-    """拉取个股近35天公告排雷状态，复用 diagnosis.classify_announcement 口径。"""
+    """拉取个股近35天公告排雷状态，带 2.0s 短超时与连续失败熔断保护。"""
+    global _NOTICE_FAIL_COUNT, _NOTICE_COOLDOWN_UNTIL
     cached = await _NOTICE_CACHE.get(code)
     if cached is not None:
         return cached
 
+    if time.monotonic() < _NOTICE_COOLDOWN_UNTIL:
+        return {"riskLevel": "安全", "redFlags": [], "yellowAlerts": []}
+
     url = f"https://np-anotice-stock.eastmoney.com/api/security/ann?sr=-1&page_size=25&page_index=1&ann_type=A&stock_list={code}"
     red_flags: List[dict] = []
     yellow_alerts: List[dict] = []
+    ok_resp = False
     async with sem:
         try:
-            r = await client.get(url, headers={"Referer": "https://data.eastmoney.com/"})
+            r = await client.get(
+                url,
+                headers={"Referer": "https://data.eastmoney.com/"},
+                timeout=2.0,
+            )
             if r.status_code == 200 and r.text.lstrip().startswith("{"):
+                ok_resp = True
+                _NOTICE_FAIL_COUNT = 0
                 items = ((r.json().get("data") or {}).get("list")) or []
                 today_dt = cn_today()
                 for item in items:
@@ -225,8 +251,12 @@ async def _fetch_stock_notice_risk(
                         red_flags.append(entry)
                     elif level == "yellow":
                         yellow_alerts.append(entry)
+            else:
+                _NOTICE_FAIL_COUNT += 1
         except Exception:
-            pass
+            _NOTICE_FAIL_COUNT += 1
+        if _NOTICE_FAIL_COUNT >= 5:
+            _NOTICE_COOLDOWN_UNTIL = time.monotonic() + 90.0
 
     risk_level = "高风险" if red_flags else ("留意" if yellow_alerts else "安全")
     res = {
@@ -234,7 +264,8 @@ async def _fetch_stock_notice_risk(
         "redFlags": red_flags[:3],
         "yellowAlerts": yellow_alerts[:3],
     }
-    await _NOTICE_CACHE.set(code, res, ttl=NOTICE_TTL)
+    if ok_resp:
+        await _NOTICE_CACHE.set(code, res, ttl=NOTICE_TTL)
     return res
 
 
@@ -875,12 +906,51 @@ def evaluate_ignition_six_dims(
     }
 
 
+def _ensure_zt_history_loaded() -> None:
+    global _ZT_HISTORY_LOADED, _ZT_HISTORY_MEM
+    if _ZT_HISTORY_LOADED:
+        return
+    _ZT_HISTORY_LOADED = True
+    if not ZT_HISTORY_CACHE_FILE.exists():
+        return
+    try:
+        with ZT_HISTORY_CACHE_FILE.open("r", encoding="utf-8") as f:
+            raw = json.load(f)
+        if isinstance(raw, dict):
+            for k, v in raw.items():
+                if isinstance(k, str) and isinstance(v, list) and v:
+                    _ZT_HISTORY_MEM[k] = v
+    except Exception:
+        pass
+
+
+def _persist_zt_history_sync() -> None:
+    try:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        keys = sorted(_ZT_HISTORY_MEM.keys(), reverse=True)[:45]
+        slim = {k: _ZT_HISTORY_MEM[k] for k in keys}
+        tmp_path = ZT_HISTORY_CACHE_FILE.with_suffix(".json.tmp")
+        with tmp_path.open("w", encoding="utf-8") as f:
+            json.dump(slim, f, ensure_ascii=False, separators=(",", ":"))
+        os.replace(tmp_path, ZT_HISTORY_CACHE_FILE)
+    except Exception:
+        pass
+
+
 async def _fetch_zt_pool_day(
     client: httpx.AsyncClient,
     date_str: str,
     sem: asyncio.Semaphore,
+    today_compact: str = "",
 ) -> Tuple[str, List[dict]]:
-    """拉取东财指定交易日涨停池（不因响应头 qdate 仍打印最新日期而丢弃历史池）。"""
+    """拉取东财指定交易日涨停池：历史已收盘交易日永久落盘复用，当日池短 TTL 刷新。"""
+    is_hist_day = bool(today_compact and date_str < today_compact)
+    if is_hist_day:
+        _ensure_zt_history_loaded()
+        hist_hit = _ZT_HISTORY_MEM.get(date_str)
+        if hist_hit:
+            return date_str, hist_hit
+
     cached = await _ZT_DAY_CACHE.get(date_str)
     if cached is not None:
         return date_str, cached
@@ -892,18 +962,28 @@ async def _fetch_zt_pool_day(
     pool: List[dict] = []
     async with sem:
         try:
-            r = await client.get(url, headers={"Referer": "https://quote.eastmoney.com/"})
+            r = await client.get(
+                url,
+                headers={"Referer": "https://quote.eastmoney.com/"},
+                timeout=2.8,
+            )
             if r.status_code == 200 and r.text.lstrip().startswith("{"):
                 j = r.json()
                 if j.get("rc") == 0 and isinstance(j.get("data"), dict):
                     raw = j["data"].get("pool") or []
                     if isinstance(raw, list) and raw:
-                        pool = raw
+                        pool = [
+                            {"c": row.get("c"), "n": row.get("n"), "hybk": row.get("hybk")}
+                            for row in raw
+                            if isinstance(row, dict) and row.get("c")
+                        ]
         except Exception:
             pool = []
 
     if pool:
-        await _ZT_DAY_CACHE.set(date_str, pool, ttl=ZT_DAY_TTL)
+        await _ZT_DAY_CACHE.set(date_str, pool, ttl=(ZT_HIST_TTL if is_hist_day else 75.0))
+        if is_hist_day:
+            _ZT_HISTORY_MEM[date_str] = pool
     return date_str, pool
 
 
@@ -914,18 +994,20 @@ async def scan_breakout_ignition(
 ) -> dict:
     """
     方向一：多周期共振「横盘试盘起爆」全市场漏斗挖掘。
-    1. 拉取近 N 日涨停池作为种子（默认仅 00/60 主板，include_cyb=True 纳入 30/688）；
-    2. 腾讯批量快照过滤 ST / 停牌 / 流动性极差股；
-    3. 日K筛选“横向试盘板后逐步缩量、未破启动位”标的；
-    4. 对过日K初筛的标的并发拉取周K+月K，校验月放量+周向上并产出震仓/粘合/防回调分档。
     """
     cand_dates = recent_trade_dates(lookback_days + 3, include_ref=True, fmt="%Y%m%d")
+    today_compact = latest_or_current_trade_day().replace("-", "")
+    _ensure_zt_history_loaded()
+    before_hist_cnt = len(_ZT_HISTORY_MEM)
 
-    sem_zt = asyncio.Semaphore(3)
+    sem_zt = asyncio.Semaphore(10)
     zt_results = await asyncio.gather(
-        *[_fetch_zt_pool_day(http_client, d, sem_zt) for d in cand_dates],
+        *[_fetch_zt_pool_day(http_client, d, sem_zt, today_compact=today_compact) for d in cand_dates],
         return_exceptions=True,
     )
+    if len(_ZT_HISTORY_MEM) > before_hist_cnt:
+        async with _ZT_HISTORY_LOCK:
+            _persist_zt_history_sync()
 
     valid_days: List[Tuple[str, List[dict]]] = []
     for item in zt_results:
@@ -970,8 +1052,8 @@ async def scan_breakout_ignition(
         if c in quotes and quotes[c]["price"] > 0 and quotes[c]["amount"] >= 4e7
     ][:200]
 
-    # Step 3A: 拉取日K初筛（走免 WAF 极速腾讯代理节点 + 东财熔断保护）
-    sem_k = asyncio.Semaphore(8)
+    # Step 3A: 高并发拉取日K初筛（走免 WAF 腾讯代理节点 + 超集切片缓存）
+    sem_k = asyncio.Semaphore(28)
     daily_tasks = [
         _fetch_em_klines(
             http_client,
@@ -980,6 +1062,7 @@ async def scan_breakout_ignition(
             95,
             sem_k,
             tcode_fallback=_to_tcode(c),
+            ttl=120.0,
         )
         for c in active_codes
     ]
@@ -993,15 +1076,15 @@ async def scan_breakout_ignition(
         if pre is not None:
             daily_passed.append((c, dbars, pre))
 
-    # Step 3B: 仅对通过日K缩量试盘筛查的标的拉周K+月K
-    sem_wm = asyncio.Semaphore(6)
+    # Step 3B: 仅对通过日K缩量试盘筛查的标的并发拉周K+月K（15分钟长缓存）
+    sem_wm = asyncio.Semaphore(20)
 
     async def _fetch_wm(code: str) -> Tuple[List[dict], List[dict]]:
         em_secid = f"{'1' if code.startswith(('6', '9')) else '0'}.{code}"
         tc = _to_tcode(code)
         w_bars, m_bars = await asyncio.gather(
-            _fetch_em_klines(http_client, em_secid, 102, 26, sem_wm, tcode_fallback=tc),
-            _fetch_em_klines(http_client, em_secid, 103, 15, sem_wm, tcode_fallback=tc),
+            _fetch_em_klines(http_client, em_secid, 102, 26, sem_wm, tcode_fallback=tc, ttl=900.0),
+            _fetch_em_klines(http_client, em_secid, 103, 15, sem_wm, tcode_fallback=tc, ttl=900.0),
         )
         return w_bars, m_bars
 
@@ -1041,8 +1124,8 @@ async def scan_breakout_ignition(
         })
         qual_bars.append((dbars, w_bars, m_bars))
 
-    # 补充公告排雷（小并发）并统一调用 evaluate_ignition_six_dims 对齐总分
-    sem_notice = asyncio.Semaphore(4)
+    # 补充公告排雷（带熔断高并发）并统一调用 evaluate_ignition_six_dims 对齐总分
+    sem_notice = asyncio.Semaphore(16)
     notice_list = await asyncio.gather(
         *[_fetch_stock_notice_risk(http_client, item["code"], sem_notice) for item in qualified[:45]],
         return_exceptions=True,
@@ -1124,30 +1207,74 @@ async def _fetch_us_benchmarks(
         quotes_by_secid = {q["secid"]: q for q in cached_us}
 
     if not quotes_by_secid and unique_secids:
-        url = (
-            "https://push2.eastmoney.com/api/qt/ulist.np/get"
-            f"?fltt=2&invt=2&fields=f12,f13,f14,f2,f3,f4,f15,f16,f17,f18&secids={','.join(unique_secids)}"
-        )
-        try:
-            r = await client.get(url, headers={"Referer": "https://quote.eastmoney.com/"})
-            if r.status_code == 200 and r.text.lstrip().startswith("{"):
-                for row in ((r.json().get("data") or {}).get("diff")) or []:
-                    mkt = row.get("f13")
-                    sym = str(row.get("f12") or "").strip().upper()
-                    sid = f"{mkt}.{sym}"
-                    px = _sf(row.get("f2"))
-                    chg = _sf(row.get("f3"), None)
-                    if px <= 0 or chg is None:
-                        continue
-                    quotes_by_secid[sid] = {
-                        "secid": sid,
-                        "symbol": sym,
-                        "name": str(row.get("f14") or sym),
-                        "price": round(px, 2),
-                        "chg": round(float(chg), 2),
-                    }
-        except Exception:
-            pass
+        if time.monotonic() >= _EM_CLIST_COOLDOWN_UNTIL:
+            url = (
+                "https://push2.eastmoney.com/api/qt/ulist.np/get"
+                f"?fltt=2&invt=2&fields=f12,f13,f14,f2,f3,f4,f15,f16,f17,f18&secids={','.join(unique_secids)}"
+            )
+            try:
+                r = await client.get(
+                    url,
+                    headers={"Referer": "https://quote.eastmoney.com/"},
+                    timeout=2.4,
+                )
+                if r.status_code == 200 and r.text.lstrip().startswith("{"):
+                    for row in ((r.json().get("data") or {}).get("diff")) or []:
+                        mkt = row.get("f13")
+                        sym = str(row.get("f12") or "").strip().upper()
+                        sid = f"{mkt}.{sym}"
+                        px = _sf(row.get("f2"))
+                        chg = _sf(row.get("f3"), None)
+                        if px <= 0 or chg is None:
+                            continue
+                        quotes_by_secid[sid] = {
+                            "secid": sid,
+                            "symbol": sym,
+                            "name": str(row.get("f14") or sym),
+                            "price": round(px, 2),
+                            "chg": round(float(chg), 2),
+                        }
+            except Exception:
+                pass
+
+        # 腾讯极速美股快照兜底（防止东财 push2 偶发超时导致美股风向标空白）
+        if not quotes_by_secid:
+            qq_us_syms = list({
+                str(s.split(".", 1)[1]).strip().upper()
+                for s in unique_secids
+                if "." in s and s.split(".", 1)[1]
+            })
+            if qq_us_syms:
+                qq_url = f"https://qt.gtimg.cn/q={','.join(f's_us{sym}' for sym in qq_us_syms)}"
+                try:
+                    rq = await client.get(
+                        qq_url,
+                        headers={"Referer": "https://gu.qq.com/"},
+                        timeout=2.2,
+                    )
+                    if rq.status_code == 200 and "v_s_us" in rq.text:
+                        for line in rq.text.splitlines():
+                            if "~" not in line:
+                                continue
+                            parts = line.split("~")
+                            if len(parts) < 6:
+                                continue
+                            raw_sym = str(parts[2] or "").split(".", 1)[0].strip().upper()
+                            px = _sf(parts[3])
+                            chg = _sf(parts[5], None)
+                            if not raw_sym or px <= 0 or chg is None:
+                                continue
+                            entry_q = {
+                                "secid": f"105.{raw_sym}",
+                                "symbol": raw_sym,
+                                "name": str(parts[1] or raw_sym),
+                                "price": round(px, 2),
+                                "chg": round(float(chg), 2),
+                            }
+                            quotes_by_secid[f"105.{raw_sym}"] = entry_q
+                            quotes_by_secid[f"106.{raw_sym}"] = entry_q
+                except Exception:
+                    pass
 
         if quotes_by_secid:
             await _US_CACHE.set(cache_key, list(quotes_by_secid.values()), ttl=US_TTL)
@@ -1190,63 +1317,97 @@ async def _fetch_us_benchmarks(
 
 
 async def _fetch_all_boards(client: httpx.AsyncClient) -> List[dict]:
-    """拉取东财概念+行业板块（按 pz=100 分页 + 60日/年内跌幅榜排序），解决东财单页100截断限制。"""
+    """单波并发拉取东财概念+行业板块（2.4s 短超时 + 熔断 + 本地落盘兜底）。"""
+    global _EM_CLIST_FAIL_COUNT, _EM_CLIST_COOLDOWN_UNTIL
     cached_boards = await _BOARD_LIST_CACHE.get("all")
     if cached_boards is not None:
         return cached_boards
 
-    queries: List[Tuple[str, str]] = [
-        ("concept", "https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=100&po=0&np=1&fltt=2&invt=2&fid=f24&fs=m:90+t:3+f:!50&fields=f12,f14,f2,f3,f20,f24,f25"),
-        ("concept", "https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=100&po=0&np=1&fltt=2&invt=2&fid=f25&fs=m:90+t:3+f:!50&fields=f12,f14,f2,f3,f20,f24,f25"),
-        ("industry", "https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=100&po=0&np=1&fltt=2&invt=2&fid=f24&fs=m:90+t:2+f:!50&fields=f12,f14,f2,f3,f20,f24,f25"),
-        ("industry", "https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=100&po=0&np=1&fltt=2&invt=2&fid=f25&fs=m:90+t:2+f:!50&fields=f12,f14,f2,f3,f20,f24,f25"),
-    ]
-    # 补充全部概念板块各分页（531个概念分6页），确保 CPO/算力/机器人/有色等外盘映射概念全命中
-    for pn in range(1, 7):
-        queries.append((
-            "concept",
-            f"https://push2.eastmoney.com/api/qt/clist/get?pn={pn}&pz=100&po=1&np=1&fltt=2&invt=2&fid=f3&fs=m:90+t:3+f:!50&fields=f12,f14,f2,f3,f20,f24,f25",
-        ))
+    out: List[dict] = []
+    if time.monotonic() >= _EM_CLIST_COOLDOWN_UNTIL:
+        queries: List[Tuple[str, str]] = [
+            ("concept", "https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=100&po=0&np=1&fltt=2&invt=2&fid=f24&fs=m:90+t:3+f:!50&fields=f12,f14,f2,f3,f20,f24,f25"),
+            ("concept", "https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=100&po=0&np=1&fltt=2&invt=2&fid=f25&fs=m:90+t:3+f:!50&fields=f12,f14,f2,f3,f20,f24,f25"),
+            ("industry", "https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=100&po=0&np=1&fltt=2&invt=2&fid=f24&fs=m:90+t:2+f:!50&fields=f12,f14,f2,f3,f20,f24,f25"),
+            ("industry", "https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=100&po=0&np=1&fltt=2&invt=2&fid=f25&fs=m:90+t:2+f:!50&fields=f12,f14,f2,f3,f20,f24,f25"),
+        ]
+        for pn in range(1, 4):
+            queries.append((
+                "concept",
+                f"https://push2.eastmoney.com/api/qt/clist/get?pn={pn}&pz=200&po=1&np=1&fltt=2&invt=2&fid=f3&fs=m:90+t:3+f:!50&fields=f12,f14,f2,f3,f20,f24,f25",
+            ))
 
-    sem_b = asyncio.Semaphore(2)
+        sem_b = asyncio.Semaphore(8)
 
-    async def _get_page(btype: str, url: str) -> Tuple[str, Optional[httpx.Response]]:
-        async with sem_b:
-            try:
-                r = await client.get(url, headers={"Referer": "https://quote.eastmoney.com/"})
-                return btype, r
-            except Exception:
-                return btype, None
+        async def _get_page(btype: str, url: str) -> Tuple[str, Optional[httpx.Response]]:
+            async with sem_b:
+                try:
+                    r = await client.get(
+                        url,
+                        headers={"Referer": "https://quote.eastmoney.com/"},
+                        timeout=2.4,
+                    )
+                    return btype, r
+                except Exception:
+                    return btype, None
 
-    resps = await asyncio.gather(*[_get_page(bt, u) for bt, u in queries], return_exceptions=True)
+        resps = await asyncio.gather(*[_get_page(bt, u) for bt, u in queries], return_exceptions=True)
 
-    by_code: Dict[str, dict] = {}
-    for item in resps:
-        if not isinstance(item, tuple):
-            continue
-        btype, r = item
-        if r is None or r.status_code != 200 or not r.text.lstrip().startswith("{"):
-            continue
-        for row in ((r.json().get("data") or {}).get("diff")) or []:
-            bk_code = str(row.get("f12") or "").strip()
-            bk_name = str(row.get("f14") or "").strip()
-            if not bk_code or _is_noise_board(bk_name):
+        by_code: Dict[str, dict] = {}
+        ok_pages = 0
+        for item in resps:
+            if not isinstance(item, tuple):
                 continue
-            by_code[bk_code] = {
-                "bkCode": bk_code,
-                "bkName": bk_name,
-                "boardType": btype,
-                "price": _sf(row.get("f2")),
-                "chg": round(_sf(row.get("f3")), 2),
-                "chg60d": round(_sf(row.get("f24")), 2),
-                "chgYtd": round(_sf(row.get("f25")), 2),
-                "mcap": _sf(row.get("f20")),
-            }
+            btype, r = item
+            if r is None or r.status_code != 200 or not r.text.lstrip().startswith("{"):
+                continue
+            ok_pages += 1
+            for row in ((r.json().get("data") or {}).get("diff")) or []:
+                bk_code = str(row.get("f12") or "").strip()
+                bk_name = str(row.get("f14") or "").strip()
+                if not bk_code or _is_noise_board(bk_name):
+                    continue
+                by_code[bk_code] = {
+                    "bkCode": bk_code,
+                    "bkName": bk_name,
+                    "boardType": btype,
+                    "price": _sf(row.get("f2")),
+                    "chg": round(_sf(row.get("f3")), 2),
+                    "chg60d": round(_sf(row.get("f24")), 2),
+                    "chgYtd": round(_sf(row.get("f25")), 2),
+                    "mcap": _sf(row.get("f20")),
+                }
 
-    out = list(by_code.values())
+        out = list(by_code.values())
+        if ok_pages == 0:
+            _EM_CLIST_FAIL_COUNT += 1
+            if _EM_CLIST_FAIL_COUNT >= 2:
+                _EM_CLIST_COOLDOWN_UNTIL = time.monotonic() + 90.0
+        else:
+            _EM_CLIST_FAIL_COUNT = 0
+
     if out:
         await _BOARD_LIST_CACHE.set("all", out, ttl=BOARD_LIST_TTL)
-    return out
+        try:
+            DATA_DIR.mkdir(parents=True, exist_ok=True)
+            tmp_b = BOARD_LIST_CACHE_FILE.with_suffix(".json.tmp")
+            with tmp_b.open("w", encoding="utf-8") as f:
+                json.dump(out, f, ensure_ascii=False, separators=(",", ":"))
+            os.replace(tmp_b, BOARD_LIST_CACHE_FILE)
+        except Exception:
+            pass
+        return out
+
+    if BOARD_LIST_CACHE_FILE.exists():
+        try:
+            with BOARD_LIST_CACHE_FILE.open("r", encoding="utf-8") as f:
+                disk_boards = json.load(f)
+            if isinstance(disk_boards, list) and disk_boards:
+                await _BOARD_LIST_CACHE.set("all", disk_boards, ttl=180.0)
+                return disk_boards
+        except Exception:
+            pass
+    return []
 
 
 async def scan_dip_leaders(
@@ -1273,8 +1434,10 @@ async def scan_dip_leaders(
                     "boardKeywords": cm["boardKeywords"],
                 })
 
-    radar_cards, theme_shocks = await _fetch_us_benchmarks(http_client, mappings)
-    all_boards = await _fetch_all_boards(http_client)
+    (radar_cards, theme_shocks), all_boards = await asyncio.gather(
+        _fetch_us_benchmarks(http_client, mappings),
+        _fetch_all_boards(http_client),
+    )
 
     # 给每个板块关联对应外盘映射（动态关键词匹配，避免硬编码 BK 号码漂移）
     board_shock_map: Dict[str, dict] = {}
@@ -1289,19 +1452,18 @@ async def scan_dip_leaders(
                 if b not in mapped_boards:
                     mapped_boards.append(b)
 
-    # 筛选待检查 180日高点回撤的候选板块池：
-    # ① 60日跌幅前22名 ② 年内跌幅前15名 ③ 今日板块大跌前10名 ④ 关联美股隔夜大跌的板块
-    by_60d = sorted(all_boards, key=lambda x: x["chg60d"])[:22]
-    by_ytd = sorted(all_boards, key=lambda x: x["chgYtd"])[:15]
-    by_today = sorted(all_boards, key=lambda x: x["chg"])[:10]
+    # 筛选待检查 180日高点回撤的候选板块池（精选前 20 个高置信候选 + 15 分钟缓存，避免冗余请求）：
+    by_60d = sorted(all_boards, key=lambda x: x["chg60d"])[:16]
+    by_ytd = sorted(all_boards, key=lambda x: x["chgYtd"])[:12]
+    by_today = sorted(all_boards, key=lambda x: x["chg"])[:8]
     cand_board_map: Dict[str, dict] = {}
     for b in [*by_60d, *by_ytd, *by_today, *mapped_boards]:
         cand_board_map[b["bkCode"]] = b
-    cand_boards = list(cand_board_map.values())[:38]
+    cand_boards = list(cand_board_map.values())[:20]
 
-    sem_bk = asyncio.Semaphore(4)
+    sem_bk = asyncio.Semaphore(10)
     bk_klines = await asyncio.gather(
-        *[_fetch_em_klines(http_client, f"90.{b['bkCode']}", 101, 180, sem_bk) for b in cand_boards],
+        *[_fetch_em_klines(http_client, f"90.{b['bkCode']}", 101, 180, sem_bk, ttl=900.0) for b in cand_boards],
         return_exceptions=True,
     )
 
@@ -1313,12 +1475,10 @@ async def scan_dip_leaders(
         if isinstance(bars, list) and len(bars) >= 25:
             peak_hi = max(bar["high"] for bar in bars)
             cur_close = b["price"] if b["price"] > 0 else bars[-1]["close"]
-            dd_pct = ((cur_close - peak_hi) / max(1e-6, peak_hi)) * 100.0  # 负数，如 -38.5
+            dd_pct = ((cur_close - peak_hi) / max(1e-6, peak_hi)) * 100.0
         else:
-            # 若板块历史K线受阻，使用东财板块直出的 60日/年内跌幅作为保底
             dd_pct = min(b.get("chg60d") or 0.0, b.get("chgYtd") or 0.0)
 
-        # 入选门槛：板块真实高点回撤达标（如 >= 30%），或关联外盘暴跌且回撤 >= max(18, sector_dd_min - 12)%
         min_req = max(18.0, sector_dd_min - 12.0) if has_us_shock else sector_dd_min
         if -dd_pct >= min_req:
             qualifying_boards.append({
@@ -1327,7 +1487,6 @@ async def scan_dip_leaders(
                 "usShock": shock,
             })
 
-    # 优先挑回撤最深 + 带外盘冲击的板块前 12 个抽取龙头
     qualifying_boards.sort(
         key=lambda x: (
             0 if (x.get("usShock") and x["usShock"]["usMinChg"] <= -2.0) else 1,
@@ -1336,8 +1495,12 @@ async def scan_dip_leaders(
     )
     top_boards = qualifying_boards[:12]
 
-    # 拉取每个深跌板块的成交额 Top 5 龙头股
+    # 拉取每个深跌板块的成交额 Top 5 龙头股（短超时 + 8 并发）
+    sem_leaders = asyncio.Semaphore(8)
+
     async def _fetch_board_leaders(bk: dict) -> List[dict]:
+        if time.monotonic() < _EM_CLIST_COOLDOWN_UNTIL:
+            return []
         bk_code = bk["bkCode"]
         url = (
             "https://push2.eastmoney.com/api/qt/clist/get"
@@ -1345,8 +1508,12 @@ async def scan_dip_leaders(
             "&fields=f12,f14,f2,f3,f6,f8,f15,f16,f17,f18,f20,f21"
         )
         try:
-            async with sem_bk:
-                r = await http_client.get(url, headers={"Referer": "https://quote.eastmoney.com/"})
+            async with sem_leaders:
+                r = await http_client.get(
+                    url,
+                    headers={"Referer": "https://quote.eastmoney.com/"},
+                    timeout=2.4,
+                )
             if r.status_code != 200 or not r.text.lstrip().startswith("{"):
                 return []
             diff = ((r.json().get("data") or {}).get("diff")) or []
@@ -1377,7 +1544,6 @@ async def scan_dip_leaders(
 
     leader_groups = await asyncio.gather(*[_fetch_board_leaders(b) for b in top_boards], return_exceptions=True)
 
-    # 按股票去重，保留其归属的全部深跌板块与最重外盘利空对照
     merged_leaders: Dict[str, dict] = {}
     for grp in leader_groups:
         if not isinstance(grp, list):
@@ -1413,9 +1579,9 @@ async def scan_dip_leaders(
 
     leader_list = sorted(merged_leaders.values(), key=lambda x: -x["mcapYi"])[:42]
 
-    # 并发拉取龙头股 180日日K与公告排雷
-    sem_k = asyncio.Semaphore(4)
-    sem_notice = asyncio.Semaphore(4)
+    # 高并发拉取龙头股 180日日K与公告排雷
+    sem_k = asyncio.Semaphore(20)
+    sem_notice = asyncio.Semaphore(16)
     k_tasks = [
         _fetch_em_klines(
             http_client,
@@ -1937,6 +2103,70 @@ async def get_ignition_tracking_pool(
     }
 
 
+def _saved_params_match(
+    saved_payload: dict,
+    include_cyb: bool,
+    lookback_days: int,
+    sector_dd_min: float,
+    stock_dd_min: float,
+    custom_us_mappings: Optional[List[dict]],
+) -> bool:
+    if custom_us_mappings:
+        return False
+    p = saved_payload.get("params") or {}
+    return (
+        bool(p.get("includeCyb", False)) == bool(include_cyb)
+        and int(p.get("lookbackDays", 20)) == int(lookback_days)
+        and abs(float(p.get("sectorDdMin", 30.0)) - float(sector_dd_min)) < 0.05
+        and abs(float(p.get("stockDdMin", 40.0)) - float(stock_dd_min)) < 0.05
+    )
+
+
+async def _refresh_payload_quotes_and_tracking(
+    payload: dict,
+    http_client: Optional[httpx.AsyncClient] = None,
+    persist_tracking: bool = False,
+) -> dict:
+    b_items = [dict(x) for x in ((payload.get("breakout") or {}).get("items") or [])]
+    d_items = [dict(x) for x in ((payload.get("dipLeaders") or {}).get("items") or [])]
+    all_codes = list({x["code"] for x in [*b_items, *d_items] if x.get("code")})
+    if all_codes:
+        try:
+            if http_client:
+                quotes = await _fetch_batch_quotes(http_client, all_codes)
+            else:
+                async with httpx.AsyncClient(timeout=5.0, trust_env=False) as c:
+                    quotes = await _fetch_batch_quotes(c, all_codes)
+            for it in b_items:
+                q = quotes.get(it["code"])
+                if q and q.get("price", 0) > 0:
+                    it["price"] = round(q["price"], 2)
+                    it["chg"] = round(q["chg"], 2)
+            for it in d_items:
+                q = quotes.get(it["code"])
+                if q and q.get("price", 0) > 0:
+                    it["price"] = round(q["price"], 2)
+                    it["chg"] = round(q["chg"], 2)
+        except Exception:
+            pass
+
+    out = {
+        **payload,
+        "quoteUpdatedAt": cn_now_str(),
+        "breakout": {**(payload.get("breakout") or {}), "items": b_items},
+        "dipLeaders": {**(payload.get("dipLeaders") or {}), "items": d_items},
+    }
+    try:
+        out["trackingPool"] = await get_ignition_tracking_pool(
+            http_client=http_client,
+            fresh_breakout_items=(b_items if persist_tracking else None),
+            fresh_date=(out.get("date") if persist_tracking else None),
+        )
+    except Exception:
+        pass
+    return out
+
+
 async def get_ignition_pool(
     include_cyb: bool = False,
     lookback_days: int = 20,
@@ -1944,139 +2174,167 @@ async def get_ignition_pool(
     stock_dd_min: float = 40.0,
     custom_us_mappings: Optional[List[dict]] = None,
     force_refresh: bool = False,
+    fast_snapshot: bool = False,
     http_client: Optional[httpx.AsyncClient] = None,
 ) -> dict:
     """
     统一聚合「起爆点挖掘」双方向结果：
-    - breakout: 横盘试盘涨停 + 月放量 + 周向上 + 日缩量起爆潜伏池
-    - dipLeaders: 板块深跌腰斩龙头 + 外盘/板块利空抗跌抄底池
+    - 内存缓存仅保存 45 秒内的真实全市场扫描结果（绝不把旧落盘文件伪装成新扫描写入内存缓存）；
+    - fast_snapshot=True 时供前端入页零白屏秒开本地同口径快照 + 刷新现价，并标记 needsLiveRefresh=True；
+    - fast_snapshot=False（默认或 refresh=true）时并发执行方向一+方向二全市场实时扫盘，自动合并并发同参请求。
     """
     custom_key = json.dumps(custom_us_mappings or [], sort_keys=True, ensure_ascii=False)
     cache_key = f"{int(include_cyb)}:{lookback_days}:{sector_dd_min}:{stock_dd_min}:{custom_key}"
-    now_ts = time.monotonic()
+    cur_trade_day = latest_or_current_trade_day()
 
-    # 1. 带容量上限内存缓存命中直接返回
+    # 1. 45 秒内真实全量扫描内存缓存命中：秒刷实时现价后直接返回
     if not force_refresh:
         cached = await _RESULT_CACHE.get(cache_key)
-        if cached is not None:
-            return cached
+        if cached is not None and not cached.get("isSnapshot") and cached.get("date") == cur_trade_day:
+            refreshed = await _refresh_payload_quotes_and_tracking(cached, http_client=http_client, persist_tracking=False)
+            refreshed["isSnapshot"] = False
+            refreshed["needsLiveRefresh"] = False
+            return refreshed
 
-    # 2. 若非强制刷新，优先尝试使用本地落盘优质快照并毫秒更新实时现价（极速响应且防限流）
-    saved_payload = load_saved_ignition() if not force_refresh else None
-    if saved_payload and not force_refresh:
-        b_items = (saved_payload.get("breakout") or {}).get("items") or []
-        d_items = (saved_payload.get("dipLeaders") or {}).get("items") or []
-        if len(b_items) > 0 or len(d_items) > 0:
-            # 批量刷新最新现价
-            all_codes = list({x["code"] for x in [*b_items, *d_items] if x.get("code")})
-            try:
-                if http_client:
-                    quotes = await _fetch_batch_quotes(http_client, all_codes)
-                else:
-                    async with httpx.AsyncClient(timeout=8.0, trust_env=False) as c:
-                        quotes = await _fetch_batch_quotes(c, all_codes)
-                for it in b_items:
-                    q = quotes.get(it["code"])
-                    if q and q.get("price", 0) > 0:
-                        it["price"] = round(q["price"], 2)
-                        it["chg"] = round(q["chg"], 2)
-                for it in d_items:
-                    q = quotes.get(it["code"])
-                    if q and q.get("price", 0) > 0:
-                        it["price"] = round(q["price"], 2)
-                        it["chg"] = round(q["chg"], 2)
-            except Exception:
-                pass
-
-            try:
-                saved_payload["trackingPool"] = await get_ignition_tracking_pool(
-                    http_client=http_client,
-                    fresh_breakout_items=b_items,
-                    fresh_date=saved_payload.get("date"),
-                )
-            except Exception:
-                pass
-
-            await _RESULT_CACHE.set(cache_key, saved_payload, ttl=RESULT_TTL)
-            return saved_payload
-
-    async def _run_both(client: httpx.AsyncClient) -> Tuple[dict, dict]:
-        b_res = await scan_breakout_ignition(client, include_cyb=include_cyb, lookback_days=lookback_days)
-        d_res = await scan_dip_leaders(
-            client,
-            sector_dd_min=sector_dd_min,
-            stock_dd_min=stock_dd_min,
-            custom_us_mappings=custom_us_mappings,
-        )
-        return b_res, d_res
-
-    if http_client is not None:
-        breakout_res, dip_res = await _run_both(http_client)
-    else:
-        async with httpx.AsyncClient(
-            timeout=httpx.Timeout(15.0),
-            trust_env=False,
-            headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                "Accept": "*/*",
+    # 2. 仅当调用方显式请求 fast_snapshot=True 时，秒回同参数本地快照（不污染 _RESULT_CACHE）
+    if fast_snapshot and not force_refresh:
+        saved_payload = load_saved_ignition()
+        if saved_payload and _saved_params_match(
+            saved_payload, include_cyb, lookback_days, sector_dd_min, stock_dd_min, custom_us_mappings
+        ):
+            b_items = (saved_payload.get("breakout") or {}).get("items") or []
+            d_items = (saved_payload.get("dipLeaders") or {}).get("items") or []
+            if len(b_items) > 0 or len(d_items) > 0:
+                snap = await _refresh_payload_quotes_and_tracking(saved_payload, http_client=http_client, persist_tracking=False)
+                snap["isSnapshot"] = True
+                snap["needsLiveRefresh"] = True
+                return snap
+        return {
+            "ok": True,
+            "emptySnapshot": True,
+            "isSnapshot": True,
+            "needsLiveRefresh": True,
+            "date": cur_trade_day,
+            "scannedAt": "",
+            "params": {
+                "includeCyb": include_cyb,
+                "lookbackDays": lookback_days,
+                "sectorDdMin": sector_dd_min,
+                "stockDdMin": stock_dd_min,
             },
-        ) as client:
-            breakout_res, dip_res = await _run_both(client)
+            "breakout": {"items": [], "stats": {}},
+            "dipLeaders": {"items": [], "usRadar": [], "deepBoards": [], "stats": {}},
+            "trackingPool": {"ok": True, "summary": {}, "items": []},
+        }
 
-    # 3. 若实时扫描因三方网络拦截或限流出现 0 结果，自动保底回退至本地已有优质快照
-    b_len = len((breakout_res or {}).get("items") or [])
-    d_len = len((dip_res or {}).get("items") or [])
-    if b_len == 0 and d_len == 0:
-        fallback = load_saved_ignition()
-        if fallback and (len((fallback.get("breakout") or {}).get("items") or []) > 0 or len((fallback.get("dipLeaders") or {}).get("items") or []) > 0):
-            breakout_res = fallback.get("breakout") or breakout_res
-            dip_res = fallback.get("dipLeaders") or dip_res
+    # 3. Singleflight 合并并发同参实时扫描请求
+    async def _execute_live_scan() -> dict:
+        t0 = time.monotonic()
 
-    # 优先采用日K样本/扫描中的真实最新交易日（防周末/法定节假日/盘前日期偏移）
-    trade_date = (
-        next((b.get("latestDate") for b in (breakout_res.get("items") or []) if b.get("latestDate")), None)
-        or latest_or_current_trade_day()
-    )
-    payload = {
-        "ok": True,
-        "date": trade_date,
-        "scannedAt": cn_now_str(),
-        "params": {
-            "includeCyb": include_cyb,
-            "lookbackDays": lookback_days,
-            "sectorDdMin": sector_dd_min,
-            "stockDdMin": stock_dd_min,
-        },
-        "breakout": breakout_res,
-        "dipLeaders": dip_res,
-    }
+        async def _run_both(client: httpx.AsyncClient) -> Tuple[dict, dict]:
+            b_res, d_res = await asyncio.gather(
+                scan_breakout_ignition(client, include_cyb=include_cyb, lookback_days=lookback_days),
+                scan_dip_leaders(
+                    client,
+                    sector_dd_min=sector_dd_min,
+                    stock_dd_min=stock_dd_min,
+                    custom_us_mappings=custom_us_mappings,
+                ),
+            )
+            return b_res, d_res
+
+        if http_client is not None:
+            breakout_res, dip_res = await _run_both(http_client)
+        else:
+            limits_cls = getattr(httpx, "Limits", None)
+            client_kwargs: Dict[str, Any] = {}
+            if callable(limits_cls):
+                client_kwargs["limits"] = limits_cls(max_connections=60, max_keepalive_connections=30)
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(10.0),
+                trust_env=False,
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                    "Accept": "*/*",
+                },
+                **client_kwargs,
+            ) as client:
+                breakout_res, dip_res = await _run_both(client)
+
+        # 若实时扫描因三方网络全部受阻出现 0 结果，保底回退本地同口径快照并标记为快照
+        b_len = len((breakout_res or {}).get("items") or [])
+        d_len = len((dip_res or {}).get("items") or [])
+        used_fallback = False
+        if b_len == 0 and d_len == 0:
+            fallback = load_saved_ignition()
+            if fallback and (len((fallback.get("breakout") or {}).get("items") or []) > 0 or len((fallback.get("dipLeaders") or {}).get("items") or []) > 0):
+                breakout_res = fallback.get("breakout") or breakout_res
+                dip_res = fallback.get("dipLeaders") or dip_res
+                used_fallback = True
+
+        trade_date = (
+            next((b.get("latestDate") for b in (breakout_res.get("items") or []) if b.get("latestDate")), None)
+            or cur_trade_day
+        )
+        now_str = cn_now_str()
+        elapsed_ms = int(round((time.monotonic() - t0) * 1000))
+        payload = {
+            "ok": True,
+            "date": trade_date,
+            "scannedAt": now_str,
+            "quoteUpdatedAt": now_str,
+            "elapsedMs": elapsed_ms,
+            "isSnapshot": used_fallback,
+            "needsLiveRefresh": used_fallback,
+            "params": {
+                "includeCyb": include_cyb,
+                "lookbackDays": lookback_days,
+                "sectorDdMin": sector_dd_min,
+                "stockDdMin": stock_dd_min,
+            },
+            "breakout": breakout_res,
+            "dipLeaders": dip_res,
+        }
+
+        try:
+            tracking_pool_res = await get_ignition_tracking_pool(
+                http_client=http_client,
+                fresh_breakout_items=breakout_res.get("items"),
+                fresh_date=trade_date,
+            )
+            payload["trackingPool"] = tracking_pool_res
+        except Exception:
+            payload["trackingPool"] = {"ok": False, "summary": {}, "items": []}
+
+        if not used_fallback:
+            await _RESULT_CACHE.set(cache_key, payload, ttl=RESULT_TTL)
+
+        is_default = (
+            not custom_us_mappings
+            and not include_cyb
+            and abs(sector_dd_min - 30.0) < 0.01
+            and abs(stock_dd_min - 40.0) < 0.01
+        )
+        if not used_fallback and (is_default or not IGNITION_CACHE_FILE.exists()):
+            try:
+                _save_latest_sync(payload)
+            except Exception:
+                pass
+
+        return payload
+
+    async with _INFLIGHT_SCANS_LOCK:
+        task = _INFLIGHT_SCANS.get(cache_key)
+        if task is None or task.done():
+            task = asyncio.create_task(_execute_live_scan())
+            _INFLIGHT_SCANS[cache_key] = task
 
     try:
-        tracking_pool_res = await get_ignition_tracking_pool(
-            http_client=http_client,
-            fresh_breakout_items=breakout_res.get("items"),
-            fresh_date=trade_date,
-        )
-        payload["trackingPool"] = tracking_pool_res
-    except Exception:
-        payload["trackingPool"] = {"ok": False, "summary": {}, "items": []}
-
-    await _RESULT_CACHE.set(cache_key, payload, ttl=RESULT_TTL)
-
-    # 默认口径或首次落盘时保存，供策略战绩账本归档使用
-    is_default = (
-        not custom_us_mappings
-        and not include_cyb
-        and abs(sector_dd_min - 30.0) < 0.01
-        and abs(stock_dd_min - 40.0) < 0.01
-    )
-    if is_default or not IGNITION_CACHE_FILE.exists():
-        try:
-            _save_latest_sync(payload)
-        except Exception:
-            pass
-
-    return payload
+        return await task
+    finally:
+        async with _INFLIGHT_SCANS_LOCK:
+            if _INFLIGHT_SCANS.get(cache_key) is task and task.done():
+                _INFLIGHT_SCANS.pop(cache_key, None)
 
 
 async def diagnose_ignition_stock(query: str, http_client: Optional[httpx.AsyncClient] = None) -> dict:

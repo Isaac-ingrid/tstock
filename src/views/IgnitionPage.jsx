@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   fetchIgnitionPool,
   fetchIgnitionTracking,
@@ -9,11 +9,22 @@ import {
   loadLocalTrackedCodes,
 } from '../services/api.js';
 import { f2, toastOk, toastErr, copyPlain } from '../services/utils.js';
+import { getAShareMarketStatus } from '../services/calendar.js';
 import MemeRadarSection from '../components/MemeRadarSection.jsx';
 import KlinePatternBadges from '../components/KlinePatternBadges.jsx';
 import { BoardStockActions } from '../components/board/boardShared.jsx';
 
 const CUSTOM_US_KEY = 't-ignition-custom-us';
+const FRESH_SCAN_MAX_AGE_SEC = 45;
+
+function getScanAgeSeconds(scannedAtStr) {
+  const s = String(scannedAtStr || '').trim();
+  if (!s) return Infinity;
+  const iso = `${s.replace(' ', 'T')}+08:00`;
+  const ts = Date.parse(iso);
+  if (!Number.isFinite(ts)) return Infinity;
+  return Math.max(0, (Date.now() - ts) / 1000);
+}
 
 const STAGE_STYLE = {
   SHAKEOUT_READY: { bg: 'var(--up-bg)', color: 'var(--up)', border: 'var(--up-b)' },
@@ -68,8 +79,12 @@ export default function IgnitionPage({
   const [trackFilter, setTrackFilter] = useState('all'); // 'all' | 'IGNITED' | 'WAITING' | 'STOPPED'
   const [trackingRefreshing, setTrackingRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [syncingLive, setSyncingLive] = useState(false);
   const [error, setError] = useState('');
   const [data, setData] = useState(null);
+  const reqSeqRef = useRef(0);
+  const dataRef = useRef(null);
+  dataRef.current = data;
 
   const [localTrackedCodes, setLocalTrackedCodes] = useState(() => new Set(loadLocalTrackedCodes()));
   const [trackBusyCode, setTrackBusyCode] = useState('');
@@ -169,10 +184,42 @@ export default function IgnitionPage({
           fastSnapshot: true,
           timeoutMs: 6500,
         });
-        if (res && res.ok) {
-          setData(res);
-        } else {
-          throw new Error(res?.detail || '起爆挖掘扫盘返回异常');
+        if (seq !== reqSeqRef.current) return;
+        if (snapRes && snapRes.ok && !snapRes.emptySnapshot) {
+          setData(snapRes);
+          setLoading(false);
+          paintedSnapshot = true;
+          const ageSec = getScanAgeSeconds(snapRes.scannedAt);
+          alreadyFresh = !snapRes.isSnapshot && !snapRes.needsLiveRefresh && ageSec <= FRESH_SCAN_MAX_AGE_SEC;
+        }
+      } catch {
+        // 快照失败不阻断后续自动实时扫盘
+      }
+
+      if (seq !== reqSeqRef.current) return;
+      if (alreadyFresh) {
+        setLoading(false);
+        setSyncingLive(false);
+        return;
+      }
+
+      setSyncingLive(true);
+      try {
+        const liveRes = await fetchIgnitionPool({
+          includeCyb,
+          lookbackDays,
+          sectorDdMin,
+          stockDdMin,
+          customMappings,
+          refresh: true,
+          timeoutMs: 35000,
+        });
+        if (seq !== reqSeqRef.current) return;
+        if (liveRes && liveRes.ok) {
+          setData(liveRes);
+          setError('');
+        } else if (!paintedSnapshot) {
+          throw new Error(liveRes?.detail || '起爆挖掘扫盘返回异常');
         }
       } catch (err) {
         if (seq !== reqSeqRef.current) return;
@@ -191,6 +238,33 @@ export default function IgnitionPage({
 
   useEffect(() => {
     loadScan(false);
+  }, [loadScan]);
+
+  // 切回浏览器标签页或盘中交易时段定时自动刷新最新起爆盘口
+  useEffect(() => {
+    const maybeAutoRefresh = () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      const ageSec = getScanAgeSeconds(dataRef.current?.scannedAt);
+      if (ageSec > 75) {
+        loadScan(true, { silent: true });
+      }
+    };
+    const onVisChange = () => {
+      if (document.visibilityState === 'visible') {
+        maybeAutoRefresh();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisChange);
+    const timer = setInterval(() => {
+      const st = getAShareMarketStatus();
+      if (st?.isOpen) {
+        maybeAutoRefresh();
+      }
+    }, 90000);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisChange);
+      clearInterval(timer);
+    };
   }, [loadScan]);
 
   const breakoutData = data?.breakout || {};
@@ -543,17 +617,34 @@ export default function IgnitionPage({
                   fontSize: '11px',
                   padding: '2px 8px',
                   borderRadius: '4px',
-                  background: 'rgba(56,189,248,0.2)',
-                  border: '1px solid #38bdf8',
-                  color: '#bae6fd',
+                  background: 'var(--info-bg)',
+                  border: '1px solid var(--info-b)',
+                  color: 'var(--accent)',
+                  fontVariantNumeric: 'tabular-nums',
                 }}
               >
-                交易日 {data?.date || '—'} · 更新 {data?.scannedAt || '扫描中'}
+                交易日 {data?.date || '—'} · {data?.isSnapshot ? '快照现价已刷 · ' : ''}扫盘 {data?.scannedAt || '同步中'}
+                {data?.elapsedMs ? ` (${(data.elapsedMs / 1000).toFixed(1)}s)` : ''}
               </span>
+              {syncingLive && (
+                <span
+                  style={{
+                    fontSize: '11px',
+                    padding: '2px 8px',
+                    borderRadius: '4px',
+                    background: 'var(--warn-bg)',
+                    border: '1px solid var(--warn-b)',
+                    color: 'var(--warn)',
+                    fontWeight: 700,
+                  }}
+                >
+                  ⟳ 正在自动拉取最新盘口…
+                </span>
+              )}
             </div>
-            <div style={{ fontSize: '12px', color: '#cbd5e1', marginTop: '5px', lineHeight: 1.5 }}>
+            <div style={{ fontSize: '12px', color: 'var(--sub)', marginTop: '5px', lineHeight: 1.5 }}>
               方向一抓<b>“近期涨停试水 → 月放量 + 周向上 + 日缩量 + 震仓收回”</b>主升前夜；
-              方向二抓<b>“板块腰斩级出清 + 美股/板块利空砸不动”</b>龙头拐点；支持全池原位加入自选与跟踪。
+              方向二抓<b>“板块腰斩级出清 + 美股/板块利空砸不动”</b>龙头拐点；入页自动同步最新盘口，支持原位加自选与跟踪。
             </div>
           </div>
 
@@ -564,9 +655,9 @@ export default function IgnitionPage({
               onClick={handleCopyBrief}
               style={{
                 marginLeft: 0,
-                background: 'rgba(56,189,248,0.18)',
-                color: '#bae6fd',
-                borderColor: '#38bdf8',
+                background: 'var(--info-bg)',
+                color: 'var(--accent)',
+                borderColor: 'var(--info-b)',
                 padding: '5px 10px',
               }}
             >
@@ -575,7 +666,7 @@ export default function IgnitionPage({
             <button
               type="button"
               className="mini"
-              disabled={loading}
+              disabled={loading || syncingLive}
               onClick={() => loadScan(true)}
               style={{
                 marginLeft: 0,
@@ -586,7 +677,7 @@ export default function IgnitionPage({
                 fontWeight: 700,
               }}
             >
-              {loading ? '⟳ 全市场漏斗扫盘中…' : '🔄 立即实时扫盘'}
+              {loading || syncingLive ? '⟳ 实时扫盘同步中…' : '🔄 立即实时扫盘'}
             </button>
           </div>
         </div>

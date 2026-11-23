@@ -78,4 +78,6 @@ data/vaults/
 data/auth_users.json
 data/auth_secret.key
 data/*.bak
+data/zt_pool_history_cache.json
+data/board_list_cache.json
 

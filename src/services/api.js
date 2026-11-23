@@ -306,6 +306,8 @@ export async function fetchIgnitionPool({
   stockDdMin = 40,
   customMappings = [],
   refresh = false,
+  fastSnapshot = false,
+  timeoutMs = 35000,
 } = {}) {
   const qs = new URLSearchParams();
   qs.set('include_cyb', includeCyb ? 'true' : 'false');
@@ -313,12 +315,13 @@ export async function fetchIgnitionPool({
   qs.set('sector_dd_min', String(sectorDdMin));
   qs.set('stock_dd_min', String(stockDdMin));
   if (refresh) qs.set('refresh', 'true');
+  if (fastSnapshot) qs.set('fast_snapshot', 'true');
   if (Array.isArray(customMappings) && customMappings.length > 0) {
     qs.set('custom_mappings', JSON.stringify(customMappings));
   }
   const url = `${STOCK_API_BASE}/api/stock/ignition_pool?${qs.toString()}`;
   const ctl = new AbortController();
-  const t = setTimeout(() => ctl.abort(), 55000);
+  const t = setTimeout(() => ctl.abort(), timeoutMs);
   try {
     const res = await fetch(url, { cache: 'no-store', headers: authHeaders(), signal: ctl.signal });
     if (!res.ok) {

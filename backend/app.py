@@ -99,6 +99,10 @@ def _cache_ttl(url: str) -> int:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     timeout = float(os.getenv("STOCK_API_TIMEOUT_SECONDS", "15"))
+    limits_cls = getattr(httpx, "Limits", None)
+    http_kwargs: dict[str, object] = {}
+    if callable(limits_cls):
+        http_kwargs["limits"] = limits_cls(max_connections=80, max_keepalive_connections=40)
     app.state.http = httpx.AsyncClient(
         timeout=httpx.Timeout(timeout),
         follow_redirects=True,
@@ -107,6 +111,7 @@ async def lifespan(app: FastAPI):
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Accept": "*/*",
         },
+        **http_kwargs,
     )
     yield
     await app.state.http.aclose()
@@ -603,6 +608,7 @@ async def stock_ignition_pool(
     stock_dd_min: float = Query(40.0, ge=15.0, le=80.0),
     custom_mappings: str | None = Query(None, max_length=4000),
     refresh: bool = Query(False),
+    fast_snapshot: bool = Query(False),
 ) -> dict[str, object]:
     """起爆点挖掘双方向扫描：横盘多周期试盘起爆 + 板块深跌腰斩龙头抗跌抄底"""
     parsed_custom = None
@@ -622,6 +628,7 @@ async def stock_ignition_pool(
             stock_dd_min=stock_dd_min,
             custom_us_mappings=parsed_custom,
             force_refresh=refresh,
+            fast_snapshot=fast_snapshot,
             http_client=http_client,
         )
     except Exception as exc:

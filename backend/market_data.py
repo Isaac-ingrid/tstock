@@ -105,10 +105,11 @@ class BoundedTTLCache(Generic[K, V]):
         return len(self._store)
 
 
-_KLINE_CACHE: BoundedTTLCache[Tuple[str, int, int], List[dict]] = BoundedTTLCache(maxsize=1024, default_ttl=300.0)
+_KLINE_CACHE: BoundedTTLCache[Tuple[str, int, int], List[dict]] = BoundedTTLCache(maxsize=2048, default_ttl=300.0)
+_KLINE_SUPERSLICE_CACHE: BoundedTTLCache[Tuple[str, int], Tuple[int, List[dict]]] = BoundedTTLCache(maxsize=2048, default_ttl=300.0)
 _QUOTE_CACHE: BoundedTTLCache[str, dict] = BoundedTTLCache(maxsize=2048, default_ttl=4.0)
 
-# 东财 push2his 连续超时自动熔断状态（避免批量扫盘逐只卡在 15s 连接超时）
+# 东财 push2his 连续超时自动熔断状态（含个股与 90.BK* 板块，避免批量扫盘逐只卡在超时）
 _EM_HIS_FAIL_COUNT = 0
 _EM_HIS_COOLDOWN_UNTIL = 0.0
 
@@ -320,15 +321,20 @@ async def fetch_em_klines(
     if cached is not None:
         return cached
 
+    sup = await _KLINE_SUPERSLICE_CACHE.get((secid, klt))
+    if sup is not None and sup[0] >= lmt and len(sup[1]) >= min(lmt, 15):
+        return sup[1][-lmt:]
+
     p_map = {101: "day", 102: "week", 103: "month"}
     period = p_map.get(klt, "day")
     is_board = str(secid).startswith("90.")
+    effective_ttl = max(float(ttl), 900.0) if (is_board or klt in (102, 103)) else float(ttl)
 
     tc = tcode_fallback
     if not tc and not is_board:
         tc = to_tcode(secid)
 
-    async def _try_tencent_url(u: str, req_timeout: float = 4.5) -> List[dict]:
+    async def _try_tencent_url(u: str, req_timeout: float = 2.8) -> List[dict]:
         if not tc:
             return []
         try:
@@ -346,7 +352,7 @@ async def fetch_em_klines(
 
     async def _try_eastmoney() -> List[dict]:
         global _EM_HIS_FAIL_COUNT, _EM_HIS_COOLDOWN_UNTIL
-        if not is_board and time.monotonic() < _EM_HIS_COOLDOWN_UNTIL:
+        if time.monotonic() < _EM_HIS_COOLDOWN_UNTIL:
             return []
         url = (
             "https://push2his.eastmoney.com/api/qt/stock/kline/get"
@@ -357,7 +363,7 @@ async def fetch_em_klines(
             r = await client.get(
                 url,
                 headers={"Referer": "https://quote.eastmoney.com/"},
-                timeout=3.5,
+                timeout=2.2,
             )
             if r.status_code == 200 and r.text.lstrip().startswith("{"):
                 raw = ((r.json().get("data") or {}).get("klines")) or []
@@ -365,6 +371,9 @@ async def fetch_em_klines(
                 if parsed:
                     _EM_HIS_FAIL_COUNT = 0
                     return parsed
+            _EM_HIS_FAIL_COUNT += 1
+            if _EM_HIS_FAIL_COUNT >= 3:
+                _EM_HIS_COOLDOWN_UNTIL = time.monotonic() + 120.0
         except Exception:
             _EM_HIS_FAIL_COUNT += 1
             if _EM_HIS_FAIL_COUNT >= 3:
@@ -374,7 +383,7 @@ async def fetch_em_klines(
     async def _do_one() -> List[dict]:
         if tc and not is_board:
             primary_qq = f"https://proxy.finance.qq.com/ifzqgtimg/appstock/app/fqkline/get?param={tc},{period},,,{lmt},qfq"
-            bars = await _try_tencent_url(primary_qq, req_timeout=4.5)
+            bars = await _try_tencent_url(primary_qq, req_timeout=2.8)
             if bars:
                 return bars
 
@@ -390,7 +399,7 @@ async def fetch_em_klines(
                 f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={tc},{period},,,{lmt},qfq",
                 f"https://ifzq.gtimg.cn/appstock/app/fqkline/get?param={tc},{period},,,{lmt},qfq",
             ):
-                bars = await _try_tencent_url(alt_u, req_timeout=3.0)
+                bars = await _try_tencent_url(alt_u, req_timeout=2.0)
                 if bars:
                     return bars
         return []
@@ -402,7 +411,10 @@ async def fetch_em_klines(
         bars = await _do_one()
 
     if bars:
-        await _KLINE_CACHE.set(cache_key, bars, ttl=ttl)
+        await _KLINE_CACHE.set(cache_key, bars, ttl=effective_ttl)
+        prev_sup = await _KLINE_SUPERSLICE_CACHE.get((secid, klt))
+        if prev_sup is None or lmt >= prev_sup[0]:
+            await _KLINE_SUPERSLICE_CACHE.set((secid, klt), (lmt, bars), ttl=effective_ttl)
     return bars
 
 

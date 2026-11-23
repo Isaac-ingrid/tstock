@@ -206,5 +206,126 @@ class TestIgnitionUnifiedSixDims(unittest.TestCase):
         self.assertIs(ma_item["passed"], False)
 
 
+class TestIgnitionFreshnessAndSpeedPipeline(unittest.TestCase):
+    def test_fast_snapshot_does_not_poison_live_cache_and_live_runs_parallel(self):
+        import time as _time
+        from unittest.mock import patch
+        import backend.ignition as ign
+
+        stale_disk = {
+            "ok": True,
+            "date": "2026-01-05",
+            "scannedAt": "2026-01-05 15:05:00",
+            "params": {
+                "includeCyb": False,
+                "lookbackDays": 20,
+                "sectorDdMin": 30.0,
+                "stockDdMin": 40.0,
+            },
+            "breakout": {"items": [{"code": "600977", "name": "中国电影", "price": 15.0, "chg": 1.0}], "stats": {}},
+            "dipLeaders": {"items": [], "usRadar": [], "deepBoards": [], "stats": {}},
+        }
+
+        call_counts = {"breakout": 0, "dip": 0}
+
+        async def _fake_breakout(client, include_cyb=False, lookback_days=20):
+            call_counts["breakout"] += 1
+            await asyncio.sleep(0.06)
+            return {
+                "items": [{"code": "600519", "name": "贵州茅台", "latestDate": "2026-11-23", "price": 1520.0, "chg": 2.3, "stage": "SHAKEOUT_READY"}],
+                "stats": {"seedCount": 10},
+            }
+
+        async def _fake_dip(client, sector_dd_min=30.0, stock_dd_min=40.0, custom_us_mappings=None):
+            call_counts["dip"] += 1
+            await asyncio.sleep(0.06)
+            return {
+                "items": [{"code": "002594", "name": "比亚迪", "price": 268.0, "chg": 1.5}],
+                "usRadar": [],
+                "deepBoards": [],
+                "stats": {},
+            }
+
+        async def _fake_quotes(client, codes):
+            return {c: {"price": 16.66, "chg": 4.25} for c in codes}
+
+        async def _fake_tracking(**kwargs):
+            return {"ok": True, "summary": {"totalCount": 1}, "items": []}
+
+        async def _run():
+            await ign._RESULT_CACHE.clear()
+            dummy_client = object()
+            with (
+                patch.object(ign, "load_saved_ignition", return_value=stale_disk),
+                patch.object(ign, "scan_breakout_ignition", side_effect=_fake_breakout),
+                patch.object(ign, "scan_dip_leaders", side_effect=_fake_dip),
+                patch.object(ign, "_fetch_batch_quotes", side_effect=_fake_quotes),
+                patch.object(ign, "get_ignition_tracking_pool", side_effect=_fake_tracking),
+                patch.object(ign, "_save_latest_sync", side_effect=lambda payload: None),
+                patch.object(ign, "latest_or_current_trade_day", return_value="2026-11-23"),
+            ):
+                # 1) fast_snapshot=True 返回本地快照并刷新现价，但标记 needsLiveRefresh=True 且不污染 _RESULT_CACHE
+                snap = await ign.get_ignition_pool(fast_snapshot=True, http_client=dummy_client)
+                self.assertTrue(snap["isSnapshot"])
+                self.assertTrue(snap["needsLiveRefresh"])
+                self.assertEqual(snap["breakout"]["items"][0]["price"], 16.66)
+                self.assertEqual(call_counts["breakout"], 0)
+
+                # 2) 默认调用（fast_snapshot=False）绝不被旧快照短路，而是并发跑方向一+方向二，且并发 Singleflight 只执行 1 次
+                t0 = _time.monotonic()
+                r1, r2 = await asyncio.gather(
+                    ign.get_ignition_pool(force_refresh=False, fast_snapshot=False, http_client=dummy_client),
+                    ign.get_ignition_pool(force_refresh=True, fast_snapshot=False, http_client=dummy_client),
+                )
+                elapsed = _time.monotonic() - t0
+                # 若串行需 >= 0.12s，并发 gather 约 0.06s
+                self.assertLess(elapsed, 0.11)
+                self.assertEqual(call_counts["breakout"], 1)
+                self.assertEqual(call_counts["dip"], 1)
+                self.assertFalse(r1["isSnapshot"])
+                self.assertFalse(r1["needsLiveRefresh"])
+                self.assertEqual(r1["date"], "2026-11-23")
+                self.assertEqual(r1["breakout"]["items"][0]["code"], "600519")
+                self.assertEqual(r2["dipLeaders"]["items"][0]["code"], "002594")
+
+        asyncio.run(_run())
+
+    def test_kline_superslice_cache_and_board_circuit_breaker(self):
+        import time as _time
+        import backend.market_data as md
+
+        bars_180 = [_make_bar(f"2026-01-{(i % 28) + 1:02d}", 10.0, 10.5, 10.8, 9.9, 5000.0) for i in range(180)]
+
+        class _BoomClient:
+            def __init__(self):
+                self.calls = 0
+
+            async def get(self, *args, **kwargs):
+                self.calls += 1
+                raise RuntimeError("upstream timeout")
+
+        async def _run():
+            await md._KLINE_CACHE.clear()
+            await md._KLINE_SUPERSLICE_CACHE.clear()
+            await md._KLINE_SUPERSLICE_CACHE.set(("1.600519", 101), (180, bars_180), ttl=300.0)
+
+            client = _BoomClient()
+            # 180 日缓存可直接切片服务 95 日请求，零网络调用
+            sliced = await md.fetch_em_klines(client, "1.600519", klt=101, lmt=95, tcode_fallback="sh600519")
+            self.assertEqual(len(sliced), 95)
+            self.assertEqual(client.calls, 0)
+
+            # 板块 90.BK* 在东财 push2his 熔断期内立即短路返回空，不再卡超时
+            md._EM_HIS_COOLDOWN_UNTIL = _time.monotonic() + 60.0
+            try:
+                bk_bars = await md.fetch_em_klines(client, "90.BK0475", klt=101, lmt=180)
+                self.assertEqual(bk_bars, [])
+                self.assertEqual(client.calls, 0)
+            finally:
+                md._EM_HIS_COOLDOWN_UNTIL = 0.0
+
+        asyncio.run(_run())
+
+
 if __name__ == "__main__":
     unittest.main()
