@@ -4,6 +4,7 @@
    ============================================================ */
 
 import { f2 } from './utils.js';
+import { getAShareMarketStatus, getCNClock } from './calendar.js';
 
 export const AUCTION_TIERS = [
   {
@@ -106,17 +107,15 @@ export function getAuctionTier(gapPct) {
 /**
  * 获取当前时段的集合竞价状态与指引
  */
-export function getAuctionStatusInfo() {
-  const now = new Date();
-  const mins = now.getHours() * 60 + now.getMinutes();
-  const wd = now.getDay();
-  const isWeekend = (wd === 0 || wd === 6);
+export function getAuctionStatusInfo(now = new Date()) {
+  const st = getAShareMarketStatus(now);
+  const mins = st.mins;
 
-  if (isWeekend) {
+  if (!st.isTradeDay) {
     return {
-      phase: 'weekend',
-      label: '周末休市',
-      desc: '非交易日，展示历史集合竞价大样本弱参考基准。',
+      phase: st.isHoliday ? 'holiday' : 'weekend',
+      label: st.label,
+      desc: `今日为${st.label}（下一交易日 ${st.nextTradeDate}），展示历史集合竞价大样本弱参考基准。`,
       isAuctionTime: false
     };
   }
@@ -344,9 +343,9 @@ export function computeLimitUpRigidity(stock) {
   const turnoverYuan = (+stock.amt || 0) * 10000;
   const sealRatio = turnoverYuan > 0 ? (sealAmtYuan / turnoverYuan) : (sealAmtYuan > 0 ? 10 : 0);
 
-  // 封板时间窗口分析
+  // 封板时间窗口分析（统一按北京时间 UTC+8）
   const now = new Date();
-  const mins = now.getHours() * 60 + now.getMinutes();
+  const mins = getCNClock(now).mins;
   const isBefore940 = (mins >= 570 && mins <= 580); // 09:30 - 09:40
 
   let hardnessScore = 0;

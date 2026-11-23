@@ -46,6 +46,7 @@ export default function TradePage({
   onCopySinglePlan,
   onJumpDiagnosis,
   onJumpIgnition,
+  onSentimentChange = null,
   fastRefresh = true,
   onToggleFastRefresh,
 }) {
@@ -69,7 +70,12 @@ export default function TradePage({
   return (
     <div className="page-trade">
       {/* 🌡️ 全市场超短情绪温度计 & 炸板率风控总阀 */}
-      <MarketSentimentBar onSentimentChange={setSentiment} />
+      <MarketSentimentBar
+        onSentimentChange={(s) => {
+          setSentiment(s);
+          if (onSentimentChange) onSentimentChange(s);
+        }}
+      />
 
       {/* 🌅 09:15-09:30 集合竞价速览条 & 持仓/自选盘前公告自动排雷 */}
       <PreMarketPanel

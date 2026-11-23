@@ -5,7 +5,7 @@
 import { f2, f3, pct, money, money2, todayStr, toast, toastOk, toastWarn, toastErr, copyPlain, soundChime, FEE, LCOLS, LS_KEYS } from './utils.js';
 import { pool, savePool, LOG, saveLog } from './state.js';
 import { calc, MKT } from './api.js';
-import { evaluateChannelHoldingDiscipline } from './risk.js';
+import { evaluateChannelHoldingDiscipline, auditPreHolidayBuyDiscipline } from './risk.js';
 
 export function logNet(r){
   const b=+r.buy||0, s=+r.sell||0, q=+r.qty||0;
@@ -195,6 +195,12 @@ export function auditTradeExecution({
   prevLogs = [],
   wbLatest = null,
   poolList = [],
+  tailActives = [],
+  currentMktVal = null,
+  allowedCapPct = null,
+  postBuyPosPct = null,
+  holidayCapPct = null,
+  holidayReminder = undefined,
   totalAssets = 100000,
   date = todayStr(),
 }) {
@@ -219,7 +225,7 @@ export function auditTradeExecution({
     poolList,
   });
 
-  const isClosed = buyPx > 0 && sellPx > 0 && dir !== '买入建仓' && dir !== '买入加仓' && dir !== '尾盘买入';
+  const isClosed = buyPx > 0 && sellPx > 0 && dir !== '买入建仓' && dir !== '底仓建仓' && dir !== '买入加仓' && dir !== '尾盘买入';
   const buyDevPct =
     buyPx > 0 && benchmark?.sysBuy > 0
       ? Math.round(((buyPx - benchmark.sysBuy) / benchmark.sysBuy) * 10000) / 100
@@ -237,7 +243,7 @@ export function auditTradeExecution({
   // 合并人工勾选标签与客观盘口自动识别违规标签
   const tagSet = new Set(Array.isArray(mistakeTags) ? mistakeTags.filter(Boolean) : []);
   const isOpeningBuy =
-    dir === '正T' || dir === '买入建仓' || dir === '买入加仓' || dir === '直接买入' || dir === '尾盘买入';
+    dir === '正T' || dir === '买入建仓' || dir === '底仓建仓' || dir === '买入加仓' || dir === '直接买入' || dir === '尾盘买入';
   const mktLevel = MKT?.gate?.level || calcSnap?.mktLevel || 'NA';
 
   // 1) 🔥 追高天花板：买入价越过倒T高抛位 outA，或高于系统买点 +1.5% 以上
@@ -320,9 +326,37 @@ export function auditTradeExecution({
     }
   }
 
+  // 9) 🏮 节前连续长假（≥3天连休前1-2个交易日）突破控仓上限强行建仓/加仓/尾盘潜伏
+  const effEmotionCap =
+    allowedCapPct !== null && allowedCapPct !== undefined && Number.isFinite(+allowedCapPct) && +allowedCapPct > 0
+      ? +allowedCapPct
+      : mktLevel === 'BAD'
+      ? 20
+      : mktLevel === 'WARN'
+      ? 50
+      : 80;
+  const preHolidayAudit = auditPreHolidayBuyDiscipline({
+    dir,
+    buy: buyPx,
+    sell: sellPx,
+    qty: qNum,
+    date,
+    totalAssets,
+    currentMktVal,
+    poolList,
+    tailActives,
+    emotionCapPct: effEmotionCap,
+    savedPostBuyPosPct: postBuyPosPct,
+    savedHolidayCapPct: holidayCapPct,
+    holidayReminder,
+  });
+  if (preHolidayAudit.triggered) {
+    tagSet.add('pre_holiday_overcap');
+  }
+
   const finalTags = Array.from(tagSet);
 
-  // 自动校准计划内/外：若出现追高、逆市、浮亏死补、三连阳追买、报复性交易或窄幅乱T且用户未强行指定，归为计划外
+  // 自动校准计划内/外：若出现追高、逆市、节前长假超限建仓、浮亏死补、三连阳追买、报复性交易或窄幅乱T且用户未强行指定，归为计划外
   const severeAutoTags = [
     'fomo_chase',
     'against_trend',
@@ -331,12 +365,15 @@ export function auditTradeExecution({
     'averaging_down',
     'hold_past_3red',
     'backrow_laggard',
+    'pre_holiday_overcap',
   ];
   const resolvedPlan =
     plan === '计划外' || (!plan && finalTags.some((t) => severeAutoTags.includes(t)))
       ? '计划外'
-      : finalTags.some((t) => severeAutoTags.includes(t)) && plan === '自动判定'
-      ? '计划外'
+      : plan === '自动判定'
+      ? finalTags.some((t) => severeAutoTags.includes(t))
+        ? '计划外'
+        : '计划内'
       : plan || '计划内';
 
   // 计算单笔纪律得分 (0~100)
@@ -352,11 +389,21 @@ export function auditTradeExecution({
   if (tagSet.has('revenge_trade')) score -= 22;
   if (tagSet.has('impulse_t')) score -= 14;
   if (tagSet.has('heavy_gamble')) score -= 15;
+  if (tagSet.has('pre_holiday_overcap')) {
+    score -= preHolidayAudit.scorePenalty > 0 ? preHolidayAudit.scorePenalty : 18;
+  }
   if (tagSet.has('early_exit')) score -= (mktLevel === 'OK' ? 12 : 5);
   if (buyDevPct !== null && dir !== '倒T' && buyDevPct > 0.8 && !tagSet.has('fomo_chase')) {
     score -= Math.min(12, Math.round((buyDevPct - 0.5) * 6));
   }
   score = Math.max(20, Math.min(100, Math.round(score)));
+
+  const defaultBasis =
+    resolvedPlan === '计划外'
+      ? tagSet.has('pre_holiday_overcap')
+        ? '节前重仓博弈'
+        : '盘中主观脉冲'
+      : '量化网格信号';
 
   return {
     track: resolvedTrack,
@@ -366,9 +413,24 @@ export function auditTradeExecution({
     sellDevPct,
     holdingFloatPct,
     redStreak,
+    postBuyPosPct: preHolidayAudit.postBuyPosPct,
+    holidayCapPct: preHolidayAudit.effectiveCapPct,
+    preHolidayContext: preHolidayAudit.active
+      ? {
+          holidayName: preHolidayAudit.holidayName,
+          closedDays: preHolidayAudit.closedDays,
+          remainingTradeDays: preHolidayAudit.remainingTradeDays,
+          reopenDate: preHolidayAudit.reopenDate,
+          beforePosPct: preHolidayAudit.beforePosPct,
+          afterPosPct: preHolidayAudit.postBuyPosPct,
+          effectiveCapPct: preHolidayAudit.effectiveCapPct,
+          overPct: preHolidayAudit.overPct,
+          overAmt: preHolidayAudit.overAmt,
+        }
+      : null,
     mistakeTags: finalTags,
     plan: resolvedPlan,
-    basis: basis || (resolvedPlan === '计划外' ? '盘中主观脉冲' : '量化网格信号'),
+    basis: basis || defaultBasis,
     disciplineScore: score,
   };
 }
@@ -393,6 +455,8 @@ export function computeDisciplineScorecard(logs = [], poolList = [], wbLatest = 
       plan: r.plan || '计划内',
       basis: r.basis || '',
       mistakeTags: r.mistakeTags || [],
+      postBuyPosPct: r.postBuyPosPct ?? null,
+      holidayCapPct: r.holidayCapPct ?? null,
       wbLatest,
       poolList,
       date: r.date || todayStr(),
@@ -449,13 +513,21 @@ export function computeDisciplineScorecard(logs = [], poolList = [], wbLatest = 
     else envPenalty += 4;
 
     if (tags.has('fomo_chase') || tags.has('late_chase')) buyPenalty += 7;
+    if (tags.has('backrow_laggard')) buyPenalty += 6;
     if (tags.has('impulse_t')) buyPenalty += 5;
     if (tags.has('early_exit')) sellPenalty += 5;
+    if (tags.has('hold_past_3red')) sellPenalty += 6;
     if (tags.has('no_stoploss')) stopPenalty += 9;
+    if (tags.has('averaging_down')) { stopPenalty += 8; envPenalty += 4; }
+    if (tags.has('t1_illusion_hold')) stopPenalty += 7;
     if (tags.has('t_to_add')) stopPenalty += 7;
     if (tags.has('against_trend')) envPenalty += 7;
     if (tags.has('revenge_trade')) envPenalty += 8;
     if (tags.has('heavy_gamble') || tags.has('lone_wolf')) envPenalty += 5;
+    if (tags.has('pre_holiday_overcap')) {
+      envPenalty += 7;
+      stopPenalty += r.dir === '尾盘买入' ? 3 : 2;
+    }
 
     if (r.buyDevPct !== null && r.buyDevPct !== undefined && r.dir !== '倒T') {
       buyDevs.push(+r.buyDevPct);
@@ -467,7 +539,7 @@ export function computeDisciplineScorecard(logs = [], poolList = [], wbLatest = 
       sellDevs.push(+r.sellDevPct);
     }
 
-    const isClosed = +r.buy > 0 && +r.sell > 0 && r.dir !== '买入建仓' && r.dir !== '买入加仓' && r.dir !== '尾盘买入';
+    const isClosed = +r.buy > 0 && +r.sell > 0 && r.dir !== '买入建仓' && r.dir !== '底仓建仓' && r.dir !== '买入加仓' && r.dir !== '尾盘买入';
     if (isClosed && r.systemBenchmark && r.systemBenchmark.sysNet !== null && r.systemBenchmark.sysNet !== undefined) {
       duelCount += 1;
       const actN = +r.net || 0;

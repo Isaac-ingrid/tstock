@@ -412,11 +412,14 @@ async def fetch_kline_rows(
     lmt: int = 120,
     sem: Optional[asyncio.Semaphore] = None,
     ttl: float = 180.0,
+    limit: Optional[int] = None,
+    tcode_fallback: Optional[str] = None,
 ) -> List[list]:
     """返回 [date, open, close, high, low, vol] 格式前复权日K，兼容 diagnosis.py 与 strong_herd.py。"""
-    tc = to_tcode(code_or_tcode)
-    em_secid = to_em_secid(tc)
-    bars = await fetch_em_klines(client, em_secid, klt=101, lmt=lmt, sem=sem, tcode_fallback=tc, ttl=ttl)
+    eff_lmt = int(limit) if limit is not None else int(lmt)
+    tc = to_tcode(tcode_fallback or code_or_tcode)
+    em_secid = to_em_secid(code_or_tcode if "." in str(code_or_tcode) else tc)
+    bars = await fetch_em_klines(client, em_secid, klt=101, lmt=eff_lmt, sem=sem, tcode_fallback=tc, ttl=ttl)
     return [
         [b["date"], str(b["open"]), str(b["close"]), str(b["high"]), str(b["low"]), str(b["vol"])]
         for b in bars

@@ -46,6 +46,7 @@ from backend.market_data import build_tencent_fqkline_payload, fetch_em_klines, 
 from backend.meme_radar import get_meme_radar_overview, diagnose_stock_meme
 from backend.strategy_ledger import get_strategy_performance, snapshot_strategies
 from backend.strong_herd import mutate_herd_pool
+from backend.trade_calendar import cn_now_str, cn_today, get_market_calendar_snapshot
 from backend.user_vault import load_user_vault, save_user_vault
 
 ALLOWED_HOSTS = {
@@ -414,7 +415,20 @@ async def root() -> dict[str, object]:
 
 @app.get("/health")
 async def health() -> dict[str, object]:
-    return {"ok": True, "service": "tstock-data", "upstreams": len(ALLOWED_HOSTS)}
+    return {
+        "ok": True,
+        "service": "tstock-data",
+        "upstreams": len(ALLOWED_HOSTS),
+        "tradeCalendar": get_market_calendar_snapshot(),
+    }
+
+
+@app.get("/api/stock/trade_calendar")
+async def stock_trade_calendar(
+    date: str | None = Query(None, min_length=8, max_length=10),
+) -> dict[str, object]:
+    """查询指定日期或当前北京时间的 A 股交易日历、法定节假日休市标签及前后交易日"""
+    return {"ok": True, **get_market_calendar_snapshot(date)}
 
 
 @app.get("/api/stock/diagnosis")
@@ -456,7 +470,7 @@ async def stock_batch_notice_risk(
         if close_client:
             await client.aclose()
 
-    today_dt = datetime.date.today()
+    today_dt = cn_today()
     items: dict[str, Any] = {}
     red_count = 0
     yellow_count = 0
@@ -486,7 +500,7 @@ async def stock_batch_notice_risk(
         "items": items,
         "redCount": red_count,
         "yellowCount": yellow_count,
-        "checkedAt": datetime.datetime.now().strftime("%H:%M:%S"),
+        "checkedAt": cn_now_str("%H:%M:%S"),
     }
 
 

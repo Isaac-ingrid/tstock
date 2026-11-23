@@ -21,6 +21,7 @@ import PwaInstallModal, { usePwaManager, PwaInstallBanner } from './components/P
 import { SITE_META, APP_PAGE_TITLE, STORAGE_KEYS, DEFAULT_POOL } from './data/site.js';
 import useRoute from './router/useRoute.js';
 import { todayStr, nowTimeHHMM, f2, money, toast, toastOk, toastWarn, toastErr, setToastListener, copyPlain, getTodayTStatus } from './services/utils.js';
+import { getAShareMarketStatus, isAShareTradeDay, getCNClock, getUpcomingHolidayReminder, syncRemoteTradeCalendar } from './services/calendar.js';
 import {
   AUTH_LAST_USER_KEY,
   fetchAuthStatus,
@@ -61,10 +62,12 @@ import {
   inspectPostMarketPositions,
   buildPostMarketSnapshot,
   buildEodBriefMarkdown,
+  buildDailyBattlePlanText,
 } from './services/eod.js';
 import {
   loadPosRules,
   savePosRules,
+  getAllowedPosCap,
   loadTiltOverride,
   saveTiltOverride,
   computeDailyTiltState,
@@ -182,6 +185,7 @@ export default function App() {
 
   const [posRules, setPosRules] = useState(() => loadPosRules());
   const [tiltOverride, setTiltOverride] = useState(() => loadTiltOverride());
+  const [liveSentiment, setLiveSentiment] = useState(null);
 
   const [vaultStatus, setVaultStatus] = useState({
     connected: false,
@@ -735,7 +739,7 @@ export default function App() {
       lRef: (tradeLogs || []).map(x => `${x.id}:${(x.mistakeTags || []).join(',')}:${x.reflection || ''}`).join('|'),
       t: (tailActives || []).map(x => `${x.id}:${x.shares}:${x.cost}`),
       s: (snapshots || []).map(x => `${x.date}:${x.total}`),
-      eod: (eodArchives || []).map(x => `${x.date}:${x.archivedAt}:${x.leadingReview?.totalCount || 0}:${x.leadingReview?.alignedCount || 0}`),
+      eod: (eodArchives || []).map(x => `${x.date}:${x.archivedAt}:${x.leadingReview?.totalCount || 0}:${x.leadingReview?.alignedCount || 0}:${x.holidayAudit?.isYellowCard ? 1 : 0}`),
       r: posRules,
       ic: initialCapital,
       ac: Math.round(availableCash * 100) / 100,
@@ -800,6 +804,7 @@ export default function App() {
   const cash = Math.max(0, Math.round(availableCash * 100) / 100);
   const totalAssets = Math.round((cash + marketValue) * 100) / 100;
   const posRate = totalAssets > 0 ? (marketValue / totalAssets) * 100 : 0;
+  const { capPct: appAllowedCapPct } = getAllowedPosCap(liveSentiment, posRules);
 
   /* 统一账户资金直输更新通道（总资产 / 可用现金 / 初始本金） */
   const handleUpdateTotalAssets = useCallback(
@@ -908,8 +913,16 @@ export default function App() {
   }).filter(Boolean);
 
   const liveEodPositionCheck = useMemo(
-    () => inspectPostMarketPositions({ pool, tailActives, tradeLogs }),
-    [pool, tailActives, tradeLogs]
+    () =>
+      inspectPostMarketPositions({
+        pool,
+        tailActives,
+        tradeLogs,
+        totalAssets,
+        availableCash: cash,
+        allowedCapPct: appAllowedCapPct,
+      }),
+    [pool, tailActives, tradeLogs, totalAssets, cash, appAllowedCapPct]
   );
 
   const todayArchived = useMemo(
@@ -918,10 +931,9 @@ export default function App() {
   );
 
   const nowTime = new Date();
-  const currentMins = nowTime.getHours() * 60 + nowTime.getMinutes();
-  const currentWd = nowTime.getDay();
-  const isWeekendNow = (currentWd === 0 || currentWd === 6);
-  const isTailAlertTime = (!isWeekendNow && currentMins >= 880 && currentMins < 900);
+  const currentCn = getCNClock(nowTime);
+  const isTradeDayNow = isAShareTradeDay(nowTime);
+  const isTailAlertTime = (isTradeDayNow && currentCn.mins >= 880 && currentCn.mins < 900);
   const isPostMarketWindow = isPostMarketWindowNow(nowTime);
 
   const authStateRef = useRef(authState);
@@ -940,17 +952,18 @@ export default function App() {
   eodArchivesRef.current = eodArchives;
   const posRulesRef = useRef(posRules);
   posRulesRef.current = posRules;
+  const allowedCapRef = useRef(appAllowedCapPct);
+  allowedCapRef.current = appAllowedCapPct;
   const initCapRef = useRef(initialCapital);
   initCapRef.current = initialCapital;
   const wbLatestRef = useRef(wbLatest);
   wbLatestRef.current = wbLatest;
 
-  /* 收盘后（工作日 15:05+）自动归档今日收盘净值快照 */
+  /* 收盘后（交易日北京时间 15:05+，自动排除法定节假日）自动归档今日收盘净值快照 */
   const maybeAutoSnapshot = useCallback((nextPool, nextTail) => {
     const now = new Date();
-    const wd = now.getDay();
-    const mins = now.getHours() * 60 + now.getMinutes();
-    if (wd < 1 || wd > 5 || mins < 15 * 60 + 5) return;
+    const { mins } = getCNClock(now);
+    if (!isAShareTradeDay(now) || mins < 15 * 60 + 5) return;
 
     const pList = nextPool || poolRef.current || [];
     const tList = nextTail || tailActivesRef.current || [];
@@ -971,17 +984,20 @@ export default function App() {
     });
   }, []);
 
-  /* 时钟与盘中时段更新 */
+  /* 时钟与盘中时段更新（基于北京时间与沪深北法定节假日日历） */
   const updateClock = useCallback(() => {
     const now = new Date();
-    const h = now.getHours(), m = now.getMinutes(), s = now.getSeconds();
-    const timeStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-    const mins = h * 60 + m;
-    const wd = now.getDay();
-    const isWeekend = (wd === 0 || wd === 6);
+    const st = getAShareMarketStatus(now);
+    const { mins, timeStr } = st;
 
     let phase = '已休市';
-    if (!isWeekend) {
+    if (!st.isTradeDay) {
+      const nxtShort = st.nextTradeDate ? st.nextTradeDate.slice(5) : '';
+      const rem = getUpcomingHolidayReminder(now);
+      phase = st.isHoliday || rem?.phase === 'in_holiday'
+        ? `休市中${nxtShort ? ` (${nxtShort}开市)` : ''}`
+        : `周末休市${nxtShort ? ` (${nxtShort}开市)` : ''}`;
+    } else {
       if (mins >= 555 && mins < 565) phase = '集合竞价 (09:15-09:25)';
       else if (mins >= 565 && mins < 570) phase = '竞价定盘 (09:25-09:30)';
       else if (mins >= 570 && mins < 585) phase = '情绪博弈期 (09:30-09:45 严禁追高)';
@@ -996,8 +1012,8 @@ export default function App() {
     }
     setClockPhase(`${timeStr} ${phase}`);
 
-    if (!isWeekend && mins >= 880 && mins < 895) {
-      const hasUnclosed = (poolRef.current || []).some(st => getTodayTStatus(st, tradeLogs).hasUnclosed);
+    if (st.isTradeDay && mins >= 880 && mins < 895) {
+      const hasUnclosed = (poolRef.current || []).some(item => getTodayTStatus(item, tradeLogs).hasUnclosed);
       if (hasUnclosed) setOvernightBannerOpen(true);
     }
   }, [tradeLogs]);
@@ -1068,8 +1084,7 @@ export default function App() {
     setPool(nextPool);
     poolRef.current = nextPool;
     lastSuccessStamp.current = Date.now();
-    const d = new Date();
-    const timeStr = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+    const timeStr = getCNClock().timeStr;
     setQuoteStamp(timeStr);
     setIsStale(false);
 
@@ -1128,14 +1143,21 @@ export default function App() {
       pool: poolRef.current || [],
       tailActives: tailActivesRef.current || [],
       tradeLogs: tradeLogsRef.current || [],
+      availableCash: cashRef.current || 0,
+      allowedCapPct: allowedCapRef.current ?? 80,
+      date: today,
     });
     const unclosedCnt = posCheck.unclosedTList.length;
     const tailCnt = posCheck.overnightTailList.length;
+    const holOver = posCheck.holidayGuard?.isYellowCard;
     setEodSteps(prev => ({
       ...prev,
-      audit: unclosedCnt > 0
-        ? { status: 'warn', note: `发现 ${unclosedCnt} 只未平T仓需确认` }
-        : { status: 'done', note: tailCnt > 0 ? `T仓清零 · 尾盘隔夜${tailCnt}只` : '全部T仓已清零无滞留' },
+      audit:
+        unclosedCnt > 0
+          ? { status: 'warn', note: `发现 ${unclosedCnt} 只未平T仓${holOver ? ' + 节前超限' : ''}` }
+          : holOver
+          ? { status: 'warn', note: `🟨 节前仓位超限 ${posCheck.holidayGuard.excessPct}%` }
+          : { status: 'done', note: tailCnt > 0 ? `T仓清零 · 尾盘隔夜${tailCnt}只` : '全部T仓已清零无滞留' },
       snapshot: { status: 'running', note: '正在写入收盘净值快照…' },
     }));
 
@@ -1184,6 +1206,7 @@ export default function App() {
       wbLatest: wbLatestRef.current,
       positionCheck: posCheck,
       marketEnv,
+      allowedCapPct: allowedCapRef.current ?? 80,
       coachReview: coachRes,
     });
 
@@ -1200,6 +1223,7 @@ export default function App() {
       todayRealizedNet: briefRes.todayRealizedNet,
       frictionLoss: briefRes.frictionLoss,
       leadingReview: briefRes.leadingReview,
+      holidayAudit: briefRes.holidayAudit,
       briefMarkdown: briefRes.briefMarkdown,
       vaultSynced: false,
     };
@@ -1313,8 +1337,7 @@ export default function App() {
         const nextPool = currentPool.map(item => (item.code === target.code ? { ...target } : item));
         setPool(nextPool);
         lastSuccessStamp.current = Date.now();
-        const d = new Date();
-        const timeStr = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+        const timeStr = getCNClock().timeStr;
         setQuoteStamp(timeStr);
         setIsStale(false);
       } catch (_) {
@@ -1335,11 +1358,12 @@ export default function App() {
       setIsStale(diffMin > 3);
     }, 5000);
 
+    syncRemoteTradeCalendar();
+
     const autoRefreshTimer = setInterval(() => {
       const now = new Date();
-      const wd = now.getDay();
-      const mins = now.getHours() * 60 + now.getMinutes();
-      if (isAShareTradingNow(now) || (wd >= 1 && wd <= 5 && mins >= 905 && mins <= 920)) {
+      const { mins } = getCNClock(now);
+      if (isAShareTradingNow(now) || (isAShareTradeDay(now) && mins >= 905 && mins <= 920)) {
         handleRefreshRef.current(true);
       }
     }, 60000);
@@ -1624,8 +1648,16 @@ export default function App() {
       prevLogs: tradeLogs,
       wbLatest,
       poolList: pool,
+      tailActives,
+      currentMktVal: marketValue,
+      allowedCapPct: appAllowedCapPct,
       totalAssets,
     });
+
+    const holAuditSuffix =
+      audit.mistakeTags?.includes('pre_holiday_overcap') && audit.postBuyPosPct != null
+        ? ` [🏮节前超限: 买后仓位 ${audit.postBuyPosPct}% > 上限 ${audit.holidayCapPct}%]`
+        : '';
 
     const newLog = {
       id: Date.now(),
@@ -1644,14 +1676,17 @@ export default function App() {
       plan: audit.plan,
       basis: audit.basis,
       mistakeTags: audit.mistakeTags,
+      postBuyPosPct: audit.postBuyPosPct,
+      holidayCapPct: audit.holidayCapPct,
+      preHolidayContext: audit.preHolidayContext,
       systemBenchmark: audit.systemBenchmark,
       alphaNet: audit.alphaNet,
       buyDevPct: audit.buyDevPct,
       sellDevPct: audit.sellDevPct,
       disciplineScore: audit.disciplineScore,
-      note: isInitial
+      note: (isInitial
         ? `首次建仓 ${buyQty} 股，成交价 ¥${buyPx.toFixed(2)}，扣减现金 ¥${money(totalOutflow)}`
-        : `买入加仓 ${buyQty} 股（成交价 ¥${buyPx.toFixed(2)}），持仓增至 ${newShares} 股，均价 ¥${newCost.toFixed(2)}`
+        : `买入加仓 ${buyQty} 股（成交价 ¥${buyPx.toFixed(2)}），持仓增至 ${newShares} 股，均价 ¥${newCost.toFixed(2)}`) + holAuditSuffix
     };
 
     setTradeLogs(prev => [newLog, ...prev]);
@@ -1795,12 +1830,20 @@ export default function App() {
       sell: 0,
       qty,
       net: -buyFee,
-      plan: '计划内',
+      plan: '自动判定',
       prevLogs: tradeLogs,
       wbLatest,
       poolList: pool,
+      tailActives,
+      currentMktVal: marketValue,
+      allowedCapPct: appAllowedCapPct,
       totalAssets,
     });
+
+    const tailHolSuffix =
+      audit.mistakeTags?.includes('pre_holiday_overcap') && audit.postBuyPosPct != null
+        ? ` [🏮节前超限: 买后仓位 ${audit.postBuyPosPct}% > 上限 ${audit.holidayCapPct}%]`
+        : '';
 
     const newLog = {
       id: Date.now(),
@@ -1817,14 +1860,17 @@ export default function App() {
       fee: buyFee,
       net: -buyFee,
       plan: audit.plan,
-      basis: '尾盘SOP信号',
+      basis: audit.plan === '计划外' && audit.mistakeTags?.includes('pre_holiday_overcap') ? '节前尾盘博弈' : '尾盘SOP信号',
       mistakeTags: audit.mistakeTags,
+      postBuyPosPct: audit.postBuyPosPct,
+      holidayCapPct: audit.holidayCapPct,
+      preHolidayContext: audit.preHolidayContext,
       systemBenchmark: audit.systemBenchmark,
       alphaNet: null,
       buyDevPct: audit.buyDevPct,
       sellDevPct: null,
       disciplineScore: audit.disciplineScore,
-      note: `尾盘黑马潜伏建仓 ${qty} 股，扣减现金 ¥${money(totalOutflow)}，次日冲高 ¥${f2(cand.tp1)} 止盈`
+      note: `尾盘黑马潜伏建仓 ${qty} 股，扣减现金 ¥${money(totalOutflow)}，次日冲高 ¥${f2(cand.tp1)} 止盈${tailHolSuffix}`
     };
 
     setTradeLogs(prev => [newLog, ...prev]);
@@ -1955,35 +2001,19 @@ export default function App() {
     reader.readAsText(file);
   };
 
-  /* 复制今日作战计划 */
+  /* 复制今日作战计划（自动同步法定节假日倒计时与节前长假控仓黄牌降仓提示） */
   const handleCopyPlan = () => {
-    const lines = [
-      `【今日做T作战计划】${todayStr()}`,
-      `账户总资产: ¥${money(totalAssets)} ｜ 可用现金: ¥${money(cash)} ｜ 总仓位: ${posRate.toFixed(1)}%${tiltState?.isLocked ? ' ｜ 🔒 防上头熔断保护中' : ''}`,
-    ];
-    pool.forEach(s => {
-      let c = null;
-      try { c = calc(s); } catch (_) {}
-      const posTag = (+s.shares || 0) > 0 ? `持仓 ${s.shares}股(成本 ¥${f2(s.cost)})` : '自选观察';
-      lines.push('');
-      lines.push(`■ ${s.name} (${String(s.code).padStart(6, '0')}) [${posTag}] 现价: ¥${f2(s.price)}`);
-      if (c) {
-        const cleanTitle = String(c.title || '').replace(/<[^>]+>/g, '');
-        lines.push(`  结论: ${cleanTitle}`);
-        lines.push(`  正T低吸: ¥${f2(c.inA)} / ¥${f2(c.inB)} ｜ 倒T高抛: ¥${f2(c.outA)} / ¥${f2(c.outB)}`);
-        lines.push(`  止盈目标: ¥${f2(c.tp1)} / ¥${f2(c.tp2)} ｜ 止损红线: ¥${f2(c.slA)} (-${(c.effStop * 100).toFixed(2)}%)`);
-      }
-      if (s.memo && String(s.memo).trim()) {
-        lines.push(`  作战备注: ${String(s.memo).trim()}`);
-      }
+    const res = buildDailyBattlePlanText({
+      pool,
+      tailActives,
+      totalAssets,
+      cash,
+      marketValue,
+      posRate,
+      allowedCapPct: appAllowedCapPct,
+      tiltState,
     });
-    if (tailActives.length > 0) {
-      lines.push('');
-      lines.push(`⚡ 隔夜尾盘持仓（09:30~10:00 必平）: ${tailActives.map(t => `${t.name}(${t.shares}股 成本¥${f2(t.cost)})`).join('、')}`);
-    }
-    lines.push('');
-    lines.push('—— 铁律：破止损线无条件砍；做T仓 14:55 前必须平掉，绝不硬扛过夜。');
-    copyPlain(lines.join('\n'), '今日真实量化作战计划已复制到剪贴板！');
+    copyPlain(res.text, res.toastMessage);
   };
 
   /* 复制单只股票计划 */
@@ -2001,6 +2031,16 @@ export default function App() {
       lines.push(`倒T高抛区: ¥${f2(c.outA)}（首份）~ ¥${f2(c.outB)}（二份）｜ 卖飞线: ¥${f2(c.fly)}`);
       lines.push(`止盈目标位: ¥${f2(c.tp1)} (+${c.gain1.toFixed(1)}%) / ¥${f2(c.tp2)} (+${c.gain2.toFixed(1)}%)`);
       lines.push(`止损硬红线: ¥${f2(c.slA)} (-${(c.effStop * 100).toFixed(2)}%)`);
+    }
+    const holRem = getUpcomingHolidayReminder(new Date());
+    if (holRem?.isHighAlert) {
+      const effCap = Math.min(appAllowedCapPct ?? 80, Number(holRem.suggestedMaxPosPct) || (holRem.closedDays >= 7 ? 30 : 50));
+      const isOver = posRate > effCap + 0.1;
+      lines.push(
+        isOver
+          ? `🟨 节前控仓黄牌: 距${holRem.holidayName}连休${holRem.closedDays}天剩${holRem.remainingTradeDays}日，当前账户总仓${posRate.toFixed(1)}%超≤${effCap}%线，优先冲高倒T减仓`
+          : `🏮 节前控仓提醒: 距${holRem.holidayName}连休${holRem.closedDays}天剩${holRem.remainingTradeDays}日（上限≤${effCap}%），${holRem.remainingTradeDays === 1 ? '收官日严禁尾盘重仓锁仓跨假' : '留意午后取现兑现抛压'}`
+      );
     }
     if (stock.memo && String(stock.memo).trim()) {
       lines.push(`盘前备注: ${String(stock.memo).trim()}`);
@@ -2108,6 +2148,7 @@ export default function App() {
         cash={cash}
         marketValue={marketValue}
         posRate={posRate}
+        allowedCapPct={appAllowedCapPct}
         onUpdateTotalAssets={handleUpdateTotalAssets}
         onUpdateCash={handleUpdateCash}
         clockPhase={clockPhase}
@@ -2216,6 +2257,7 @@ export default function App() {
             onCopySinglePlan={handleCopySinglePlan}
             onJumpDiagnosis={handleJumpDiagnosis}
             onJumpIgnition={handleJumpIgnition}
+            onSentimentChange={setLiveSentiment}
           />
         )}
 
@@ -2245,6 +2287,8 @@ export default function App() {
             pool={pool}
             totalAssets={totalAssets}
             cash={cash}
+            currentMktVal={marketValue}
+            allowedCapPct={appAllowedCapPct}
             actives={tailActives}
             wbLatest={wbLatest}
             tiltState={tiltState}
@@ -2264,7 +2308,7 @@ export default function App() {
           <DiagnosisPage
             pool={pool}
             tradeLogs={tradeLogs}
-            initialCode={query?.code || activeStockCode}
+            initialCode={query?.code || ''}
             onAddStockToPool={handleAddStockByQuery}
             onSelectStockInPool={handleSelectStock}
             onJumpIgnition={handleJumpIgnition}
@@ -2292,6 +2336,7 @@ export default function App() {
             poolMarketValue={poolMarketValue}
             tailMarketValue={tailMarketValue}
             posRate={posRate}
+            allowedCapPct={appAllowedCapPct}
             cash={cash}
             pool={pool}
             tailActives={tailActives}
@@ -2341,6 +2386,8 @@ export default function App() {
               toast('流水记录已删除', 'info');
             }}
             pool={pool}
+            tailActives={tailActives}
+            allowedCapPct={appAllowedCapPct}
             onExport={handleExport}
             onImportClick={() => importInputRef.current && importInputRef.current.click()}
             onSelectStock={handleSelectStock}
@@ -2349,7 +2396,7 @@ export default function App() {
         )}
 
         {(activeTab === 'tabRules' || activeTab === 'tabAll') && (
-          <RulesPage />
+          <RulesPage onTabChange={navigate} />
         )}
       </main>
 
@@ -2362,6 +2409,9 @@ export default function App() {
           modalData={quickTModal}
           tradeLogs={tradeLogs}
           tiltState={tiltState}
+          totalAssets={totalAssets}
+          currentMktVal={marketValue}
+          allowedCapPct={appAllowedCapPct}
           onClose={() => setQuickTModal({ open: false, stock: null })}
           onConfirm={handleConfirmQuickT}
         />
@@ -2382,6 +2432,14 @@ export default function App() {
         <TradingClockModal
           open={clockModalOpen}
           onClose={() => setClockModalOpen(false)}
+          posRate={posRate}
+          marketValue={marketValue}
+          totalAssets={totalAssets}
+          allowedCapPct={appAllowedCapPct}
+          onJumpRules={() => {
+            setClockModalOpen(false);
+            navigate('/rules');
+          }}
         />
       )}
 

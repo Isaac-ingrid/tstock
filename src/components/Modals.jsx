@@ -1,23 +1,48 @@
 import React, { useState, useEffect } from 'react';
 import { f2, money, getTodayTStatus, toastWarn, playAlertTone } from '../services/utils.js';
+import { getCNClock, getUpcomingHolidayReminder, getTradingClockSnapshot, syncRemoteTradeCalendar } from '../services/calendar.js';
 import { calc, computeLeadingMomentum } from '../services/api.js';
-import { evaluateChannelHoldingDiscipline } from '../services/risk.js';
+import { evaluateChannelHoldingDiscipline, evaluateHolidayPositionGuard, evaluatePreTradeHolidayGuard } from '../services/risk.js';
 
-/* 1. 快捷记T弹窗（含单日防上头熔断锁保护：锁买不锁卖） */
-export function QuickTModal({ modalData, tradeLogs = [], tiltState = null, onClose, onConfirm }) {
+/* 1. 快捷记T弹窗（含单日防上头熔断锁保护与节前控仓黄牌二次确认） */
+export function QuickTModal({
+  modalData,
+  tradeLogs = [],
+  tiltState = null,
+  totalAssets = 100000,
+  currentMktVal = 0,
+  allowedCapPct = 80,
+  holidayReminder = undefined,
+  onClose,
+  onConfirm,
+}) {
   if (!modalData || !modalData.open) return null;
   return (
     <QuickTModalInner
       modalData={modalData}
       tradeLogs={tradeLogs}
       tiltState={tiltState}
+      totalAssets={totalAssets}
+      currentMktVal={currentMktVal}
+      allowedCapPct={allowedCapPct}
+      holidayReminder={holidayReminder}
       onClose={onClose}
       onConfirm={onConfirm}
     />
   );
 }
 
-function QuickTModalInner({ modalData, tradeLogs = [], tiltState = null, onClose, onConfirm }) {
+function QuickTModalInner({
+  modalData,
+  tradeLogs = [],
+  tiltState = null,
+  totalAssets = 100000,
+  currentMktVal = 0,
+  allowedCapPct = 80,
+  holidayReminder = undefined,
+  onClose,
+  onConfirm,
+}) {
   const stock = modalData.stock || {};
   const todayT = getTodayTStatus(stock, tradeLogs);
   const { defaultDir, defaultPx, defaultQty } = modalData;
@@ -97,6 +122,15 @@ function QuickTModalInner({ modalData, tradeLogs = [], tiltState = null, onClose
     ? Math.round(((totalHeld * (+stock.cost || 0) + buyAmt) / newHeldBuy) * 100) / 100
     : b;
   const costDiffBuy = totalHeld > 0 ? (newWeightedCostBuy - (+stock.cost || 0)) : 0;
+  const preBuyHolidayGuard = evaluatePreTradeHolidayGuard({
+    currentMkt: currentMktVal,
+    buyAmt: isDirectBuy && b > 0 && q > 0 ? buyAmt : 0,
+    unitPrice: b,
+    totalAssets,
+    emotionCapPct: allowedCapPct,
+    holidayReminder: holidayReminder !== undefined ? holidayReminder : getUpcomingHolidayReminder(new Date()),
+    stockName: stock.name || stock.code,
+  });
 
   // 直接卖出 / 减仓 / 清仓计算
   const sellAmt = s * q;
@@ -124,6 +158,11 @@ function QuickTModalInner({ modalData, tradeLogs = [], tiltState = null, onClose
         }
       } else if (totalHeld > 0 && channelDisc?.warn3Red) {
         if (!window.confirm(`${channelDisc.warn3RedReason}\n\n确定仍要在连红高潮区继续加仓吗？`)) {
+          return;
+        }
+      }
+      if (preBuyHolidayGuard.willExceedCap) {
+        if (!window.confirm(preBuyHolidayGuard.confirmPromptText)) {
           return;
         }
       }
@@ -438,6 +477,42 @@ function QuickTModalInner({ modalData, tradeLogs = [], tiltState = null, onClose
                   </div>
                 </div>
               </div>
+
+              {preBuyHolidayGuard.willExceedCap && (
+                <div
+                  style={{
+                    marginTop: '10px',
+                    padding: '8px 11px',
+                    borderRadius: '7px',
+                    background: 'linear-gradient(90deg, #fffbeb 0%, #fff7ed 100%)',
+                    border: '1px solid #f59e0b',
+                    color: '#78350f',
+                    fontSize: '11.5px',
+                    lineHeight: 1.55,
+                  }}
+                >
+                  <div>
+                    🟨 <b>节前控仓黄牌：</b>距<b>{preBuyHolidayGuard.holidayName}</b>（连休
+                    {preBuyHolidayGuard.closedDays}天）仅剩 <b>{preBuyHolidayGuard.remainingTradeDays}</b> 个交易日，
+                    买后总仓将由 <b>{preBuyHolidayGuard.beforePosPct.toFixed(1)}%</b> 升至{' '}
+                    <b>{preBuyHolidayGuard.afterPosPct.toFixed(1)}%</b>，超{preBuyHolidayGuard.capSourceLabel}{' '}
+                    <b>{preBuyHolidayGuard.overPct}%</b>。
+                  </div>
+                  <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px', color: '#92400e' }}>
+                    <span>{preBuyHolidayGuard.safeCapHint}</span>
+                    {preBuyHolidayGuard.maxSafeShares >= 100 && (
+                      <button
+                        type="button"
+                        className="qt-chip"
+                        style={{ background: '#fef3c7', borderColor: '#f59e0b', color: '#92400e', fontWeight: 700 }}
+                        onClick={() => setQty(preBuyHolidayGuard.maxSafeShares)}
+                      >
+                        按节前上限 ({preBuyHolidayGuard.maxSafeShares}股)
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           ) : isDirectSell ? (
             /* ===== 直接卖出界面 ===== */
@@ -954,44 +1029,405 @@ function StockReasonModalInner({ stock, inPool, onClose, onAdd, onJumpCard, onJu
   );
 }
 
-/* 3. A股日内分时作战法则时段禁忌表弹窗 */
-export function TradingClockModal({ open, onClose }) {
+/* 3. A股日内分时作战法则时段禁忌表弹窗（联动法定节假日休市与节前控仓窗口） */
+export function TradingClockModal({
+  open,
+  onClose,
+  onJumpRules,
+  posRate = 0,
+  marketValue = 0,
+  totalAssets = 100000,
+  allowedCapPct = 80,
+}) {
+  const [nowTs, setNowTs] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!open) return undefined;
+    setNowTs(Date.now());
+    syncRemoteTradeCalendar().finally(() => setNowTs(Date.now()));
+    const timer = setInterval(() => setNowTs(Date.now()), 1000);
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape' && onClose) onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open, onClose]);
+
   if (!open) return null;
+
+  const nowObj = new Date(nowTs);
+  const snap = getTradingClockSnapshot(nowObj);
+  const reminder = snap.holidayReminder;
+  const remDays = Number(reminder?.remainingTradeDays || 0);
+  const closedDays = Number(reminder?.closedDays || 0);
+  const isLongHoliday = Boolean(reminder?.isLongHoliday || closedDays >= 3);
+  const isUrgentPreHoliday = snap.isPreHolidayUrgent;
+  const isFinalPreHolidayDay = Boolean(isUrgentPreHoliday && remDays === 1);
+  const holidayGuard = evaluateHolidayPositionGuard({
+    totalPosPct: posRate,
+    totalMkt: marketValue,
+    totalAssets,
+    emotionCapPct: allowedCapPct,
+    holidayReminder: reminder,
+    now: nowObj,
+  });
+  const capPct = holidayGuard.active
+    ? holidayGuard.effectiveCapPct
+    : Math.min(Number(allowedCapPct || 80), Number(reminder?.suggestedMaxPosPct) || (closedDays >= 7 ? 30 : 50));
+
+  const sessionTone = (snap.isInHoliday || snap.isHoliday)
+    ? { bg: '#fef2f2', bd: '#fecaca', fg: '#b91c1c' }
+    : !snap.isTradeDay
+      ? { bg: '#f8fafc', bd: '#cbd5e1', fg: '#475569' }
+      : isUrgentPreHoliday
+        ? { bg: '#fffbeb', bd: '#fcd34d', fg: '#b45309' }
+        : { bg: '#eff6ff', bd: '#bfdbfe', fg: '#1d4ed8' };
+
+  const slots = [
+    {
+      id: 'auction_call',
+      time: '09:15-09:25',
+      zone: '集合竞价期',
+      tone: null,
+      rule: <>盯开盘定高低，看竞价异动（09:20 后不可撤单），不盲目抢跑</>
+    },
+    {
+      id: 'auction_fix',
+      time: '09:25-09:30',
+      zone: '竞价定盘期',
+      tone: null,
+      rule: <>跑竞价校准，核对昨日计划挂单与今日开盘承接水位</>
+    },
+    {
+      id: 'open_frenzy',
+      time: '09:30-09:45',
+      zone: '⚠️ 情绪宣泄诱多期',
+      tone: 'up',
+      rule: <>假摔诱多极多，<b>严禁冲动追高开仓</b>，等待分时均线平稳</>
+    },
+    {
+      id: 'golden_t',
+      time: '09:45-10:30',
+      zone: '🎯 做T黄金主窗口',
+      tone: 'down',
+      rule: (
+        <>
+          方向确立，缩量回踩分时均线低吸正T，放量冲高乏力倒T
+          {isUrgentPreHoliday && (
+            <div style={{ marginTop: '3px', color: '#b45309', fontWeight: 600 }}>
+              🏮 节前窗口纪律：逢分时冲高优先执行倒T减仓，将总仓位压降至 ≤{capPct}% 安全线内
+            </div>
+          )}
+        </>
+      )
+    },
+    {
+      id: 'mid_consolidate',
+      time: '10:30-11:30',
+      zone: '震荡巩固期',
+      tone: null,
+      rule: <>检验均线支撑，未达成做T价差条件的停止追单</>
+    },
+    {
+      id: 'lunch_break',
+      time: '11:30-13:00',
+      zone: '午间休市',
+      tone: null,
+      rule: <>复盘上午量能承接与港股/外盘风向，梳理午后止盈止损挂单</>
+    },
+    {
+      id: 'dull_hour',
+      time: '13:00-14:00',
+      zone: '💤 缩量垃圾时间',
+      tone: 'warn',
+      rule: <>全天成交低谷，无量假突破居多，<b>管住手，多看少动</b></>
+    },
+    {
+      id: 'inflection_warn',
+      time: '14:00-14:30',
+      zone: '变盘预警期',
+      tone: null,
+      rule: (
+        <>
+          主力抢跑与方向突变窗口，警惕破位跳水
+          {isUrgentPreHoliday && remDays === 2 && (
+            <div style={{ marginTop: '3px', color: '#b45309', fontWeight: 600 }}>
+              💸 节前倒数第 2 日（提现出金兑现高峰）：警惕避险资金集中抛压引发午后回落
+            </div>
+          )}
+        </>
+      )
+    },
+    {
+      id: 'force_close_t',
+      time: '14:30-14:55',
+      zone: '🚨 T仓强制平仓期',
+      tone: 'up',
+      rule: (
+        <>
+          <b>做T绝不过夜变加仓！</b>必须在此窗口将今日T仓平掉归位或止损
+          {isUrgentPreHoliday && (
+            <div style={{ marginTop: '3px', color: isFinalPreHolidayDay ? '#b91c1c' : '#b45309', fontWeight: 700 }}>
+              {isFinalPreHolidayDay
+                ? `🔒 节前收官日铁律：今日任何新买单受 T+1 限制将强制锁仓跨假 ${closedDays} 天！严禁尾盘博弈抄底，超限仓位务必在 14:55 前清退至 ≤${capPct}%`
+                : `🟡 节前控仓核查：收盘前核对实际总仓位，超 ≤${capPct}% 上限部分主动择机减仓`}
+            </div>
+          )}
+        </>
+      )
+    },
+    {
+      id: 'close_auction',
+      time: '14:55-15:00',
+      zone: '尾盘集合竞价',
+      tone: null,
+      rule: <>全天定盘收官，持仓锁定，15:05 进入收盘归档与跨假风控核查</>
+    }
+  ];
 
   return (
     <div className="modal-mask" onClick={onClose}>
-      <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '580px' }}>
+      <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '640px' }}>
         <div className="modal-hd">
-          <h3>⏰ A 股日内分时作战法则（时段禁忌表）</h3>
+          <h3>⏰ A 股交易时钟与日内分时作战法则</h3>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
-        <div className="modal-bd" style={{ fontSize: '12.5px', lineHeight: 1.7 }}>
-          <div style={{ marginBottom: '10px', padding: '8px 12px', background: 'var(--surface2)', borderRadius: '7px', border: '1px solid var(--line)' }}>
-            <b>核心铁律：</b>A 股做T有极其残酷的时段效应，在错误的时间挂单（如 09:30 追高或中午垃圾时间乱买），胜率会断崖式暴跌。请严格对照当前时段作战。
+        <div className="modal-bd" style={{ fontSize: '12.5px', lineHeight: 1.65 }}>
+          {/* 实时北京时间与交易日历状态栏 */}
+          <div style={{
+            marginBottom: '10px',
+            padding: '9px 12px',
+            borderRadius: '8px',
+            background: sessionTone.bg,
+            border: `1px solid ${sessionTone.bd}`,
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '8px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <span style={{
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                fontWeight: 800,
+                fontSize: '13.5px',
+                color: '#0f172a'
+              }}>
+                🕒 北京时间 {snap.dateStr} {snap.weekdayLabel} {snap.timeStr}
+              </span>
+              <span style={{
+                padding: '2px 8px',
+                borderRadius: '999px',
+                fontSize: '11.5px',
+                fontWeight: 700,
+                background: '#fff',
+                color: sessionTone.fg,
+                border: `1px solid ${sessionTone.bd}`
+              }}>
+                {snap.sessionBadge}
+              </span>
+            </div>
+            <div style={{ fontSize: '11.5px', color: '#475569', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <span>上个交易日：<b>{snap.prevTradeDate || '--'}</b></span>
+              <span>下个开市日：<b style={{ color: '#1d4ed8' }}>{snap.nextTradeDate || '--'}</b></span>
+            </div>
           </div>
+
+          {/* 法定节假日休市 / 周末休市 / 节前长假控仓窗口横幅 */}
+          {(snap.isInHoliday || snap.isHoliday) ? (
+            <div style={{
+              marginBottom: '10px',
+              padding: '9px 12px',
+              borderRadius: '8px',
+              background: 'linear-gradient(90deg, #fef2f2 0%, #fff7ed 100%)',
+              border: '1px solid #fca5a5',
+              color: '#991b1b',
+              fontSize: '12px'
+            }}>
+              <div style={{ fontWeight: 800, marginBottom: '2px' }}>
+                🏮 法定节假日休市期：【{reminder?.holidayName || snap.holidayName || '节假日休市'}】
+                {reminder?.closureStart && reminder?.closureEnd ? `（${reminder.closureStart} ~ ${reminder.closureEnd}，连休 ${closedDays || 1} 天）` : ''}
+              </div>
+              <div style={{ color: '#7f1d1d' }}>
+                当前 A 股全天不开市、不接受日内撮合。节后首个开市日为 <b>{reminder?.reopenDate || snap.nextTradeDate || '--'}</b>，建议提前梳理外盘与假期消息面，制定节后首日 <b>09:15-09:25</b> 竞价应对与去弱留强预案。
+              </div>
+            </div>
+          ) : !snap.isTradeDay ? (
+            <div style={{
+              marginBottom: '10px',
+              padding: '8px 12px',
+              borderRadius: '8px',
+              background: '#f8fafc',
+              border: '1px solid #cbd5e1',
+              color: '#334155',
+              fontSize: '12px'
+            }}>
+              <b>🛋️ 周末休市时段：</b>今日非 A 股交易日，下个交易日为 <b>{snap.nextTradeDate || '--'}</b>。
+              {reminder && reminder.phase !== 'in_holiday' && (
+                <span>
+                  {' '}另请注意：距【<b>{reminder.holidayName}</b>】（连休 {closedDays} 天）仅剩{' '}
+                  <b style={{ color: remDays <= 2 && isLongHoliday ? '#b45309' : '#1d4ed8' }}>
+                    {remDays}
+                  </b>{' '}个交易日
+                  {remDays <= 2 && isLongHoliday
+                    ? `，下周开盘即进入节前控仓窗口（建议上限 ≤${capPct}%）。`
+                    : '。'}
+                </span>
+              )}
+            </div>
+          ) : isUrgentPreHoliday ? (
+            <div style={{
+              marginBottom: '10px',
+              padding: '9px 12px',
+              borderRadius: '8px',
+              background: holidayGuard.isYellowCard
+                ? 'linear-gradient(90deg, #fffbeb 0%, #fef3c7 100%)'
+                : 'linear-gradient(90deg, #f0fdf4 0%, #fffbeb 100%)',
+              border: `1px solid ${holidayGuard.isYellowCard ? '#f59e0b' : '#86efac'}`,
+              color: holidayGuard.isYellowCard ? '#92400e' : '#166534',
+              fontSize: '12px'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px', marginBottom: '3px' }}>
+                <span style={{ fontWeight: 800 }}>
+                  {holidayGuard.isYellowCard ? '🟨 节前长假控仓黄牌预警' : '🏮 节前长假控仓窗口（当前达标）'}：距【{reminder.holidayName}】（{reminder.closureStart} ~ {reminder.closureEnd}，连休 {closedDays} 天）仅剩 {remDays} 个交易日
+                </span>
+                <span style={{
+                  padding: '1px 7px',
+                  borderRadius: '999px',
+                  background: holidayGuard.isYellowCard ? '#fde68a' : '#dcfce7',
+                  border: `1px solid ${holidayGuard.isYellowCard ? '#f59e0b' : '#86efac'}`,
+                  fontWeight: 800,
+                  fontSize: '11px',
+                  color: holidayGuard.isYellowCard ? '#78350f' : '#166534'
+                }}>
+                  {holidayGuard.isYellowCard
+                    ? `当前 ${Number(posRate).toFixed(1)}% · 超≤${capPct}%线 ${holidayGuard.excessPct}%`
+                    : `当前 ${Number(posRate).toFixed(1)}% ≤ 上限 ${capPct}%`}
+                </span>
+              </div>
+              <div>
+                {holidayGuard.isYellowCard && (
+                  <div style={{ fontWeight: 700, marginBottom: '2px', color: '#b45309' }}>
+                    建议在收盘前逢高降仓约 ¥{holidayGuard.excessAmt.toLocaleString('zh-CN')}，压回 ≤{capPct}% 跨假安全水位。
+                  </div>
+                )}
+                {isFinalPreHolidayDay
+                  ? `今日为节前收官日！受 A 股 T+1 交收限制，今日任何新买单均将强制锁仓跨假 ${closedDays} 天（直至 ${reminder.reopenDate} 才能卖出）。请聚焦 09:45-10:30 逢高减仓与 14:30-14:55 T仓清退，严禁尾盘冲动抄底。`
+                  : `今日为节前倒数第 2 个交易日（节前法定提现出金日），午后易现避险兑现抛压。请优先借早盘黄金窗口逢高减仓，避免临近收盘被动追砍。`}
+              </div>
+            </div>
+          ) : reminder && reminder.phase !== 'in_holiday' ? (
+            <div style={{
+              marginBottom: '10px',
+              padding: '7px 12px',
+              borderRadius: '8px',
+              background: '#eff6ff',
+              border: '1px solid #bfdbfe',
+              color: '#1e40af',
+              fontSize: '12px'
+            }}>
+              📅 <b>近期节假日预告：</b>距【{reminder.holidayName}】（{reminder.closureStart} ~ {reminder.closureEnd}，连休 {closedDays} 天）还有 <b>{remDays}</b> 个交易日
+              {isLongHoliday ? `（距假 ≤2 个交易日时将启动 ≤${capPct}% 节前分档控仓黄牌提示）` : '（短休维持常规日内做T纪律）'}。
+            </div>
+          ) : null}
+
+          <div style={{ marginBottom: '10px', padding: '8px 12px', background: 'var(--surface2)', borderRadius: '7px', border: '1px solid var(--line)' }}>
+            <b>核心铁律：</b>A 股做T有极其残酷的时段效应，在错误的时间挂单（如 09:30 追高或中午垃圾时间乱买），胜率会断崖式暴跌。
+            {snap.isTradeDay && snap.activeSlotId === 'pre_open' && (
+              <span style={{ color: '#1d4ed8', fontWeight: 700 }}> 当前处于 09:15 盘前准备期，请核查隔夜仓位与预埋挂单。</span>
+            )}
+            {snap.isTradeDay && snap.activeSlotId === 'post_eod' && (
+              <span style={{ color: '#475569', fontWeight: 700 }}> 今日已收盘定盘，请完成 15:05 盘后归档与次日预案复盘。</span>
+            )}
+          </div>
+
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
             <thead>
-              <tr style={{ background: 'var(--surface)', textAlign: 'left' }}>
-                <th style={{ padding: '6px 8px' }}>时段</th>
-                <th style={{ padding: '6px 8px' }}>作战时区属性</th>
+              <tr style={{ background: 'var(--surface)', textAlign: 'left', borderBottom: '1px solid var(--line)' }}>
+                <th style={{ padding: '6px 8px', width: '112px' }}>时段</th>
+                <th style={{ padding: '6px 8px', width: '148px' }}>作战时区属性</th>
                 <th style={{ padding: '6px 8px' }}>操作纪律与禁忌</th>
               </tr>
             </thead>
             <tbody>
-              <tr><td style={{ padding: '6px 8px', fontWeight: 700 }}>09:15-09:25</td><td>集合竞价期</td><td>盯开盘定高低，看竞价异动，不盲目抢跑</td></tr>
-              <tr><td style={{ padding: '6px 8px', fontWeight: 700 }}>09:25-09:30</td><td>竞价定盘期</td><td>跑竞价校准，定全天挂单预期买卖点</td></tr>
-              <tr style={{ background: 'var(--up-bg)' }}><td style={{ padding: '6px 8px', fontWeight: 700, color: 'var(--up)' }}>09:30-09:45</td><td style={{ color: 'var(--up)', fontWeight: 700 }}>⚠️ 情绪宣泄诱多期</td><td>假摔诱多极多，<b>严禁冲动追高开仓</b>，等待分时均线平稳</td></tr>
-              <tr style={{ background: 'var(--down-bg)' }}><td style={{ padding: '6px 8px', fontWeight: 700, color: 'var(--down)' }}>09:45-10:30</td><td style={{ color: 'var(--down)', fontWeight: 700 }}>🎯 做T黄金主窗口</td><td>方向确立，缩量回踩分时均线低吸正T，放量冲高乏力倒T</td></tr>
-              <tr><td style={{ padding: '6px 8px', fontWeight: 700 }}>10:30-11:30</td><td>震荡巩固期</td><td>检验均线支撑，未达成做T条件的停止追单</td></tr>
-              <tr><td style={{ padding: '6px 8px', fontWeight: 700 }}>11:30-13:00</td><td>午间休市</td><td>复盘上午量能承接，梳理午后挂单</td></tr>
-              <tr style={{ background: 'var(--warn-bg)' }}><td style={{ padding: '6px 8px', fontWeight: 700, color: 'var(--warn-d)' }}>13:00-14:00</td><td>💤 缩量垃圾时间</td><td>全天成交低谷，无量假突破居多，<b>管住手，多看少动</b></td></tr>
-              <tr><td style={{ padding: '6px 8px', fontWeight: 700 }}>14:00-14:30</td><td>变盘预警期</td><td>主力抢跑与方向突变窗口，警惕破位跳水</td></tr>
-              <tr style={{ background: 'var(--up-bg)' }}><td style={{ padding: '6px 8px', fontWeight: 700, color: 'var(--up)' }}>14:30-14:55</td><td style={{ color: 'var(--up)', fontWeight: 700 }}>🚨 T仓强制平仓期</td><td><b>做T绝不过夜变加仓！</b>必须在此窗口将今日T仓平掉归位或止损</td></tr>
-              <tr><td style={{ padding: '6px 8px', fontWeight: 700 }}>14:55-15:00</td><td>尾盘集合竞价</td><td>全天定盘收官，持仓锁定</td></tr>
+              {slots.map(slot => {
+                const isActive = snap.isTradeDay && snap.activeSlotId === slot.id;
+                const baseBg = slot.tone === 'up'
+                  ? 'var(--up-bg)'
+                  : slot.tone === 'down'
+                    ? 'var(--down-bg)'
+                    : slot.tone === 'warn'
+                      ? 'var(--warn-bg)'
+                      : 'transparent';
+                const toneColor = slot.tone === 'up'
+                  ? 'var(--up)'
+                  : slot.tone === 'down'
+                    ? 'var(--down)'
+                    : slot.tone === 'warn'
+                      ? 'var(--warn-d)'
+                      : undefined;
+
+                return (
+                  <tr
+                    key={slot.id}
+                    style={{
+                      background: isActive ? '#dbeafe' : baseBg,
+                      boxShadow: isActive ? 'inset 3px 0 0 #2563eb' : undefined,
+                      borderBottom: '1px solid var(--line)',
+                      opacity: !snap.isTradeDay ? 0.86 : 1
+                    }}
+                  >
+                    <td style={{ padding: '6px 8px', fontWeight: 700, color: isActive ? '#1d4ed8' : toneColor, whiteSpace: 'nowrap' }}>
+                      {isActive ? '👉 ' : ''}{slot.time}
+                      {isActive && (
+                        <span style={{
+                          marginLeft: '5px',
+                          padding: '1px 5px',
+                          borderRadius: '4px',
+                          fontSize: '10px',
+                          fontWeight: 800,
+                          background: '#2563eb',
+                          color: '#fff',
+                          verticalAlign: 'middle'
+                        }}>
+                          当前
+                        </span>
+                      )}
+                    </td>
+                    <td style={{ padding: '6px 8px', color: toneColor, fontWeight: (slot.tone || isActive) ? 700 : 500 }}>
+                      {slot.zone}
+                    </td>
+                    <td style={{ padding: '6px 8px' }}>{slot.rule}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
-        <div className="modal-ft" style={{ display: 'flex', justifyContent: 'flex-end', padding: '10px 14px', borderTop: '1px solid var(--line)' }}>
+        <div className="modal-ft" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', padding: '10px 14px', borderTop: '1px solid var(--line)' }}>
+          <div>
+            {onJumpRules && (
+              <button
+                type="button"
+                onClick={onJumpRules}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  border: '1px solid #bfdbfe',
+                  background: '#eff6ff',
+                  color: '#1d4ed8',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  cursor: 'pointer'
+                }}
+              >
+                📖 查看节前分档控仓完整手册 →
+              </button>
+            )}
+          </div>
           <button className="btn-cancel" onClick={onClose} style={{ padding: '6px 14px', borderRadius: '6px', border: '1px solid var(--line)', background: '#fff', cursor: 'pointer' }}>关闭 (Esc)</button>
         </div>
       </div>
@@ -1025,8 +1461,7 @@ export function OvernightBanner({
 }) {
   if (!visible) return null;
 
-  const now = new Date();
-  const mins = now.getHours() * 60 + now.getMinutes();
+  const { mins } = getCNClock(new Date());
   const minsLeft = Math.max(0, 895 - mins); // 14:55 连续竞价结束
 
   return (

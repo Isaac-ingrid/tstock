@@ -11,6 +11,8 @@ export default function LedgerPage({
   onUpdateLog,
   onDeleteLog,
   pool,
+  tailActives,
+  allowedCapPct,
   totalAssets,
   vaultStatus,
   onForceSyncVault,
@@ -31,6 +33,8 @@ export default function LedgerPage({
         onUpdateLog={onUpdateLog}
         onDeleteLog={onDeleteLog}
         pool={pool}
+        tailActives={tailActives}
+        allowedCapPct={allowedCapPct}
         totalAssets={totalAssets}
         vaultStatus={vaultStatus}
         onForceSyncVault={onForceSyncVault}

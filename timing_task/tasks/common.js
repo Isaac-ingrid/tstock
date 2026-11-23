@@ -16,28 +16,32 @@ const LOGS_DIR = path.join(TIMING_ROOT, 'logs');
 const DATA_DIR = path.join(PROJECT_ROOT, 'data');
 const PUBLIC_DATA_DIR = path.join(PROJECT_ROOT, 'public', 'data');
 
+const {
+  getCNClock,
+  getTradeDayStatus,
+  isTradeDay,
+  nextTradeDay,
+  prevTradeDay,
+  isLastTradeDayOfWeek,
+  probeLiveExchangeTradeDay,
+} = require('./trade_calendar');
+
 // 保证日志目录存在
 fs.mkdirSync(LOGS_DIR, { recursive: true });
 
-/** 获取当前日期字符串 YYYY-MM-DD */
+/** 获取当前北京时间日期字符串 YYYY-MM-DD */
 function todayStr(d = new Date()) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  return getCNClock(d).dateStr;
 }
 
-/** 获取当前时间戳 HH:mm:ss */
+/** 获取当前北京时间时间戳 HH:mm:ss */
 function timeStr(d = new Date()) {
-  const h = String(d.getHours()).padStart(2, '0');
-  const m = String(d.getMinutes()).padStart(2, '0');
-  const s = String(d.getSeconds()).padStart(2, '0');
-  return `${h}:${m}:${s}`;
+  return getCNClock(d).timeStr;
 }
 
-/** 判断今天是否为周末（周六=6，周日=0） */
+/** 判断指定时间是否为周末（按北京时间，周六=6，周日=0） */
 function isWeekend(d = new Date()) {
-  const day = d.getDay();
+  const day = getCNClock(d).weekday;
   return day === 0 || day === 6;
 }
 
@@ -136,6 +140,13 @@ module.exports = {
   todayStr,
   timeStr,
   isWeekend,
+  getCNClock,
+  getTradeDayStatus,
+  isTradeDay,
+  nextTradeDay,
+  prevTradeDay,
+  isLastTradeDayOfWeek,
+  probeLiveExchangeTradeDay,
   cleanEnv,
   log,
   runScript

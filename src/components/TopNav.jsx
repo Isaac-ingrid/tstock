@@ -1,6 +1,8 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { money } from '../services/utils.js';
 import { NAV_ROUTES } from '../data/site.js';
+import { syncRemoteTradeCalendar } from '../services/calendar.js';
+import { evaluateTopNavClockBadge } from '../services/risk.js';
 import DirectMoneyInput from './DirectMoneyInput.jsx';
 
 export default function TopNav({
@@ -13,6 +15,7 @@ export default function TopNav({
   cash = 0,
   marketValue,
   posRate,
+  allowedCapPct = 80,
   onUpdateTotalAssets = null,
   onUpdateCash = null,
   clockPhase,
@@ -37,6 +40,13 @@ export default function TopNav({
 }) {
   const navRef = useRef(null);
   const moreRef = useRef(null);
+  const [, setCalendarReadyTick] = useState(0);
+
+  useEffect(() => {
+    syncRemoteTradeCalendar().finally(() => {
+      setCalendarReadyTick((n) => n + 1);
+    });
+  }, []);
 
   // 窄屏横向滑动导航栏：切换Tab时仅在导航容器内平滑居中当前项，绝不干扰页面纵向滚动
   useEffect(() => {
@@ -72,6 +82,13 @@ export default function TopNav({
 
   const holdingCount = pool.filter((s) => (s.shares || 0) > 0).length;
   const watchCount = pool.length - holdingCount;
+
+  const clockBadge = evaluateTopNavClockBadge({
+    totalPosPct: posRate,
+    totalMkt: marketValue,
+    totalAssets,
+    emotionCapPct: allowedCapPct,
+  });
 
   return (
     <div className={`topbar topbar-v2 ${isStale ? 'stale' : ''}`} id="topbar">
@@ -231,7 +248,7 @@ export default function TopNav({
         </div>
       </div>
 
-      {/* 第二行：精简状态条（资产/现金直输 + 盘中时钟 + 持仓/自选汇总入口，窄屏单行横滑不撑高） */}
+      {/* 第二行：精简状态条（资产/现金直输 + 盘中时钟及节假日/控仓黄牌角标 + 持仓/自选汇总入口） */}
       <div className="tb-row-sub">
         <div
           className="tb-acc-pill"
@@ -279,13 +296,21 @@ export default function TopNav({
         </div>
 
         <div
-          className="tb-clock-pill"
+          className={`tb-clock-pill ${clockBadge.pillTone || ''}`.trim()}
           id="tbClockPill"
-          title="点击展开全天交易纪律时钟与窗口说明"
+          title={clockBadge.tooltip}
           onClick={onOpenClock}
         >
-          <span className="clock-dot" />
+          <span className={`clock-dot dot-${clockBadge.dotTone}`} />
           <span id="tbClockPhase">{clockPhase}</span>
+          {clockBadge.showBadge && (
+            <span
+              className={`tb-clock-badge tone-${clockBadge.badgeTone}`}
+              id="tbClockHolidayBadge"
+            >
+              {clockBadge.badgeText}
+            </span>
+          )}
           <span className={`tb-quote-time ${isStale ? 'tb-quote-stale' : ''}`} id="tbQuoteTime">
             {quoteStamp}
           </span>

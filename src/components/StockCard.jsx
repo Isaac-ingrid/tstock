@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { f2, pct, money, money$, fmtIn, GRID, TIER_LABEL, AUTO_FIELDS, AUTO_FIELD_LABELS, toastOk, toastErr, calcTBreakeven, getTodayTStatus, todayStr } from '../services/utils.js';
+import { isAShareTradeDay, getCNClock, getUpcomingHolidayReminder } from '../services/calendar.js';
 import { calc, posCalc, computeTA, rsCalc, drawRS, computeExperimentalATRGrid, computeExperimentalStockDNA } from '../services/api.js';
 import { getAuctionTier, computeAuctionPattern, computeLimitUpRigidity, computeNextDayExitDecision } from '../services/auction.js';
 import ChartCanvas from './ChartCanvas.jsx';
 import TechAndResearchSection from './TechAndResearchSection.jsx';
-import { evaluateChannelHoldingDiscipline } from '../services/risk.js';
+import { evaluateChannelHoldingDiscipline, evaluatePreTradeHolidayGuard } from '../services/risk.js';
 
 export const MODE_BADGE = {
   BUY: ['buy', '正T'],
@@ -18,6 +19,10 @@ export default function StockCard({
   index,
   isCur = true,
   tradeLogs,
+  totalAssets = 100000,
+  totalMktVal = null,
+  allowedCapPct = 80,
+  holidayReminder = undefined,
   isTailAlertTime = false,
   simTailAlert = false,
   onUpdateStock,
@@ -85,14 +90,13 @@ export default function StockCard({
     mktLevel: c.mktLevel,
   });
 
-  // 14:40 尾盘清T预警触发判定 (14:40~15:00 或开启演练模拟)
+  // 14:40 尾盘清T预警触发判定 (交易日北京时间 14:40~15:00 或开启演练模拟，排除法定节假日)
   const isTailRiskTime = (() => {
     if (simTailAlert) return true;
     if (isTailAlertTime) return true;
     const now = new Date();
-    const wd = now.getDay();
-    const mins = now.getHours() * 60 + now.getMinutes();
-    return (wd >= 1 && wd <= 5 && mins >= 880 && mins < 900);
+    const { mins } = getCNClock(now);
+    return isAShareTradeDay(now) && mins >= 880 && mins < 900;
   })();
 
   // 做T保本价计算器状态
@@ -218,7 +222,18 @@ export default function StockCard({
     trialCostDiff = trialNewCost - oldCost;
   }
 
-  // 执行买入建仓或加仓（支持加权平均均价重算、双通道禁逆势补仓拦截与流水写入）
+  const effectiveCurrentMkt = totalMktVal != null ? Number(totalMktVal) : (pos?.curMkt || 0);
+  const preBuyHolidayGuard = evaluatePreTradeHolidayGuard({
+    currentMkt: effectiveCurrentMkt,
+    buyAmt: isBuyInputValid ? trialTotalCapital : 0,
+    unitPrice: isBuyInputValid ? inputBuyPx : pxNow,
+    totalAssets,
+    emotionCapPct: allowedCapPct,
+    holidayReminder: holidayReminder !== undefined ? holidayReminder : getUpcomingHolidayReminder(new Date()),
+    stockName: stock.name || stock.code,
+  });
+
+  // 执行买入建仓或加仓（支持加权平均均价重算、双通道禁逆势补仓拦截、节前控仓黄牌二次确认与流水写入）
   const handleExecuteBuy = () => {
     if (!isBuyInputValid) {
       toastErr('请输入有效的买入股数与买入价格');
@@ -230,6 +245,11 @@ export default function StockCard({
       }
     } else if (oldShares > 0 && channelDisc?.warn3Red) {
       if (!window.confirm(`${channelDisc.warn3RedReason}\n\n确定仍要在连红高潮区继续加仓吗？`)) {
+        return;
+      }
+    }
+    if (preBuyHolidayGuard.willExceedCap) {
+      if (!window.confirm(preBuyHolidayGuard.confirmPromptText)) {
         return;
       }
     }
@@ -1393,6 +1413,53 @@ export default function StockCard({
                       <span>💡 <b>首次建仓预演:</b> 买入 {inputBuyQty} 股 @ ¥{f2(inputBuyPx)} ➔</span>
                       <span>初始底仓: <b>{trialNewShares}</b> 股 ｜ 成本价: <b>¥{f2(trialNewCost)}</b> ｜ 动用资金: <b>¥{money(trialTotalCapital)}</b></span>
                     </>
+                  )}
+                </div>
+              )}
+
+              {/* 连续≥3天长假前1-2个交易日：新开仓/加仓超节前上限实时黄牌提醒条 */}
+              {isBuyInputValid && preBuyHolidayGuard.willExceedCap && (
+                <div
+                  style={{
+                    marginTop: '8px',
+                    padding: '6px 10px',
+                    background: 'linear-gradient(90deg, #fffbeb 0%, #fff7ed 100%)',
+                    border: '1px solid #f59e0b',
+                    borderRadius: '6px',
+                    fontSize: '11.5px',
+                    lineHeight: 1.5,
+                    color: '#78350f',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '8px',
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  <span>
+                    🟨 <b>节前控仓黄牌：</b>距<b>{preBuyHolidayGuard.holidayName}</b>（连休
+                    {preBuyHolidayGuard.closedDays}天）仅剩 <b>{preBuyHolidayGuard.remainingTradeDays}</b> 个交易日，
+                    本笔买入后总仓将由 <b>{preBuyHolidayGuard.beforePosPct.toFixed(1)}%</b> 升至{' '}
+                    <b>{preBuyHolidayGuard.afterPosPct.toFixed(1)}%</b>，超{preBuyHolidayGuard.capSourceLabel}{' '}
+                    <b>{preBuyHolidayGuard.overPct}%</b>（{preBuyHolidayGuard.safeCapHint}）
+                  </span>
+                  {preBuyHolidayGuard.maxSafeShares >= 100 && (
+                    <button
+                      type="button"
+                      className="mini"
+                      onClick={() => setBuyQtyStr(String(preBuyHolidayGuard.maxSafeShares))}
+                      style={{
+                        background: '#fef3c7',
+                        borderColor: '#f59e0b',
+                        color: '#92400e',
+                        fontWeight: 700,
+                        padding: '2px 8px',
+                        fontSize: '11px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      填入节前上限 {preBuyHolidayGuard.maxSafeShares} 股
+                    </button>
                   )}
                 </div>
               )}

@@ -15,6 +15,7 @@ import httpx
 
 from .market_data import BoundedTTLCache, fetch_batch_quotes, fetch_kline_rows
 from .patterns import analyze_kline_patterns
+from .trade_calendar import count_trade_days_between, latest_or_current_trade_day, recent_trade_dates, shift_trade_days
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 HERD_POOL_FILE = DATA_DIR / "herd_pool.json"
@@ -475,12 +476,17 @@ async def _fetch_hist_zt_pool(client: httpx.AsyncClient, date_str: str) -> List[
 async def _fetch_recent_zt_days(
     client: httpx.AsyncClient, actual_date: str, lookback_cal_days: int = 7, max_valid_days: int = 3
 ) -> List[Tuple[str, List[dict]]]:
-    """并发探测实际交易日之前的近 3 个交易日涨停池，用于自动发现昨日高标/近期抱团核。"""
+    """并发探测实际交易日之前的近 3 个真实交易日涨停池（自动跨越周末与国庆/春节长假）。"""
     cached_days = await _RECENT_ZT_CACHE.get(actual_date)
     if cached_days is not None:
         return cached_days
 
-    cand_dates = [_shift_date_str(actual_date, -d) for d in range(1, lookback_cal_days + 1)]
+    cand_dates = recent_trade_dates(
+        max(max_valid_days + 2, 5),
+        ref=actual_date,
+        include_ref=False,
+        fmt="%Y%m%d",
+    )
     res_list = await asyncio.gather(
         *[_fetch_hist_zt_pool(client, d) for d in cand_dates],
         return_exceptions=True,
@@ -1219,7 +1225,7 @@ async def build_strong_herd_and_themes(
 
         herd_items: List[dict] = []
         newly_evicted: List[dict] = []
-        cooldown_until = _shift_date_str(actual_date, 4)
+        cooldown_until = shift_trade_days(actual_date, 3, fmt="%Y%m%d")
 
         for code in herd_codes:
             meta = active_map[code]
@@ -1293,9 +1299,10 @@ async def build_strong_herd_and_themes(
             is_zt_now = bool(zt_q or chg >= 9.6)
 
             try:
-                dt_e = datetime.datetime.strptime(meta.get("entryDate", actual_date), "%Y%m%d").date()
-                dt_a = datetime.datetime.strptime(actual_date, "%Y%m%d").date()
-                track_days = max(1, (dt_a - dt_e).days + 1)
+                track_days = max(
+                    1,
+                    count_trade_days_between(meta.get("entryDate", actual_date), actual_date, inclusive=True),
+                )
             except Exception:
                 track_days = 1
 
@@ -1843,7 +1850,7 @@ async def build_strong_herd_and_themes(
 async def mutate_herd_pool(action: str, code: str, name: str = "", hybk: str = "", price: float = 0.0, reason: str = "") -> dict:
     """支持在自动跟踪池基础上执行手动固定(pin)、手动移出(remove)、从破位区恢复(restore)或手动加池(add)。"""
     code = str(code).strip().zfill(6)
-    today_code = datetime.date.today().strftime("%Y%m%d")
+    today_code = latest_or_current_trade_day(fmt="%Y%m%d")
     if action in ("add", "restore") and not is_mainboard_10cm(code, name):
         raise ValueError("抱团跟踪池已严格剔除创业板(30)、科创板(68)及ST个股，仅支持00/60主板")
 
@@ -1867,7 +1874,7 @@ async def mutate_herd_pool(action: str, code: str, name: str = "", hybk: str = "
             evicted_list = [e for e in evicted_list if str(e.get("code", "")).zfill(6) != code]
         elif action == "remove":
             meta = active_map.pop(code, None)
-            cooldown_until = _shift_date_str(today_code, 5)
+            cooldown_until = shift_trade_days(today_code, 4, fmt="%Y%m%d")
             ev_rec = {
                 "code": code,
                 "name": (meta or {}).get("name") or name or code,

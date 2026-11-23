@@ -1,6 +1,8 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { f2, pct, money, todayStr } from '../services/utils.js';
 import { tRealOf } from '../services/api.js';
+import { syncRemoteTradeCalendar } from '../services/calendar.js';
+import { evaluateAccountHolidayWatermark } from '../services/risk.js';
 import DirectMoneyInput from './DirectMoneyInput.jsx';
 
 export default function AccountSection({
@@ -10,7 +12,9 @@ export default function AccountSection({
   poolMarketValue = 0,
   tailMarketValue = 0,
   posRate = 0,
+  allowedCapPct = 80,
   cash = 0,
+  referenceDate = null,
   pool = [],
   tailActives = [],
   tradeLogs = [],
@@ -25,7 +29,32 @@ export default function AccountSection({
   onTabChange,
 }) {
   const [hoverIdx, setHoverIdx] = useState(null);
+  const [calTick, setCalTick] = useState(0);
   const svgRef = useRef(null);
+
+  useEffect(() => {
+    let mounted = true;
+    syncRemoteTradeCalendar().then(() => {
+      if (mounted) setCalTick((t) => t + 1);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const effEmotionCap = Number.isFinite(+allowedCapPct) && +allowedCapPct > 0 ? +allowedCapPct : 80;
+  const holidayWm = useMemo(
+    () =>
+      evaluateAccountHolidayWatermark({
+        totalAssets,
+        marketValue,
+        cash,
+        posRate,
+        emotionCapPct: effEmotionCap,
+        now: referenceDate || new Date(),
+      }),
+    [totalAssets, marketValue, cash, posRate, effEmotionCap, referenceDate, calTick]
+  );
 
   const activeTails = useMemo(
     () => (tailActives || []).filter(t => t && t.status !== 'closed' && (+t.shares || 0) > 0),
@@ -306,14 +335,119 @@ export default function AccountSection({
             </div>
           </div>
 
-          {/* 4. 实际总仓位 */}
-          <div className="card" style={{ padding: '14px', background: 'var(--surface2)', marginBottom: 0 }}>
-            <div style={{ fontSize: '12px', color: 'var(--sub)' }}>实际股票总仓位</div>
-            <div style={{ fontSize: '22px', fontWeight: 700, fontFamily: 'ui-monospace,Consolas,monospace', marginTop: '4px', color: posRate > 80 ? 'var(--up)' : 'var(--text)' }}>
+          {/* 4. 实际总仓位 & 节前控仓水位刻度 */}
+          <div
+            className="card"
+            style={{
+              padding: '14px',
+              background: holidayWm.isYellowCard ? '#fffbeb' : 'var(--surface2)',
+              border: holidayWm.isYellowCard ? '1px solid #f59e0b' : undefined,
+              marginBottom: 0,
+            }}
+          >
+            <div style={{ fontSize: '12px', color: 'var(--sub)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '4px' }}>
+              <span>实际股票总仓位</span>
+              <span
+                style={{
+                  fontSize: '10.5px',
+                  padding: '1px 6px',
+                  borderRadius: '999px',
+                  fontWeight: 700,
+                  background: holidayWm.isYellowCard ? '#fef3c7' : holidayWm.showChartLine ? '#ecfdf5' : 'var(--surface)',
+                  color: holidayWm.isYellowCard ? '#b45309' : holidayWm.showChartLine ? '#047857' : 'var(--mute)',
+                  border: `1px solid ${holidayWm.isYellowCard ? '#fcd34d' : holidayWm.showChartLine ? '#a7f3d0' : 'var(--line)'}`,
+                }}
+              >
+                {holidayWm.showChartLine
+                  ? `🏮 节前线 ≤${holidayWm.watermarkPct}%`
+                  : `风控线 ≤${effEmotionCap}%`}
+              </span>
+            </div>
+            <div
+              style={{
+                fontSize: '22px',
+                fontWeight: 700,
+                fontFamily: 'ui-monospace,Consolas,monospace',
+                marginTop: '4px',
+                color: holidayWm.isYellowCard
+                  ? '#b45309'
+                  : posRate > effEmotionCap + 0.1
+                  ? 'var(--up)'
+                  : 'var(--text)',
+              }}
+            >
               {posRate.toFixed(1)}%
             </div>
-            <div style={{ fontSize: '11px', color: posRate > 75 ? 'var(--up)' : 'var(--mute)', marginTop: '4px' }}>
-              {posRate > 75 ? '⚠️ 仓位偏重，谨防回撤风险' : '仓位处于机动可控区间'}
+            {/* 迷你仓位水位刻度条（叠加日常风控线与节前长假上限线） */}
+            <div
+              style={{
+                position: 'relative',
+                height: '6px',
+                borderRadius: '999px',
+                background: '#e2e8f0',
+                marginTop: '6px',
+                overflow: 'visible',
+              }}
+              title={`当前仓位 ${posRate.toFixed(1)}% ｜ 水位上限 ${holidayWm.watermarkPct}% (¥${money(holidayWm.watermarkMkt)})`}
+            >
+              <div
+                style={{
+                  width: `${Math.min(100, Math.max(0, posRate))}%`,
+                  height: '100%',
+                  borderRadius: '999px',
+                  background: holidayWm.isYellowCard
+                    ? '#f59e0b'
+                    : posRate > effEmotionCap + 0.1
+                    ? '#dc2626'
+                    : '#0f766e',
+                }}
+              />
+              {holidayWm.showChartLine && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: `${Math.min(100, holidayWm.watermarkPct)}%`,
+                    top: '-3px',
+                    bottom: '-3px',
+                    width: '2px',
+                    background: '#d97706',
+                    borderRadius: '1px',
+                  }}
+                  title={`${holidayWm.holidayName}控仓水位线 ≤${holidayWm.watermarkPct}%`}
+                />
+              )}
+              {effEmotionCap < 100 && (!holidayWm.showChartLine || effEmotionCap !== holidayWm.watermarkPct) && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: `${Math.min(100, effEmotionCap)}%`,
+                    top: '-2px',
+                    bottom: '-2px',
+                    width: '2px',
+                    background: '#475569',
+                    borderRadius: '1px',
+                  }}
+                  title={`情绪允许上限 ≤${effEmotionCap}%`}
+                />
+              )}
+            </div>
+            <div
+              style={{
+                fontSize: '11px',
+                color: holidayWm.isYellowCard ? '#b45309' : posRate > effEmotionCap + 0.1 ? 'var(--up)' : 'var(--mute)',
+                fontWeight: holidayWm.isYellowCard ? 700 : 400,
+                marginTop: '5px',
+              }}
+            >
+              {holidayWm.isYellowCard
+                ? `🟨 超节前线 ${holidayWm.excessPct}% · 待降 ¥${money(holidayWm.excessAmt)}`
+                : holidayWm.mode === 'safe_urgent' || holidayWm.mode === 'in_holiday'
+                ? `✅ 跨假安全余量 ¥${money(holidayWm.headroomAmt)}`
+                : holidayWm.mode === 'advance_countdown'
+                ? `📅 剩${holidayWm.remainingTradeDays}日迎${holidayWm.holidayName} · 预备线 ≤${holidayWm.watermarkPct}%`
+                : posRate > effEmotionCap + 0.1
+                ? `🚨 超风控上限 ${(posRate - effEmotionCap).toFixed(1)}%`
+                : `机动可开仓余量 ¥${money(holidayWm.deployableCash)}`}
             </div>
           </div>
 
@@ -346,6 +480,115 @@ export default function AccountSection({
             </div>
           </div>
         </div>
+
+        {/* 🏮 节前连续长假控仓水位线 & 跨假安全可开仓余量全景条（仅在长假前5个交易日内或休市中展示） */}
+        {holidayWm.showBanner && (
+          <div
+            className="card"
+            style={{
+              padding: '12px 15px',
+              marginBottom: '16px',
+              borderRadius: '10px',
+              background: holidayWm.isYellowCard
+                ? 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)'
+                : holidayWm.mode === 'safe_urgent'
+                ? 'linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%)'
+                : 'linear-gradient(135deg, #f8fafc 0%, #eff6ff 100%)',
+              border: `1.5px solid ${
+                holidayWm.isYellowCard ? '#f59e0b' : holidayWm.mode === 'safe_urgent' ? '#86efac' : '#bfdbfe'
+              }`,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', fontSize: '13px', fontWeight: 800, color: holidayWm.isYellowCard ? '#92400e' : holidayWm.mode === 'safe_urgent' ? '#166534' : '#1e3a8a' }}>
+                <span>{holidayWm.isYellowCard ? '🟨' : '🏮'}</span>
+                <span>
+                  {holidayWm.mode === 'in_holiday'
+                    ? `${holidayWm.holidayName}休市跨假仓位体检（连休 ${holidayWm.closedDays} 天 · ${holidayWm.reopenDate.slice(5)} 开市）`
+                    : `距${holidayWm.holidayName}连休 ${holidayWm.closedDays} 天剩 ${holidayWm.remainingTradeDays} 个交易日 · 节前控仓水位线 ≤${holidayWm.watermarkPct}%`}
+                </span>
+                <span
+                  style={{
+                    fontSize: '11px',
+                    padding: '1px 8px',
+                    borderRadius: '999px',
+                    background: '#fff',
+                    border: '1px solid rgba(0,0,0,0.08)',
+                    fontFamily: 'ui-monospace,Consolas,monospace',
+                  }}
+                >
+                  上限市值 ¥{money(holidayWm.watermarkMkt)} ({holidayWm.posRangeLabel})
+                </span>
+              </div>
+              {onTabChange && (
+                <button
+                  type="button"
+                  className="mini"
+                  style={{
+                    marginLeft: 0,
+                    background: '#fff',
+                    color: holidayWm.isYellowCard ? '#b45309' : '#0f766e',
+                    borderColor: holidayWm.isYellowCard ? '#f59e0b' : '#86efac',
+                    fontWeight: 700,
+                  }}
+                  onClick={() => onTabChange('/trade')}
+                >
+                  {holidayWm.isYellowCard ? '🎯 去作战台执行节前降仓 →' : '🎯 去作战台查看挂单锚点 →'}
+                </button>
+              )}
+            </div>
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(185px, 1fr))',
+                gap: '8px',
+                fontSize: '12px',
+              }}
+            >
+              <div style={{ padding: '7px 10px', borderRadius: '7px', background: 'rgba(255,255,255,0.82)', border: '1px solid rgba(0,0,0,0.06)' }}>
+                <div style={{ fontSize: '11px', color: 'var(--mute)' }}>节前安全市值水位线</div>
+                <div style={{ fontWeight: 800, fontFamily: 'ui-monospace,Consolas,monospace', marginTop: '2px' }}>
+                  ≤{holidayWm.watermarkPct}%（¥{money(holidayWm.watermarkMkt)}）
+                </div>
+              </div>
+
+              <div style={{ padding: '7px 10px', borderRadius: '7px', background: 'rgba(255,255,255,0.82)', border: '1px solid rgba(0,0,0,0.06)' }}>
+                <div style={{ fontSize: '11px', color: 'var(--mute)' }}>
+                  {holidayWm.excessAmt > 0 ? '超额跨假风险敞口（建议减仓）' : '跨假安全可开仓余量'}
+                </div>
+                <div
+                  style={{
+                    fontWeight: 800,
+                    fontFamily: 'ui-monospace,Consolas,monospace',
+                    marginTop: '2px',
+                    color: holidayWm.excessAmt > 0 ? '#cf1322' : '#15803d',
+                  }}
+                >
+                  {holidayWm.excessAmt > 0
+                    ? `超 +${holidayWm.excessPct}% · 需降 ¥${money(holidayWm.excessAmt)}`
+                    : `尚余 ${holidayWm.headroomPct}% · 可开 ¥${money(holidayWm.headroomAmt)}`}
+                </div>
+              </div>
+
+              <div style={{ padding: '7px 10px', borderRadius: '7px', background: 'rgba(255,255,255,0.82)', border: '1px solid rgba(0,0,0,0.06)' }}>
+                <div style={{ fontSize: '11px', color: 'var(--mute)' }}>可用现金拆解（动用额度 / 避险储备）</div>
+                <div style={{ fontWeight: 700, fontFamily: 'ui-monospace,Consolas,monospace', marginTop: '2px' }}>
+                  可动用 <b style={{ color: '#0958d9' }}>¥{money(holidayWm.deployableCash)}</b> · 护城河储备 <b>¥{money(holidayWm.reserveCash)}</b>
+                </div>
+              </div>
+            </div>
+
+            {holidayWm.windowNote && (
+              <div style={{ fontSize: '11.5px', color: holidayWm.isYellowCard ? '#78350f' : 'var(--sub)', lineHeight: 1.5 }}>
+                💡 {holidayWm.windowNote}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* 净值与仓位联动曲线（支持鼠标悬停 + 手机触屏滑动查点） */}
         {chartGeom && (
@@ -439,6 +682,7 @@ export default function AccountSection({
                 const barW = Math.min(22, Math.max(6, (chartGeom.iw / Math.max(4, curveSeries.pts.length)) * 0.45));
                 const topY = chartGeom.YRate(p.rate);
                 const barH = Math.max(2, chartGeom.PT + chartGeom.ih - topY);
+                const overHolLine = p.live && holidayWm.showChartLine && p.rate > holidayWm.watermarkPct + 0.1;
                 return (
                   <rect
                     key={`pos_${p.date}`}
@@ -447,10 +691,39 @@ export default function AccountSection({
                     width={barW}
                     height={barH}
                     rx="2"
-                    fill={p.rate > 80 ? 'rgba(220,38,38,0.18)' : 'rgba(59,130,246,0.16)'}
+                    fill={
+                      overHolLine
+                        ? 'rgba(217,119,6,0.32)'
+                        : p.rate > 80
+                        ? 'rgba(220,38,38,0.18)'
+                        : 'rgba(59,130,246,0.16)'
+                    }
                   />
                 );
               })}
+
+              {holidayWm.showChartLine && (
+                <g>
+                  <line
+                    x1={chartGeom.PL}
+                    y1={chartGeom.YRate(holidayWm.watermarkPct)}
+                    x2={chartGeom.PL + chartGeom.iw}
+                    y2={chartGeom.YRate(holidayWm.watermarkPct)}
+                    stroke="#d97706"
+                    strokeDasharray="5 3"
+                    strokeWidth="1.3"
+                  />
+                  <text
+                    x={chartGeom.PL + chartGeom.iw + 4}
+                    y={chartGeom.YRate(holidayWm.watermarkPct) + 3}
+                    fontSize="9.5"
+                    fontWeight="700"
+                    fill="#b45309"
+                  >
+                    节前≤{holidayWm.watermarkPct}%
+                  </text>
+                </g>
+              )}
 
               {chartGeom.areaPath && <path d={chartGeom.areaPath} fill="url(#eqAreaGrad)" />}
               <path

@@ -2,7 +2,7 @@ import React from 'react';
 import AccountSection from '../components/AccountSection.jsx';
 
 /**
- * 📊 账户资产、真实可用现金、净值曲线与收盘快照页面
+ * 📊 账户资产、真实可用现金、节前安全仓位水位线与净值曲线页面
  */
 export default function AccountPage({
   totalAssets,
@@ -11,6 +11,7 @@ export default function AccountPage({
   poolMarketValue,
   tailMarketValue,
   posRate,
+  allowedCapPct,
   cash,
   pool,
   tailActives,
@@ -34,6 +35,7 @@ export default function AccountPage({
         poolMarketValue={poolMarketValue}
         tailMarketValue={tailMarketValue}
         posRate={posRate}
+        allowedCapPct={allowedCapPct}
         cash={cash}
         pool={pool}
         tailActives={tailActives}

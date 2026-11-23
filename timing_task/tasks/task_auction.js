@@ -11,23 +11,25 @@
 
 const fs = require('fs');
 const path = require('path');
-const { ENGINE_DIR, todayStr, isWeekend, log, runScript } = require('./common');
+const { ENGINE_DIR, todayStr, getCNClock, getTradeDayStatus, nextTradeDay, log, runScript } = require('./common');
 
 async function main() {
   const force = process.argv.includes('--force');
-  const today = todayStr();
+  const now = new Date();
+  const ck = getCNClock(now);
+  const today = todayStr(now);
+  const tdStatus = getTradeDayStatus(now);
 
   log(`════════════════════════════════════════════════════════════`);
   log(`⚡ [09:26 定时任务] 启动集合竞价存档与校准流水线 (${today})`);
   log(`════════════════════════════════════════════════════════════`);
 
-  if (isWeekend() && !force) {
-    log(`⚠️ 今日是周末非交易日，跳过集合竞价任务（使用 --force 可强制运行）`);
+  if (!tdStatus.isTradeDay && !force) {
+    log(`⚠️ 今日为【${tdStatus.label}】（下一交易日 ${nextTradeDay(today)}），跳过集合竞价任务（使用 --force 可强制运行）`);
     return;
   }
 
-  const now = new Date();
-  const hhmm = now.getHours() * 100 + now.getMinutes();
+  const hhmm = ck.hhmm;
   const auctionArgs = force ? ['--force'] : [];
 
   if (!force && (hhmm < 920 || hhmm > 935)) {

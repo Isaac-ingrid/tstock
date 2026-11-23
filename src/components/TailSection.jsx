@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { f2, pct, money, toastOk, toastWarn, toastErr } from '../services/utils.js';
+import { getUpcomingHolidayReminder, syncRemoteTradeCalendar, getCNClock, isAShareTradeDay } from '../services/calendar.js';
+import { evaluatePreTradeHolidayGuard } from '../services/risk.js';
 import { getTailBuyCandidates } from '../services/tail.js';
 import {
   runTailScan,
@@ -16,6 +18,8 @@ export default function TailSection({
   pool = [],
   totalAssets,
   cash = null,
+  currentMktVal = null,
+  allowedCapPct = 80,
   actives = [],
   wbLatest,
   tiltState = null,
@@ -28,8 +32,10 @@ export default function TailSection({
   onSelectStock,
   onJumpIgnition,
   onTabChange,
+  referenceDate = null,
 }) {
-  const tenPctBudget = (Number(totalAssets) || 100000) * 0.10;
+  const assetsNum = Math.max(1, Number(totalAssets) || 100000);
+  const tenPctBudget = assetsNum * 0.10;
   const allCandidates = useMemo(
     () => getTailBuyCandidates(wbLatest, { limit: 24, totalAssetsOverride: totalAssets }),
     [wbLatest, totalAssets]
@@ -44,9 +50,39 @@ export default function TailSection({
   const [expandedExtraCode, setExpandedExtraCode] = useState('');
   const [scanning, setScanning] = useState(false);
   const [scanStatus, setScanStatus] = useState(null);
+  const [calTick, setCalTick] = useState(0);
 
   const [trackedCodes, setTrackedCodes] = useState(() => new Set(loadLocalTrackedCodes()));
   const [trackBusyCode, setTrackBusyCode] = useState('');
+
+  useEffect(() => {
+    let mounted = true;
+    syncRemoteTradeCalendar().then(() => {
+      if (mounted) setCalTick((t) => t + 1);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const holidayReminder = useMemo(
+    () => getUpcomingHolidayReminder(referenceDate || new Date()),
+    [referenceDate, calTick]
+  );
+
+  const effectiveCurrentMkt = useMemo(() => {
+    if (currentMktVal != null && Number.isFinite(Number(currentMktVal))) {
+      return Math.max(0, Number(currentMktVal));
+    }
+    const pMkt = (pool || []).reduce((acc, s) => acc + (+s.shares || 0) * (+s.price || +s.cost || 0), 0);
+    const tMkt = (actives || []).reduce(
+      (acc, t) => acc + (t.status === 'closed' ? 0 : (+t.shares || 0) * (+t.price || +t.cost || 0)),
+      0
+    );
+    return Math.max(0, pMkt + tMkt);
+  }, [currentMktVal, pool, actives]);
+
+  const currentPosPct = +((effectiveCurrentMkt / assetsNum) * 100).toFixed(1);
 
   const inPoolCodes = useMemo(
     () => new Set((pool || []).map((s) => String(s.code).padStart(6, '0'))),
@@ -142,10 +178,11 @@ export default function TailSection({
     [onAddStock]
   );
 
-  const now = new Date();
-  const mins = now.getHours() * 60 + now.getMinutes();
-  const isTailTime = mins >= 870 && mins < 895; // 14:30 - 14:55
-  const isExitTime = mins >= 570 && mins < 600; // 09:30 - 10:00
+  const now = referenceDate ? new Date(referenceDate) : new Date();
+  const cnNow = getCNClock(now);
+  const isTradeToday = isAShareTradeDay(now);
+  const isTailTime = isTradeToday && cnNow.mins >= 870 && cnNow.mins < 895; // 14:30 - 14:55
+  const isExitTime = isTradeToday && cnNow.mins >= 570 && cnNow.mins < 600; // 09:30 - 10:00
 
   const handlePriceChange = (code, val) => {
     setInputPrices((prev) => ({ ...prev, [code]: val }));
@@ -155,13 +192,28 @@ export default function TailSection({
     setInputQtys((prev) => ({ ...prev, [code]: val }));
   };
 
-  const handleBuy = (cand) => {
+  const handleBuy = (cand, fallbackQty = null) => {
     if (isTiltLocked) {
       toastWarn('🔒 单日防上头熔断保护中：今日已锁定尾盘新开仓，防止亏损日尾盘博弈加码');
       return;
     }
     const px = parseFloat(inputPrices[cand.code]) || cand.price;
-    const qty = parseInt(inputQtys[cand.code], 10) || cand.recShares;
+    const qty = parseInt(inputQtys[cand.code], 10) || fallbackQty || cand.recShares;
+    const preGuard = evaluatePreTradeHolidayGuard({
+      currentMkt: effectiveCurrentMkt,
+      buyAmt: Math.max(0, (px || 0) * (qty || 0)),
+      unitPrice: px,
+      totalAssets: assetsNum,
+      emotionCapPct: allowedCapPct,
+      holidayReminder,
+      isTailBuy: true,
+      stockName: cand.name || cand.code,
+    });
+    if (preGuard.willExceedCap) {
+      if (!window.confirm(preGuard.confirmPromptText)) {
+        return;
+      }
+    }
     onExecTailBuy(cand, px, qty);
   };
 
@@ -197,6 +249,10 @@ export default function TailSection({
       setScanning(false);
     }
   };
+
+  const holidayEffectiveCap = holidayReminder?.isHighAlert
+    ? Math.min(allowedCapPct, holidayReminder.suggestedMaxPosPct || (holidayReminder.closedDays >= 7 ? 30 : 50))
+    : allowedCapPct;
 
   return (
     <section id="secTailBuy" className="tail-section" style={{ marginTop: '8px' }}>
@@ -273,6 +329,29 @@ export default function TailSection({
             <b>🛑 单日防上头熔断锁已激活：</b>
             {(tiltState?.reasons || []).join('；')}。已自动锁定「尾盘新开潜伏仓」，严防日内连亏后尾盘重仓博傻；上方已有隔夜持仓的
             <b>「⚡ 平仓回笼现金」不受影响</b>。
+          </div>
+        </div>
+      )}
+
+      {/* 连续≥3天长假前1-2个交易日：尾盘潜伏跨假锁仓与控仓黄牌提醒横幅 */}
+      {!isTiltLocked && holidayReminder?.isHighAlert && (
+        <div
+          className={`pr-holiday-warn-bar ${holidayReminder.remainingTradeDays === 1 ? 'is-final' : ''}`}
+          style={{ marginBottom: '12px' }}
+        >
+          <div className="pr-hw-main">
+            <span className="pr-hw-badge">
+              🟨 {holidayReminder.remainingTradeDays === 1 ? '尾盘跨假锁仓黄牌' : '节前尾盘控仓提醒'}
+            </span>
+            <span className="pr-hw-txt">
+              距<b>{holidayReminder.holidayName}</b>连休 <b>{holidayReminder.closedDays}天</b>（
+              {holidayReminder.closureStart.slice(5)}~{holidayReminder.closureEnd.slice(5)}，
+              {holidayReminder.reopenDate.slice(5)} 开市）仅剩 <b>{holidayReminder.remainingTradeDays}</b> 个交易日；
+              当前账户总仓位 <b>{currentPosPct.toFixed(1)}%</b>，节前建议上限 <b>≤{holidayEffectiveCap}%</b>。
+              {holidayReminder.remainingTradeDays === 1
+                ? ` 今日尾盘买入受 T+1 限制将无法「次日早盘冲高兑现」，筹码需锁定跨越整个 ${holidayReminder.closedDays} 天长假至 ${holidayReminder.reopenDate.slice(5)} 开市；若买后总仓超上限将触发二次确认。`
+                : ` 明日即为节前收官日，尾盘隔夜仓易受节前兑现抛压影响，买后总仓若超 ≤${holidayEffectiveCap}% 上限将触发二次确认。`}
+            </span>
           </div>
         </div>
       )}
@@ -481,7 +560,7 @@ export default function TailSection({
                     }}
                   >
                     <span style={{ fontSize: '11.5px', color: 'var(--sub)' }}>
-                      止盈目标: <b>{act.tp1 ? `¥${f2(act.tp1)} (+2.5%)` : '冲高 +2.5%'}</b>
+                      止盈目标: <b>{act.tp1 ? `¥{f2(act.tp1)} (+2.5%)`.replace('{f2(act.tp1)}', f2(act.tp1)) : '冲高 +2.5%'}</b>
                       {act.stop ? ` ｜ 止损 ¥${f2(act.stop)}` : ''}
                     </span>
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
@@ -555,6 +634,18 @@ export default function TailSection({
           candidates.map((cand) => {
             const defaultPrice = inputPrices[cand.code] !== undefined ? inputPrices[cand.code] : cand.price;
             const defaultQty = inputQtys[cand.code] !== undefined ? inputQtys[cand.code] : cand.recShares;
+            const curBuyPx = parseFloat(defaultPrice) || cand.price || 0;
+            const curBuyQty = parseInt(defaultQty, 10) || 0;
+            const candHolidayGuard = evaluatePreTradeHolidayGuard({
+              currentMkt: effectiveCurrentMkt,
+              buyAmt: Math.max(0, curBuyPx * curBuyQty),
+              unitPrice: curBuyPx,
+              totalAssets: assetsNum,
+              emotionCapPct: allowedCapPct,
+              holidayReminder,
+              isTailBuy: true,
+              stockName: cand.name,
+            });
 
             return (
               <div key={cand.code} className={`tail-cand-card ${cand.rankClass}`}>
@@ -642,6 +733,31 @@ export default function TailSection({
                   ))}
                 </div>
 
+                {!isTiltLocked && candHolidayGuard.willExceedCap && (
+                  <div className="bcc-holiday-warn" style={{ marginBottom: '8px' }}>
+                    <div>
+                      🟨 <b>节前控仓黄牌：</b>买后总仓将由 <b>{candHolidayGuard.beforePosPct.toFixed(1)}%</b> 升至{' '}
+                      <b>{candHolidayGuard.afterPosPct.toFixed(1)}%</b>，超出{candHolidayGuard.capSourceLabel}{' '}
+                      <b>{candHolidayGuard.overPct}%</b>
+                      {candHolidayGuard.remainingTradeDays === 1
+                        ? `（今日买单将跨假锁仓 ${candHolidayGuard.closedDays} 天至 ${candHolidayGuard.reopenDate.slice(5)} 开市）`
+                        : ''}
+                    </div>
+                    <div className="bcc-hw-row">
+                      <span>{candHolidayGuard.safeCapHint}</span>
+                      {candHolidayGuard.maxSafeShares >= 100 && (
+                        <button
+                          type="button"
+                          className="bcc-chip holiday-cap"
+                          onClick={() => handleQtyChange(cand.code, candHolidayGuard.maxSafeShares)}
+                        >
+                          按节前上限({candHolidayGuard.maxSafeShares}股)
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 <div className="tcc-act-bar">
                   <div className="tcc-inputs">
                     <div className="tcc-inp-row">
@@ -691,7 +807,7 @@ export default function TailSection({
                   <button
                     type="button"
                     className="btn-tb-buy"
-                    onClick={() => handleBuy(cand)}
+                    onClick={() => handleBuy(cand, cand.recShares)}
                     style={
                       isTiltLocked
                         ? {
@@ -700,10 +816,20 @@ export default function TailSection({
                             border: '1px solid #fca5a5',
                             cursor: 'not-allowed',
                           }
+                        : candHolidayGuard.willExceedCap
+                        ? {
+                            background: 'linear-gradient(135deg, #d97706 0%, #b45309 100%)',
+                            color: '#fff',
+                            border: '1px solid #b45309',
+                          }
                         : undefined
                     }
                   >
-                    {isTiltLocked ? '🔒 熔断期禁开尾盘仓' : '🚀 一键执行尾盘潜伏建仓'}
+                    {isTiltLocked
+                      ? '🔒 熔断期禁开尾盘仓'
+                      : candHolidayGuard.willExceedCap
+                      ? '🟨 节前超上限 · 二次确认建仓'
+                      : '🚀 一键执行尾盘潜伏建仓'}
                   </button>
                 </div>
               </div>
@@ -731,6 +857,20 @@ export default function TailSection({
               const isOpen = expandedExtraCode === cand.code;
               const defaultPrice = inputPrices[cand.code] !== undefined ? inputPrices[cand.code] : cand.price;
               const defaultQty = inputQtys[cand.code] !== undefined ? inputQtys[cand.code] : cand.halfShares;
+              const curBuyPx = parseFloat(defaultPrice) || cand.price || 0;
+              const curBuyQty = parseInt(defaultQty, 10) || 0;
+              const extraHolidayGuard = isOpen
+                ? evaluatePreTradeHolidayGuard({
+                    currentMkt: effectiveCurrentMkt,
+                    buyAmt: Math.max(0, curBuyPx * curBuyQty),
+                    unitPrice: curBuyPx,
+                    totalAssets: assetsNum,
+                    emotionCapPct: allowedCapPct,
+                    holidayReminder,
+                    isTailBuy: true,
+                    stockName: cand.name,
+                  })
+                : null;
 
               return (
                 <div key={cand.code} className="tail-extra-row">
@@ -789,6 +929,27 @@ export default function TailSection({
 
                   {isOpen && (
                     <div className="ter-buy-drawer">
+                      {!isTiltLocked && extraHolidayGuard?.willExceedCap && (
+                        <div className="bcc-holiday-warn" style={{ marginBottom: '8px' }}>
+                          <div>
+                            🟨 <b>节前控仓黄牌：</b>买后总仓将由 <b>{extraHolidayGuard.beforePosPct.toFixed(1)}%</b> 升至{' '}
+                            <b>{extraHolidayGuard.afterPosPct.toFixed(1)}%</b>，超出{extraHolidayGuard.capSourceLabel}{' '}
+                            <b>{extraHolidayGuard.overPct}%</b>
+                          </div>
+                          <div className="bcc-hw-row">
+                            <span>{extraHolidayGuard.safeCapHint}</span>
+                            {extraHolidayGuard.maxSafeShares >= 100 && (
+                              <button
+                                type="button"
+                                className="bcc-chip holiday-cap"
+                                onClick={() => handleQtyChange(cand.code, extraHolidayGuard.maxSafeShares)}
+                              >
+                                按节前上限({extraHolidayGuard.maxSafeShares}股)
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
                       <div className="tcc-inputs">
                         <div className="tcc-inp-row">
                           <span className="k">买入价 ¥</span>
@@ -836,7 +997,7 @@ export default function TailSection({
                         <button
                           type="button"
                           className="btn-tb-buy"
-                          onClick={() => handleBuy(cand)}
+                          onClick={() => handleBuy(cand, cand.halfShares)}
                           style={{
                             padding: '5px 14px',
                             minHeight: '30px',
@@ -848,10 +1009,20 @@ export default function TailSection({
                                   border: '1px solid #fca5a5',
                                   cursor: 'not-allowed',
                                 }
+                              : extraHolidayGuard?.willExceedCap
+                              ? {
+                                  background: 'linear-gradient(135deg, #d97706 0%, #b45309 100%)',
+                                  color: '#fff',
+                                  border: '1px solid #b45309',
+                                }
                               : {}),
                           }}
                         >
-                          {isTiltLocked ? '🔒 熔断禁买' : `🚀 确认买入 ${cand.name}`}
+                          {isTiltLocked
+                            ? '🔒 熔断禁买'
+                            : extraHolidayGuard?.willExceedCap
+                            ? `🟨 二次确认买 ${cand.name}`
+                            : `🚀 确认买入 ${cand.name}`}
                         </button>
                       </div>
                     </div>

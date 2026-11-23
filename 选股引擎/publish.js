@@ -75,12 +75,8 @@ const tail = (() => {
   };
 })();
 
-/* ---------- 交易日推算（用于复核日期） ---------- */
-const nextTradeDay = (d) => {
-  const t = new Date(d + 'T00:00:00+08:00');
-  do { t.setDate(t.getDate() + 1); } while (t.getDay() === 0 || t.getDay() === 6);
-  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
-};
+/* ---------- 交易日推算（用于复核日期，自动跳过周末与法定节假日） ---------- */
+const { nextTradeDay } = require('../timing_task/tasks/trade_calendar');
 
 /* ---------- 代码归一 ---------- */
 const norm = (c) => {

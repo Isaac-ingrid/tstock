@@ -14,6 +14,7 @@ export const MISTAKE_DICTIONARY = [
   { id: 't_to_add', category: '定位混乱', name: '做T做反变加仓', icon: '🔄', desc: '正T买入后未冲高，尾盘舍不得平仓导致日内T仓变成隔夜加仓' },
   { id: 'early_exit', category: '持股耐心', name: '过早卖飞大肉', icon: '🕊️', desc: '上升通道趋势完好未破均线，赚一点小钱就恐慌下车卖飞主升大肉' },
   { id: 'against_trend', category: '大局观', name: '逆市顶风作案', icon: '🚨', desc: '大盘环境亮红灯 BAD（双破 MA20/60）或个股触发破位锁时强行做多' },
+  { id: 'pre_holiday_overcap', category: '节前风控', name: '节前长假超限建仓', icon: '🏮', desc: '连续≥3天法定长假前1-2个交易日无视控仓黄牌，买后总仓位突破节前上限（7天长假≤30% / 3-6天小长假≤50%）重仓过节' },
   { id: 'heavy_gamble', category: '仓位控制', name: '短线重仓单赌', icon: '💣', desc: '单笔短线仓位过重，导致盘中心态严重变形' },
   { id: 'impulse_t', category: '节奏失序', name: '无量冲动乱T', icon: '⚡', desc: '日内振幅不足 2.6 格、无量织布时强行开仓磨损手续费' },
   { id: 'revenge_trade', category: '心态失衡', name: '报复性交易', icon: '💢', desc: '当日连续亏损后急于翻本，盲目逆向高频开新仓' },
@@ -38,6 +39,8 @@ export default function LedgerSection({
   onUpdateLog,
   onDeleteLog,
   pool = [],
+  tailActives = [],
+  allowedCapPct = null,
   totalAssets = 100000,
   vaultStatus = null,
   onForceSyncVault,
@@ -247,7 +250,18 @@ export default function LedgerSection({
     return benchmark;
   }, [form.stock, form.dir, form.qty, wbLatest, pool]);
 
-  const handleFormChange = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
+  const isOpenBuyOnlyDir = (d) => d === '底仓建仓' || d === '尾盘买入' || d === '买入建仓' || d === '买入加仓';
+  const handleFormChange = (k, v) =>
+    setForm(prev => {
+      const next = { ...prev, [k]: v };
+      if (k === 'track') {
+        next.dir = v === 'long_t' ? '正T' : '尾盘平仓';
+      }
+      if ((k === 'dir' && isOpenBuyOnlyDir(v)) || (k === 'track' && isOpenBuyOnlyDir(next.dir))) {
+        next.sell = '';
+      }
+      return next;
+    });
 
   const toggleMistakeTag = (tagId) => {
     setForm(prev => {
@@ -275,17 +289,20 @@ export default function LedgerSection({
   const handleSubmit = (e) => {
     e.preventDefault();
     const b = parseFloat(form.buy) || 0;
-    const s = parseFloat(form.sell) || 0;
+    const openOnlyBuy = isOpenBuyOnlyDir(form.dir);
+    const s = openOnlyBuy ? 0 : (parseFloat(form.sell) || 0);
     const q = parseInt(form.qty, 10) || 0;
-    if (b <= 0 || s <= 0 || q <= 0) {
-      toastErr('请输入正确的买卖价格与股数');
+    if (b <= 0 || q <= 0 || (!openOnlyBuy && s <= 0)) {
+      toastErr(openOnlyBuy ? '请输入正确的建仓买入价与股数' : '请输入正确的买卖价格与股数');
       return;
     }
-    const gross = (s - b) * q;
     const buyFee = Math.max(5, b * q * 0.00025) + b * q * 0.00001;
-    const sellFee = Math.max(5, s * q * 0.00025) + s * q * 0.00051;
+    const sellFee = openOnlyBuy ? 0 : (Math.max(5, s * q * 0.00025) + s * q * 0.00051);
     const fee = Math.round((buyFee + sellFee) * 100) / 100;
-    const net = Math.round((gross - fee) * 100) / 100;
+    const gross = openOnlyBuy ? 0 : (s - b) * q;
+    const net = openOnlyBuy
+      ? (form.dir === '尾盘买入' ? -Math.round(buyFee * 100) / 100 : 0)
+      : Math.round((gross - fee) * 100) / 100;
 
     const audit = auditTradeExecution({
       stockText: form.stock,
@@ -301,6 +318,8 @@ export default function LedgerSection({
       prevLogs: logs,
       wbLatest,
       poolList: pool,
+      tailActives,
+      allowedCapPct,
       totalAssets,
       date: form.date,
     });
@@ -320,6 +339,9 @@ export default function LedgerSection({
       plan: audit.plan,
       basis: audit.basis,
       mistakeTags: audit.mistakeTags,
+      postBuyPosPct: audit.postBuyPosPct,
+      holidayCapPct: audit.holidayCapPct,
+      preHolidayContext: audit.preHolidayContext,
       note: form.note,
       reflection: form.reflection,
       satisfaction: form.satisfaction,
@@ -357,8 +379,12 @@ export default function LedgerSection({
       plan: editingLog.plan,
       basis: editingLog.basis,
       mistakeTags: editingLog.mistakeTags || [],
+      postBuyPosPct: editingLog.postBuyPosPct ?? null,
+      holidayCapPct: editingLog.holidayCapPct ?? null,
       wbLatest,
       poolList: pool,
+      tailActives,
+      allowedCapPct,
       totalAssets,
       date: editingLog.date,
     });
@@ -367,6 +393,9 @@ export default function LedgerSection({
       plan: editingLog.plan,
       track: editingLog.track,
       mistakeTags: editingLog.mistakeTags || [],
+      postBuyPosPct: editingLog.postBuyPosPct !== undefined ? editingLog.postBuyPosPct : audit.postBuyPosPct,
+      holidayCapPct: editingLog.holidayCapPct !== undefined ? editingLog.holidayCapPct : audit.holidayCapPct,
+      preHolidayContext: editingLog.preHolidayContext || audit.preHolidayContext,
       reflection: editingLog.reflection || '',
       note: editingLog.note || '',
       systemBenchmark: editingLog.systemBenchmark || audit.systemBenchmark,
@@ -381,7 +410,7 @@ export default function LedgerSection({
   // 提取已平仓闭环交易记录
   const closedTLogs = useMemo(() => {
     return filteredLogs.filter(lg => {
-      const isPureBuy = lg.dir === '买入建仓' || lg.dir === '买入加仓' || lg.dir === '直接买入' || lg.dir === '尾盘买入';
+      const isPureBuy = lg.dir === '买入建仓' || lg.dir === '底仓建仓' || lg.dir === '买入加仓' || lg.dir === '直接买入' || lg.dir === '尾盘买入';
       return !isPureBuy && (lg.buy > 0 && lg.sell > 0);
     });
   }, [filteredLogs]);
@@ -1742,6 +1771,7 @@ export default function LedgerSection({
                     ) : (
                       <>
                         <option value="尾盘平仓">尾盘黑马隔夜平仓</option>
+                        <option value="尾盘买入">尾盘黑马潜伏建仓（隔夜持仓）</option>
                         <option value="连板追涨">连板起爆打板</option>
                         <option value="龙头抄底">超跌龙头反弹低吸</option>
                         <option value="冲高止盈">短线冲高兑现落袋</option>
@@ -1789,8 +1819,17 @@ export default function LedgerSection({
                   )}
                 </div>
                 <div className="fld">
-                  <label>卖出价 (元)</label>
-                  <input type="number" inputMode="decimal" step="0.01" value={form.sell} onChange={e => handleFormChange('sell', e.target.value)} required />
+                  <label>{isOpenBuyOnlyDir(form.dir) ? '卖出价 (单边建仓免填)' : '卖出价 (元)'}</label>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.01"
+                    value={form.sell}
+                    onChange={e => handleFormChange('sell', e.target.value)}
+                    placeholder={isOpenBuyOnlyDir(form.dir) ? '单边建仓免填（平仓后计入闭环）' : ''}
+                    disabled={isOpenBuyOnlyDir(form.dir)}
+                    required={!isOpenBuyOnlyDir(form.dir)}
+                  />
                   {matchedSysBenchmark && (
                     <div className="qt-quick-chips">
                       {matchedSysBenchmark.sysSell1 > 0 && (

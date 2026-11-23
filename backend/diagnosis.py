@@ -8,8 +8,9 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 from .limitup import get_limitup_pool
-from .market_data import BoundedTTLCache, fetch_kline_rows
+from .market_data import BoundedTTLCache, fetch_em_klines, fetch_kline_rows
 from .patterns import analyze_kline_patterns
+from .trade_calendar import cn_today, cn_today_iso, get_market_calendar_snapshot
 
 # 带容量上限的内存缓存，避免频繁请求上游与内存泄漏 (TTL 15 秒，上限 256 支)
 CACHE_TTL_SECONDS = 15.0
@@ -72,6 +73,299 @@ def calc_rsi(closes: List[float], period: int = 6) -> float:
         return 100.0 if ag > 0 else 50.0
     rs = ag / al
     return round(100.0 - (100.0 / (1.0 + rs)), 1)
+
+
+def calc_cyq_chips(
+    raw_bars: List[Any],
+    cur_price: Optional[float] = None,
+    float_cap_yi: float = 0.0,
+    latest_turnover_pct: float = 0.0,
+    period: int = 210,
+    bins: int = 150,
+    decay_coeff: float = 1.0,
+    profile_bins: int = 44,
+) -> Dict[str, Any]:
+    """
+    210日换手衰减筹码分布（CYQ / Position Cost Distribution）计算器：
+    参考 InStock 与东方财富 CYQ 标准模型（默认 210 个交易日、150 档价格栅格）：
+    1. 历史筹码挥发衰减：每日存量筹码按 (1 - 当日换手率 × 衰减系数) 自然衰减，近期换手自动洗出远期老筹码；
+    2. 日内三角形分布：当日新增换手筹码在 [最低价, 典型均价, 最高价] 区间按三角形概率密度分配（一字板归入单档）；
+    3. 输出指标：CYQ 加权筹码均价 (avgCost)、主峰成本 (peakPrice)、获利比例 (profitRatio)、
+       90%/70% 筹码成本区间及集中度 ((高值 - 低值) / (高值 + 低值))。
+    """
+    def _f(v: Any, d: float = 0.0) -> float:
+        try:
+            return float(v) if v not in (None, "", "-", "--", "—") else d
+        except (TypeError, ValueError):
+            return d
+
+    norm: List[Dict[str, Any]] = []
+    for row in raw_bars or []:
+        if isinstance(row, dict):
+            o = _f(row.get("open"))
+            c = _f(row.get("close"))
+            h = _f(row.get("high"))
+            lo = _f(row.get("low"))
+            vol = _f(row.get("vol"))
+            amt = _f(row.get("amount"))
+            raw_to = row.get("turnover")
+            to_val = _f(raw_to, -1.0) if raw_to is not None else -1.0
+        elif isinstance(row, (list, tuple)) and len(row) >= 6:
+            o = _f(row[1])
+            c = _f(row[2])
+            h = _f(row[3])
+            lo = _f(row[4])
+            vol = _f(row[5])
+            amt = _f(row[6]) if len(row) > 6 else 0.0
+            to_val = _f(row[7], -1.0) if len(row) > 7 and row[7] is not None else -1.0
+        else:
+            continue
+
+        if c <= 0 or h <= 0 or lo <= 0:
+            continue
+        if h < lo:
+            h, lo = lo, h
+        norm.append({
+            "open": o if o > 0 else c,
+            "close": c,
+            "high": max(h, c),
+            "low": min(lo, c),
+            "vol": max(0.0, vol),
+            "amount": max(0.0, amt),
+            "turnover": to_val if to_val > 0 else None,
+        })
+
+    if not norm:
+        px0 = round(float(cur_price or 0.0), 2)
+        return {
+            "cyqDays": 0,
+            "avgCost": px0,
+            "peakPrice": px0,
+            "profitRatio": 50.0,
+            "diffFromCost": 0.0,
+            "cost90Low": px0,
+            "cost90High": px0,
+            "concentration90": 0.0,
+            "cost70Low": px0,
+            "cost70High": px0,
+            "concentration70": 0.0,
+            "concentrationTag": "moderate",
+            "concentrationLabel": "筹码适度集中",
+            "cyqProfile": [],
+        }
+
+    window_bars = norm[-max(1, int(period)) :]
+    px = float(cur_price) if (cur_price is not None and float(cur_price) > 0) else window_bars[-1]["close"]
+
+    # 推算流通股本（单位：手），用于腾讯免 WAF 源缺失单日换手率字段时精确还原历史换手率
+    float_lots = 0.0
+    for b in reversed(window_bars[-20:]):
+        if b["turnover"] is not None and b["turnover"] > 0.02 and b["vol"] > 0:
+            float_lots = b["vol"] / (b["turnover"] / 100.0)
+            break
+    if float_lots <= 0 and float_cap_yi > 0 and px > 0:
+        float_lots = (float(float_cap_yi) * 1.0e6) / px
+
+    pos_vols = [b["vol"] for b in window_bars if b["vol"] > 0]
+    avg_vol = (sum(pos_vols) / len(pos_vols)) if pos_vols else 0.0
+
+    min_p = min(b["low"] for b in window_bars)
+    max_p = max(b["high"] for b in window_bars)
+    num_bins = max(20, int(bins))
+
+    if max_p - min_p < 1e-6:
+        flat_cost = round(min_p, 2)
+        p_ratio = 100.0 if px > min_p else (50.0 if abs(px - min_p) <= 1e-6 else 0.0)
+        diff_pct = round(((px - flat_cost) / flat_cost) * 100.0, 2) if flat_cost > 0 else 0.0
+        return {
+            "cyqDays": len(window_bars),
+            "avgCost": flat_cost,
+            "peakPrice": flat_cost,
+            "profitRatio": p_ratio,
+            "diffFromCost": diff_pct,
+            "cost90Low": flat_cost,
+            "cost90High": flat_cost,
+            "concentration90": 0.0,
+            "cost70Low": flat_cost,
+            "cost70High": flat_cost,
+            "concentration70": 0.0,
+            "concentrationTag": "tight",
+            "concentrationLabel": "单峰高度密集",
+            "cyqProfile": [{"p": flat_cost, "pct": 100.0}],
+        }
+
+    step = (max_p - min_p) / (num_bins - 1)
+    grid = [min_p + k * step for k in range(num_bins)]
+    chip_mass = [0.0] * num_bins
+    coeff = max(0.1, float(decay_coeff))
+    last_idx = len(window_bars) - 1
+
+    for idx_b, b in enumerate(window_bars):
+        vol_b = b["vol"]
+        if vol_b <= 0:
+            continue
+        if b["turnover"] is not None and b["turnover"] > 0:
+            turn_pct = b["turnover"]
+        elif idx_b == last_idx and latest_turnover_pct > 0:
+            turn_pct = float(latest_turnover_pct)
+        elif float_lots > 0:
+            turn_pct = (vol_b / float_lots) * 100.0
+        elif avg_vol > 0:
+            turn_pct = (vol_b / avg_vol) * 2.0
+        else:
+            turn_pct = 2.0
+
+        hsl = min(0.99, max(0.0005, (turn_pct / 100.0) * coeff))
+        remain = 1.0 - hsl
+        for k in range(num_bins):
+            chip_mass[k] *= remain
+
+        lo, hi, o, c = b["low"], b["high"], b["open"], b["close"]
+        if b["amount"] > 0 and vol_b > 0:
+            vwap_b = b["amount"] / (vol_b * 100.0)
+            avg_p = vwap_b if (lo <= vwap_b <= hi) else ((o + c + hi + lo) / 4.0)
+        else:
+            avg_p = (o + c + hi + lo) / 4.0
+        avg_p = max(lo, min(hi, avg_p))
+
+        if hi - lo <= step * 0.5:
+            k_idx = max(0, min(num_bins - 1, int(round((c - min_p) / step))))
+            chip_mass[k_idx] += hsl
+            continue
+
+        k_start = max(0, int((lo - min_p) / step) - 1)
+        k_end = min(num_bins - 1, int((hi - min_p) / step) + 1)
+        weights: List[Tuple[int, float]] = []
+        w_sum = 0.0
+        for k in range(k_start, k_end + 1):
+            seg_lo = max(lo, grid[k] - 0.5 * step)
+            seg_hi = min(hi, grid[k] + 0.5 * step)
+            if seg_hi <= seg_lo:
+                continue
+            mid = 0.5 * (seg_lo + seg_hi)
+            if mid <= avg_p:
+                height = ((mid - lo) / (avg_p - lo)) if (avg_p - lo) > 1e-9 else 1.0
+            else:
+                height = ((hi - mid) / (hi - avg_p)) if (hi - avg_p) > 1e-9 else 1.0
+            w = max(0.0, height) * (seg_hi - seg_lo)
+            if w > 0:
+                weights.append((k, w))
+                w_sum += w
+
+        if w_sum > 0:
+            scale = hsl / w_sum
+            for k, w in weights:
+                chip_mass[k] += w * scale
+        else:
+            k_idx = max(0, min(num_bins - 1, int(round((c - min_p) / step))))
+            chip_mass[k_idx] += hsl
+
+    total_mass = sum(chip_mass)
+    if total_mass <= 0:
+        pdf = [1.0 / num_bins] * num_bins
+    else:
+        pdf = [m / total_mass for m in chip_mass]
+
+    avg_cost = sum(p * w for p, w in zip(grid, pdf))
+
+    profit_mass = 0.0
+    for k, w in enumerate(pdf):
+        if w <= 0:
+            continue
+        b_lo = grid[k] - 0.5 * step
+        b_hi = grid[k] + 0.5 * step
+        if px >= b_hi:
+            profit_mass += w
+        elif px > b_lo:
+            profit_mass += w * ((px - b_lo) / step)
+    profit_ratio = max(0.0, min(100.0, profit_mass * 100.0))
+
+    def _quantile(q: float) -> float:
+        cum = 0.0
+        for k, w in enumerate(pdf):
+            nxt = cum + w
+            if nxt >= q and w > 0:
+                b_lo = max(min_p, grid[k] - 0.5 * step)
+                b_hi = min(max_p, grid[k] + 0.5 * step)
+                frac = max(0.0, min(1.0, (q - cum) / w))
+                return b_lo + frac * (b_hi - b_lo)
+            cum = nxt
+        return max_p
+
+    cost90_low = _quantile(0.05)
+    cost90_high = _quantile(0.95)
+    cost70_low = _quantile(0.15)
+    cost70_high = _quantile(0.85)
+
+    conc90 = ((cost90_high - cost90_low) / (cost90_high + cost90_low) * 100.0) if (cost90_high + cost90_low) > 0 else 0.0
+    conc70 = ((cost70_high - cost70_low) / (cost70_high + cost70_low) * 100.0) if (cost70_high + cost70_low) > 0 else 0.0
+
+    smooth_pdf = (
+        [0.65 * pdf[0] + 0.35 * pdf[1]]
+        + [0.25 * pdf[k - 1] + 0.50 * pdf[k] + 0.25 * pdf[k + 1] for k in range(1, num_bins - 1)]
+        + [0.35 * pdf[-2] + 0.65 * pdf[-1]]
+    )
+    peak_idx = max(range(num_bins), key=lambda k: smooth_pdf[k])
+    peak_price = grid[peak_idx]
+
+    if conc90 <= 10.0 or (conc90 <= 12.0 and conc70 <= 6.5):
+        conc_tag = "tight"
+        conc_label = "单峰高度密集"
+    elif conc90 <= 18.0:
+        conc_tag = "moderate"
+        conc_label = "筹码适度集中"
+    else:
+        conc_tag = "dispersed"
+        conc_label = "多峰发散博弈"
+
+    # 区间重叠守恒重采样：将 150 档精细密度无锯齿聚合为精简版横向筹码柱数组（默认 44 档，低价->高价）
+    cyq_profile: List[Dict[str, float]] = []
+    m_bins = min(num_bins, max(0, int(profile_bins))) if profile_bins and profile_bins > 0 else 0
+    if m_bins >= 8:
+        p_step = (max_p - min_p) / m_bins
+        coarse_mass = [0.0] * m_bins
+        for k, w in enumerate(pdf):
+            if w <= 0:
+                continue
+            f_lo = max(min_p, grid[k] - 0.5 * step)
+            f_hi = min(max_p, grid[k] + 0.5 * step)
+            f_w = f_hi - f_lo
+            if f_w <= 1e-12:
+                j_idx = min(m_bins - 1, max(0, int((grid[k] - min_p) / p_step)))
+                coarse_mass[j_idx] += w
+                continue
+            j_start = max(0, int((f_lo - min_p) / p_step))
+            j_end = min(m_bins - 1, int((f_hi - min_p) / p_step))
+            for j in range(j_start, j_end + 1):
+                c_lo = min_p + j * p_step
+                c_hi = c_lo + p_step
+                ov = min(f_hi, c_hi) - max(f_lo, c_lo)
+                if ov > 0:
+                    coarse_mass[j] += w * (ov / f_w)
+        c_tot = sum(coarse_mass) or 1.0
+        for j in range(m_bins):
+            p_mid = min_p + (j + 0.5) * p_step
+            cyq_profile.append({
+                "p": round(p_mid, 2),
+                "pct": round((coarse_mass[j] / c_tot) * 100.0, 3),
+            })
+
+    return {
+        "cyqDays": len(window_bars),
+        "avgCost": round(avg_cost, 2),
+        "peakPrice": round(peak_price, 2),
+        "profitRatio": round(profit_ratio, 1),
+        "diffFromCost": round(((px - avg_cost) / avg_cost) * 100.0, 2) if avg_cost > 0 else 0.0,
+        "cost90Low": round(cost90_low, 2),
+        "cost90High": round(cost90_high, 2),
+        "concentration90": round(conc90, 2),
+        "cost70Low": round(cost70_low, 2),
+        "cost70High": round(cost70_high, 2),
+        "concentration70": round(conc70, 2),
+        "concentrationTag": conc_tag,
+        "concentrationLabel": conc_label,
+        "cyqProfile": cyq_profile,
+    }
 
 
 def classify_announcement(title: str) -> Tuple[str, str]:
@@ -144,6 +438,7 @@ def build_comprehensive_decision(
     atr_profile: Optional[dict] = None,
     experimental_dna: Optional[dict] = None,
     kline_patterns: Optional[dict] = None,
+    trade_calendar: Optional[dict] = None,
 ) -> dict:
     """
     结合公告排雷、技术均线趋势、筹码位置、日内分时VWAP与板块/大盘情绪，
@@ -247,9 +542,12 @@ def build_comprehensive_decision(
     trend_score = max(0, min(25, trend_score))
     trend_desc = f"{trend_status} · RSI6={rsi6:.1f}"
 
-    # ---- 维度3：筹码结构与量价配合 (满分 20) ----
+    # ---- 维度3：筹码结构与量价配合 (满分 20，融合 210 日换手衰减 CYQ) ----
     box_pos = float(chips.get("boxPos", 50.0) or 50.0)
     profit_ratio = float(chips.get("profitRatio", 50.0) or 50.0)
+    conc90 = float(chips.get("concentration90", 0.0) or 0.0)
+    peak_px = float(chips.get("peakPrice", 0.0) or 0.0)
+    avg_cost_val = float(chips.get("avgCost", 0.0) or 0.0)
     stage_tag = second_wave.get("stageTag", "normal")
     is_stagnation = bool(technicals.get("isHighStagnation", False))
     chg5d = float(technicals.get("chg5d", 0.0) or 0.0)
@@ -266,6 +564,14 @@ def build_comprehensive_decision(
         chip_score += 3
         positive_points.append(f"当前股价处于 20 日箱体中下沿（{box_pos:.0f}%分位），上方阻力距离较充裕")
 
+    if 0.0 < conc90 <= 10.0 and not is_broken and (avg_cost_val <= 0 or cur_px >= avg_cost_val * 0.965):
+        chip_score += 3
+        peak_txt = f"，主峰 ¥{peak_px:.2f}" if peak_px > 0 else ""
+        positive_points.append(f"CYQ 筹码高度集中（90%集中度 {conc90:.1f}%{peak_txt}），主力锁仓合力较强")
+    elif conc90 >= 22.0 and profit_ratio < 40.0:
+        chip_score -= 2
+        risk_points.append(f"CYQ 筹码呈宽幅发散（90%集中度 {conc90:.1f}%），上方多峰历史套牢盘阻力较重")
+
     if is_stagnation or (chg5d >= 20.0 and profit_ratio >= 88.0):
         chip_score -= 7
         risk_points.append(f"近5日涨幅 {chg5d:+.1f}% 且高位放量滞涨/获利盘高达 {profit_ratio:.0f}%，谨防主力高位派发接盘")
@@ -275,7 +581,11 @@ def build_comprehensive_decision(
         risk_points.append(f"当前获利筹码不足 {profit_ratio:.1f}%，上方 80% 筹码处于套牢状态，反弹阻力大")
 
     chip_score = max(0, min(20, chip_score))
-    chip_desc = f"箱体分位 {box_pos:.0f}% · 获利盘 {profit_ratio:.0f}%"
+    chip_desc = (
+        f"获利盘 {profit_ratio:.0f}% · 90%集中 {conc90:.1f}%"
+        if conc90 > 0
+        else f"箱体分位 {box_pos:.0f}% · 获利盘 {profit_ratio:.0f}%"
+    )
 
     # ---- 维度4：分时盘口与资金承接 (满分 20) ----
     is_today_intraday = intraday.get("isToday", True) if intraday else False
@@ -286,7 +596,13 @@ def build_comprehensive_decision(
     if not is_today_intraday:
         intraday_score = 12
         if intraday and intraday.get("date"):
-            risk_points.append(f"当前分时为历史交易日（{intraday['date']}）数据，盘口信号待开盘后更新")
+            if trade_calendar and not trade_calendar.get("isTradeDay", True):
+                cal_lbl = trade_calendar.get("label") or "休市"
+                nxt_td = trade_calendar.get("nextTradeDate") or ""
+                nxt_suffix = f"（下一交易日 {nxt_td}）" if nxt_td else ""
+                risk_points.append(f"当前处于{cal_lbl}{nxt_suffix}，分时展示最近交易日（{intraday['date']}）收盘数据")
+            else:
+                risk_points.append(f"当前分时为历史交易日（{intraday['date']}）数据，盘口信号待开盘后更新")
     elif p_type in ("rebound", "bull"):
         if vwap_diff >= 3.0:
             intraday_score = 12
@@ -608,8 +924,16 @@ def build_wechat_summary(diag: dict) -> str:
     to = q.get("turnover", 0.0)
     cap = q.get("cap", 0.0)
 
+    tcal = diag.get("tradeCalendar") or {}
+    cal_banner = []
+    if tcal and not tcal.get("isTradeDay", True):
+        cal_banner.append(
+            f"📅 状态: {tcal.get('label', '休市')}（最近交易日 {tcal.get('latestTradeDate', '—')} ｜ 下一交易日 {tcal.get('nextTradeDate', '—')}）"
+        )
+
     lines = [
         f"📊【{name} ({code}) 智能诊股报告】",
+        *cal_banner,
         f"🔹 现价: ¥{px:.2f} ({chg:+.2f}%) ｜ 换手: {to:.2f}% ｜ 流通: {cap:.1f}亿",
     ]
 
@@ -659,7 +983,13 @@ def build_wechat_summary(diag: dict) -> str:
         lines.append("")
         lines.append("🎯【筹码与技术结构】:")
         lines.append(f"  · 20日箱体: ¥{chips.get('boxBot', 0):.2f} ~ ¥{chips.get('boxTop', 0):.2f} (位置 {chips.get('boxPos', 50):.0f}%)")
-        lines.append(f"  · 筹码均价: ¥{chips.get('avgCost', 0):.2f} ｜ 获利盘: {chips.get('profitRatio', 0):.1f}%")
+        peak_str = f" (主峰 ¥{chips['peakPrice']:.2f})" if chips.get("peakPrice") else ""
+        lines.append(f"  · CYQ筹码均价: ¥{chips.get('avgCost', 0):.2f}{peak_str} ｜ 获利盘: {chips.get('profitRatio', 0):.1f}%")
+        if chips.get("concentration90") is not None:
+            lines.append(
+                f"  · 90%成本区间: ¥{chips.get('cost90Low', 0):.2f}~¥{chips.get('cost90High', 0):.2f} "
+                f"(集中度 {chips.get('concentration90', 0):.1f}% · {chips.get('concentrationLabel', '适度集中')})"
+            )
 
     sts = diag.get("shortTermStatus")
     if sts:
@@ -695,10 +1025,10 @@ async def _fetch_diag_kline_days(
     client: httpx.AsyncClient,
     tcode: str,
     em_secid: str,
-    limit: int = 120,
-) -> List[list]:
-    """多源拉取前复权日K（复用 market_data 统一东财主用 + 腾讯回退与带上限缓存）。"""
-    return await fetch_kline_rows(client, em_secid, limit=limit, tcode_fallback=tcode)
+    limit: int = 210,
+) -> List[dict]:
+    """多源拉取前复权日K（默认 210 个交易日以支撑 CYQ 换手衰减筹码分布，保留换手率与成交额字段）。"""
+    return await fetch_em_klines(client, em_secid, klt=101, lmt=limit, tcode_fallback=tcode)
 
 
 async def get_stock_diagnosis(
@@ -743,7 +1073,7 @@ async def get_stock_diagnosis(
             client.get(concept_url, headers={"Referer": "https://data.eastmoney.com/"}),
             client.get(survey_url, headers={"Referer": "https://emweb.securities.eastmoney.com/"}),
             client.get(hot_bk_url, headers={"Referer": "https://quote.eastmoney.com/"}),
-            _fetch_diag_kline_days(client, tcode, em_secid, 120),
+            _fetch_diag_kline_days(client, tcode, em_secid, 210),
             client.get(min_url),
             get_limitup_pool(http_client=client),
             client.get(ind_url, headers={"Referer": "https://quote.eastmoney.com/"}),
@@ -821,7 +1151,7 @@ async def get_stock_diagnosis(
         try:
             ann_json = ann_resp.json()
             raw_list = (ann_json.get("data") or {}).get("list", [])
-            today_dt = datetime.date.today()
+            today_dt = cn_today()
             for item in raw_list:
                 title = item.get("title", "")
                 n_date_str = item.get("notice_date", "")[:10]
@@ -1003,13 +1333,15 @@ async def get_stock_diagnosis(
 
     if days:
         try:
-            if len(days) >= 20:
-                cur_px = quote_data["price"] if quote_data["price"] > 0 else float(days[-1][2])
-                opens = [float(d[1]) for d in days]
-                closes = [float(d[2]) for d in days]
-                highs = [float(d[3]) for d in days]
-                lows = [float(d[4]) for d in days]
-                vols = [float(d[5]) for d in days]
+            dates = [str(d["date"] if isinstance(d, dict) else d[0])[:10] for d in days]
+            opens = [float(d["open"] if isinstance(d, dict) else d[1]) for d in days]
+            closes = [float(d["close"] if isinstance(d, dict) else d[2]) for d in days]
+            highs = [float(d["high"] if isinstance(d, dict) else d[3]) for d in days]
+            lows = [float(d["low"] if isinstance(d, dict) else d[4]) for d in days]
+            vols = [float((d.get("vol") or 0.0) if isinstance(d, dict) else d[5]) for d in days]
+
+            if len(closes) >= 20:
+                cur_px = quote_data["price"] if quote_data["price"] > 0 else closes[-1]
 
                 ma5 = sum(closes[-5:]) / 5
                 ma10 = sum(closes[-10:]) / 10 if len(closes) >= 10 else cur_px
@@ -1027,12 +1359,13 @@ async def get_stock_diagnosis(
                 box_bot = min(lows20)
                 box_pos = ((cur_px - box_bot) / (box_top - box_bot) * 100) if box_top > box_bot else 50.0
 
-                vols60 = vols[-60:] if len(vols) >= 60 else vols
-                closes60 = closes[-60:] if len(closes) >= 60 else closes
-                sum_vol = sum(vols60)
-                avg_cost = sum(c * v for c, v in zip(closes60, vols60)) / sum_vol if sum_vol > 0 else cur_px
-                profit_vol = sum(v for c, v in zip(closes60, vols60) if c <= cur_px)
-                profit_ratio = (profit_vol / sum_vol * 100) if sum_vol > 0 else 50.0
+                cyq_info = calc_cyq_chips(
+                    days,
+                    cur_price=cur_px,
+                    float_cap_yi=float(quote_data.get("cap") or 0.0),
+                    latest_turnover_pct=float(quote_data.get("turnover") or 0.0),
+                    period=210,
+                )
 
                 # 均线趋势与破位/止跌/诱多K线结构识别
                 avg_vol5 = sum(vols[-6:-1]) / 5 if len(vols) >= 6 else (sum(vols) / len(vols))
@@ -1085,9 +1418,7 @@ async def get_stock_diagnosis(
                     "boxTop": round(box_top, 2),
                     "boxBot": round(box_bot, 2),
                     "boxPos": round(box_pos, 1),
-                    "avgCost": round(avg_cost, 2),
-                    "profitRatio": round(profit_ratio, 1),
-                    "diffFromCost": round(((cur_px - avg_cost) / avg_cost) * 100, 2) if avg_cost > 0 else 0.0,
+                    **cyq_info,
                 }
 
                 # ===== 二轮 / 二波潜力与生命周期判定 =====
@@ -1159,8 +1490,8 @@ async def get_stock_diagnosis(
 
                 # ===== 实验性弱参考：近14日ATR波动率 + 近120日个股历史基因概率回测 =====
                 try:
-                    today_iso = datetime.date.today().isoformat()
-                    comp_end = len(days) - 1 if str(days[-1][0])[:10] == today_iso else len(days)
+                    today_iso = cn_today_iso()
+                    comp_end = len(dates) - 1 if dates[-1] == today_iso else len(dates)
                     if comp_end >= 16:
                         # 1) ATR(14) 动态波动率剖面
                         tr_sum = 0.0
@@ -1197,7 +1528,7 @@ async def get_stock_diagnosis(
                                 "sampleDays": atr_cnt,
                             }
 
-                        # 2) 近120日历史基因概率统计
+                        # 2) 近120日历史基因概率统计（保持近半年 120 交易日窗口，不因 CYQ 扩至 210 日而稀释近期股性）
                         tot_d = 0
                         amp3_d = 0
                         dip_tot = 0
@@ -1205,7 +1536,8 @@ async def get_stock_diagnosis(
                         dip_reb_sum = 0.0
                         gap_up_tot = 0
                         gap_up_smash = 0
-                        for idx_k in range(1, comp_end):
+                        dna_start = max(1, comp_end - 120)
+                        for idx_k in range(dna_start, comp_end):
                             pc_k = closes[idx_k - 1]
                             o_k, c_k, h_k, l_k = opens[idx_k], closes[idx_k], highs[idx_k], lows[idx_k]
                             if pc_k <= 0 or o_k <= 0 or l_k <= 0:
@@ -1266,7 +1598,8 @@ async def get_stock_diagnosis(
         except Exception:
             pass
 
-    # 7. 全天分时 (VWAP 均价线与日内形态，带日期守卫防止盘前/休市误用昨日分时)
+    # 7. 全天分时 (VWAP 均价线与日内形态，结合同源 A 股交易日历防止周末/法定节假日/盘前误用历史分时)
+    cal_snapshot = get_market_calendar_snapshot()
     min_resp = resps[6]
     intraday_data = {}
     if not isinstance(min_resp, Exception) and min_resp.status_code == 200:
@@ -1275,8 +1608,12 @@ async def get_stock_diagnosis(
             min_node = m_json.get("data", {}).get(tcode, {}).get("data", {}) or {}
             min_arr = min_node.get("data", [])
             min_date = re.sub(r"\D", "", str(min_node.get("date") or ""))[:8]
-            today_ymd = datetime.date.today().strftime("%Y%m%d")
-            is_today_min = (min_date == today_ymd) if min_date else True
+            today_ymd = cal_snapshot["ymd"]
+            is_today_min = (
+                bool(cal_snapshot["isTradeDay"] and min_date == today_ymd)
+                if min_date
+                else bool(cal_snapshot["isTradingNow"])
+            )
             if min_arr:
                 m_prices = []
                 m_vwap_arr = []
@@ -1327,11 +1664,13 @@ async def get_stock_diagnosis(
                         pattern_type = "chop"
 
                     if not is_today_min:
-                        pattern = f"[历史分时 {min_date}] {pattern}"
+                        tag_prefix = cal_snapshot["label"] if not cal_snapshot["isTradeDay"] else "历史分时"
+                        pattern = f"[{tag_prefix} {min_date}] {pattern}"
 
                     intraday_data = {
                         "date": min_date,
                         "isToday": is_today_min,
+                        "marketStatus": cal_snapshot["sessionLabel"],
                         "curPrice": cur_p,
                         "vwap": round(last_v, 2),
                         "vwapDiff": round(((cur_p - last_v) / last_v) * 100, 2) if last_v > 0 else 0.0,
@@ -1403,12 +1742,18 @@ async def get_stock_diagnosis(
         elif p_type == "rebound":
             prescriptions.append("【探底企稳】早盘探底后午后稳步收复均价线，多头承接坚决，可顺势在均价线附近做正T低吸。")
 
-    # 5) 筹码套牢度
+    # 5) 筹码套牢度与单峰密集法则
     if chips_data:
         p_ratio = chips_data.get("profitRatio", 50)
         box_pos = chips_data.get("boxPos", 50)
+        conc90_val = chips_data.get("concentration90", 0.0)
         if p_ratio < 20 and box_pos <= 25:
-            prescriptions.append(f"【超跌箱底】获利盘仅 {p_ratio:.1f}% 且贴近 20 日箱底，筹码割无可割，若缩量企稳是左侧轻仓试正T的安全位置。")
+            prescriptions.append(f"【超跌箱底】CYQ获利盘仅 {p_ratio:.1f}% 且贴近 20 日箱底，筹码割无可割，若缩量企稳是左侧轻仓试正T的安全位置。")
+        elif 0 < conc90_val <= 10.0 and p_ratio >= 55 and not kline_patterns.get("hasTopIsland"):
+            prescriptions.append(
+                f"【单峰密集锁筹】210日CYQ 90%集中度仅 {conc90_val:.1f}%（主峰 ¥{chips_data.get('peakPrice', 0):.2f}），"
+                "筹码高度凝聚，回踩主峰或分时均线适合顺势做正T。"
+            )
 
     # 9. 解析大盘环境情绪、短线连板/抱团联动身位 与 多因子综合买入决策评分引擎
     limitup_data = resps[7] if len(resps) > 7 and isinstance(resps[7], dict) and resps[7].get("ok") else {}
@@ -1470,11 +1815,13 @@ async def get_stock_diagnosis(
         atr_profile=atr_profile,
         experimental_dna=experimental_dna,
         kline_patterns=kline_patterns,
+        trade_calendar=cal_snapshot,
     )
 
     diag_result = {
         "ok": True,
         "code": code,
+        "tradeCalendar": cal_snapshot,
         "quote": quote_data,
         "company": company_info,
         "concepts": precise_concepts or all_concepts[:12],

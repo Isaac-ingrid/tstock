@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { fetchLimitUpPool, postHerdAction } from '../services/api.js';
-import { f2, money$, toastOk, toastWarn, toastErr, copyPlain } from '../services/utils.js';
+import { f2, money$, todayStr, toastOk, toastWarn, toastErr, copyPlain } from '../services/utils.js';
 import MarketSentimentBar from '../components/MarketSentimentBar.jsx';
 import { DEFAULT_MYSTIC_ROOTS, buildDailyReviewBrief, BoardStockActions } from '../components/board/boardShared.jsx';
 import StrongPoolPanel from '../components/board/StrongPoolPanel.jsx';
@@ -10,11 +10,7 @@ import HerdPoolPanel from '../components/board/HerdPoolPanel.jsx';
 import MainThemesPanel from '../components/board/MainThemesPanel.jsx';
 
 function formatLocalIsoDate() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  return todayStr();
 }
 
 export default function BoardPage({

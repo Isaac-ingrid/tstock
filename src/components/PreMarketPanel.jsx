@@ -2,13 +2,17 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { fetchBatchNoticeRisk, computeAuctionSignalLead } from '../services/api.js';
 import { getAuctionTier } from '../services/auction.js';
 import { f2 } from '../services/utils.js';
+import {
+  isAShareTradeDay,
+  getCNClock,
+  getUpcomingHolidayReminder,
+  syncRemoteTradeCalendar,
+} from '../services/calendar.js';
 
-function isAuctionClockNow() {
-  const d = new Date();
-  const wd = d.getDay();
-  if (wd === 0 || wd === 6) return false;
-  const mins = d.getHours() * 60 + d.getMinutes();
-  return mins >= 555 && mins <= 575; // 09:15 - 09:35 自动展开竞价速览
+function isAuctionClockNow(ref = new Date()) {
+  if (!isAShareTradeDay(ref)) return false;
+  const { mins } = getCNClock(ref);
+  return mins >= 555 && mins <= 575; // 交易日 09:15 - 09:35 自动展开竞价速览
 }
 
 export default function PreMarketPanel({
@@ -16,24 +20,44 @@ export default function PreMarketPanel({
   onSelectStock,
   onJumpDiagnosis,
   onNoticeRisksChange,
+  referenceDate = null,
 }) {
-  const [auctionWindow, setAuctionWindow] = useState(() => isAuctionClockNow());
-  const [expanded, setExpanded] = useState(() => isAuctionClockNow());
+  const [clockNow, setClockNow] = useState(() => referenceDate || new Date());
+  const [auctionWindow, setAuctionWindow] = useState(() => isAuctionClockNow(referenceDate || new Date()));
+  const [expanded, setExpanded] = useState(() => isAuctionClockNow(referenceDate || new Date()));
   const [noticeLoading, setNoticeLoading] = useState(false);
   const [noticeData, setNoticeData] = useState(null);
   const [noticeErr, setNoticeErr] = useState('');
+  const [calVer, setCalVer] = useState(0);
 
-  // 每 30 秒检查是否进入 09:15-09:35 竞价黄金窗
   useEffect(() => {
+    syncRemoteTradeCalendar().then(() => setCalVer((v) => v + 1));
+  }, []);
+
+  // 每 30 秒刷新时钟（跨零点自动更新节假日倒计时，并在 09:15-09:35 自动展开竞价速览）
+  useEffect(() => {
+    if (referenceDate) {
+      setClockNow(referenceDate);
+      setAuctionWindow(isAuctionClockNow(referenceDate));
+      return undefined;
+    }
     const timer = setInterval(() => {
-      const inWin = isAuctionClockNow();
+      const now = new Date();
+      setClockNow(now);
+      const inWin = isAuctionClockNow(now);
       setAuctionWindow((prev) => {
         if (!prev && inWin) setExpanded(true);
         return inWin;
       });
     }, 30000);
     return () => clearInterval(timer);
-  }, []);
+  }, [referenceDate]);
+
+  // 近期法定节假日休市倒计时 & 连续≥3天长假前1-2交易日控仓预警
+  const holidayReminder = useMemo(
+    () => getUpcomingHolidayReminder(referenceDate || clockNow, { lookaheadTradeDays: 5 }),
+    [referenceDate, clockNow, calVer]
+  );
 
   const codesKey = useMemo(
     () =>
@@ -139,9 +163,17 @@ export default function PreMarketPanel({
   const lowOpenCnt = auctionRows.filter((r) => r.gapPct <= -1.5).length;
   const nukeCnt = auctionRows.filter((r) => r.gapPct <= -4.0).length;
   const rushLeadCnt = auctionRows.filter((r) => (r.aucLead?.score || 0) >= 15).length;
+  const holdingCnt = auctionRows.filter((r) => r.isHolding).length;
+
+  const wrapCls = [
+    'premarket-wrap',
+    redAlerts.length > 0 ? 'has-red' : holidayReminder?.isHighAlert ? 'has-holiday-warn' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return (
-    <div className={`premarket-wrap ${redAlerts.length > 0 ? 'has-red' : ''}`}>
+    <div className={wrapCls}>
       {/* 顶栏精简摘要条：非竞价时段默认只占 1 行，点击可随时展开 */}
       <div className="pm-bar">
         <div className="pm-left">
@@ -178,6 +210,23 @@ export default function PreMarketPanel({
               🛡️ 盘前排雷安全（{pool.length}只近35天无红牌利空）
             </span>
           )}
+
+          {holidayReminder && (
+            <span
+              className={`pm-holiday-chip ${
+                holidayReminder.isHighAlert
+                  ? holidayReminder.remainingTradeDays === 1
+                    ? 'urgent-1d'
+                    : 'urgent-2d'
+                  : holidayReminder.phase === 'in_holiday'
+                  ? 'closed'
+                  : 'countdown'
+              }`}
+              title={`${holidayReminder.headline} — ${holidayReminder.advice}`}
+            >
+              {holidayReminder.chipText}
+            </span>
+          )}
         </div>
 
         <div className="pm-right">
@@ -204,6 +253,31 @@ export default function PreMarketPanel({
           </button>
         </div>
       </div>
+
+      {/* 连续≥3天长假仅剩 1~2 个交易日时：常驻高亮展示节前隔夜仓位风控横幅（折叠态亦可见） */}
+      {holidayReminder?.isHighAlert && (
+        <div
+          className={`pm-holiday-alert ${
+            holidayReminder.remainingTradeDays === 1 ? 'is-final-day' : 'is-cash-day'
+          }`}
+        >
+          <div className="pm-ha-main">
+            <div className="pm-ha-head">
+              <span className="pm-ha-tag">
+                {holidayReminder.remainingTradeDays === 1
+                  ? '🏮 节前收官日 · 跨假T+1锁仓'
+                  : '🏮 距长假剩2交易日 · 节前取现窗'}
+              </span>
+              <b>{holidayReminder.headline}</b>
+              <span className="pm-ha-pos-pill">
+                建议隔夜总仓 {holidayReminder.posRangeLabel}
+                {holdingCnt > 0 ? ` · 当前持仓 ${holdingCnt} 只` : ' · 当前空仓'}
+              </span>
+            </div>
+            <div className="pm-ha-desc">{holidayReminder.advice}</div>
+          </div>
+        </div>
+      )}
 
       {/* 高危公告雷区直出警报条（只要有红牌公告，无论折叠与否都立刻亮出，防止踩雷！） */}
       {redAlerts.length > 0 && (

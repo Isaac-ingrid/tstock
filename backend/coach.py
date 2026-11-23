@@ -12,6 +12,8 @@ import os
 import time
 from typing import Any, Dict, List, Optional
 
+from .trade_calendar import get_market_calendar_snapshot
+
 try:
     import httpx  # type: ignore
 except ImportError:  # pragma: no cover
@@ -65,6 +67,7 @@ MISTAKE_LABEL_MAP = {
     "hold_past_3red": "🥀 弱势连红三日贪婪不减",
     "t1_illusion_hold": "🪞 T+1收绿幻想反包",
     "backrow_laggard": "🗑️ 看A做B买后排补涨",
+    "pre_holiday_overcap": "🏮 节前长假超限建仓",
 }
 
 
@@ -198,8 +201,28 @@ def build_quant_rule_review(
     if not trades:
         raise ValueError("复盘流水记录为空，请至少完成或录入一笔交易后再启动复盘。")
 
+    cal_ctx = get_market_calendar_snapshot(date)
+    next_td = cal_ctx["nextTradeDate"]
+    closed_ahead = int(cal_ctx.get("closedDaysAhead") or 0)
+    pre_hol = cal_ctx.get("upcomingHoliday") if isinstance(cal_ctx.get("upcomingHoliday"), dict) else None
+
     env_level = str((market_env or {}).get("level") or "OK").upper()
     env_text = str((market_env or {}).get("text") or "常态震荡")
+    emo_cap_pct = 20 if env_level == "BAD" else (50 if env_level == "WARN" else 80)
+    is_pre_hol_alert = bool(
+        pre_hol
+        and pre_hol.get("isHighAlert")
+        and int(pre_hol.get("closedDays") or 0) >= 3
+        and int(pre_hol.get("remainingTradeDays") or 0) in (1, 2)
+    )
+    eff_holiday_cap_pct = (
+        min(
+            emo_cap_pct,
+            int(pre_hol.get("suggestedMaxPosPct") or (30 if int(pre_hol.get("closedDays") or 0) >= 7 else 50)),
+        )
+        if is_pre_hol_alert and pre_hol
+        else emo_cap_pct
+    )
 
     buy_score = 25.0
     sell_score = 25.0
@@ -213,8 +236,11 @@ def build_quant_rule_review(
     win_count = 0
     loss_count = 0
     unplanned_count = 0
+    pre_holiday_overcap_count = 0
     mistake_counter: Dict[str, int] = {}
     slice_lines: List[str] = []
+
+    pos_build_dirs = ("买入建仓", "买入加仓", "直接买入", "尾盘买入", "底仓建仓", "连板追涨", "龙头抄底")
 
     for idx, t in enumerate(trades, 1):
         stock = str(t.get("stock") or t.get("code") or "未知标的")
@@ -229,20 +255,37 @@ def build_quant_rule_review(
         tag_labels = _normalize_mistake_labels(tags_raw)
 
         total_net += net_val
-        is_closed = buy_px > 0 and sell_px > 0
+        is_closed = buy_px > 0 and sell_px > 0 and dir_name not in ("买入建仓", "买入加仓", "直接买入", "尾盘买入", "底仓建仓")
         if is_closed:
             if net_val > 0:
                 win_count += 1
             elif net_val < 0:
                 loss_count += 1
 
-        if plan_stat == "计划外":
-            unplanned_count += 1
-            env_score -= 3.5
-
         raw_set = {str(x) for x in tags_raw}
         holding_float_pct = float(t.get("holdingFloatPct") or 0.0)
         red_streak = int(float(t.get("redStreak") or 0))
+        post_buy_pct_raw = t.get("postBuyPosPct") if t.get("postBuyPosPct") is not None else t.get("posPctAfter")
+        trade_hol_cap_raw = t.get("holidayCapPct")
+        resolved_hol_cap = int(float(trade_hol_cap_raw)) if trade_hol_cap_raw is not None and float(trade_hol_cap_raw) > 0 else eff_holiday_cap_pct
+
+        # 自动侦测「节前长假超限建仓」（即使上游流水未预打标签，只要买后总仓位超过节前上限立即捕获并归为计划外）
+        if (
+            is_pre_hol_alert
+            and dir_name in pos_build_dirs
+            and buy_px > 0
+            and "pre_holiday_overcap" not in raw_set
+            and post_buy_pct_raw is not None
+            and float(post_buy_pct_raw) > resolved_hol_cap + 0.1
+        ):
+            raw_set.add("pre_holiday_overcap")
+            tag_labels.append(MISTAKE_LABEL_MAP["pre_holiday_overcap"])
+            if plan_stat in ("", "自动判定", "计划内"):
+                plan_stat = "计划外"
+
+        if plan_stat == "计划外":
+            unplanned_count += 1
+            env_score -= 3.5
 
         # 自动侦测「下跌通道浮亏死补」与「弱势连红3天贪婪追买」
         if env_level in ("WARN", "BAD"):
@@ -257,6 +300,7 @@ def build_quant_rule_review(
             mistake_counter[lb] = mistake_counter.get(lb, 0) + 1
 
         lbl_joined = " ".join(tag_labels)
+        is_pre_hol_overcap = "pre_holiday_overcap" in raw_set or "节前长假超限" in lbl_joined
 
         if "fomo_chase" in raw_set or "late_chase" in raw_set or "追高" in lbl_joined or "接盘" in lbl_joined:
             buy_score -= 6.5
@@ -283,8 +327,13 @@ def build_quant_rule_review(
             env_score -= 7.0
         if "revenge_trade" in raw_set or "报复" in lbl_joined:
             env_score -= 7.5
-        if "heavy_gamble" in raw_set or "重仓" in lbl_joined:
+        if "heavy_gamble" in raw_set or "重仓单赌" in lbl_joined:
             env_score -= 5.5
+        if is_pre_hol_overcap:
+            pre_holiday_overcap_count += 1
+            rem_td_cur = int((pre_hol or {}).get("remainingTradeDays") or 1)
+            env_score -= 7.5
+            stop_score -= 3.5 if (rem_td_cur == 1 and dir_name == "尾盘买入") else (2.5 if rem_td_cur == 1 else 2.0)
 
         bench = t.get("systemBenchmark") if isinstance(t.get("systemBenchmark"), dict) else {}
         sys_buy = float(bench.get("sysBuy") or 0.0)
@@ -316,7 +365,7 @@ def build_quant_rule_review(
             if ret_pct <= -2.0:
                 stop_score -= min(7.0, abs(ret_pct + 1.5) * 2.5)
 
-        if env_level == "BAD" and dir_name in ("正T", "买入建仓", "买入加仓", "直接买入", "尾盘买入"):
+        if env_level == "BAD" and dir_name in ("正T", "买入建仓", "底仓建仓", "买入加仓", "直接买入", "尾盘买入"):
             env_score -= 6.0
 
         alpha_str = ""
@@ -338,6 +387,23 @@ def build_quant_rule_review(
             dev_parts.append(f"卖点较止盈1(¥{sys_sell1:.2f})偏离 `{s_d:+.2f}%`")
         if sys_stop > 0 and sell_px > 0 and sell_px < sys_stop:
             dev_parts.append(f"⚠️ 击穿系统止损线(¥{sys_stop:.2f})后滞后出局")
+        if is_pre_hol_overcap:
+            if pre_hol and pre_hol.get("holidayName"):
+                pos_detail = (
+                    f"买后总仓 `{float(post_buy_pct_raw):.1f}%` 突破节前控仓红线(`≤{resolved_hol_cap}%`)"
+                    if post_buy_pct_raw is not None
+                    else f"无视节前控仓黄牌突破上限(`≤{resolved_hol_cap}%`)"
+                )
+                lock_detail = (
+                    f"，且受 T+1 限制跨假锁定至 `{pre_hol.get('reopenDate', next_td)}` 开市"
+                    if int(pre_hol.get("remainingTradeDays") or 0) == 1
+                    else "，直面节前最后取现日避险抛压"
+                )
+                dev_parts.append(
+                    f"🏮 距{pre_hol['holidayName']}连休{pre_hol['closedDays']}天仅剩{pre_hol['remainingTradeDays']}个交易日，{pos_detail}{lock_detail}"
+                )
+            else:
+                dev_parts.append(f"🏮 触发节前长假超上限建仓违规（控仓上限 `≤{resolved_hol_cap}%`），重仓过节暴露外围风险")
 
         meme_note = ""
         try:
@@ -372,10 +438,16 @@ def build_quant_rule_review(
     total_score = b_sc + s_sc + st_sc + e_sc
 
     closed_total = win_count + loss_count
-    win_rate = (win_count / closed_total * 100.0) if closed_total > 0 else 0.0
+    win_rate = (closed_total > 0 and (win_count / closed_total * 100.0)) or 0.0
 
     # 一句话犀利定性
-    if total_score >= 85 and total_net >= 0:
+    if pre_holiday_overcap_count > 0 and total_score < 85:
+        hol_tag = f"{pre_hol['holidayName']}连休{pre_hol['closedDays']}天" if pre_hol and pre_hol.get("holidayName") else "法定长假"
+        headline = (
+            f"无视节前黄牌的重仓跨假博弈：{hol_tag}临近仍触发 {pre_holiday_overcap_count} 笔超上限建仓，"
+            f"综合纪律降至 {total_score}/100 分（环境与仓位分 {e_sc}/25），切忌拿跨假不确定性赌节后开门红。"
+        )
+    elif total_score >= 85 and total_net >= 0:
         headline = f"知行合一的机构级执行日：综合纪律 {total_score} 分，买在分歧低吸位、卖在脉冲压力区，实盘落袋 {'+' if total_net >= 0 else ''}¥{total_net:.0f} 元。"
     elif total_net > 0 and total_score < 70:
         headline = f"靠运气赚到的危险盈余：虽然账面盈利 +¥{total_net:.0f} 元，但存在计划外追高或纪律偏离（纪律分仅 {total_score} 分），切忌把行情赏饭当成实力。"
@@ -397,6 +469,15 @@ def build_quant_rule_review(
             "- **情绪平稳度良好**：今日未触发高频主观违规标签，买卖节奏整体锚定在分时均价与七格支撑阻力带内。"
         ]
 
+    if pre_holiday_overcap_count > 0:
+        hol_ctx_str = (
+            f"距{pre_hol['holidayName']}连休 {pre_hol['closedDays']} 天仅剩 {pre_hol['remainingTradeDays']} 个交易日"
+            if pre_hol and pre_hol.get("holidayName")
+            else "连续长假前敏感控仓窗口"
+        )
+        psych_lines.append(
+            f"- **节前重仓博弈心魔**：{hol_ctx_str}，盘前与下单均已亮出控仓黄牌（上限 `≤{eff_holiday_cap_pct}%`），仍出现 **{pre_holiday_overcap_count}** 笔超限建仓，本质是怕节后踏空而忽视跨假 T+1 锁仓与外围波动风险。"
+        )
     if unplanned_count > 0:
         psych_lines.append(
             f"- **盘中临时起意警报**：共有 **{unplanned_count}** 笔交易脱离盘前预案（计划执行率 {(1 - unplanned_count / len(trades)) * 100:.0f}%），盘中看分时脉冲临时下单极易买在情绪高点。"
@@ -405,8 +486,12 @@ def build_quant_rule_review(
         psych_lines.append(
             f"- **主观情绪摩擦账单**：对比系统 SOP 标准买卖点，主观操作额外造成 **-¥{friction_loss:.0f} 元** 摩擦损耗。"
         )
+    if not cal_ctx["isTradeDay"]:
+        psych_lines.append(
+            f"- **交易日历归属核验**：所选复盘日期 `{cal_ctx['dateStr']}` 为 **{cal_ctx['label']}**，流水归属最近交易日 `{cal_ctx['latestTradeDate']}`，下一开市交易日为 `{next_td}`。"
+        )
     if user_notes and user_notes.strip():
-        psych_lines.append(f"- **交易员自省印证**：你在笔记中提到 *“{user_notes.strip()}”*，建议将其固化为明日盘前硬约束。")
+        psych_lines.append(f"- **交易员自省印证**：你在笔记中提到 *“{user_notes.strip()}”*，建议将其固化为下一交易日（{next_td}）盘前硬约束。")
 
     sop_rules: List[str] = []
     if env_level == "OK":
@@ -436,6 +521,23 @@ def build_quant_rule_review(
             "3. **锁死单日熔断底线**：保持当前纪律执行力，单日连续止损达 2 笔或账户回撤触及 2.0% 时立即开启作战台熔断锁休息。"
         )
 
+    if is_pre_hol_alert and pre_hol and int(pre_hol.get("remainingTradeDays") or 0) == 2:
+        sop_rules.append(
+            f"4. **跨长假节前降仓铁律（明日 {next_td} 为{pre_hol['holidayName']}连休 {pre_hol['closedDays']} 天前最后 1 个交易日）**：明日新开仓受 T+1 限制将跨假锁定至 `{pre_hol['reopenDate']}` 开市；务必趁明日早盘冲高去弱留强，将隔夜总仓位压降至 **`≤{eff_holiday_cap_pct}%`（{pre_hol['posRangeLabel']}）** 以内，严禁尾盘超限偷袭赌假期消息！"
+        )
+    elif closed_ahead >= 3:
+        hol_name_str = f"{pre_hol['holidayName']}" if pre_hol and pre_hol.get("holidayName") else "法定长假"
+        overcap_extra = (
+            f"今日已触发节前超限建仓违规，节后首日（{next_td}）竞价若不及预期须在 09:30~10:00 优先减回 `≤{eff_holiday_cap_pct}%` 安全线，"
+            if pre_holiday_overcap_count > 0
+            else f"节后首日（{next_td}）竞价严防情绪高低切兑现，"
+        )
+        sop_rules.append(
+            f"4. **跨长假风控纪律（距下一交易日 {next_td} 迎来{hol_name_str}连续休市 {closed_ahead} 天）**：跨法定节假日期间外围市场与政策消息面不确定性较高，{overcap_extra}切忌开盘盲目顶高。"
+        )
+
+    sop_heading = f"### 🛡️ 明日必须坚守的实战行动清单 (Actionable SOP · 下一交易日 {next_td})"
+
     review_md = (
         f"### 🎯 一句话犀利定性\n"
         f"{headline}\n\n"
@@ -446,12 +548,12 @@ def build_quant_rule_review(
         f"  - **买点与龙头身位分**：`{b_sc} / 25`（检验是否聚焦前排龙头回踩、有无追高或看A做B买后排）\n"
         f"  - **卖点与三连阳止盈分**：`{s_sc} / 25`（检验弱势连红3天减仓/首阴清仓、上升期有无过早卖飞）\n"
         f"  - **止损与禁逆势补仓分**：`{st_sc} / 25`（检验 T+1 收绿止损、破位执行力与有无浮亏死补摊平）\n"
-        f"  - **大盘通道与仓位分**：`{e_sc} / 25`（检验上升/下跌双通道仓位匹配度与防报复交易）\n\n"
+        f"  - **大盘通道与仓位分**：`{e_sc} / 25`（检验双通道仓位匹配度、节前长假控仓上限与防报复交易）\n\n"
         f"### 🔍 逐笔实操切片诊断\n"
         + "\n".join(slice_lines)
         + "\n\n### 🧠 交易心魔与心理博弈剖析\n"
         + "\n".join(psych_lines)
-        + "\n\n### 🛡️ 明日必须坚守的实战行动清单 (Actionable SOP)\n"
+        + f"\n\n{sop_heading}\n"
         + "\n".join(sop_rules)
     )
 
@@ -460,6 +562,7 @@ def build_quant_rule_review(
         "engine": "quant_rule",
         "aiConfigured": False,
         "date": date,
+        "calendar": cal_ctx,
         "model": "内置量化规则教练 v3 (三步实战体系双通道引擎)",
         "latencyMs": 1,
         "totalTrades": len(trades),
@@ -471,6 +574,7 @@ def build_quant_rule_review(
             "stop": st_sc,
             "env": e_sc,
         },
+        "preHolidayOvercapCount": pre_holiday_overcap_count,
         "frictionLoss": round(friction_loss, 2),
         "review": review_md,
     }
@@ -484,7 +588,8 @@ COACH_SYSTEM_PROMPT = """你是由顶级对冲基金操盘手与资深A股游资
    - 下跌/弱势通道（WARN/BAD）：不存在踏空！严禁浮亏向下补仓摊平（防一路跌一路补深套）；建仓次日盘中跌了不急补不乱割，收盘若仍收绿必须果断割肉换票（绝不幻想第3天反包）；建仓收红后若连红满3天必须主动减仓，最多格局到收盘首阴无条件清仓，严防第4天核按钮闷杀；
 2. 第二步选持续性板块：只做有持续资金流入与梯队效应的主线板块，警惕孤狼单打一日游；
 3. 第三步只买前排龙头、严禁看A做B买后排补涨：前排涨得多跌得少接力多，后排跟风跌得多涨得少，绝不因畏高龙头而买后排垃圾；
-4. 日内做T与人机对决：日内做T以回踩VWAP分时均价线为准绳，绝不让做T变成被动隔夜加仓，精确核算主观情绪摩擦损耗。
+4. 日内做T与人机对决：日内做T以回踩VWAP分时均价线为准绳，绝不让做T变成被动隔夜加仓，精确核算主观情绪摩擦损耗；
+5. 节前长假控仓铁律：连续≥3天法定长假前1-2个交易日严控隔夜总仓位（7天以上长假≤30%，3-6天小长假≤50%，并与情绪闸门上限从严叠加），严禁无视控仓黄牌超限建仓或节前收官日尾盘重仓赌假期消息。
 
 请根据用户提供的交易流水、盘面数据、计划偏离度%、失误归因与心得，给出结构化、深度透彻的复盘诊断报告。
 报告语气：如严师般冷静、客观、直指命门，给出清晰、可执行的下一步修正SOP。"""
@@ -572,12 +677,17 @@ async def generate_coach_review(
         except Exception:
             pass
 
+        hol_pos_str = ""
+        if t.get("postBuyPosPct") is not None:
+            cap_note = f" / 节前上限 ≤{t.get('holidayCapPct')}%" if t.get("holidayCapPct") is not None else ""
+            hol_pos_str = f"\n  - 买后总仓位占比: {float(t.get('postBuyPosPct')):.1f}%{cap_note}"
+
         trades_text_list.append(
             f"第{idx}笔: 【{stock}】（{track} · {dir_name}）\n"
             f"  - 成交参数: 买入价 ¥{buy_px:.2f} ｜ 卖出价 ¥{sell_px:.2f} ｜ 股数 {qty} 股\n"
             f"  - 净套利额: {'+' if net_val >= 0 else ''}{net_val:.2f} 元 ｜ 决策计划: {plan_stat} ({basis})\n"
             f"  - 归因失误标签: [{mistakes_str}]\n"
-            f"  - 反思与备注: {note}{bench_str}{meme_diag_str}"
+            f"  - 反思与备注: {note}{hol_pos_str}{bench_str}{meme_diag_str}"
         )
 
     trades_summary_text = "\n\n".join(trades_text_list)
@@ -586,8 +696,21 @@ async def generate_coach_review(
     if market_env:
         env_desc = f"环境评级 {market_env.get('level', 'OK')}（{market_env.get('text', '')}）"
 
+    cal_ctx = quant_res.get("calendar") or get_market_calendar_snapshot(date)
+    up_hol = cal_ctx.get("upcomingHoliday") if isinstance(cal_ctx.get("upcomingHoliday"), dict) else None
+    up_hol_note = (
+        f"，距{up_hol['holidayName']}连休{up_hol['closedDays']}天仅剩{up_hol['remainingTradeDays']}个交易日（建议上限≤{up_hol['suggestedMaxPosPct']}%）"
+        if up_hol and up_hol.get("isHighAlert")
+        else (f"，中间连续休市 {cal_ctx['closedDaysAhead']} 天" if cal_ctx.get("closedDaysAhead", 0) >= 3 else "")
+    )
+    cal_desc = (
+        f"交易日（下一交易日 {cal_ctx['nextTradeDate']}{up_hol_note}）"
+        if cal_ctx.get("isTradeDay")
+        else f"{cal_ctx.get('label', '休市')}（归属最近交易日 {cal_ctx.get('latestTradeDate')}，下一交易日 {cal_ctx.get('nextTradeDate')}）"
+    )
+
     prompt = f"""【交易员今日实盘复盘诊断请求】
-- 复盘日期: {date}
+- 复盘日期: {date}（A股交易日历：{cal_desc}）
 - 当日大盘风控环境: {env_desc}
 - 今日实盘总净收益: {'+' if total_net >= 0 else ''}{total_net:.2f} 元 (共 {len(trades)} 笔操作)
 - 量化引擎客观参考纪律分: {quant_res['disciplineScore']}/100 分（主观情绪摩擦损耗 ¥{quant_res['frictionLoss']:.2f} 元）
@@ -662,6 +785,7 @@ async def generate_coach_review(
             "engine": "llm",
             "aiConfigured": True,
             "date": date,
+            "calendar": cal_ctx,
             "model": final_model,
             "latencyMs": latency_ms,
             "totalTrades": len(trades),

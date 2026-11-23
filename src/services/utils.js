@@ -67,14 +67,16 @@ export const fvol = v => {
   return Math.round(v) + '股';
 };
 
-export const todayStr = () => {
-  const d = new Date();
-  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+export const todayStr = (now = Date.now()) => {
+  const t = now instanceof Date ? now.getTime() : (Number.isFinite(+now) ? +now : Date.now());
+  const cn = new Date(t + 8 * 3600 * 1000);
+  return cn.getUTCFullYear() + '-' + String(cn.getUTCMonth() + 1).padStart(2, '0') + '-' + String(cn.getUTCDate()).padStart(2, '0');
 };
 
-export const nowTimeHHMM = () => {
-  const d = new Date();
-  return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+export const nowTimeHHMM = (now = Date.now()) => {
+  const t = now instanceof Date ? now.getTime() : (Number.isFinite(+now) ? +now : Date.now());
+  const cn = new Date(t + 8 * 3600 * 1000);
+  return String(cn.getUTCHours()).padStart(2, '0') + ':' + String(cn.getUTCMinutes()).padStart(2, '0');
 };
 
 /* Toast 提示事件分发 */
@@ -364,14 +366,14 @@ export function getTodayTStatus(stock, tradeLogs) {
   logs.forEach(l => {
     const d = String(l.dir || '');
     const q = parseInt(l.qty, 10) || 0;
-    if (d === '买入建仓') {
+    if (d === '买入建仓' || d === '底仓建仓') {
       initBoughtQty += q;
     } else if (d === '尾盘买入') {
       addBoughtQty += q;
     } else if (d === '买入加仓' || d === '直接买入' || d === '正T买入' || d === '正T开仓') {
       addBoughtQty += q;
       tOpenBoughtQty += q;
-    } else if (d === '直接卖出' || d === '清仓卖出' || d === '正T卖出' || d === '正T平仓') {
+    } else if (d === '直接卖出' || d === '底仓减持' || d === '清仓卖出' || d === '正T卖出' || d === '正T平仓') {
       soldQty += q;
     } else if (d === '正T' || d === '倒T') {
       closedTCount += 1;

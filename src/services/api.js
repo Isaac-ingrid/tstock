@@ -7,6 +7,7 @@ import { ALERT_CENTER, saveAlerts, stampData, pool, LOG, SNAP } from './state.js
 import { evaluateChannelHoldingDiscipline } from './risk.js';
 import { chartInd, chartEntry, chartMeta } from './chart.js';
 import { APP_PAGE_TITLE } from '../data/site.js';
+import { isAShareTradeDay, isAShareTradingNow as checkAShareTradingNow, getCNClock } from './calendar.js';
 
 /* ===================== 数据层：全腾讯源（行情 / 检索 / 日K） =====================
    选源原则：实测本机到东财域名严重不稳（searchapi 首包 11s+，push2his 直接连不上），
@@ -647,9 +648,8 @@ export async function searchTencent(q){
   });
   return out;
 }
-const todayStr = ()=>{ const d=new Date();
-  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
-const nowStr = ()=> new Date().toLocaleTimeString('zh-CN',{hour12:false});
+const todayStr = () => getCNClock().dateStr;
+const nowStr = () => getCNClock().timeStr;
 
 /* 实时行情（腾讯）：现价 / 昨收 / 开高低 / 分时均线 / 量比
    字段下标已逐项核对（88 个字段挤在一行，取错一位不报错、只静默算错） */
@@ -1149,16 +1149,9 @@ export async function loadDD(s, force){
 const T_DCW = 'https://datacenter-web.eastmoney.com/api/data/v1/get';
 const MKT_IDX = [ ['sh000001','上证指数'], ['sz399001','深证成指'], ['sz399006','创业板指'], ['sh000688','科创50'] ];
 
-/* 是否交易日：周末 + 可维护的节假日表（法定假日往 HOLIDAYS 里加一行 'YYYY-MM-DD' 即可） */
-const HOLIDAYS = new Set([
-  /* '2026-10-01', '2026-10-02', */
-]);
+/* 是否交易日：统一接入 calendar.js（覆盖沪深北法定节假日休市表、周末恒休市与北京时间归一） */
 function isTradeDay(d){
-  d = d || new Date();
-  const wd = d.getDay();
-  if (wd < 1 || wd > 5) return false;
-  const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-  return !HOLIDAYS.has(key);
+  return isAShareTradeDay(d || new Date());
 }
 
 /* ===================== 日内成交量分布（U 型） =====================
@@ -1196,7 +1189,7 @@ function volShareAt(m){
 }
 /* 当前时点「应完成」的成交量占比（0~1）。盘中量能必须折算到这个口径才可比。 */
 function sessionProgress(){
-  const d = new Date(), m = d.getHours()*60 + d.getMinutes();
+  const d = new Date(), m = getCNClock(d).mins;
   if (!isTradeDay(d)) return 1;      // 非交易日不折算：否则周六下午打开，会把周五的成交量按"今日已过半"折，量比直接失真
   return Math.max(0.005, volShareAt(m));
 }
@@ -2105,8 +2098,8 @@ async function refreshAll(silent){
 /* 收盘自动快照：交易日 15:05 之后、当天还没记录时自动补一条。
    只在有持仓时记录；记录的是当时行情，收盘后取到的即为收盘价。 */
 function autoSnapshot(){
-  const d = new Date(), mins = d.getHours()*60 + d.getMinutes(), wd = d.getDay();
-  if (wd < 1 || wd > 5 || mins < 15*60+5) return;
+  const d = new Date(), ck = getCNClock(d);
+  if (!isAShareTradeDay(d) || ck.mins < 15*60+5) return;
   const today = todayStr();
   if ((SNAP||[]).some(x => x.date === today)) return;
   if (!pool.some(s => Math.round(+s.shares||0) > 0)) return;
@@ -2235,8 +2228,8 @@ export function setupTimer(){
   const autoEl = document.getElementById('dbAuto');
   if (!autoEl || !autoEl.checked) return;
   _timer = setInterval(()=>{
-    const d = new Date(), mins = d.getHours()*60 + d.getMinutes(), wd = d.getDay();
-    if (wd < 1 || wd > 5 || mins < 9*60+15 || mins > 15*60+5) return;
+    const d = new Date(), ck = getCNClock(d);
+    if (!isAShareTradeDay(d) || ck.mins < 9*60+15 || ck.mins > 15*60+5) return;
     const ae = document.activeElement;                        // 正在输入时不打断
     // 守卫补上 #dbInput：正在检索框里打字时同样不能被整页重绘打断
     if (ae && ae.closest && (ae.closest('#pool') || ae.closest('#logTable') || ae.closest('#dbInput') || ae.closest('#quickTModal'))) return;
@@ -3124,7 +3117,7 @@ export function checkPriceAlerts(targetPool = null){
       id: now + Math.random(),
       category: 'price',
       priority: h.priority,
-      time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
+      time: nowStr(),
       name: h.name,
       code: h.code,
       label: h.label,
@@ -3421,7 +3414,7 @@ export function checkLeadingResonanceAlerts(targetPool = null, options = {}) {
           ? `（持仓盯紧 ¥${f2(c.outA)} 倒T锁盈，严禁低吸）`
           : '（盘口诱多暗出，暂停正T低吸防接盘）');
     const summary = `[${tagJoin}] 先导动能 ${lm.scoreTxt}${actionHint} — ${lm.summary}`;
-    const timeStr = new Date(now).toLocaleTimeString('zh-CN', { hour12: false });
+    const timeStr = getCNClock(now).timeStr;
 
     const leadAlert = {
       type: isBull ? 'lead_bull_resonance' : 'lead_bear_resonance',
@@ -3744,11 +3737,9 @@ export function posCalc(s){
            aboveCost: (sh && cost) ? px > cost : null };
 }
 
-/* 判断当前是否处于 A 股盘中连续竞价交易时段（工作日 09:30-11:30, 13:00-15:00） */
+/* 判断当前是否处于 A 股盘中连续竞价交易时段（交易日北京时间 09:30-11:30, 13:00-15:00，自动跳过法定节假日） */
 export function isAShareTradingNow(now = new Date()) {
-  const mins = now.getHours() * 60 + now.getMinutes();
-  const wd = now.getDay();
-  return wd >= 1 && wd <= 5 && ((mins >= 570 && mins <= 690) || (mins >= 780 && mins <= 900));
+  return checkAShareTradingNow(now);
 }
 
 /**
@@ -3841,15 +3832,15 @@ export function computeAuctionSignalLead(s, nowDate = new Date()) {
   const open = +s.open || 0;
   if (!(pc > 0)) return { type: 'NONE', tag: '', score: 0, desc: '', netUnmatchedLots: 0 };
 
-  const mins = nowDate.getHours() * 60 + nowDate.getMinutes();
+  const mins = getCNClock(nowDate).mins;
   const b1 = book5?.bids?.[0];
   const b2 = book5?.bids?.[1];
   const a1 = book5?.asks?.[0];
   const a2 = book5?.asks?.[1];
 
-  // 1) 实时集合竞价撮合阶段特征：买一价 === 卖一价 > 0
+  // 1) 实时集合竞价撮合阶段特征：交易日且买一价 === 卖一价 > 0
   const inLiveAuction = Boolean(
-    b1 && a1 && b1.price > 0 && a1.price > 0 && Math.abs(b1.price - a1.price) <= 0.001
+    isAShareTradeDay(nowDate) && b1 && a1 && b1.price > 0 && a1.price > 0 && Math.abs(b1.price - a1.price) <= 0.001
   );
   if (inLiveAuction) {
     const indPx = b1.price;

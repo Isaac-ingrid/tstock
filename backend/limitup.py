@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import httpx
 
 from .strong_herd import build_strong_herd_and_themes, parse_mystic_roots
+from .trade_calendar import cn_now_str, cn_today_ymd, get_market_calendar_snapshot, is_trade_day, recent_trade_dates
 
 # 内存缓存，TTL 8 秒（盘中毫秒级更新，盘后快速响应）
 _LIMITUP_CACHE: Dict[str, Tuple[float, dict]] = {}
@@ -43,10 +44,10 @@ async def get_limitup_pool(
     2. 东方财富全市场 A 股极速行情 (clist/get，用于捕获正在冲击涨停的临界打板票)
     """
     now_ts = time.monotonic()
-    today_dt = datetime.date.today()
-    today_code = today_dt.strftime("%Y%m%d")
-    is_history_mode = bool(date_str and date_str.strip() != today_code)
-    target_date = date_str.strip() if date_str else today_code
+    today_code = cn_today_ymd()
+    today_is_open = is_trade_day(today_code)
+    is_history_mode = bool((date_str and date_str.strip() != today_code) or (not date_str and not today_is_open))
+    target_date = date_str.strip() if date_str else (today_code if today_is_open else recent_trade_dates(1, ref=today_code, include_ref=False, fmt="%Y%m%d")[0])
     roots_list = parse_mystic_roots(mystic_roots)
     roots_key = ",".join(roots_list)
 
@@ -71,11 +72,11 @@ async def get_limitup_pool(
         )
     )
     async with client_cm as client:
-        dates_to_try = [target_date]
-        if not date_str:
-            for days_back in range(1, 6):
-                prev_d = (today_dt - datetime.timedelta(days=days_back)).strftime("%Y%m%d")
-                dates_to_try.append(prev_d)
+        dates_to_try = (
+            [target_date]
+            if date_str
+            else recent_trade_dates(6, ref=today_code, include_ref=True, fmt="%Y%m%d")
+        )
 
         raw_pool: List[dict] = []
         actual_date = target_date
@@ -648,6 +649,7 @@ async def get_limitup_pool(
         "ok": True,
         "date": actual_date,
         "isHistory": is_history_mode,
+        "tradeCalendar": get_market_calendar_snapshot(date_str if date_str else None),
         "totalCount": len(items),
         "rushingCount": len(rushing_items),
         "maxLadder": max_lbc_val,
@@ -662,7 +664,7 @@ async def get_limitup_pool(
         "ladder": ladder_groups,
         "hotThemes": hot_themes,
         **herd_extra,
-        "updatedAt": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "updatedAt": cn_now_str(),
     }
 
     async with _CACHE_LOCK:

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { f2, pct, money, money$, toastOk, toastErr, toastWarn, copyPlain } from '../services/utils.js';
+import { f2, pct, money, money$, toastOk, toastErr, toastWarn, copyPlain, calcTBreakeven } from '../services/utils.js';
 import { fetchStockDiagnosis, searchTencent, postHerdAction, loadChart, loadStock, refreshSingleFastRt, isAShareTradingNow } from '../services/api.js';
 import ChartCanvas from '../components/ChartCanvas.jsx';
 import KlinePatternBadges from '../components/KlinePatternBadges.jsx';
@@ -29,6 +29,459 @@ function fmtPct(v, signed = false, digits = null) {
   return signed && num >= 0 ? `+${s}%` : `${s}%`;
 }
 
+function CyqFlameChart({ chips, curPrice, holdCost = 0, holdBePrice = 0 }) {
+  const [hoverIdx, setHoverIdx] = useState(null);
+  const profile = Array.isArray(chips?.cyqProfile) ? chips.cyqProfile : [];
+  if (profile.length < 2) return null;
+
+  const px = Number(curPrice || chips?.curPrice || 0);
+  const avgCost = Number(chips?.avgCost || 0);
+  const peakPrice = Number(chips?.peakPrice || 0);
+  const c90Lo = Number(chips?.cost90Low || 0);
+  const c90Hi = Number(chips?.cost90High || 0);
+  const profitRatio = Number(chips?.profitRatio ?? 50);
+  const hCost = Number(holdCost || 0);
+  const hBe = Number(holdBePrice || 0);
+  const hasHoldLines = hCost > 0 || hBe > 0;
+
+  const minBarP = Number(profile[0].p || 0);
+  const maxBarP = Number(profile[profile.length - 1].p || 0);
+  const stepP = Math.max(0.005, (maxBarP - minBarP) / Math.max(1, profile.length - 1));
+
+  const baseMarks = [px, avgCost, peakPrice, c90Lo, c90Hi].filter((v) => Number.isFinite(v) && v > 0);
+  const baseLo = Math.min(minBarP - 0.5 * stepP, ...baseMarks);
+  const baseHi = Math.max(maxBarP + 0.5 * stepP, ...baseMarks);
+  const baseSpan = Math.max(0.02, baseHi - baseLo);
+
+  // 若持仓成本或做T保本价在 210 日筹码区间近邻（±30%跨度内），直接纳入线性纵轴；若远高于/低于（如早期高位深套底仓），吸附在顶/底边缘不压扁筹码峰
+  const nearHoldMarks = [hCost, hBe].filter(
+    (v) => Number.isFinite(v) && v > 0 && v >= baseLo - 0.3 * baseSpan && v <= baseHi + 0.3 * baseSpan
+  );
+  const rawLo = Math.min(baseLo, ...nearHoldMarks);
+  const rawHi = Math.max(baseHi, ...nearHoldMarks);
+  const rawSpan = Math.max(0.02, rawHi - rawLo);
+  const domLo = Math.max(0.01, rawLo - rawSpan * 0.045);
+  const domHi = rawHi + rawSpan * 0.045;
+  const domSpan = Math.max(0.02, domHi - domLo);
+
+  const hasPinnedTop = [hCost, hBe].some((v) => v > domHi);
+  const hasPinnedBot = [hCost, hBe].some((v) => v > 0 && v < domLo);
+
+  const svgW = 480;
+  const svgH = hasHoldLines ? 228 : 208;
+  const padTop = hasPinnedTop ? 20 : 12;
+  const padBot = hasPinnedBot ? 20 : 12;
+  const plotH = svgH - padTop - padBot;
+  const axisX = 56;
+  const barMaxW = 274;
+  const pToY = (v) => padTop + ((domHi - v) / domSpan) * plotH;
+
+  const maxPct = Math.max(...profile.map((r) => Number(r.pct) || 0), 0.1);
+
+  let peakIdx = 0;
+  if (peakPrice > 0) {
+    let bestSc = -Infinity;
+    profile.forEach((r, idx) => {
+      const dist = Math.abs(Number(r.p) - peakPrice);
+      const nearBonus = dist <= stepP * 1.15 ? 1000 : -dist * 50;
+      const sc = nearBonus + (Number(r.pct) || 0);
+      if (sc > bestSc) {
+        bestSc = sc;
+        peakIdx = idx;
+      }
+    });
+  } else {
+    profile.forEach((r, idx) => {
+      if ((Number(r.pct) || 0) > (Number(profile[peakIdx].pct) || 0)) peakIdx = idx;
+    });
+  }
+
+  const yTicks = [0, 0.333, 0.667, 1].map((t) => domHi - t * domSpan);
+
+  const has90Band = c90Hi > c90Lo && c90Lo > 0;
+  const y90Top = has90Band ? pToY(c90Hi) : 0;
+  const y90Bot = has90Band ? pToY(c90Lo) : 0;
+  const h90 = has90Band ? Math.max(3, y90Bot - y90Top) : 0;
+
+  const pushMarker = (arr, item) => {
+    if (!(item.price > 0)) return;
+    let trueY = pToY(item.price);
+    let label = item.label;
+    let dash = item.dash;
+    if (item.price > domHi) {
+      trueY = 7;
+      label = `↑ ${item.label}`;
+      dash = '2 2.5';
+    } else if (item.price < domLo) {
+      trueY = svgH - 7;
+      label = `↓ ${item.label}`;
+      dash = '2 2.5';
+    }
+    arr.push({ ...item, label, dash, trueY, labelY: trueY });
+  };
+
+  const rawMarkers = [];
+  pushMarker(rawMarkers, {
+    key: 'cur',
+    label: `现价 ¥${f2(px)}`,
+    price: px,
+    stroke: '#0f172a',
+    bg: '#0f172a',
+    fg: '#ffffff',
+    border: '#0f172a',
+    dash: undefined,
+    sw: 1.35,
+  });
+  pushMarker(rawMarkers, {
+    key: 'peak',
+    label: `主峰 ¥${f2(peakPrice)}`,
+    price: peakPrice,
+    stroke: '#0e7490',
+    bg: '#ecfeff',
+    fg: '#0e7490',
+    border: '#67e8f9',
+    dash: '4 2.5',
+    sw: 1.25,
+  });
+  pushMarker(rawMarkers, {
+    key: 'avg',
+    label: `均价 ¥${f2(avgCost)}`,
+    price: avgCost,
+    stroke: '#475569',
+    bg: '#f1f5f9',
+    fg: '#334155',
+    border: '#cbd5e1',
+    dash: '2.5 2.5',
+    sw: 1.15,
+  });
+  if (hCost > 0) {
+    pushMarker(rawMarkers, {
+      key: 'cost',
+      label: `持仓 ¥${f2(hCost)}`,
+      price: hCost,
+      stroke: '#7c3aed',
+      bg: '#7c3aed',
+      fg: '#ffffff',
+      border: '#6d28d9',
+      dash: '5 3',
+      sw: 1.3,
+    });
+  }
+  if (hBe > 0 && Math.abs(hBe - hCost) >= 0.005) {
+    pushMarker(rawMarkers, {
+      key: 'be',
+      label: `保本 ¥${f2(hBe)}`,
+      price: hBe,
+      stroke: '#d97706',
+      bg: '#d97706',
+      fg: '#ffffff',
+      border: '#b45309',
+      dash: '3.5 2',
+      sw: 1.3,
+    });
+  }
+
+  const markers = rawMarkers.sort((a, b) => a.trueY - b.trueY);
+  const minGap = markers.length >= 5 ? 19.5 : 21;
+  for (let i = 0; i < markers.length; i += 1) {
+    const floorY = i === 0 ? 11 : markers[i - 1].labelY + minGap;
+    if (markers[i].labelY < floorY) markers[i].labelY = floorY;
+  }
+  for (let i = markers.length - 1; i >= 0; i -= 1) {
+    const ceilY = i === markers.length - 1 ? svgH - 11 : markers[i + 1].labelY - minGap;
+    if (markers[i].labelY > ceilY) markers[i].labelY = ceilY;
+    if (markers[i].labelY < 11) markers[i].labelY = 11;
+  }
+
+  const handlePointer = (clientY, rect) => {
+    if (!rect || rect.height <= 0) return;
+    const relY = ((clientY - rect.top) / rect.height) * svgH;
+    const targetP = domHi - ((relY - padTop) / plotH) * domSpan;
+    let bestI = 0;
+    let bestDiff = Infinity;
+    profile.forEach((r, idx) => {
+      const d = Math.abs(Number(r.p) - targetP);
+      if (d < bestDiff) {
+        bestDiff = d;
+        bestI = idx;
+      }
+    });
+    setHoverIdx(bestI);
+  };
+
+  const hRow = hoverIdx !== null && profile[hoverIdx] ? profile[hoverIdx] : null;
+  const hDiffPct = hRow && px > 0 ? (((Number(hRow.p) - px) / px) * 100).toFixed(2) : null;
+  const trappedRatio = Math.max(0, 100 - profitRatio);
+
+  // 保本位 vs 筹码主峰关系诊断（仅在有实盘持仓保本线与主峰时生成）
+  let bePeakInsight = null;
+  if (hBe > 0 && peakPrice > 0) {
+    const diffPct = ((hBe - peakPrice) / peakPrice) * 100;
+    const trappedPeakAbove = peakPrice > px * 1.004;
+    if (trappedPeakAbove && hBe <= peakPrice) {
+      bePeakInsight = {
+        tone: 'good',
+        bg: '#f0fdf4',
+        border: '#bbf7d0',
+        color: '#166534',
+        text: `✅ 保本位低于上方套牢主峰：做T保本 ¥${f2(hBe)} 位于主峰 ¥${f2(peakPrice)} 下方 (${diffPct.toFixed(1)}%)，日内反抽无需穿过主峰解套抛压墙即可保本出局`,
+      };
+    } else if (trappedPeakAbove && hBe > peakPrice) {
+      bePeakInsight = {
+        tone: 'warn',
+        bg: '#fffbeb',
+        border: '#fde68a',
+        color: '#92400e',
+        text: `⚠️ 保本位需跨过上方套牢主峰：做T保本 ¥${f2(hBe)} 高于主峰 ¥${f2(peakPrice)} (+${diffPct.toFixed(1)}%)，触及保本前易遇主峰抛压阻击，反抽主峰附近宜先倒T磨低成本`,
+      };
+    } else {
+      bePeakInsight = {
+        tone: 'info',
+        bg: '#eff6ff',
+        border: '#bfdbfe',
+        color: '#1e40af',
+        text: `🛡️ 现价已站上筹码主峰（¥${f2(peakPrice)}）：做T保本 ¥${f2(hBe)} (${diffPct >= 0 ? '+' : ''}${diffPct.toFixed(1)}% vs 主峰)${hCost > px ? `，可依托主峰支撑波段做T逐步摊薄底仓 ¥${f2(hCost)}` : '，筹码支撑与持仓均处于顺势区'}`,
+      };
+    }
+  }
+
+  return (
+    <div
+      style={{
+        marginBottom: '10px',
+        padding: '9px 10px 7px',
+        borderRadius: '8px',
+        background: 'linear-gradient(180deg, #fcfcfd 0%, #f8fafc 100%)',
+        border: '1px solid var(--line)',
+      }}
+    >
+      {/* 顶部图例与交互读数栏 */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '6px',
+          marginBottom: '5px',
+          fontSize: '11px',
+          minHeight: '18px',
+        }}
+      >
+        {hRow ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', fontFamily: 'ui-monospace, Consolas, monospace' }}>
+            <span style={{ fontWeight: 700, color: 'var(--text)' }}>档位 ¥{f2(hRow.p)}</span>
+            <span style={{ color: 'var(--sub)' }}>单档占比 <b>{Number(hRow.pct).toFixed(2)}%</b></span>
+            {hDiffPct !== null && (
+              <span style={{ fontWeight: 700, color: Number(hRow.p) <= px ? 'var(--up)' : 'var(--info-d)' }}>
+                {Number(hRow.p) <= px ? `获利支撑 (${hDiffPct}%)` : `套牢抛压 (+${hDiffPct}%)`}
+              </span>
+            )}
+          </div>
+        ) : (
+          <span style={{ fontWeight: 700, color: 'var(--sub)' }}>
+            🔥 {chips.cyqDays || 210}日换手衰减筹码峰火焰图
+          </span>
+        )}
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', color: 'var(--mute)', marginLeft: 'auto' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+            <i style={{ width: '8px', height: '8px', borderRadius: '2px', background: '#ef4444', display: 'inline-block' }} />
+            获利 {fmtPct(profitRatio, false, 1)}
+          </span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+            <i style={{ width: '8px', height: '8px', borderRadius: '2px', background: '#3b82f6', display: 'inline-block' }} />
+            套牢 {fmtPct(trappedRatio, false, 1)}
+          </span>
+          {has90Band && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+              <i style={{ width: '8px', height: '8px', borderRadius: '2px', background: 'rgba(245, 158, 11, 0.38)', border: '1px solid #d97706', display: 'inline-block' }} />
+              90%密集区
+            </span>
+          )}
+        </div>
+      </div>
+
+      <svg
+        viewBox={`0 0 ${svgW} ${svgH}`}
+        style={{ width: '100%', height: 'auto', display: 'block', touchAction: 'pan-y', userSelect: 'none' }}
+        role="img"
+        aria-label="210日CYQ横向筹码分布火焰柱状图"
+        onMouseMove={(e) => handlePointer(e.clientY, e.currentTarget.getBoundingClientRect())}
+        onMouseLeave={() => setHoverIdx(null)}
+        onTouchMove={(e) => {
+          if (e.touches && e.touches[0]) {
+            handlePointer(e.touches[0].clientY, e.currentTarget.getBoundingClientRect());
+          }
+        }}
+      >
+        <defs>
+          <linearGradient id="cyqProfitGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#fca5a5" />
+            <stop offset="55%" stopColor="#ef4444" />
+            <stop offset="100%" stopColor="#ea580c" />
+          </linearGradient>
+          <linearGradient id="cyqTrapGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#93c5fd" />
+            <stop offset="60%" stopColor="#3b82f6" />
+            <stop offset="100%" stopColor="#1d4ed8" />
+          </linearGradient>
+        </defs>
+
+        {/* 水平参考网格与左轴价格刻度 */}
+        {yTicks.map((tv, idx) => {
+          const ty = pToY(tv);
+          return (
+            <g key={idx}>
+              <line x1={axisX} y1={ty} x2={axisX + barMaxW + 8} y2={ty} stroke="#e2e8f0" strokeWidth="0.8" strokeDasharray="2 3" />
+              <text
+                x="45"
+                y={ty}
+                textAnchor="end"
+                dominantBaseline="central"
+                fontSize="10"
+                fontFamily="ui-monospace, Consolas, monospace"
+                fill="#64748b"
+              >
+                ¥{f2(tv)}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* 90% 筹码密集区高亮背景带与左轴括号 */}
+        {has90Band && (
+          <g>
+            <rect
+              x={axisX}
+              y={y90Top}
+              width={barMaxW + 8}
+              height={h90}
+              rx="3"
+              fill="#f59e0b"
+              fillOpacity="0.10"
+            />
+            <line x1={axisX} y1={y90Top} x2={axisX + barMaxW + 8} y2={y90Top} stroke="#d97706" strokeOpacity="0.45" strokeWidth="0.9" strokeDasharray="2 3" />
+            <line x1={axisX} y1={y90Bot} x2={axisX + barMaxW + 8} y2={y90Bot} stroke="#d97706" strokeOpacity="0.45" strokeWidth="0.9" strokeDasharray="2 3" />
+            <path
+              d={`M 53 ${y90Top} L 49 ${y90Top} L 49 ${y90Bot} L 53 ${y90Bot}`}
+              fill="none"
+              stroke="#d97706"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+          </g>
+        )}
+
+        {/* 纵向价格基轴 */}
+        <line x1={axisX} y1={padTop - 2} x2={axisX} y2={svgH - padBot + 2} stroke="#cbd5e1" strokeWidth="1.1" />
+
+        {/* 横向筹码峰火焰柱 */}
+        {profile.map((row, idx) => {
+          const pVal = Number(row.p || 0);
+          const pctVal = Number(row.pct || 0);
+          const yTopB = pToY(pVal + 0.5 * stepP);
+          const yBotB = pToY(pVal - 0.5 * stepP);
+          const bH = Math.max(1.9, Math.abs(yBotB - yTopB) - 0.85);
+          const bY = Math.min(yTopB, yBotB) + 0.42;
+          const bW = Math.max(1.5, (pctVal / maxPct) * barMaxW);
+          const isProfit = px > 0 ? pVal <= px + 1e-6 : true;
+          const isPeak = idx === peakIdx;
+          const isHovered = idx === hoverIdx;
+          return (
+            <rect
+              key={idx}
+              x={axisX + 0.6}
+              y={bY}
+              width={bW}
+              height={bH}
+              rx={Math.min(1.6, bH * 0.45)}
+              fill={isProfit ? 'url(#cyqProfitGrad)' : 'url(#cyqTrapGrad)'}
+              fillOpacity={isHovered || isPeak ? '1' : '0.84'}
+              stroke={isPeak ? '#0e7490' : isHovered ? '#0f172a' : 'none'}
+              strokeWidth={isPeak || isHovered ? '1' : '0'}
+            />
+          );
+        })}
+
+        {/* 悬停水平准星线 */}
+        {hRow && (
+          <line
+            x1={axisX}
+            y1={pToY(Number(hRow.p))}
+            x2={axisX + barMaxW + 8}
+            y2={pToY(Number(hRow.p))}
+            stroke="#475569"
+            strokeWidth="0.9"
+            strokeDasharray="1.5 2"
+          />
+        )}
+
+        {/* 主峰、筹码均价、现价三条基准线与右侧防重叠标签 */}
+        {markers.map((m) => (
+          <g key={m.key}>
+            <line
+              x1={axisX}
+              y1={m.trueY}
+              x2={axisX + barMaxW + 8}
+              y2={m.trueY}
+              stroke={m.stroke}
+              strokeWidth={m.sw}
+              strokeDasharray={m.dash}
+            />
+            <polyline
+              points={`${axisX + barMaxW + 8},${m.trueY} ${axisX + barMaxW + 16},${m.labelY} ${axisX + barMaxW + 22},${m.labelY}`}
+              fill="none"
+              stroke={m.stroke}
+              strokeWidth="1"
+              strokeOpacity="0.75"
+            />
+            <rect
+              x={axisX + barMaxW + 22}
+              y={m.labelY - 9}
+              width="122"
+              height="18"
+              rx="4.5"
+              fill={m.bg}
+              stroke={m.border}
+              strokeWidth="1"
+            />
+            <text
+              x={axisX + barMaxW + 83}
+              y={m.labelY}
+              textAnchor="middle"
+              dominantBaseline="central"
+              fontSize="10.2"
+              fontWeight="700"
+              fontFamily="ui-monospace, Consolas, monospace"
+              fill={m.fg}
+            >
+              {m.label}
+            </text>
+          </g>
+        ))}
+      </svg>
+
+      {bePeakInsight && (
+        <div
+          style={{
+            marginTop: '6px',
+            padding: '5px 8px',
+            borderRadius: '6px',
+            background: bePeakInsight.bg,
+            border: `1px solid ${bePeakInsight.border}`,
+            color: bePeakInsight.color,
+            fontSize: '11.2px',
+            lineHeight: 1.45,
+          }}
+        >
+          {bePeakInsight.text}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DiagnosisPage({
   pool = [],
   tradeLogs = [],
@@ -39,9 +492,9 @@ export default function DiagnosisPage({
   fastRefresh = true,
   onToggleFastRefresh,
 }) {
-  const defaultCode = initialCode || pool[0]?.code || '002085';
-  const [activeCode, setActiveCode] = useState(defaultCode);
-  const [inputText, setInputText] = useState(defaultCode);
+  const initCleanCode = extractCodeFromInput(initialCode) || '';
+  const [activeCode, setActiveCode] = useState(initCleanCode);
+  const [inputText, setInputText] = useState(initCleanCode);
   const [loading, setLoading] = useState(false);
   const [report, setReport] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
@@ -108,9 +561,19 @@ export default function DiagnosisPage({
   }, []);
 
   useEffect(() => {
-    const target = initialCode || pool[0]?.code || '002085';
-    const localHit = localLookup.find((x) => x.code === String(target).padStart(6, '0'));
-    runDiagnosis(target, localHit?.name || '');
+    const code6 = extractCodeFromInput(initialCode);
+    if (code6) {
+      const localHit = localLookup.find((x) => x.code === code6);
+      runDiagnosis(code6, localHit?.name || '');
+    } else {
+      setActiveCode('');
+      suppressSuggestRef.current = true;
+      setInputText('');
+      setReport(null);
+      setDiagChartStock(null);
+      setErrorMsg('');
+      setShowSuggest(false);
+    }
   }, [initialCode]);
 
   // 点击外部关闭联想下拉框
@@ -356,6 +819,30 @@ export default function DiagnosisPage({
   const mkt = report?.marketContext || {};
   const sts = report?.shortTermStatus || null;
   const isUp = q.chg >= 0;
+
+  const matchedPoolStock = report?.code
+    ? (pool || []).find((s) => String(s.code || '').padStart(6, '0') === String(report.code).padStart(6, '0'))
+    : null;
+  const holdShares = +(diagChartStock?.shares ?? matchedPoolStock?.shares ?? 0);
+  const holdCost = holdShares > 0 ? +(diagChartStock?.cost || matchedPoolStock?.cost || 0) : 0;
+  const holdBePrice = (() => {
+    if (holdShares <= 0) return 0;
+    const savedBe = +(diagChartStock?.bePrice || matchedPoolStock?.bePrice || 0);
+    if (savedBe > 0) return savedBe;
+    const basePx = +(q.price || chips.curPrice || holdCost || 0);
+    if (basePx <= 0) return 0;
+    try {
+      return calcTBreakeven({
+        mode: 'BUY',
+        entryPx: basePx,
+        qty: Math.min(holdShares, 1000) || 100,
+        commRate: 0.00025,
+        hasMin5: true,
+      }).targetPx;
+    } catch (_) {
+      return 0;
+    }
+  })();
 
   const handleQuickAddHerd = async () => {
     if (!report?.code) return;
@@ -1323,19 +1810,34 @@ export default function DiagnosisPage({
                       </div>
                     </div>
 
-                    {/* 筹码成本与获利盘 */}
+                    {/* 210日CYQ横向筹码峰火焰柱状图（持仓股自动叠加成本线与做T保本线） */}
+                    <CyqFlameChart
+                      chips={chips}
+                      curPrice={q.price || chips.curPrice}
+                      holdCost={holdCost}
+                      holdBePrice={holdBePrice}
+                    />
+
+                    {/* 210日换手衰减筹码成本、获利盘与集中度 */}
                     <div className="diag-chips-pair">
                       <div>
-                        <div style={{ color: 'var(--mute)', fontSize: '11.5px' }}>近60日筹码均价:</div>
+                        <div style={{ color: 'var(--mute)', fontSize: '11.5px' }}>
+                          CYQ筹码均价 ({chips.cyqDays || 210}日衰减):
+                        </div>
                         <div style={{ fontWeight: 700, fontSize: '15px', fontFamily: 'monospace' }}>
                           ¥{f2(chips.avgCost)}
+                          {chips.peakPrice > 0 && (
+                            <span style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--sub)', marginLeft: '6px' }}>
+                              (主峰 ¥{f2(chips.peakPrice)})
+                            </span>
+                          )}
                         </div>
                         <div style={{ fontSize: '11px', color: (chips.diffFromCost ?? 0) >= 0 ? 'var(--up)' : 'var(--down)' }}>
                           现价距均价: {fmtPct(chips.diffFromCost, true)}
                         </div>
                       </div>
                       <div>
-                        <div style={{ color: 'var(--mute)', fontSize: '11.5px' }}>当前获利筹码估算:</div>
+                        <div style={{ color: 'var(--mute)', fontSize: '11.5px' }}>CYQ获利盘比例:</div>
                         <div style={{ fontWeight: 700, fontSize: '15px', fontFamily: 'monospace', color: (chips.profitRatio ?? 50) <= 20 ? 'var(--down)' : (chips.profitRatio ?? 50) >= 80 ? 'var(--up)' : 'var(--text)' }}>
                           {fmtPct(chips.profitRatio)}
                         </div>
@@ -1344,6 +1846,29 @@ export default function DiagnosisPage({
                         </div>
                       </div>
                     </div>
+
+                    {chips.concentration90 != null && (
+                      <div className="diag-chips-pair" style={{ marginTop: '8px' }}>
+                        <div>
+                          <div style={{ color: 'var(--mute)', fontSize: '11.5px' }}>90%筹码成本与集中度:</div>
+                          <div style={{ fontWeight: 700, fontSize: '13.5px', fontFamily: 'monospace' }}>
+                            ¥{f2(chips.cost90Low)} ~ ¥{f2(chips.cost90High)}
+                          </div>
+                          <div style={{ fontSize: '11px', color: chips.concentration90 <= 10 ? 'var(--down)' : chips.concentration90 >= 20 ? 'var(--warn)' : 'var(--sub)' }}>
+                            集中度 {fmtPct(chips.concentration90)} · {chips.concentrationLabel || '适度集中'}
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{ color: 'var(--mute)', fontSize: '11.5px' }}>70%核心筹码密集带:</div>
+                          <div style={{ fontWeight: 700, fontSize: '13.5px', fontFamily: 'monospace' }}>
+                            ¥{f2(chips.cost70Low)} ~ ¥{f2(chips.cost70High)}
+                          </div>
+                          <div style={{ fontSize: '11px', color: 'var(--sub)' }}>
+                            70%集中度 {fmtPct(chips.concentration70)}
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                     {/* 🧬 实验性弱参考 */}
                     {(report.atrProfile || report.experimentalDNA) && (
@@ -1501,7 +2026,55 @@ export default function DiagnosisPage({
             </section>
           </div>
         </div>
-      ) : null}
+      ) : (
+        <section
+          style={{
+            textAlign: 'center',
+            padding: '38px 20px',
+            background: 'linear-gradient(180deg, #ffffff 0%, #fafbfc 100%)',
+            border: '1px dashed var(--line2)',
+          }}
+        >
+          <div style={{ fontSize: '28px', marginBottom: '8px' }}>🩺</div>
+          <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text)' }}>
+            输入股票代码、名称或拼音首字母开始全景体检
+          </div>
+          <div style={{ fontSize: '12.5px', color: 'var(--sub)', marginTop: '6px', maxWidth: '560px', marginInline: 'auto', lineHeight: 1.6 }}>
+            覆盖近 30 天公告排雷、210 日换手衰减 CYQ 筹码峰、全天分时 VWAP 承接、板块身位与二波潜力评估
+          </div>
+          {pool.length > 0 && (
+            <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '12px', color: 'var(--mute)' }}>点选自选快速体检：</span>
+              {[...pool]
+                .sort((a, b) => ((+b.shares || 0) > 0 ? 1 : 0) - ((+a.shares || 0) > 0 ? 1 : 0))
+                .slice(0, 8)
+                .map((s) => {
+                  const c6 = String(s.code || '').padStart(6, '0');
+                  const hasPos = (+s.shares || 0) > 0;
+                  return (
+                    <button
+                      key={c6}
+                      type="button"
+                      onClick={() => handlePresetClick(c6, s.name)}
+                      className="diag-preset-pill"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        background: hasPos ? '#faf5ff' : '#fff',
+                        borderColor: hasPos ? '#d8b4fe' : 'var(--line2)',
+                      }}
+                    >
+                      <span style={{ fontSize: '11px' }}>{hasPos ? '📦' : '👀'}</span>
+                      <span style={{ fontWeight: 600 }}>{s.name || c6}</span>
+                      <span style={{ fontSize: '11px', color: 'var(--mute)', fontFamily: 'ui-monospace, Consolas, monospace' }}>{c6}</span>
+                    </button>
+                  );
+                })}
+            </div>
+          )}
+        </section>
+      )}
     </div>
   );
 }

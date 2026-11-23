@@ -12,6 +12,7 @@ import httpx
 
 from .ignition import get_ignition_pool, load_saved_ignition
 from .limitup import get_limitup_pool
+from .trade_calendar import cn_now_str, cn_today_iso, get_market_calendar_snapshot, is_trade_day
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENGINE_OUT_DIR = os.path.join(BASE_DIR, "选股引擎", "out")
@@ -341,8 +342,8 @@ async def _ingest_board_signals(signals: Dict[str, dict], today_iso: str, http_c
 async def _ingest_ignition_signals(signals: Dict[str, dict], today_iso: str, http_client: Optional[httpx.AsyncClient] = None) -> dict:
     """从起爆点挖掘双方向结果建档「横盘起爆潜伏(ignition)」与「深跌抗跌抄底(bottom)」。"""
     ig = load_saved_ignition()
-    is_weekday = datetime.date.today().weekday() < 5
-    if not ig or (is_weekday and _norm_iso_date(ig.get("date")) < today_iso):
+    is_open_trade_day = is_trade_day(today_iso)
+    if not ig or (is_open_trade_day and _norm_iso_date(ig.get("date")) < today_iso):
         try:
             ig = await get_ignition_pool(http_client=http_client)
         except Exception:
@@ -416,7 +417,7 @@ async def _ingest_ignition_signals(signals: Dict[str, dict], today_iso: str, htt
 
 async def snapshot_strategies(http_client: Optional[httpx.AsyncClient] = None) -> dict:
     """触发一次全策略建档快照并原子落盘至 data/strategy_ledger.json。"""
-    today_iso = datetime.date.today().strftime("%Y-%m-%d")
+    today_iso = cn_today_iso()
     async with _LEDGER_LOCK:
         state = _load_ledger_sync()
         signals: Dict[str, dict] = state.get("signals", {})
@@ -430,7 +431,7 @@ async def snapshot_strategies(http_client: Optional[httpx.AsyncClient] = None) -
         ig_info = await _ingest_ignition_signals(signals, today_iso, http_client=http_client)
 
         state["baselineDate"] = STRATEGY_BASELINE_DATE
-        state["updatedAt"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        state["updatedAt"] = cn_now_str()
         state["lastBoardExclude"] = {
             "date": board_info.get("signalDate", today_iso),
             "excludedLocked": board_info["excludedLocked"],
@@ -1053,8 +1054,9 @@ async def get_strategy_performance(
     out = {
         "ok": True,
         "baselineDate": STRATEGY_BASELINE_DATE,
+        "tradeCalendar": get_market_calendar_snapshot(),
         "updatedAt": state.get("updatedAt", ""),
-        "evaluatedAt": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "evaluatedAt": cn_now_str(),
         "feeRatePct": round(ROUND_TRIP_FEE * 100.0, 3),
         "totalSignals": len(evaluated),
         "summaries": summaries,

@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { calc, posCalc, computeLeadingMomentum } from '../services/api.js';
 import { f2, money, getTodayTStatus, copyPlain, toastWarn } from '../services/utils.js';
-import { evaluateChannelHoldingDiscipline } from '../services/risk.js';
+import { getUpcomingHolidayReminder } from '../services/calendar.js';
+import { evaluateChannelHoldingDiscipline, evaluatePreTradeHolidayGuard } from '../services/risk.js';
 
 /**
  * 根据「自选观察」vs「实盘持仓」分别生成清晰、直白的买卖点判定结论：
@@ -293,7 +294,16 @@ export function buildActionSignal(stock, { sentiment = null, noticeRisk = null, 
 }
 
 /** 卡片内置：一键下单手数 / 以损定仓 / 盈亏比计算器 */
-function OrderSizingCalc({ stock, sig, totalAssets, posRules, totalMktVal = 0, allowedCapPct = 80, onClose }) {
+function OrderSizingCalc({
+  stock,
+  sig,
+  totalAssets,
+  posRules,
+  totalMktVal = 0,
+  allowedCapPct = 80,
+  holidayReminder = undefined,
+  onClose,
+}) {
   const { c, px, pos } = sig;
   const assets = Math.max(1, +totalAssets || 100000);
   const singleMaxPct = posRules?.singleMaxPct ?? 30;
@@ -321,12 +331,21 @@ function OrderSizingCalc({ stock, sig, totalAssets, posRules, totalMktVal = 0, a
   const lossPct = eNum > 0 ? ((sNum - eNum) / eNum) * 100 : 0;
   const gainPct = eNum > 0 ? ((tNum - eNum) / eNum) * 100 : 0;
 
-  // 买入后单票占比 & 总仓位占比风控校验
+  // 买入后单票占比 & 总仓位占比风控校验（含连续≥3天长假前1-2日黄牌预检）
   const curSingleMkt = pos?.curMkt || 0;
   const afterSinglePct = ((curSingleMkt + actualAmt) / assets) * 100;
   const afterTotalPct = ((totalMktVal + actualAmt) / assets) * 100;
   const overSingle = actualAmt > 0 && afterSinglePct > singleMaxPct + 0.1;
   const overTotal = actualAmt > 0 && afterTotalPct > allowedCapPct + 0.1;
+  const preHolidayGuard = evaluatePreTradeHolidayGuard({
+    currentMkt: totalMktVal,
+    buyAmt: actualAmt,
+    unitPrice: eNum,
+    totalAssets: assets,
+    emotionCapPct: allowedCapPct,
+    holidayReminder,
+    stockName: stock.name,
+  });
 
   // 以损定仓：按「最大可承受亏损 = 总资产 × riskPct%」反推整手预算
   const applyRiskSizing = (riskPct) => {
@@ -346,7 +365,7 @@ function OrderSizingCalc({ stock, sig, totalAssets, posRules, totalMktVal = 0, a
       `计划挂单买入：¥${f2(eNum)} × ${shares} 股（约 ¥${Math.round(actualAmt).toLocaleString('zh-CN')}，买后单票 ${afterSinglePct.toFixed(1)}% / 总仓 ${afterTotalPct.toFixed(1)}%）`,
       `止损防守价：¥${f2(sNum)}（${lossPct.toFixed(1)}%，最大回撤约 ¥${Math.round(maxLoss)}，占总资产 ${((maxLoss / assets) * 100).toFixed(2)}%）`,
       `止盈目标价：¥${f2(tNum)}（+${gainPct.toFixed(1)}%，预期收益约 ¥${Math.round(expGain)}）`,
-      `盈亏比：1 : ${rrRatio.toFixed(2)}${stock.memo ? `\n买入逻辑：${stock.memo}` : ''}`,
+      `盈亏比：1 : ${rrRatio.toFixed(2)}${preHolidayGuard.willExceedCap ? `\n节前控仓提醒：${preHolidayGuard.inlineWarnText}` : ''}${stock.memo ? `\n买入逻辑：${stock.memo}` : ''}`,
     ].join('\n');
     copyPlain(txt, `已复制 ${stock.name} 下单与条件单参数`);
   };
@@ -459,6 +478,29 @@ function OrderSizingCalc({ stock, sig, totalAssets, posRules, totalMktVal = 0, a
         </div>
       )}
 
+      {preHolidayGuard.willExceedCap && (
+        <div className="bcc-holiday-warn">
+          <div>
+            🟨 <b>节前控仓黄牌提醒：</b>距<b>{preHolidayGuard.holidayName}</b>（连休
+            {preHolidayGuard.closedDays}天）仅剩 <b>{preHolidayGuard.remainingTradeDays}</b> 个交易日，
+            买后总仓将达 <b>{preHolidayGuard.afterPosPct.toFixed(1)}%</b>，超出
+            {preHolidayGuard.capSourceLabel} <b>{preHolidayGuard.overPct}%</b>。
+          </div>
+          <div className="bcc-hw-row">
+            <span>{preHolidayGuard.safeCapHint}</span>
+            {preHolidayGuard.maxSafeShares >= 100 && (
+              <button
+                type="button"
+                className="bcc-chip holiday-cap"
+                onClick={() => setBudget(String(Math.round(preHolidayGuard.maxSafeShares * eNum)))}
+              >
+                按节前上限({preHolidayGuard.maxSafeShares}股)
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="bcc-foot">
         <span className="bcc-fee">含单边佣金约 ¥{comm.toFixed(1)} + 印花税</span>
         <button type="button" className="bc-act-btn" onClick={handleCopyOrder}>
@@ -479,6 +521,7 @@ export default function BattleCardGrid({
   tiltState = null,
   totalMktVal = 0,
   allowedCapPct = 80,
+  holidayReminder = undefined,
   activeStockCode = '',
   expandedCode = '',
   onToggleExpand,
@@ -492,6 +535,10 @@ export default function BattleCardGrid({
   const [editingMemoCode, setEditingMemoCode] = useState('');
   const [memoDraft, setMemoDraft] = useState('');
   const [calcOpenCode, setCalcOpenCode] = useState('');
+  const effHolidayReminder = useMemo(
+    () => (holidayReminder !== undefined ? holidayReminder : getUpcomingHolidayReminder(new Date())),
+    [holidayReminder]
+  );
 
   if (!stocks.length) {
     return (
@@ -767,6 +814,7 @@ export default function BattleCardGrid({
                 posRules={posRules}
                 totalMktVal={totalMktVal}
                 allowedCapPct={allowedCapPct}
+                holidayReminder={effHolidayReminder}
                 onClose={() => setCalcOpenCode('')}
               />
             )}
@@ -798,30 +846,61 @@ export default function BattleCardGrid({
                 >
                   🧮 算手数
                 </button>
-                <button
-                  type="button"
-                  className={`bc-act-btn primary-t ${hasPos ? 'is-pos-t' : 'is-watch-buy'} ${!hasPos && isTiltLocked ? 'is-locked' : ''}`}
-                  onClick={() => {
-                    if (!hasPos && isTiltLocked) {
-                      toastWarn('🔒 单日防上头熔断保护中：已暂停新开仓买入，请先在上方风控条冷静复盘');
-                      return;
-                    }
-                    if (onOpenQuickT) {
-                      onOpenQuickT(s, hasPos ? (isTiltLocked ? '倒T' : '正T') : '买入建仓', px);
-                    }
-                  }}
-                  title={
-                    !hasPos && isTiltLocked
-                      ? '防上头熔断保护中，暂禁新开仓'
-                      : hasPos
-                      ? isTiltLocked
-                        ? '熔断期仅允许记录减仓卖出或倒T高抛'
-                        : '快捷记录做T或买卖流水'
-                      : '记录首次买入建仓（自动转入实盘持仓）'
-                  }
-                >
-                  {hasPos ? (isTiltLocked ? '⚡ 减仓/倒T' : '⚡ 记T') : (isTiltLocked ? '🔒 熔断禁买' : '＋ 建仓')}
-                </button>
+                {(() => {
+                  const minLotHoliday = !hasPos
+                    ? evaluatePreTradeHolidayGuard({
+                        currentMkt: totalMktVal,
+                        buyAmt: Math.max(100 * (px || 1), 1),
+                        unitPrice: px,
+                        totalAssets,
+                        emotionCapPct: allowedCapPct,
+                        holidayReminder: effHolidayReminder,
+                        stockName: s.name,
+                      })
+                    : null;
+                  const warnWatchHoliday = Boolean(!hasPos && !isTiltLocked && minLotHoliday?.willExceedCap);
+                  return (
+                    <button
+                      type="button"
+                      className={`bc-act-btn primary-t ${hasPos ? 'is-pos-t' : 'is-watch-buy'} ${!hasPos && isTiltLocked ? 'is-locked' : ''} ${warnWatchHoliday ? 'is-holiday-warn' : ''}`}
+                      onClick={() => {
+                        if (!hasPos && isTiltLocked) {
+                          toastWarn('🔒 单日防上头熔断保护中：已暂停新开仓买入，请先在上方风控条冷静复盘');
+                          return;
+                        }
+                        if (warnWatchHoliday) {
+                          toastWarn(
+                            `🟨 节前控仓提醒：距${minLotHoliday.holidayName}(休${minLotHoliday.closedDays}天)仅剩${minLotHoliday.remainingTradeDays}个交易日，当前仓位 ${minLotHoliday.beforePosPct.toFixed(1)}% 已临近/超过节前上限(${minLotHoliday.effectiveCapPct}%)，确认建仓时将触发二次核验`
+                          );
+                        }
+                        if (onOpenQuickT) {
+                          onOpenQuickT(s, hasPos ? (isTiltLocked ? '倒T' : '正T') : '买入建仓', px);
+                        }
+                      }}
+                      title={
+                        !hasPos && isTiltLocked
+                          ? '防上头熔断保护中，暂禁新开仓'
+                          : warnWatchHoliday
+                          ? `${minLotHoliday.inlineWarnText}（点击打开建仓弹窗，确认买入时将二次提醒）`
+                          : hasPos
+                          ? isTiltLocked
+                            ? '熔断期仅允许记录减仓卖出或倒T高抛'
+                            : '快捷记录做T或买卖流水'
+                          : '记录首次买入建仓（自动转入实盘持仓）'
+                      }
+                    >
+                      {hasPos
+                        ? isTiltLocked
+                          ? '⚡ 减仓/倒T'
+                          : '⚡ 记T'
+                        : isTiltLocked
+                        ? '🔒 熔断禁买'
+                        : warnWatchHoliday
+                        ? '🟨 ＋建仓'
+                        : '＋ 建仓'}
+                    </button>
+                  );
+                })()}
               </div>
               <button
                 type="button"

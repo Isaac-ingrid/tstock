@@ -8,6 +8,7 @@ import PositionRiskBar, {
 } from './PositionRiskBar.jsx';
 import { posCalc } from '../services/api.js';
 import { money } from '../services/utils.js';
+import { getUpcomingHolidayReminder, syncRemoteTradeCalendar } from '../services/calendar.js';
 import DirectMoneyInput from './DirectMoneyInput.jsx';
 
 export default function ConsoleSection({
@@ -52,8 +53,20 @@ export default function ConsoleSection({
   const [expandedCode, setExpandedCode] = useState(''); // 点击卡片才展开对应完整做T详情面板
   const [expandAll, setExpandAll] = useState(false);
   const [internalPosRules, setInternalPosRules] = useState(() => loadPosRules());
+  const [calTick, setCalTick] = useState(0);
+
+  useEffect(() => {
+    let mounted = true;
+    syncRemoteTradeCalendar().then(() => {
+      if (mounted) setCalTick((t) => t + 1);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const posRules = externalPosRules || internalPosRules;
+  const holidayReminder = useMemo(() => getUpcomingHolidayReminder(new Date()), [calTick]);
 
   const handleUpdatePosRules = (next) => {
     if (onUpdatePosRules) {
@@ -88,8 +101,9 @@ export default function ConsoleSection({
   const baseCapital = totalAssetsNum * 0.7;
   const tacticalCapital = totalAssetsNum * 0.3;
 
-  const baseStocks = useMemo(() => pool.filter((s) => s.tier === 'long' || s.poolTag === '稳健'), [pool]);
-  const tacticalStocks = useMemo(() => pool.filter((s) => s.tier === 'short' || s.poolTag === '短线'), [pool]);
+  const resolveStockTier = (s) => (s?.tier === 'short' || s?.tier === 'long' ? s.tier : s?.poolTag === '稳健' ? 'long' : 'short');
+  const baseStocks = useMemo(() => pool.filter((s) => resolveStockTier(s) === 'long'), [pool]);
+  const tacticalStocks = useMemo(() => pool.filter((s) => resolveStockTier(s) === 'short'), [pool]);
   const baseMktVal = useMemo(() => baseStocks.reduce((acc, s) => acc + (s.shares || 0) * (s.price || s.cost || 0), 0), [baseStocks]);
   const shortPoolMktVal = useMemo(() => tacticalStocks.reduce((acc, s) => acc + (s.shares || 0) * (s.price || s.cost || 0), 0), [tacticalStocks]);
   const tailMktVal = useMemo(
@@ -346,6 +360,7 @@ export default function ConsoleSection({
             tiltState={tiltState}
             totalMktVal={totalMktVal}
             allowedCapPct={allowedCapPct}
+            holidayReminder={holidayReminder}
             activeStockCode={activeStockCode}
             expandedCode={expandAll ? '' : expandedCode}
             onToggleExpand={handleToggleExpand}
@@ -380,6 +395,7 @@ export default function ConsoleSection({
             tiltState={tiltState}
             totalMktVal={totalMktVal}
             allowedCapPct={allowedCapPct}
+            holidayReminder={holidayReminder}
             activeStockCode={activeStockCode}
             expandedCode={expandAll ? '' : expandedCode}
             onToggleExpand={handleToggleExpand}
@@ -434,6 +450,10 @@ export default function ConsoleSection({
               index={pool.indexOf(expandedStock)}
               isCur={true}
               tradeLogs={tradeLogs}
+              totalAssets={totalAssetsNum}
+              totalMktVal={totalMktVal}
+              allowedCapPct={allowedCapPct}
+              holidayReminder={holidayReminder}
               isTailAlertTime={isTailAlertTime}
               simTailAlert={simTailAlert}
               onUpdateStock={onUpdateStock}
@@ -460,6 +480,10 @@ export default function ConsoleSection({
               index={pool.indexOf(s)}
               isCur={true}
               tradeLogs={tradeLogs}
+              totalAssets={totalAssetsNum}
+              totalMktVal={totalMktVal}
+              allowedCapPct={allowedCapPct}
+              holidayReminder={holidayReminder}
               isTailAlertTime={isTailAlertTime}
               simTailAlert={simTailAlert}
               onUpdateStock={onUpdateStock}

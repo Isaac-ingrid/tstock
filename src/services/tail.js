@@ -5,6 +5,7 @@
 import { f2, f3, pct, money, money2, todayStr, toast, toastOk, toastWarn, toastErr, soundChime } from './utils.js';
 import { pool, savePool, LOG, saveLog, TAIL_ACTIVES, saveTailActive, getAccountTotalAssets } from './state.js';
 import { animRadarGlow } from './anim.js';
+import { getCNClock, isAShareTradeDay } from './calendar.js';
 
 /* 获取账户总资产用于计算 10% 理想仓位 */
 export function getAccountTotalAssetsForTail() {
@@ -118,9 +119,10 @@ export function renderTailBuySection() {
   const actives = (TAIL_ACTIVES || []).filter(x => x && x.status === 'active');
 
   const now = new Date();
-  const mins = now.getHours() * 60 + now.getMinutes();
-  const isTailTime = (mins >= 870 && mins < 895); // 14:30 - 14:55
-  const isExitTime = (mins >= 570 && mins < 600); // 09:30 - 10:00
+  const mins = getCNClock(now).mins;
+  const onTradeDay = isAShareTradeDay(now);
+  const isTailTime = onTradeDay && (mins >= 870 && mins < 895); // 14:30 - 14:55
+  const isExitTime = onTradeDay && (mins >= 570 && mins < 600); // 09:30 - 10:00
 
   let badgeHtml = '';
   if (isTailTime) {

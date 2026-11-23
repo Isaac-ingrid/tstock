@@ -15,18 +15,19 @@
 
 const fs = require('fs');
 const path = require('path');
-const { ENGINE_DIR, DATA_DIR, todayStr, isWeekend, log, runScript } = require('./common');
+const { ENGINE_DIR, DATA_DIR, todayStr, getTradeDayStatus, nextTradeDay, log, runScript } = require('./common');
 
 async function main() {
   const force = process.argv.includes('--force');
   const today = todayStr();
+  const tdStatus = getTradeDayStatus(today);
 
   log(`════════════════════════════════════════════════════════════`);
   log(`⚡ [14:30 定时任务] 启动 A股尾盘黑马盘中实时精选 (${today})`);
   log(`════════════════════════════════════════════════════════════`);
 
-  if (isWeekend() && !force) {
-    log(`⚠️ 今日是周末非交易日，跳过尾盘选股任务（使用 --force 可强制运行）`);
+  if (!tdStatus.isTradeDay && !force) {
+    log(`⚠️ 今日为【${tdStatus.label}】（下一交易日 ${nextTradeDay(today)}），跳过尾盘选股任务（使用 --force 可强制运行）`);
     return;
   }
 

@@ -8,6 +8,8 @@ export default function TailPage({
   pool = [],
   totalAssets,
   cash,
+  currentMktVal = null,
+  allowedCapPct = 80,
   actives,
   wbLatest,
   tiltState = null,
@@ -27,6 +29,8 @@ export default function TailPage({
         pool={pool}
         totalAssets={totalAssets}
         cash={cash}
+        currentMktVal={currentMktVal}
+        allowedCapPct={allowedCapPct}
         actives={actives}
         wbLatest={wbLatest}
         tiltState={tiltState}

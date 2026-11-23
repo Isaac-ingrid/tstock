@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { AUCTION_TIERS, getAuctionStatusInfo, getAuctionTier, computeAuctionPattern, computeLimitUpRigidity } from '../services/auction.js';
 import { fetchQuotes } from '../services/api.js';
 import { f2 } from '../services/utils.js';
+import { getCNClock } from '../services/calendar.js';
 
 export default function SelectionSection({
   wbLatest,
@@ -36,7 +37,7 @@ export default function SelectionSection({
   const displayShort = (onlyRed && redShort.length > 0) ? redShort : short;
 
   const dateStr = D ? (D.tradeDate || (D.generatedAt ? D.generatedAt.slice(0, 10) : '今日')) : '今日';
-  const genTimeStr = D && D.generatedAt ? new Date(D.generatedAt).toLocaleTimeString('zh-CN', { hour12: false }) : '';
+  const genTimeStr = D && D.generatedAt ? getCNClock(D.generatedAt).timeStr : '';
   const inCnt = short.concat(steady).filter(r => inPoolCodes.has(String(r.code).padStart(6, '0'))).length;
   const aucStatus = getAuctionStatusInfo();
 
@@ -65,8 +66,7 @@ export default function SelectionSection({
       const q = await fetchQuotes(candCodes);
       if (q && Object.keys(q).length) {
         setCandQuotes(prev => ({ ...prev, ...q }));
-        const now = new Date();
-        setQuotesUpdatedTime(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`);
+        setQuotesUpdatedTime(getCNClock(new Date()).timeStr);
       }
     } catch (e) {
       console.warn('[CandQuotes error]', e);

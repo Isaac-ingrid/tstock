@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { posCalc } from '../services/api.js';
 import { money } from '../services/utils.js';
+import { getUpcomingHolidayReminder, syncRemoteTradeCalendar } from '../services/calendar.js';
 import DirectMoneyInput from './DirectMoneyInput.jsx';
 import {
   POS_RULES_KEY,
@@ -8,9 +9,17 @@ import {
   loadPosRules,
   savePosRules,
   getAllowedPosCap,
+  evaluateHolidayPositionGuard,
 } from '../services/risk.js';
 
-export { POS_RULES_KEY, DEFAULT_POS_RULES, loadPosRules, savePosRules, getAllowedPosCap };
+export {
+  POS_RULES_KEY,
+  DEFAULT_POS_RULES,
+  loadPosRules,
+  savePosRules,
+  getAllowedPosCap,
+  evaluateHolidayPositionGuard,
+};
 
 export default function PositionRiskBar({
   pool = [],
@@ -28,9 +37,21 @@ export default function PositionRiskBar({
   onUnlockTilt,
   onRelockTilt,
   onSelectStock,
+  referenceDate = null,
 }) {
   const [expanded, setExpanded] = useState(false);
   const [confirmingUnlock, setConfirmingUnlock] = useState(false);
+  const [calTick, setCalTick] = useState(0);
+
+  useEffect(() => {
+    let mounted = true;
+    syncRemoteTradeCalendar().then(() => {
+      if (mounted) setCalTick((t) => t + 1);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const assets = Math.max(1, +totalAssets || 100000);
   const { capPct, valve, label: capLabel } = getAllowedPosCap(sentiment, posRules);
@@ -102,12 +123,29 @@ export default function PositionRiskBar({
     };
   }, [pool, tailActives, assets, posRules.singleMaxPct]);
 
+  const holidayReminder = useMemo(
+    () => getUpcomingHolidayReminder(referenceDate || new Date()),
+    [referenceDate, calTick]
+  );
+  const holidayGuard = useMemo(
+    () =>
+      evaluateHolidayPositionGuard({
+        totalPosPct,
+        totalMkt,
+        totalAssets: assets,
+        emotionCapPct: capPct,
+        holidayReminder,
+      }),
+    [totalPosPct, totalMkt, assets, capPct, holidayReminder]
+  );
+
   const isOverTotal = totalPosPct > capPct + 0.1;
   const excessAmt = Math.max(0, totalMkt - (assets * capPct) / 100);
   const remainAmt = Math.max(0, (assets * capPct) / 100 - totalMkt);
   const cashPct = Math.max(0, 100 - totalPosPct);
   const isTiltLocked = Boolean(tiltState?.isLocked);
-  const hasAnyWarn = isOverTotal || overweightList.length > 0 || isTiltLocked;
+  const hasAnyWarn =
+    isOverTotal || holidayGuard.isYellowCard || overweightList.length > 0 || isTiltLocked;
 
   const updateField = (key, val) => {
     const next = {
@@ -122,7 +160,7 @@ export default function PositionRiskBar({
       className={`pos-risk-wrap ${
         isOverTotal || isTiltLocked
           ? 'is-danger'
-          : overweightList.length > 0 || tiltState?.isWarning
+          : holidayGuard.isYellowCard || overweightList.length > 0 || tiltState?.isWarning
           ? 'is-warn'
           : ''
       }`}
@@ -132,12 +170,32 @@ export default function PositionRiskBar({
         <div className="pr-left">
           <span className="pr-title">⚖️ 动态仓位 &amp; 盘中风控</span>
 
-          <div className="pr-gauge" title={`当前总仓位 ${totalPosPct.toFixed(1)}% / ${capLabel} ${capPct}%`}>
+          <div
+            className="pr-gauge"
+            title={
+              holidayGuard.active
+                ? `当前总仓位 ${totalPosPct.toFixed(1)}% / ${capLabel} ${capPct}% · ${holidayGuard.holidayName}节前建议上限 ${holidayGuard.effectiveCapPct}%`
+                : `当前总仓位 ${totalPosPct.toFixed(1)}% / ${capLabel} ${capPct}%`
+            }
+          >
             <div className="pr-gauge-track">
               <div
-                className={`pr-gauge-fill ${isOverTotal ? 'danger' : totalPosPct >= capPct * 0.85 ? 'warn' : 'ok'}`}
+                className={`pr-gauge-fill ${
+                  isOverTotal
+                    ? 'danger'
+                    : holidayGuard.isYellowCard || totalPosPct >= capPct * 0.85
+                    ? 'warn'
+                    : 'ok'
+                }`}
                 style={{ width: `${Math.min(100, totalPosPct)}%` }}
               />
+              {holidayGuard.active && holidayGuard.holidayCapPct < capPct && (
+                <div
+                  className="pr-gauge-holiday-cap"
+                  style={{ left: `${Math.min(100, holidayGuard.holidayCapPct)}%` }}
+                  title={`${holidayGuard.holidayName}节前建议上限 ${holidayGuard.holidayCapPct}%`}
+                />
+              )}
               <div
                 className="pr-gauge-cap"
                 style={{ left: `${Math.min(100, capPct)}%` }}
@@ -145,7 +203,16 @@ export default function PositionRiskBar({
               />
             </div>
             <span className="pr-gauge-txt">
-              总仓 <b className={isOverTotal ? 'up' : ''}>{totalPosPct.toFixed(1)}%</b> / {capLabel} <b>{capPct}%</b>
+              总仓{' '}
+              <b className={isOverTotal ? 'up' : holidayGuard.isYellowCard ? 'warn' : ''}>
+                {totalPosPct.toFixed(1)}%
+              </b>{' '}
+              / {capLabel} <b>{capPct}%</b>
+              {holidayGuard.active && holidayGuard.effectiveCapPct < capPct ? (
+                <span className="pr-holiday-cap-txt">
+                  {' '}· 节前≤<b>{holidayGuard.effectiveCapPct}%</b>
+                </span>
+              ) : null}
             </span>
           </div>
 
@@ -153,6 +220,10 @@ export default function PositionRiskBar({
             <span className="pr-pill danger">
               🚨 超仓 {(totalPosPct - capPct).toFixed(1)}% · 建议减仓 ¥{money(excessAmt)}（暂禁新开仓）
             </span>
+          ) : holidayGuard.isYellowCard ? (
+            <span className="pr-pill warn">{holidayGuard.pillText}</span>
+          ) : holidayGuard.active ? (
+            <span className="pr-pill ok">{holidayGuard.pillText}</span>
           ) : (
             <span className="pr-pill ok">
               ✅ 仓位安全 · 情绪额度余 ¥{money(remainAmt)}
@@ -265,6 +336,34 @@ export default function PositionRiskBar({
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* 连续≥3天长假前1-2个交易日：超建议上限自动亮黄牌常驻降仓提示条 */}
+      {holidayGuard.isYellowCard && (
+        <div className={`pr-holiday-warn-bar ${holidayGuard.remainingTradeDays === 1 ? 'is-final' : ''}`}>
+          <div className="pr-hw-main">
+            <span className="pr-hw-badge">
+              🟨 {holidayGuard.remainingTradeDays === 1 ? '长假收官黄牌' : '节前控仓黄牌'}
+            </span>
+            <span className="pr-hw-txt">
+              距<b>{holidayGuard.holidayName}</b>连休 <b>{holidayGuard.closedDays}天</b>（
+              {holidayGuard.closureStart.slice(5)}~{holidayGuard.closureEnd.slice(5)}，
+              {holidayGuard.reopenDate.slice(5)} 开市）仅剩 <b>{holidayGuard.remainingTradeDays}</b> 个交易日：
+              当前总仓 <b>{totalPosPct.toFixed(1)}%</b> 超出{holidayGuard.capSourceLabel}{' '}
+              <b>{holidayGuard.excessPct}%</b>，建议逢冲高降仓约{' '}
+              <b>¥{holidayGuard.excessAmt.toLocaleString('zh-CN')}</b>。
+              {holidayGuard.windowNote}。
+            </span>
+          </div>
+          <button
+            type="button"
+            className="mini"
+            style={{ marginLeft: 0 }}
+            onClick={() => setExpanded((v) => !v)}
+          >
+            {expanded ? '收起持仓明细 ▴' : '查看持仓减仓位 ▾'}
+          </button>
         </div>
       )}
 
@@ -519,8 +618,14 @@ export default function PositionRiskBar({
             </div>
             {valve && (
               <div className="pr-rule-tip">
-                当前情绪总阀为 <b>{sentiment?.valveLabel || '🟢 绿灯'}</b>，动态总仓红线锁定 <b>{capPct}%</b>；
-                单日连亏 ≥<b>{posRules.maxConsecLosses ?? 2}笔</b> 或日回撤 ≥<b>{posRules.dailyLossLimitPct ?? 2}%</b> 时自动锁定新开仓与正T低吸
+                当前情绪总阀为 <b>{sentiment?.valveLabel || '🟢 绿灯'}</b>，动态总仓红线锁定 <b>{capPct}%</b>
+                {holidayGuard.active ? (
+                  <>
+                    （叠加<b>{holidayGuard.holidayName}</b>连休{holidayGuard.closedDays}天节前建议上限{' '}
+                    <b>≤{holidayGuard.effectiveCapPct}%</b>）
+                  </>
+                ) : null}
+                ；单日连亏 ≥<b>{posRules.maxConsecLosses ?? 2}笔</b> 或日回撤 ≥<b>{posRules.dailyLossLimitPct ?? 2}%</b> 时自动锁定新开仓与正T低吸
                 {hasAnyWarn ? '（当前存在风控预警，请严格按纪律执行）。' : '。'}
               </div>
             )}

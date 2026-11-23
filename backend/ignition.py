@@ -29,6 +29,7 @@ from .strong_herd import (
     _shift_date_str,
     is_mainboard_10cm,
 )
+from .trade_calendar import cn_now_str, cn_today, latest_or_current_trade_day, recent_trade_dates
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 IGNITION_CACHE_FILE = DATA_DIR / "ignition_latest.json"
@@ -207,7 +208,7 @@ async def _fetch_stock_notice_risk(
             r = await client.get(url, headers={"Referer": "https://data.eastmoney.com/"})
             if r.status_code == 200 and r.text.lstrip().startswith("{"):
                 items = ((r.json().get("data") or {}).get("list")) or []
-                today_dt = datetime.date.today()
+                today_dt = cn_today()
                 for item in items:
                     title = str(item.get("title") or "")
                     n_date_str = str(item.get("notice_date") or "")[:10]
@@ -918,9 +919,7 @@ async def scan_breakout_ignition(
     3. 日K筛选“横向试盘板后逐步缩量、未破启动位”标的；
     4. 对过日K初筛的标的并发拉取周K+月K，校验月放量+周向上并产出震仓/粘合/防回调分档。
     """
-    today_str = datetime.date.today().strftime("%Y%m%d")
-    cal_lookback = max(25, lookback_days + 12)
-    cand_dates = [_shift_date_str(today_str, -d) for d in range(0, cal_lookback)]
+    cand_dates = recent_trade_dates(lookback_days + 3, include_ref=True, fmt="%Y%m%d")
 
     sem_zt = asyncio.Semaphore(3)
     zt_results = await asyncio.gather(
@@ -1597,7 +1596,7 @@ async def mutate_ignition_tracking(
         raise ValueError("股票代码必须为 6 位数字")
 
     strat = strategy if strategy in ("ignition", "bottom", "meme", "tail_watch") else "ignition"
-    today_iso = datetime.date.today().strftime("%Y-%m-%d")
+    today_iso = latest_or_current_trade_day()
 
     async with _LEDGER_FILE_LOCK:
         ledger_state: dict = {"version": 1, "signals": {}, "updatedAt": ""}
@@ -1675,7 +1674,7 @@ async def mutate_ignition_tracking(
             raise ValueError(f"不支持的跟踪池操作: {action}")
 
         ledger_state["signals"] = signals_map
-        ledger_state["updatedAt"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        ledger_state["updatedAt"] = cn_now_str()
         DATA_DIR.mkdir(parents=True, exist_ok=True)
         tmp_path = STRATEGY_LEDGER_FILE.with_suffix(".json.tmp")
         with tmp_path.open("w", encoding="utf-8") as f:
@@ -1756,7 +1755,7 @@ async def get_ignition_tracking_pool(
             if modified:
                 try:
                     ledger_state["signals"] = signals_map
-                    ledger_state["updatedAt"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    ledger_state["updatedAt"] = cn_now_str()
                     DATA_DIR.mkdir(parents=True, exist_ok=True)
                     tmp_path = STRATEGY_LEDGER_FILE.with_suffix(".json.tmp")
                     with tmp_path.open("w", encoding="utf-8") as f:
@@ -1779,7 +1778,7 @@ async def get_ignition_tracking_pool(
             with open(IGNITION_CACHE_FILE, "r", encoding="utf-8") as f:
                 cache_payload = json.load(f)
             b_items = (cache_payload.get("breakout") or {}).get("items") or []
-            sig_date = cache_payload.get("date") or datetime.date.today().strftime("%Y-%m-%d")
+            sig_date = cache_payload.get("date") or latest_or_current_trade_day()
             for it in b_items:
                 c6 = str(it.get("code") or "").strip().zfill(6)
                 if c6.isdigit():
@@ -1801,7 +1800,7 @@ async def get_ignition_tracking_pool(
     if not tracking_sigs:
         return {
             "ok": True,
-            "updatedAt": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "updatedAt": cn_now_str(),
             "summary": {
                 "totalCount": 0,
                 "ignitedCount": 0,
@@ -1925,7 +1924,7 @@ async def get_ignition_tracking_pool(
 
     return {
         "ok": True,
-        "updatedAt": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "updatedAt": cn_now_str(),
         "summary": {
             "totalCount": total_cnt,
             "ignitedCount": ignited_cnt,
@@ -2033,15 +2032,15 @@ async def get_ignition_pool(
             breakout_res = fallback.get("breakout") or breakout_res
             dip_res = fallback.get("dipLeaders") or dip_res
 
-    # 优先采用日K样本/扫描中的真实最新交易日（防周末/盘前日期偏移）
+    # 优先采用日K样本/扫描中的真实最新交易日（防周末/法定节假日/盘前日期偏移）
     trade_date = (
         next((b.get("latestDate") for b in (breakout_res.get("items") or []) if b.get("latestDate")), None)
-        or datetime.date.today().strftime("%Y-%m-%d")
+        or latest_or_current_trade_day()
     )
     payload = {
         "ok": True,
         "date": trade_date,
-        "scannedAt": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "scannedAt": cn_now_str(),
         "params": {
             "includeCyb": include_cyb,
             "lookbackDays": lookback_days,

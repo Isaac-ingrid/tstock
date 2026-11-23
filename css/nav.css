@@ -1040,6 +1040,120 @@
   background: linear-gradient(180deg, #fffafa 0%, #ffffff 100%);
 }
 
+.premarket-wrap.has-holiday-warn {
+  border-color: #fcd34d;
+  background: linear-gradient(180deg, #fffdf5 0%, #ffffff 100%);
+}
+
+.pm-holiday-chip {
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pm-holiday-chip.countdown {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+
+.pm-holiday-chip.closed {
+  background: #f5f3ff;
+  color: #6d28d9;
+  border: 1px solid #ddd6fe;
+}
+
+.pm-holiday-chip.urgent-2d {
+  background: #fffbeb;
+  color: #b45309;
+  border: 1px solid #f59e0b;
+}
+
+.pm-holiday-chip.urgent-1d {
+  background: #fff1f2;
+  color: #be123c;
+  border: 1px solid #fb7185;
+  box-shadow: 0 1px 4px rgba(225, 29, 72, 0.12);
+}
+
+.pm-holiday-alert {
+  margin-top: 10px;
+  padding: 9px 12px;
+  border-radius: 9px;
+  background: linear-gradient(90deg, #fffbeb 0%, #fff7ed 100%);
+  border: 1px solid #fcd34d;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.pm-holiday-alert.is-final-day {
+  background: linear-gradient(90deg, #fff1f2 0%, #fffbeb 100%);
+  border-color: #fda4af;
+}
+
+.pm-ha-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.pm-ha-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  font-size: 12.5px;
+  color: #78350f;
+}
+
+.pm-holiday-alert.is-final-day .pm-ha-head {
+  color: #9f1239;
+}
+
+.pm-ha-tag {
+  font-size: 10.5px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: #d97706;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.pm-holiday-alert.is-final-day .pm-ha-tag {
+  background: #e11d48;
+}
+
+.pm-ha-pos-pill {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid #fbbf24;
+  color: #92400e;
+  font-family: ui-monospace, Consolas, monospace;
+}
+
+.pm-holiday-alert.is-final-day .pm-ha-pos-pill {
+  border-color: #fda4af;
+  color: #be123c;
+}
+
+.pm-ha-desc {
+  font-size: 11.8px;
+  line-height: 1.5;
+  color: #475569;
+}
+
 .pm-bar {
   display: flex;
   align-items: center;
@@ -1292,6 +1406,16 @@
   border-radius: 1px;
 }
 
+.pr-gauge-holiday-cap {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  background: #d97706;
+  border-radius: 1px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.85);
+}
+
 .pr-gauge-txt {
   font-size: 12px;
   color: var(--sub);
@@ -1300,6 +1424,11 @@
 
 .pr-gauge-txt b { color: var(--text); }
 .pr-gauge-txt b.up { color: var(--up); }
+.pr-gauge-txt b.warn { color: #b45309; }
+
+.pr-holiday-cap-txt {
+  color: #b45309;
+}
 
 .pr-pill {
   font-size: 11.5px;
@@ -1493,6 +1622,42 @@
   gap: 3px;
 }
 
+.bcc-holiday-warn {
+  background: linear-gradient(90deg, #fffbeb 0%, #fff7ed 100%);
+  border: 1px solid #f59e0b;
+  border-radius: 7px;
+  padding: 6px 9px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: #78350f;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bcc-hw-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: #92400e;
+  font-size: 11px;
+}
+
+.bcc-chip.holiday-cap {
+  background: #fef3c7;
+  border-color: #f59e0b;
+  color: #92400e;
+  font-weight: 700;
+}
+
+.bcc-chip.holiday-cap:hover {
+  background: #fde68a;
+  border-color: #d97706;
+  color: #78350f;
+}
+
 /* 选项卡面板切换与展示 */
 .tab-panel {
   display: none;
@@ -1557,6 +1722,55 @@
   gap: 8px;
   font-size: 11.5px;
   color: #7f1d1d;
+}
+
+.pr-holiday-warn-bar {
+  margin-top: 9px;
+  padding: 7px 11px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #fffbeb 0%, #fff7ed 100%);
+  border: 1px solid #f59e0b;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 11.8px;
+  line-height: 1.5;
+  color: #78350f;
+}
+
+.pr-holiday-warn-bar.is-final {
+  background: linear-gradient(90deg, #fef3c7 0%, #fffbeb 100%);
+  border-color: #d97706;
+}
+
+.pr-hw-main {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 7px;
+  flex: 1;
+  min-width: 240px;
+}
+
+.pr-hw-badge {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: #f59e0b;
+  color: #fff;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.pr-holiday-warn-bar.is-final .pr-hw-badge {
+  background: #d97706;
+}
+
+.pr-hw-txt b {
+  color: #92400e;
 }
 
 .tilt-override-bar {
@@ -1644,6 +1858,16 @@
   background: #dcfce7;
   border-color: var(--down);
   color: var(--down);
+}
+.bc-act-btn.primary-t.is-holiday-warn {
+  background: #fffbeb;
+  border-color: #f59e0b;
+  color: #b45309;
+}
+.bc-act-btn.primary-t.is-holiday-warn:hover {
+  background: #fef3c7;
+  border-color: #d97706;
+  color: #92400e;
 }
 .bc-act-btn.primary-t.is-locked {
   background: #fef2f2;
@@ -4832,6 +5056,111 @@ html[data-pwa="standalone"] .topbar {
     font-size: 16px !important;
   }
 }
+
+/* ==================== 17. 顶栏交易时钟按钮：实时状态点、法定节假日休市与节前控仓黄牌小角标 ==================== */
+.tb-clock-pill .clock-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #94a3b8;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.tb-clock-pill .clock-dot.dot-live {
+  background: var(--down);
+  box-shadow: 0 0 0 3px rgba(10, 127, 66, 0.18);
+  animation: clock-pulse 2s infinite;
+}
+
+.tb-clock-pill .clock-dot.dot-warn {
+  background: #d97706;
+  box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.24);
+  animation: clock-pulse 1.8s infinite;
+}
+
+.tb-clock-pill .clock-dot.dot-danger {
+  background: var(--up);
+  box-shadow: 0 0 0 3px rgba(211, 47, 47, 0.25);
+  animation: clock-pulse 1.4s infinite;
+}
+
+.tb-clock-pill .clock-dot.dot-closed {
+  background: #dc2626;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.16);
+}
+
+.tb-clock-pill.is-holiday-closed {
+  background: linear-gradient(90deg, #fff5f5 0%, #ffffff 100%);
+  border-color: #fecaca;
+}
+
+.tb-clock-pill.is-holiday-closed:hover {
+  background: #fef2f2;
+  border-color: #fca5a5;
+}
+
+.tb-clock-pill.is-holiday-yellow {
+  background: linear-gradient(90deg, #fffbeb 0%, #fef3c7 100%);
+  border-color: #f59e0b;
+  box-shadow: 0 1px 6px rgba(245, 158, 11, 0.18);
+}
+
+.tb-clock-pill.is-holiday-yellow:hover {
+  background: #fef3c7;
+  border-color: #d97706;
+}
+
+.tb-clock-pill.is-holiday-window {
+  background: linear-gradient(90deg, #fffdf5 0%, #ffffff 100%);
+  border-color: #fde68a;
+}
+
+.tb-clock-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.45;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.tb-clock-badge.tone-holiday-closed {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fca5a5;
+}
+
+.tb-clock-badge.tone-holiday-overcap {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #f59e0b;
+}
+
+.tb-clock-badge.tone-yellow-card {
+  background: #f59e0b;
+  color: #ffffff;
+  border: 1px solid #d97706;
+  box-shadow: 0 1px 3px rgba(217, 119, 6, 0.25);
+}
+
+.tb-clock-badge.tone-window-safe {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #6ee7b7;
+}
+
+.tb-clock-badge.tone-countdown {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  font-weight: 700;
+}
+
 
 
 

@@ -20,22 +20,34 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { PROJECT_ROOT, ENGINE_DIR, DATA_DIR, todayStr, isWeekend, log, runScript, cleanEnv } = require('./common');
+const {
+  PROJECT_ROOT,
+  ENGINE_DIR,
+  DATA_DIR,
+  todayStr,
+  getTradeDayStatus,
+  nextTradeDay,
+  isLastTradeDayOfWeek,
+  log,
+  runScript,
+  cleanEnv,
+} = require('./common');
 
 async function main() {
   const force = process.argv.includes('--force');
   const dateArg = process.argv.find((a) => /^\d{4}-\d{2}-\d{2}$/.test(a))
     || (process.argv.includes('--date') ? process.argv[process.argv.indexOf('--date') + 1] : null);
   const today = dateArg || todayStr();
-  const isFriday = new Date(`${today}T12:00:00+08:00`).getDay() === 5 || process.argv.includes('--force-steady');
+  const tdStatus = getTradeDayStatus(today);
+  const isWeekEndClose = isLastTradeDayOfWeek(today) || process.argv.includes('--force-steady');
   const dayArgs = dateArg ? [dateArg] : [];
 
   log(`════════════════════════════════════════════════════════════`);
   log(`🚀 [15:10 定时任务] 启动收盘选股、回算、预案与发布完整流水线 (${today})`);
   log(`════════════════════════════════════════════════════════════`);
 
-  if (!dateArg && isWeekend() && !force) {
-    log(`⚠️ 今日是周末非交易日，跳过收盘选股流水线（使用 --force 可强制运行）`);
+  if (!dateArg && !tdStatus.isTradeDay && !force) {
+    log(`⚠️ 今日为【${tdStatus.label}】（下一交易日 ${nextTradeDay(today)}），跳过收盘选股流水线（使用 --force 可强制运行）`);
     return;
   }
 
@@ -70,11 +82,11 @@ async function main() {
       log(`⚠️ 生成挂单计划报告失败（不影响契约发布）: ${planRepErr.message}`, 'WARN');
     }
 
-    // 6. 稳健型底仓（每周五例行更新，或本地缺失 steady.json 时自动初始化兜底）
+    // 6. 稳健型底仓（每周最后一个交易日例行更新——兼容周五节假日提前至周四/周三收官，或缺失 steady.json 时兜底）
     const steadyJsonPath = path.join(ENGINE_DIR, 'out', 'steady.json');
     const needSteadyInit = !fs.existsSync(steadyJsonPath);
-    if (isFriday || needSteadyInit) {
-      log(`[6/9] ${isFriday ? '今日为周五例行重选' : '检测到本地缺少 steady.json 自动触发初始化兜底'}，更新稳健底仓候选 (steady.js)...`);
+    if (isWeekEndClose || needSteadyInit) {
+      log(`[6/9] ${isWeekEndClose ? '今日为本周收官交易日例行重选' : '检测到本地缺少 steady.json 自动触发初始化兜底'}，更新稳健底仓候选 (steady.js)...`);
       runScript('steady.js');
       try {
         runScript('steady-report.js');
@@ -82,7 +94,7 @@ async function main() {
         log(`⚠️ 生成稳健底仓报告页失败（不影响契约发布）: ${stRepErr.message}`, 'WARN');
       }
     } else {
-      log(`[6/9] 周一至周四复用最新稳健底仓 (${steadyJsonPath})，跳过稳健重选。`);
+      log(`[6/9] 非本周收官交易日，复用最新稳健底仓 (${steadyJsonPath})，跳过稳健重选。`);
     }
 
     // 7. 选股工作台看板（放于 steady.js 之后，确保 steady.json 已就绪；缺失历史回测文件时不阻断发布）

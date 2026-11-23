@@ -3,7 +3,7 @@ import { f2, money, todayStr, copyPlain, toastOk } from '../services/utils.js';
 
 const STEP_DEFS = [
   { key: 'quotes', num: '01', title: '同步收盘行情', desc: '拉取持仓/尾盘最新收盘价与指数' },
-  { key: 'audit', num: '02', title: '核查未平T与隔夜仓', desc: '排查滞留T仓与次日早盘必平黑马' },
+  { key: 'audit', num: '02', title: '核查未平T与节前仓位', desc: '排查滞留T仓、隔夜仓与节前超限敞口' },
   { key: 'snapshot', num: '03', title: '归档今日净值快照', desc: '落盘总资产、仓位与单日涨跌' },
   { key: 'brief', num: '04', title: '生成量化复盘简报', desc: '纪律分、先导命中对照与明日锚点' },
   { key: 'vault', num: '05', title: '双写本地磁盘金库', desc: '同步 user_vault.json 与按日备份' },
@@ -51,6 +51,8 @@ export default function PostMarketModal({
 
   const unclosedList = livePositionCheck?.unclosedTList || [];
   const overnightTails = livePositionCheck?.overnightTailList || [];
+  const activeHolidayAudit =
+    activeArchive?.holidayAudit || (selectedDate === today ? livePositionCheck?.holidayGuard : null);
 
   const handleDownloadMd = () => {
     if (!activeArchive?.briefMarkdown) return;
@@ -289,6 +291,85 @@ export default function PostMarketModal({
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* 🟨 节前连续长假超上限持仓黄牌与节后首日/次日减仓纠偏卡 */}
+          {activeHolidayAudit?.isYellowCard && (
+            <div
+              style={{
+                padding: '12px 14px',
+                borderRadius: '9px',
+                background: '#fffbeb',
+                border: '1.5px solid #f59e0b',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '8px',
+                }}
+              >
+                <div style={{ fontSize: '13px', fontWeight: 800, color: '#92400e', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                  <span>🟨</span>
+                  <span>{activeHolidayAudit.actionTitle || `节前长假超上限持仓黄牌预警（超上限 ${activeHolidayAudit.excessPct}%）`}</span>
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      padding: '1px 7px',
+                      borderRadius: '999px',
+                      background: '#fef3c7',
+                      color: '#b45309',
+                      border: '1px solid #fcd34d',
+                    }}
+                  >
+                    收盘总仓 {Number(activeHolidayAudit.totalPosPct || 0).toFixed(1)}% / 上限 ≤{activeHolidayAudit.effectiveCapPct}% · 待降约 ¥{money(activeHolidayAudit.excessAmt || 0)}
+                  </span>
+                </div>
+                {onTabChange && (
+                  <button
+                    type="button"
+                    className="mini"
+                    style={{ marginLeft: 0, background: '#fff', color: '#b45309', borderColor: '#f59e0b', fontWeight: 700 }}
+                    onClick={() => {
+                      onClose();
+                      onTabChange('/trade');
+                    }}
+                  >
+                    🎯 去作战台查看减仓锚点 →
+                  </button>
+                )}
+              </div>
+              {activeHolidayAudit.actionSummary && (
+                <div style={{ fontSize: '12px', color: '#78350f', lineHeight: 1.55 }}>
+                  {activeHolidayAudit.actionSummary}
+                </div>
+              )}
+              {Array.isArray(activeHolidayAudit.reductionTargets) && activeHolidayAudit.reductionTargets.length > 0 && (
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                  {activeHolidayAudit.reductionTargets.map((rt) => (
+                    <span
+                      key={`${rt.isTail ? 'tail' : 'pool'}_${rt.code}`}
+                      style={{
+                        fontSize: '11.5px',
+                        padding: '4px 9px',
+                        borderRadius: '6px',
+                        background: '#fff',
+                        border: '1px solid #fde68a',
+                        color: '#92400e',
+                      }}
+                    >
+                      <b>{rt.name}({rt.code})</b>：建议减 <b>{rt.trimShares}股</b>(≈¥{money(rt.trimAmt)}) · 锚点 <b>¥{f2(rt.refAnchor)}</b> / 防守 <b>¥{f2(rt.stopAnchor)}</b>
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
