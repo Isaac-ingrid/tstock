@@ -640,29 +640,29 @@ export default function BattleCardGrid({
                   lineHeight: 1.45,
                   background:
                     channelDisc.alert.kind === 'danger'
-                      ? '#fef2f2'
+                      ? 'var(--up-bg)'
                       : channelDisc.alert.kind === 'warn'
-                      ? '#fff7ed'
+                      ? 'var(--warn-bg)'
                       : channelDisc.alert.kind === 'ok'
-                      ? '#ecfdf5'
-                      : '#f8fafc',
+                      ? 'var(--down-bg)'
+                      : 'var(--surface)',
                   border: `1px solid ${
                     channelDisc.alert.kind === 'danger'
-                      ? '#fca5a5'
+                      ? 'var(--up-b)'
                       : channelDisc.alert.kind === 'warn'
-                      ? '#fdba74'
+                      ? 'var(--warn-b)'
                       : channelDisc.alert.kind === 'ok'
-                      ? '#86efac'
-                      : '#cbd5e1'
+                      ? 'var(--down-b)'
+                      : 'var(--line2)'
                   }`,
                   color:
                     channelDisc.alert.kind === 'danger'
-                      ? '#991b1b'
+                      ? 'var(--up-d)'
                       : channelDisc.alert.kind === 'warn'
                       ? '#9a3412'
                       : channelDisc.alert.kind === 'ok'
-                      ? '#065f46'
-                      : '#334155',
+                      ? 'var(--down-d)'
+                      : 'var(--sub)',
                 }}
               >
                 <b>{channelDisc.alert.badge}：</b>

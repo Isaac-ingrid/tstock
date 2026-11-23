@@ -440,7 +440,7 @@ export default function ChartCanvas({
   const moreLabel = isMoreActive ? (P_MORE.find(([k]) => k === curPeriod)?.[1] || '更多') : '更多';
 
   return (
-    <div className="kline-box" style={{ background: '#fff', borderRadius: '8px', border: '1px solid var(--line)', marginBottom: '12px' }}>
+    <div className="kline-box" style={{ background: 'var(--card)', borderRadius: '8px', border: '1px solid var(--line)', marginBottom: '12px' }}>
       {/* 1. 顶部操作栏（周期/叠加/副图/资金；窄屏下自动转为单行顺滑横滑，不遮挡分时图） */}
       <div className="kbar k-main kbar-responsive" style={{ padding: '8px 12px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
         <span className="lbl" style={{ fontSize: '11.5px', color: 'var(--mute)', fontWeight: 600 }}>周期</span>
@@ -503,8 +503,8 @@ export default function ChartCanvas({
                   padding: '2px 8px',
                   marginLeft: '2px',
                   borderColor: fastRefresh ? '#f59e0b' : undefined,
-                  color: fastRefresh ? '#b45309' : undefined,
-                  background: fastRefresh ? '#fffbeb' : undefined,
+                  color: fastRefresh ? 'var(--warn-d)' : undefined,
+                  background: fastRefresh ? 'var(--warn-bg)' : undefined,
                   fontWeight: fastRefresh ? 600 : 400,
                 }}
               >
@@ -662,7 +662,7 @@ export default function ChartCanvas({
           <div className="kline-rt-zone-bar" style={{
             padding: '7px 14px',
             borderTop: '1px solid var(--line)',
-            background: '#fafbfc',
+            background: 'var(--surface)',
             fontSize: '11.5px',
             display: 'flex',
             flexDirection: 'column',
@@ -671,31 +671,31 @@ export default function ChartCanvas({
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                 {z.buyHi > 0 && (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#cf1322', flexWrap: 'wrap' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--up)', flexWrap: 'wrap' }}>
                     <span>🔴 <b>推荐买区</b></span>
                     <b style={{ fontFamily: 'monospace' }}>¥{f2(z.buyLo > 0 ? z.buyLo : z.buyHi)}~{f2(z.buyHi)}</b>
                     <span style={{ color: 'var(--mute)', fontFamily: 'monospace' }}>{fmtDist(sig.distToBuyPct)}</span>
                     {onOpenQuickT && (
-                      <button type="button" className="mini kline-zone-act" onClick={() => onOpenQuickT(stock, '正T', f2(z.buyHi))} style={{ fontSize: '10.5px', padding: '2px 7px', borderColor: '#fca5a5', color: '#cf1322', background: '#fff1f0', marginLeft: '2px' }}>
+                      <button type="button" className="mini kline-zone-act" onClick={() => onOpenQuickT(stock, '正T', f2(z.buyHi))} style={{ fontSize: '10.5px', padding: '2px 7px', borderColor: 'var(--up-b)', color: 'var(--up)', background: 'var(--up-bg)', marginLeft: '2px' }}>
                         ⚡ 按此正T
                       </button>
                     )}
                   </span>
                 )}
                 {z.sellLo > 0 && (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#15803d', flexWrap: 'wrap' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--down-d)', flexWrap: 'wrap' }}>
                     <span>🟢 <b>推荐卖区</b></span>
                     <b style={{ fontFamily: 'monospace' }}>¥{f2(z.sellLo)}~{f2(z.sellHi > 0 ? z.sellHi : z.sellLo)}</b>
                     <span style={{ color: 'var(--mute)', fontFamily: 'monospace' }}>{fmtDist(sig.distToSellPct)}</span>
                     {onOpenQuickT && (
-                      <button type="button" className="mini kline-zone-act" onClick={() => onOpenQuickT(stock, '倒T', f2(z.sellLo))} style={{ fontSize: '10.5px', padding: '2px 7px', borderColor: '#86efac', color: '#15803d', background: '#f0fdf4', marginLeft: '2px' }}>
+                      <button type="button" className="mini kline-zone-act" onClick={() => onOpenQuickT(stock, '倒T', f2(z.sellLo))} style={{ fontSize: '10.5px', padding: '2px 7px', borderColor: 'var(--down-b)', color: 'var(--down-d)', background: 'var(--down-bg)', marginLeft: '2px' }}>
                         ⚡ 按此倒T
                       </button>
                     )}
                   </span>
                 )}
                 {z.stopPx > 0 && (
-                  <span style={{ color: '#991b1b', fontFamily: 'monospace' }}>
+                  <span style={{ color: 'var(--up-d)', fontFamily: 'monospace' }}>
                     🛡️ 止损 ¥{f2(z.stopPx)}
                   </span>
                 )}
@@ -716,9 +716,9 @@ export default function ChartCanvas({
                       borderRadius: '4px',
                       fontFamily: 'monospace',
                       fontSize: '11px',
-                      background: pt.type === 'BUY' ? '#fff1f0' : '#f0fdf4',
-                      color: pt.type === 'BUY' ? '#cf1322' : '#15803d',
-                      border: `1px solid ${pt.type === 'BUY' ? '#ffa39e' : '#bbf7d0'}`,
+                      background: pt.type === 'BUY' ? 'var(--up-bg)' : 'var(--down-bg)',
+                      color: pt.type === 'BUY' ? 'var(--up)' : 'var(--down-d)',
+                      border: `1px solid ${pt.type === 'BUY' ? 'var(--up-b)' : 'var(--down-b)'}`,
                     }}
                     title={pt.reason}
                   >
@@ -734,9 +734,9 @@ export default function ChartCanvas({
                       fontFamily: 'monospace',
                       fontSize: '11px',
                       fontWeight: 700,
-                      background: mk.side === 'B' ? '#fff1f0' : '#dcfce7',
-                      color: mk.side === 'B' ? '#b91c1c' : '#15803d',
-                      border: `1px solid ${mk.side === 'B' ? '#fca5a5' : '#86efac'}`,
+                      background: mk.side === 'B' ? 'var(--up-bg)' : 'var(--down-bg)',
+                      color: mk.side === 'B' ? 'var(--up-d)' : 'var(--down-d)',
+                      border: `1px solid ${mk.side === 'B' ? 'var(--up-b)' : 'var(--down-b)'}`,
                     }}
                   >
                     ◆ {mk.side}实 {mk.time || '今日'} ¥{f2(mk.px)} ({mk.dir}{mk.qty ? ` ${mk.qty}股` : ''})

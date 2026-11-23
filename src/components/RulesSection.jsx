@@ -91,26 +91,26 @@ export default function RulesSection({
             borderRadius: '999px',
             fontWeight: 700,
             background: isUrgent
-              ? '#fffbeb'
+              ? 'var(--warn-bg)'
               : isInHoliday
-              ? '#fef2f2'
+              ? 'var(--up-bg)'
               : holidayReminder
-              ? '#eff6ff'
+              ? 'var(--info-bg)'
               : 'var(--surface2)',
             color: isUrgent
-              ? '#b45309'
+              ? 'var(--warn-d)'
               : isInHoliday
-              ? '#b91c1c'
+              ? 'var(--up-d)'
               : holidayReminder
-              ? '#1d4ed8'
+              ? 'var(--info-d)'
               : 'var(--sub)',
             border: `1px solid ${
               isUrgent
-                ? '#fcd34d'
+                ? 'var(--warn-b)'
                 : isInHoliday
-                ? '#fecaca'
+                ? 'var(--up-b)'
                 : holidayReminder
-                ? '#bfdbfe'
+                ? 'var(--info-b)'
                 : 'var(--line)'
             }`,
           }}

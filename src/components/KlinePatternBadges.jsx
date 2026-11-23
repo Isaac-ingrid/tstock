@@ -4,36 +4,36 @@ const PATTERN_STYLE_MAP = {
   TOP_ISLAND: {
     icon: '🏝️',
     label: '顶部岛形反转（高危）',
-    color: '#cf1322',
-    bg: '#fff1f0',
-    border: '#ffa39e',
+    color: 'var(--up)',
+    bg: 'var(--up-bg)',
+    border: 'var(--up-b)',
   },
   BOTTOM_ISLAND: {
     icon: '🏝️',
     label: '底部岛形反转（强反转）',
-    color: '#15803d',
-    bg: '#f0fdf4',
-    border: '#86efac',
+    color: 'var(--down-d)',
+    bg: 'var(--down-bg)',
+    border: 'var(--down-b)',
   },
   HIGH_GRAVESTONE: {
     icon: '⚡',
     label: '高位天量避雷针',
-    color: '#b45309',
-    bg: '#fffbeb',
-    border: '#fcd34d',
+    color: 'var(--warn-d)',
+    bg: 'var(--warn-bg)',
+    border: 'var(--warn-b)',
   },
   BEARISH_ENGULFING: {
     icon: '🐻',
     label: '高位放量阴包阳',
-    color: '#c2410c',
-    bg: '#fff7ed',
-    border: '#fdba74',
+    color: 'var(--warn-d)',
+    bg: 'var(--warn-bg)',
+    border: 'var(--warn-b)',
   },
   IMMORTAL_GUIDE: {
     icon: '✨',
     label: '仙人指路反包',
-    color: '#0369a1',
-    bg: '#f0f9ff',
+    color: 'var(--accent-d)',
+    bg: 'var(--info-bg)',
     border: '#7dd3fc',
   },
 };
@@ -47,9 +47,9 @@ function buildChips(klinePatterns) {
     const st = PATTERN_STYLE_MAP[p.code] || {
       icon: p.side === 'bearish' ? '⚠️' : '📈',
       label: p.name || p.code,
-      color: p.side === 'bearish' ? '#b45309' : '#15803d',
-      bg: p.side === 'bearish' ? '#fffbeb' : '#f0fdf4',
-      border: p.side === 'bearish' ? '#fcd34d' : '#86efac',
+      color: p.side === 'bearish' ? 'var(--warn-d)' : 'var(--down-d)',
+      bg: p.side === 'bearish' ? 'var(--warn-bg)' : 'var(--down-bg)',
+      border: p.side === 'bearish' ? 'var(--warn-b)' : 'var(--down-b)',
     };
     chips.push({
       key: p.code,
@@ -71,8 +71,8 @@ function buildChips(klinePatterns) {
       desc: `${supGap.date || ''} 向上跳空缺口连续 ${supGap.ageDays} 日未回补，构成有效下方支撑带`,
       side: 'bullish',
       severity: 'info',
-      color: '#0369a1',
-      bg: '#f0f9ff',
+      color: 'var(--accent-d)',
+      bg: 'var(--info-bg)',
       border: '#7dd3fc',
     });
   }
@@ -86,8 +86,8 @@ function buildChips(klinePatterns) {
       side: 'bearish',
       severity: 'info',
       color: '#9a3412',
-      bg: '#fff7ed',
-      border: '#fed7aa',
+      bg: 'var(--warn-bg)',
+      border: 'var(--warn-b)',
     });
   }
 
@@ -109,10 +109,10 @@ export default function KlinePatternBadges({ klinePatterns, variant = 'compact',
   if (variant === 'banner') {
     const primaryChip = chips[0];
     const bannerTheme = hasVeto
-      ? { bg: '#fff1f0', border: '#ffa39e', titleColor: '#cf1322', heading: '🚨 A股K线形态风控雷达' }
+      ? { bg: 'var(--up-bg)', border: 'var(--up-b)', titleColor: 'var(--up)', heading: '🚨 A股K线形态风控雷达' }
       : hasBull
-        ? { bg: '#f0fdf4', border: '#86efac', titleColor: '#15803d', heading: '✨ A股K线形态共振雷达' }
-        : { bg: '#f0f9ff', border: '#bae6fd', titleColor: '#0369a1', heading: '🧱 A股缺口支撑/压力雷达' };
+        ? { bg: 'var(--down-bg)', border: 'var(--down-b)', titleColor: 'var(--down-d)', heading: '✨ A股K线形态共振雷达' }
+        : { bg: 'var(--info-bg)', border: 'var(--info-b)', titleColor: 'var(--accent-d)', heading: '🧱 A股缺口支撑/压力雷达' };
 
     return (
       <div
@@ -151,7 +151,7 @@ export default function KlinePatternBadges({ klinePatterns, variant = 'compact',
           ))}
         </div>
         {chips.filter((c) => c.desc).slice(0, 2).map((c) => (
-          <div key={`${c.key}_desc`} style={{ fontSize: '12px', color: '#334155', lineHeight: 1.55, marginTop: '2px' }}>
+          <div key={`${c.key}_desc`} style={{ fontSize: '12px', color: 'var(--sub)', lineHeight: 1.55, marginTop: '2px' }}>
             · {c.desc}
           </div>
         ))}

@@ -379,7 +379,7 @@ export default function StockCard({
         {(stock.strategyTag === '起爆' || stock.planStrategy === 'ignition') && (
           <span
             className="snap-tag"
-            style={{ background: '#fff7ed', borderColor: '#fdba74', color: '#c2410c', fontWeight: 700 }}
+            style={{ background: 'var(--warn-bg)', borderColor: 'var(--warn-b)', color: 'var(--warn-d)', fontWeight: 700 }}
             title={stock.ignitionMeta ? `起爆策略跟踪 ｜ 参考买价 ¥${stock.ignitionMeta.refPrice || '—'} ｜ 防守底线 ¥${stock.ignitionMeta.stopPrice || '—'}` : '起爆挖掘策略跟踪标的'}
           >
             🚀 起爆试盘跟踪
@@ -388,7 +388,7 @@ export default function StockCard({
         {(stock.strategyTag === '抄底' || stock.planStrategy === 'bottom') && (
           <span
             className="snap-tag"
-            style={{ background: '#f0fdf4', borderColor: '#86efac', color: '#15803d', fontWeight: 700 }}
+            style={{ background: 'var(--down-bg)', borderColor: 'var(--down-b)', color: 'var(--down-d)', fontWeight: 700 }}
             title={stock.ignitionMeta ? `抗跌抄底策略跟踪 ｜ 参考买价 ¥${stock.ignitionMeta.refPrice || '—'} ｜ 止损 ¥${stock.ignitionMeta.stopPrice || '—'}` : '抗跌抄底策略跟踪标的'}
           >
             🛟 抗跌抄底跟踪
@@ -415,7 +415,7 @@ export default function StockCard({
         {isShortTier && aucPattern && aucPattern.isWeakToStrong && (
           <span
             className="snap-tag"
-            style={{ background: '#fff1f0', borderColor: '#ffa39e', color: '#cf1322', fontWeight: 700 }}
+            style={{ background: 'var(--up-bg)', borderColor: 'var(--up-b)', color: 'var(--up)', fontWeight: 700 }}
             title={aucPattern.desc}
           >
             🚀 弱转强逆转
@@ -433,7 +433,7 @@ export default function StockCard({
         {limitRig && limitRig.isBroken && (
           <span
             className="snap-tag tail-alert-pulse"
-            style={{ background: '#fff1f0', borderColor: '#ff4d4f', color: '#cf1322', fontWeight: 800 }}
+            style={{ background: 'var(--up-bg)', borderColor: '#ff4d4f', color: 'var(--up)', fontWeight: 800 }}
             title={`曾涨停已被砸开，当前自涨停回落 ${Math.abs(limitRig.brokenDrop).toFixed(1)}%！严禁盲目打板！`}
           >
             🚨 曾炸板回落
@@ -442,7 +442,7 @@ export default function StockCard({
         {limitRig && limitRig.isNearLimit && !limitRig.isLimitUp && !limitRig.isBroken && (
           <span
             className="snap-tag"
-            style={{ background: '#e6f4ff', borderColor: '#91caff', color: '#0958d9', fontWeight: 700 }}
+            style={{ background: 'var(--info-bg)', borderColor: 'var(--info-b)', color: 'var(--info-d)', fontWeight: 700 }}
             title={`今日涨幅接近涨停（现价距涨停仅差 ${limitRig.distCeiling.toFixed(1)}%），处于打板排单观察期`}
           >
             ⚡ 逼近涨停 ({limitRig.chg >= 0 ? '+' : ''}${limitRig.chg.toFixed(1)}%)
@@ -451,7 +451,7 @@ export default function StockCard({
         {limitRig && limitRig.hadPrevLimitUp && !limitRig.isLimitUp && !limitRig.isBroken && (
           <span
             className="snap-tag"
-            style={{ background: '#f6ffed', borderColor: '#b7eb8f', color: '#389e0d', fontWeight: 700 }}
+            style={{ background: 'var(--down-bg)', borderColor: 'var(--down-b)', color: 'var(--down-d)', fontWeight: 700 }}
             title="前一天收盘涨停，今日具备连板接力观察背景"
           >
             🎯 昨涨停连板标的
@@ -460,7 +460,7 @@ export default function StockCard({
         {todayT.isFirstDayLocked && (
           <span
             className="snap-tag"
-            style={{ background: '#f1f5f9', borderColor: '#cbd5e1', color: '#475569', fontWeight: 700 }}
+            style={{ background: 'var(--surface2)', borderColor: 'var(--line2)', color: 'var(--sub)', fontWeight: 700 }}
             title={`A股 T+1 冻结：今日新买 ${todayT.t1LockedShares} 股当日无法卖出（明日开盘后才可卖或做T，今日绝不误报尾盘清T）`}
           >
             🔒 T+1锁仓 (可卖0股)
@@ -469,7 +469,7 @@ export default function StockCard({
         {isTailRiskTime && todayT.hasUnclosed && todayT.sellableShares > 0 && (
           <span
             className="snap-tag tail-alert-pulse"
-            style={{ background: '#fff1f0', borderColor: '#ff4d4f', color: '#cf1322', fontWeight: 800 }}
+            style={{ background: 'var(--up-bg)', borderColor: '#ff4d4f', color: 'var(--up)', fontWeight: 800 }}
             title="14:40尾盘强制风控：今日尚有做T未平仓！请在14:55前平仓！"
           >
             🚨 尾盘清T ({todayT.unclosedShares}股)
@@ -481,22 +481,22 @@ export default function StockCard({
             style={{
               background:
                 channelDisc.alert.kind === 'danger'
-                  ? '#fef2f2'
+                  ? 'var(--up-bg)'
                   : channelDisc.alert.kind === 'warn'
-                  ? '#fff7ed'
-                  : '#ecfdf5',
+                  ? 'var(--warn-bg)'
+                  : 'var(--down-bg)',
               borderColor:
                 channelDisc.alert.kind === 'danger'
-                  ? '#fca5a5'
+                  ? 'var(--up-b)'
                   : channelDisc.alert.kind === 'warn'
-                  ? '#fdba74'
-                  : '#86efac',
+                  ? 'var(--warn-b)'
+                  : 'var(--down-b)',
               color:
                 channelDisc.alert.kind === 'danger'
-                  ? '#991b1b'
+                  ? 'var(--up-d)'
                   : channelDisc.alert.kind === 'warn'
                   ? '#9a3412'
-                  : '#065f46',
+                  : 'var(--down-d)',
               fontWeight: 700,
               fontSize: '11px',
             }}
@@ -525,7 +525,7 @@ export default function StockCard({
           <button
             type="button"
             className="mini"
-            style={{ color: '#d97706', borderColor: '#fcd34d', background: '#fffbeb', fontWeight: 700 }}
+            style={{ color: '#d97706', borderColor: 'var(--warn-b)', background: 'var(--warn-bg)', fontWeight: 700 }}
             onClick={() => setBeCalcOpen(prev => !prev)}
             title="展开/收起做T保本价计算器与规费滑点测算"
           >
@@ -535,9 +535,9 @@ export default function StockCard({
             type="button"
             className="mini"
             style={{
-              color: channelDisc?.forbidAddPosition ? '#991b1b' : '#1677ff',
-              borderColor: channelDisc?.forbidAddPosition ? '#fca5a5' : '#91caff',
-              background: channelDisc?.forbidAddPosition ? '#fef2f2' : '#e6f4ff',
+              color: channelDisc?.forbidAddPosition ? 'var(--up-d)' : '#1677ff',
+              borderColor: channelDisc?.forbidAddPosition ? 'var(--up-b)' : 'var(--info-b)',
+              background: channelDisc?.forbidAddPosition ? 'var(--up-bg)' : 'var(--info-bg)',
               fontWeight: 700,
             }}
             onClick={() => onOpenQuickT(stock, '直接买入', f2(stock.price), hasHoldings ? 500 : 1000)}
@@ -550,7 +550,7 @@ export default function StockCard({
               <button
                 type="button"
                 className="mini"
-                style={{ color: '#cf1322', borderColor: '#ffa39e', background: '#fff1f0', fontWeight: 700 }}
+                style={{ color: 'var(--up)', borderColor: 'var(--up-b)', background: 'var(--up-bg)', fontWeight: 700 }}
                 onClick={() => onOpenQuickT(stock, '直接卖出', f2(stock.price), todayT.sellableShares)}
                 title={`今日可用可卖 ${todayT.sellableShares} 股（已自动扣除今日新买 T+1 冻结股份）`}
               >
@@ -560,7 +560,7 @@ export default function StockCard({
               <button
                 type="button"
                 className="mini"
-                style={{ color: '#64748b', borderColor: '#cbd5e1', background: '#f8fafc', fontWeight: 600, cursor: 'not-allowed' }}
+                style={{ color: 'var(--mute)', borderColor: 'var(--line2)', background: 'var(--surface)', fontWeight: 600, cursor: 'not-allowed' }}
                 onClick={() => toastErr(`受 A 股 T+1 交易制度限制：【${stock.name}】当前股份全部为今日新买入，当日不可卖出（明日开盘解锁可用）`)}
                 title="今日新买入股份处于 T+1 锁仓期，今日可卖 0 股"
               >
@@ -572,7 +572,7 @@ export default function StockCard({
           <button
             type="button"
             className="mini"
-            style={{ color: '#0e7490', borderColor: '#a5dbe7', background: '#eff9fb', fontWeight: 600 }}
+            style={{ color: 'var(--teal)', borderColor: 'var(--teal-b)', background: 'var(--teal-bg)', fontWeight: 600 }}
             onClick={() => {
               window.location.hash = `#/diagnosis?code=${stock.code}`;
             }}
@@ -631,9 +631,9 @@ export default function StockCard({
             style={{
               padding: '11px 16px',
               borderRadius: '8px',
-              background: 'linear-gradient(90deg, #fff1f0, #ffebe8)',
+              background: 'var(--up-bg)',
               border: '1.5px solid #ff4d4f',
-              color: '#cf1322',
+              color: 'var(--up)',
               marginBottom: '12px',
               display: 'flex',
               alignItems: 'center',
@@ -661,9 +661,9 @@ export default function StockCard({
                 type="button"
                 className="mini"
                 style={{
-                  background: '#fff',
-                  color: '#64748b',
-                  border: '1px solid #cbd5e1',
+                  background: 'var(--card)',
+                  color: 'var(--mute)',
+                  border: '1px solid var(--line2)',
                   borderRadius: '6px',
                   padding: '6px 10px',
                   fontSize: '12px',
@@ -769,9 +769,9 @@ export default function StockCard({
                 <span
                   style={{
                     fontSize: '11.5px',
-                    background: '#f1f5f9',
-                    color: '#475569',
-                    border: '1px solid #cbd5e1',
+                    background: 'var(--surface2)',
+                    color: 'var(--sub)',
+                    border: '1px solid var(--line2)',
                     fontWeight: 700,
                     padding: '4px 10px',
                     borderRadius: '5px'
@@ -873,7 +873,7 @@ export default function StockCard({
           limitRig && limitRig.isBoardTarget ? (
             /* 标的符合【前一天有涨停 (连板接力)】或【今日逼近/封死/曾炸板涨停】，激活涨停与打板监控 */
             <div style={{
-              background: 'linear-gradient(180deg, #fff9f6, #fff)',
+              background: 'var(--surface)',
               border: '1.5px solid #ffbb96',
               borderRadius: '10px',
               padding: '12px 14px',
@@ -883,7 +883,7 @@ export default function StockCard({
               {/* 顶部标题与硬度总览 */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: '13.5px', fontWeight: 800, color: '#d4380d', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ fontSize: '13.5px', fontWeight: 800, color: 'var(--up-d)', display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <span>🔥 涨停与打板监控（{limitRig.label}）</span>
                   </span>
                   {aucPattern && (
@@ -918,7 +918,7 @@ export default function StockCard({
                     {limitRig.label} {limitRig.isLimitUp ? `· 硬度 ${limitRig.hardnessScore}分` : ''}
                   </span>
                 </div>
-                <div style={{ fontSize: '11px', color: '#d4380d', fontWeight: 600 }}>
+                <div style={{ fontSize: '11px', color: 'var(--up-d)', fontWeight: 600 }}>
                   🛡️ 短线机动仓位 · 严禁挪用底仓资金
                 </div>
               </div>
@@ -928,9 +928,9 @@ export default function StockCard({
                 <div style={{
                   padding: '8px 12px',
                   borderRadius: '6px',
-                  background: '#fff1f0',
-                  border: '1px solid #ffa39e',
-                  color: '#cf1322',
+                  background: 'var(--up-bg)',
+                  border: '1px solid var(--up-b)',
+                  color: 'var(--up)',
                   fontSize: '12px',
                   fontWeight: 700,
                   marginBottom: '10px',
@@ -946,8 +946,8 @@ export default function StockCard({
               {/* 双核量化数据看板: 09:25 弱转强 + 9:40 涨停硬度 */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '8px', marginBottom: '10px' }}>
                 {/* 模块1: 09:25 竞价定盘弱转强 */}
-                <div style={{ padding: '8px 10px', background: '#fff', borderRadius: '6px', border: '1px solid #ffd8bf' }}>
-                  <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#d4380d', marginBottom: '4px' }}>
+                <div style={{ padding: '8px 10px', background: 'var(--card)', borderRadius: '6px', border: '1px solid #ffd8bf' }}>
+                  <div style={{ fontSize: '11.5px', fontWeight: 700, color: 'var(--up-d)', marginBottom: '4px' }}>
                     🌅 09:25 集合竞价定盘与形态
                   </div>
                   <div style={{ fontSize: '12px', color: 'var(--text)', lineHeight: 1.5 }}>
@@ -963,11 +963,11 @@ export default function StockCard({
                 </div>
 
                 {/* 模块2: 9:40 涨停与冲板硬度追踪 */}
-                <div style={{ padding: '8px 10px', background: '#fff', borderRadius: '6px', border: '1px solid #ffd8bf' }}>
-                  <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#cf1322', marginBottom: '4px', display: 'flex', justifyContent: 'space-between' }}>
+                <div style={{ padding: '8px 10px', background: 'var(--card)', borderRadius: '6px', border: '1px solid #ffd8bf' }}>
+                  <div style={{ fontSize: '11.5px', fontWeight: 700, color: 'var(--up)', marginBottom: '4px', display: 'flex', justifyContent: 'space-between' }}>
                     <span>🎯 涨停硬度与冲板追踪</span>
                     {limitRig.isLimitUp && (
-                      <span style={{ fontSize: '10.5px', color: '#cf1322', fontWeight: 800 }}>
+                      <span style={{ fontSize: '10.5px', color: 'var(--up)', fontWeight: 800 }}>
                         硬度 {limitRig.hardnessScore} / 100
                       </span>
                     )}
@@ -977,7 +977,7 @@ export default function StockCard({
                       涨停价: <b style={{ fontFamily: 'monospace', color: 'var(--up)' }}>¥{f2(limitRig.ceiling)}</b>
                       {limitRig.isLimitUp ? (
                         <>
-                          {' ｜ '}买一封单: <b style={{ color: '#cf1322', fontFamily: 'monospace' }}>{money$(limitRig.sealAmtYuan)}</b>
+                          {' ｜ '}买一封单: <b style={{ color: 'var(--up)', fontFamily: 'monospace' }}>{money$(limitRig.sealAmtYuan)}</b>
                           {' '}(<b style={{ fontFamily: 'monospace' }}>{Number(limitRig.b1_v).toLocaleString()}</b> 手)
                         </>
                       ) : limitRig.isNearLimit ? (
@@ -985,7 +985,7 @@ export default function StockCard({
                           （距涨停仅差 {limitRig.distCeiling.toFixed(1)}%，现价 ¥{f2(pxNow)}）
                         </span>
                       ) : limitRig.hadPrevLimitUp ? (
-                        <span style={{ color: '#389e0d', marginLeft: '6px', fontWeight: 700 }}>
+                        <span style={{ color: 'var(--down-d)', marginLeft: '6px', fontWeight: 700 }}>
                           （昨日涨停收盘，今日连板接力博弈中）
                         </span>
                       ) : (
@@ -994,7 +994,7 @@ export default function StockCard({
                     </div>
                     <div style={{ fontSize: '11px', color: 'var(--sub)', marginTop: '2px' }}>
                       {limitRig.isLimitUp ? (
-                        <span>封成比: <b style={{ color: limitRig.sealRatio >= 1.5 ? '#cf1322' : 'var(--text)' }}>{limitRig.sealRatio.toFixed(2)}倍</b> ({limitRig.sealRatio >= 1.5 ? '坚如磐石' : limitRig.sealRatio >= 0.8 ? '封单正常' : '封单偏弱需防炸'})</span>
+                        <span>封成比: <b style={{ color: limitRig.sealRatio >= 1.5 ? 'var(--up)' : 'var(--text)' }}>{limitRig.sealRatio.toFixed(2)}倍</b> ({limitRig.sealRatio >= 1.5 ? '坚如磐石' : limitRig.sealRatio >= 0.8 ? '封单正常' : '封单偏弱需防炸'})</span>
                       ) : (
                         <span>{limitRig.desc}</span>
                       )}
@@ -1006,11 +1006,11 @@ export default function StockCard({
               {/* 资金防混淆与操盘纪律约束条 */}
               <div style={{
                 padding: '6px 10px',
-                background: '#fff2e8',
+                background: 'var(--warn-bg)',
                 borderRadius: '6px',
                 border: '1px dashed #ffbb96',
                 fontSize: '11.5px',
-                color: '#d4380d',
+                color: 'var(--up-d)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
@@ -1021,7 +1021,7 @@ export default function StockCard({
                   <span>🛡️ <b>打板纪律：</b></span>
                   <span>打板仅动用 30% 机动资金，严禁在打板或冲板受挫被套时挪用底仓资金补仓加码！</span>
                 </div>
-                <span style={{ fontWeight: 700, fontSize: '11px', color: '#cf1322' }}>
+                <span style={{ fontWeight: 700, fontSize: '11px', color: 'var(--up)' }}>
                   次日不板果断撤退 · 绝不留恋做股东
                 </span>
               </div>
@@ -1034,8 +1034,8 @@ export default function StockCard({
               justifyContent: 'space-between',
               padding: '7px 12px',
               borderRadius: '8px',
-              background: 'linear-gradient(180deg, #fffbf0, #fff)',
-              border: '1px solid #ffd591',
+              background: 'var(--surface)',
+              border: '1px solid var(--warn-b)',
               fontSize: '12px',
               color: 'var(--text)',
               marginBottom: '12px',
@@ -1044,7 +1044,7 @@ export default function StockCard({
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <span style={{ fontSize: '14px' }}>⚡</span>
-                <b style={{ color: '#d46b08' }}>【短线机动区标的】</b>
+                <b style={{ color: 'var(--warn-d)' }}>【短线机动区标的】</b>
                 <span style={{ color: 'var(--sub)' }}>
                   常规短线震荡标的（非涨停连板股），按分时均线与七格箱体执行日内灵活正倒T。
                 </span>
@@ -1072,13 +1072,13 @@ export default function StockCard({
           )
         ) : (
           <div style={{
-            background: 'linear-gradient(180deg, #f0f7ff, #fff)',
-            border: '1px solid #bae0ff',
+            background: 'var(--info-bg)',
+            border: '1px solid var(--info-b)',
             borderRadius: '8px',
             padding: '7px 12px',
             marginBottom: '12px',
             fontSize: '12px',
-            color: '#0958d9',
+            color: 'var(--info-d)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -1158,8 +1158,8 @@ export default function StockCard({
               style={{
                 fontSize: '11px',
                 color: isCalibrating ? '#1677ff' : 'var(--sub)',
-                borderColor: isCalibrating ? '#91caff' : 'var(--line)',
-                background: isCalibrating ? '#e6f4ff' : 'transparent',
+                borderColor: isCalibrating ? 'var(--info-b)' : 'var(--line)',
+                background: isCalibrating ? 'var(--info-bg)' : 'transparent',
                 padding: '2px 7px',
                 cursor: 'pointer'
               }}
@@ -1186,7 +1186,7 @@ export default function StockCard({
                   value={calibSharesStr}
                   onChange={e => setCalibSharesStr(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') handleSaveCalibration(); }}
-                  style={{ width: '85px', padding: '4px 8px', fontSize: '12.5px', fontFamily: 'monospace', borderRadius: '5px', border: '1px solid var(--line2)', background: '#fff' }}
+                  style={{ width: '85px', padding: '4px 8px', fontSize: '12.5px', fontFamily: 'monospace', borderRadius: '5px', border: '1px solid var(--line2)', background: 'var(--card)' }}
                 />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -1198,7 +1198,7 @@ export default function StockCard({
                   value={calibCostStr}
                   onChange={e => setCalibCostStr(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') handleSaveCalibration(); }}
-                  style={{ width: '85px', padding: '4px 8px', fontSize: '12.5px', fontFamily: 'monospace', borderRadius: '5px', border: '1px solid var(--line2)', background: '#fff' }}
+                  style={{ width: '85px', padding: '4px 8px', fontSize: '12.5px', fontFamily: 'monospace', borderRadius: '5px', border: '1px solid var(--line2)', background: 'var(--card)' }}
                 />
               </div>
               <button
@@ -1244,7 +1244,7 @@ export default function StockCard({
                       fontFamily: 'ui-monospace,Consolas,monospace',
                       borderRadius: '5px',
                       border: '1px solid var(--line2)',
-                      background: '#fff'
+                      background: 'var(--card)'
                     }}
                   />
                 </div>
@@ -1258,7 +1258,7 @@ export default function StockCard({
                       onClick={() => setBuyQtyStr(String(q))}
                       style={{
                         padding: '2px 5px', fontSize: '10.5px', borderRadius: '3px',
-                        border: '1px solid var(--line)', background: '#fff', cursor: 'pointer', color: 'var(--sub)'
+                        border: '1px solid var(--line)', background: 'var(--card)', cursor: 'pointer', color: 'var(--sub)'
                       }}
                     >
                       +{q}
@@ -1270,7 +1270,7 @@ export default function StockCard({
                       onClick={() => setBuyQtyStr(String(oldShares))}
                       style={{
                         padding: '2px 5px', fontSize: '10.5px', borderRadius: '3px',
-                        border: '1px solid var(--line)', background: '#fff', cursor: 'pointer', color: 'var(--sub)'
+                        border: '1px solid var(--line)', background: 'var(--card)', cursor: 'pointer', color: 'var(--sub)'
                       }}
                       title="加仓等同于当前持仓的股数（翻倍仓）"
                     >
@@ -1296,7 +1296,7 @@ export default function StockCard({
                       fontFamily: 'ui-monospace,Consolas,monospace',
                       borderRadius: '5px',
                       border: '1px solid var(--line2)',
-                      background: '#fff'
+                      background: 'var(--card)'
                     }}
                   />
                 </div>
@@ -1355,9 +1355,9 @@ export default function StockCard({
                         fontSize: '11.5px',
                         fontWeight: 700,
                         cursor: 'pointer',
-                        background: '#fff1f0',
-                        color: '#cf1322',
-                        borderColor: '#ffa39e'
+                        background: 'var(--up-bg)',
+                        color: 'var(--up)',
+                        borderColor: 'var(--up-b)'
                       }}
                     >
                       📤 卖出 / 减仓
@@ -1387,11 +1387,11 @@ export default function StockCard({
                 <div style={{
                   marginTop: '8px',
                   padding: '5px 10px',
-                  background: '#f6ffed',
-                  border: '1px solid #b7eb8f',
+                  background: 'var(--down-bg)',
+                  border: '1px solid var(--down-b)',
                   borderRadius: '6px',
                   fontSize: '11.5px',
-                  color: '#389e0d',
+                  color: 'var(--down-d)',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '8px',
@@ -1423,12 +1423,12 @@ export default function StockCard({
                   style={{
                     marginTop: '8px',
                     padding: '6px 10px',
-                    background: 'linear-gradient(90deg, #fffbeb 0%, #fff7ed 100%)',
+                    background: 'var(--warn-bg)',
                     border: '1px solid #f59e0b',
                     borderRadius: '6px',
                     fontSize: '11.5px',
                     lineHeight: 1.5,
-                    color: '#78350f',
+                    color: 'var(--warn-d)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
@@ -1449,9 +1449,9 @@ export default function StockCard({
                       className="mini"
                       onClick={() => setBuyQtyStr(String(preBuyHolidayGuard.maxSafeShares))}
                       style={{
-                        background: '#fef3c7',
+                        background: 'var(--warn-bg)',
                         borderColor: '#f59e0b',
-                        color: '#92400e',
+                        color: 'var(--warn-d)',
                         fontWeight: 700,
                         padding: '2px 8px',
                         fontSize: '11px',
@@ -1472,30 +1472,30 @@ export default function StockCard({
                 flexWrap: 'wrap',
                 gap: '8px',
                 padding: '6px 10px',
-                background: todayT.hasUnclosed ? '#fffbe6' : todayT.isFirstDayLocked ? '#f8fafc' : 'var(--surface2)',
-                border: todayT.hasUnclosed ? '1px solid #ffe58f' : todayT.isFirstDayLocked ? '1px solid #cbd5e1' : '1px solid var(--line)',
+                background: todayT.hasUnclosed ? 'var(--warn-bg)' : todayT.isFirstDayLocked ? 'var(--surface)' : 'var(--surface2)',
+                border: todayT.hasUnclosed ? '1px solid var(--warn-b)' : todayT.isFirstDayLocked ? '1px solid var(--line2)' : '1px solid var(--line)',
                 borderRadius: '6px',
                 fontSize: '11.5px',
                 marginTop: '8px'
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                  <span style={{ fontWeight: 700, color: todayT.hasUnclosed ? '#d46b08' : todayT.isFirstDayLocked ? '#475569' : 'var(--text)' }}>
+                  <span style={{ fontWeight: 700, color: todayT.hasUnclosed ? 'var(--warn-d)' : todayT.isFirstDayLocked ? 'var(--sub)' : 'var(--text)' }}>
                     ⏱️ 今日做T与T+1状态:
                   </span>
                   {todayT.isFirstDayLocked ? (
-                    <span style={{ color: '#475569', fontWeight: 600 }}>
+                    <span style={{ color: 'var(--sub)', fontWeight: 600 }}>
                       🔒 今日新买建仓 <b>{todayT.t1LockedShares}</b> 股（T+1 锁仓冻结，今日可卖 0 股，绝不误报尾盘清T · 明日解锁可卖/做T）
                     </span>
                   ) : todayT.hasUnclosed ? (
                     <>
-                      <span style={{ color: '#d46b08', fontWeight: 600 }}>
+                      <span style={{ color: 'var(--warn-d)', fontWeight: 600 }}>
                         ⚠️ 今日加仓/开T {todayT.addBoughtQty} 股（昨日可卖底仓 {todayT.sellableShares} 股），尚有 <b>{todayT.unclosedShares}</b> 股待平T！
                       </span>
                       <button
                         type="button"
                         className="mini"
                         onClick={() => onOpenQuickT(stock, '直接卖出', f2(pxNow), todayT.unclosedShares)}
-                        style={{ color: '#cf1322', borderColor: '#ffa39e', background: '#fff1f0', fontWeight: 700, padding: '1px 7px', fontSize: '11px', cursor: 'pointer' }}
+                        style={{ color: 'var(--up)', borderColor: 'var(--up-b)', background: 'var(--up-bg)', fontWeight: 700, padding: '1px 7px', fontSize: '11px', cursor: 'pointer' }}
                         title={`立即卖出昨日可用底仓 ${todayT.unclosedShares} 股以平T`}
                       >
                         ⚡ 立即平仓
@@ -1507,14 +1507,14 @@ export default function StockCard({
                           onUpdateStock({ ...stock, unclosedTQty: 0, ignoreTailTDate: todayStr() });
                           toastOk(`已将【${stock.name}】设为长期加仓（不触发尾盘清T）`);
                         }}
-                        style={{ color: '#64748b', borderColor: '#cbd5e1', background: '#fff', fontWeight: 600, padding: '1px 6px', fontSize: '11px', cursor: 'pointer' }}
+                        style={{ color: 'var(--mute)', borderColor: 'var(--line2)', background: 'var(--card)', fontWeight: 600, padding: '1px 6px', fontSize: '11px', cursor: 'pointer' }}
                         title="如果今日买入是为了主动长期加仓，点击取消今日平T提醒"
                       >
                         📌 长期加仓
                       </button>
                     </>
                   ) : todayT.closedTCount > 0 ? (
-                    <span style={{ color: '#389e0d', fontWeight: 600 }}>
+                    <span style={{ color: 'var(--down-d)', fontWeight: 600 }}>
                       ✅ 今日做T已全部平仓了结（累计 {todayT.closedTCount} 笔已记账 ｜ 剩余可卖底仓 {todayT.sellableShares} 股）
                     </span>
                   ) : (
@@ -1554,7 +1554,7 @@ export default function StockCard({
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: '3px' }}>
               <span style={{ fontWeight: 700, fontSize: '13px' }}>{c.title}</span>
               {c.channelShiftTag && (
-                <span style={{ fontSize: '11px', padding: '1px 6px', borderRadius: '4px', background: '#eff6ff', color: '#1d4ed8', fontWeight: 600 }}>
+                <span style={{ fontSize: '11px', padding: '1px 6px', borderRadius: '4px', background: 'var(--info-bg)', color: 'var(--info-d)', fontWeight: 600 }}>
                   {c.channelShiftTag}
                 </span>
               )}
@@ -1564,9 +1564,9 @@ export default function StockCard({
                   padding: '1px 7px',
                   borderRadius: '4px',
                   fontWeight: 700,
-                  background: c.buyGate.confirmed ? '#fef2f2' : '#fffbeb',
-                  color: c.buyGate.confirmed ? '#dc2626' : '#b45309',
-                  border: `1px solid ${c.buyGate.confirmed ? '#fecaca' : '#fde68a'}`,
+                  background: c.buyGate.confirmed ? 'var(--up-bg)' : 'var(--warn-bg)',
+                  color: c.buyGate.confirmed ? '#dc2626' : 'var(--warn-d)',
+                  border: `1px solid ${c.buyGate.confirmed ? 'var(--up-b)' : 'var(--warn-b)'}`,
                 }}>
                   {c.buyGate.label}
                 </span>
@@ -1577,9 +1577,9 @@ export default function StockCard({
                   padding: '1px 7px',
                   borderRadius: '4px',
                   fontWeight: 700,
-                  background: c.sellGate.confirmed ? '#f0fdf4' : c.sellGate.stage === 'STRONG_HOLD_RUN' ? '#faf5ff' : '#fff7ed',
-                  color: c.sellGate.confirmed ? '#15803d' : c.sellGate.stage === 'STRONG_HOLD_RUN' ? '#7e22ce' : '#c2410c',
-                  border: `1px solid ${c.sellGate.confirmed ? '#bbf7d0' : c.sellGate.stage === 'STRONG_HOLD_RUN' ? '#e9d5ff' : '#fed7aa'}`,
+                  background: c.sellGate.confirmed ? 'var(--down-bg)' : c.sellGate.stage === 'STRONG_HOLD_RUN' ? 'var(--accent-bg)' : 'var(--warn-bg)',
+                  color: c.sellGate.confirmed ? 'var(--down-d)' : c.sellGate.stage === 'STRONG_HOLD_RUN' ? 'var(--accent-d)' : 'var(--warn-d)',
+                  border: `1px solid ${c.sellGate.confirmed ? 'var(--down-b)' : c.sellGate.stage === 'STRONG_HOLD_RUN' ? 'var(--accent-b)' : 'var(--warn-b)'}`,
                 }}>
                   {c.sellGate.label}
                 </span>
@@ -1666,15 +1666,15 @@ export default function StockCard({
               margin: '8px 0 10px',
               padding: '7px 12px',
               borderRadius: '8px',
-              background: '#f8fafc',
-              border: '1px dashed #cbd5e1',
+              background: 'var(--surface)',
+              border: '1px dashed var(--line2)',
               fontSize: '11.5px',
               color: 'var(--sub)'
             }}
           >
             <summary style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px', userSelect: 'none' }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                <span style={{ background: '#ede9fe', color: '#6d28d9', padding: '1px 6px', borderRadius: '4px', fontSize: '10.5px', fontWeight: 700 }}>
+                <span style={{ background: 'var(--accent-bg)', color: 'var(--accent-d)', padding: '1px 6px', borderRadius: '4px', fontSize: '10.5px', fontWeight: 700 }}>
                   🧪 实验 · 弱参考
                 </span>
                 <span>
@@ -1685,43 +1685,43 @@ export default function StockCard({
                   {atrExp.volType}
                 </span>
                 <span>
-                  ｜ 自适应格距 <b style={{ fontFamily: 'monospace', color: '#6d28d9' }}>{atrExp.adaptiveGrid.toFixed(2)}%</b>
+                  ｜ 自适应格距 <b style={{ fontFamily: 'monospace', color: 'var(--accent-d)' }}>{atrExp.adaptiveGrid.toFixed(2)}%</b>
                   <span style={{ color: 'var(--mute)', marginLeft: '4px' }}>(标准 {atrExp.standardGrid.toFixed(2)}%)</span>
                 </span>
               </span>
-              <span style={{ fontSize: '11px', color: '#6d28d9', fontWeight: 600 }}>
+              <span style={{ fontSize: '11px', color: 'var(--accent-d)', fontWeight: 600 }}>
                 ▾ 展开实验对照点位
               </span>
             </summary>
 
-            <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px dashed #e2e8f0' }}>
+            <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px dashed var(--line)' }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '8px', marginBottom: '6px' }}>
-                <div style={{ padding: '6px 8px', background: '#fff', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                <div style={{ padding: '6px 8px', background: 'var(--card)', borderRadius: '6px', border: '1px solid var(--line)' }}>
                   <div style={{ fontSize: '10.5px', color: 'var(--mute)' }}>ATR(14) 真实波幅</div>
                   <div style={{ fontSize: '12.5px', fontWeight: 700, fontFamily: 'monospace' }}>
                     ¥{f2(atrExp.atr14)} ({atrExp.atrPct.toFixed(2)}%)
                   </div>
                 </div>
-                <div style={{ padding: '6px 8px', background: '#fff', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                <div style={{ padding: '6px 8px', background: 'var(--card)', borderRadius: '6px', border: '1px solid var(--line)' }}>
                   <div style={{ fontSize: '10.5px', color: 'var(--mute)' }}>实验动态步长 vs 标准</div>
-                  <div style={{ fontSize: '12.5px', fontWeight: 700, fontFamily: 'monospace', color: '#6d28d9' }}>
+                  <div style={{ fontSize: '12.5px', fontWeight: 700, fontFamily: 'monospace', color: 'var(--accent-d)' }}>
                     {atrExp.adaptiveGrid.toFixed(2)}% <span style={{ color: 'var(--mute)', fontWeight: 400 }}>/ {atrExp.standardGrid.toFixed(2)}%</span>
                   </div>
                 </div>
-                <div style={{ padding: '6px 8px', background: '#f0fdf4', borderRadius: '6px', border: '1px solid #bbf7d0' }}>
-                  <div style={{ fontSize: '10.5px', color: '#15803d' }}>ATR 实验低吸格位</div>
-                  <div style={{ fontSize: '12.5px', fontWeight: 700, fontFamily: 'monospace', color: '#15803d' }}>
+                <div style={{ padding: '6px 8px', background: 'var(--down-bg)', borderRadius: '6px', border: '1px solid var(--down-b)' }}>
+                  <div style={{ fontSize: '10.5px', color: 'var(--down-d)' }}>ATR 实验低吸格位</div>
+                  <div style={{ fontSize: '12.5px', fontWeight: 700, fontFamily: 'monospace', color: 'var(--down-d)' }}>
                     ¥{f2(atrExp.expIn1)} — ¥{f2(atrExp.expIn2)}
                   </div>
                 </div>
-                <div style={{ padding: '6px 8px', background: '#fef2f2', borderRadius: '6px', border: '1px solid #fecaca' }}>
+                <div style={{ padding: '6px 8px', background: 'var(--up-bg)', borderRadius: '6px', border: '1px solid var(--up-b)' }}>
                   <div style={{ fontSize: '10.5px', color: '#dc2626' }}>ATR 实验高抛格位</div>
                   <div style={{ fontSize: '12.5px', fontWeight: 700, fontFamily: 'monospace', color: '#dc2626' }}>
                     ¥{f2(atrExp.expOut1)} — ¥{f2(atrExp.expOut2)}
                   </div>
                 </div>
               </div>
-              <div style={{ fontSize: '11.5px', color: '#475569', lineHeight: 1.5 }}>
+              <div style={{ fontSize: '11.5px', color: 'var(--sub)', lineHeight: 1.5 }}>
                 💡 <b>股性观察：</b>{atrExp.volDesc}
                 <span style={{ color: '#94a3b8', marginLeft: '6px' }}>（⚠️ 仅供实验性对照弱参考，主挂单仍严格以系统 1.33% 七格与分时均线为准）</span>
               </div>
@@ -1736,15 +1736,15 @@ export default function StockCard({
               margin: '0 0 12px',
               padding: '7px 12px',
               borderRadius: '8px',
-              background: '#f8fafc',
-              border: '1px dashed #cbd5e1',
+              background: 'var(--surface)',
+              border: '1px dashed var(--line2)',
               fontSize: '11.5px',
               color: 'var(--sub)'
             }}
           >
             <summary style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px', userSelect: 'none' }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                <span style={{ background: '#e0f2fe', color: '#0369a1', padding: '1px 6px', borderRadius: '4px', fontSize: '10.5px', fontWeight: 700 }}>
+                <span style={{ background: 'var(--info-bg)', color: 'var(--accent-d)', padding: '1px 6px', borderRadius: '4px', fontSize: '10.5px', fontWeight: 700 }}>
                   🧬 实验 · 弱参考
                 </span>
                 <span>
@@ -1758,39 +1758,39 @@ export default function StockCard({
                   ｜ 深水低吸反抽胜率 <b style={{ fontFamily: 'monospace', color: dnaExp.dipWinRate >= 55 ? '#16a34a' : '#dc2626' }}>{dnaExp.dipWinRate}%</b>
                 </span>
               </span>
-              <span style={{ fontSize: '11px', color: '#0369a1', fontWeight: 600 }}>
+              <span style={{ fontSize: '11px', color: 'var(--accent-d)', fontWeight: 600 }}>
                 ▾ 展开历史胜率详单
               </span>
             </summary>
 
-            <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px dashed #e2e8f0' }}>
+            <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px dashed var(--line)' }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(165px, 1fr))', gap: '8px', marginBottom: '6px' }}>
-                <div style={{ padding: '6px 8px', background: '#fff', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                <div style={{ padding: '6px 8px', background: 'var(--card)', borderRadius: '6px', border: '1px solid var(--line)' }}>
                   <div style={{ fontSize: '10.5px', color: 'var(--mute)' }}>做T日内弹性达标率</div>
                   <div style={{ fontSize: '12px', fontWeight: 700, fontFamily: 'monospace' }}>
-                    ≥3%: <b style={{ color: '#0284c7' }}>{dnaExp.tFriendly3Pct}%</b> · ≥4%: <b>{dnaExp.tFriendly4Pct}%</b>
+                    ≥3%: <b style={{ color: 'var(--accent)' }}>{dnaExp.tFriendly3Pct}%</b> · ≥4%: <b>{dnaExp.tFriendly4Pct}%</b>
                   </div>
                 </div>
-                <div style={{ padding: '6px 8px', background: '#fff', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                <div style={{ padding: '6px 8px', background: 'var(--card)', borderRadius: '6px', border: '1px solid var(--line)' }}>
                   <div style={{ fontSize: '10.5px', color: 'var(--mute)' }}>深跌(≤-1.8%)反抽≥1.2%胜率</div>
                   <div style={{ fontSize: '12px', fontWeight: 700, fontFamily: 'monospace', color: dnaExp.dipWinRate >= 55 ? '#16a34a' : '#dc2626' }}>
                     {dnaExp.dipTotal > 0 ? `${dnaExp.dipWinRate}% (${dnaExp.dipWin}/${dnaExp.dipTotal}次 · 均抽+${dnaExp.dipAvgRebound}%)` : '样本不足'}
                   </div>
                 </div>
-                <div style={{ padding: '6px 8px', background: '#fff', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                <div style={{ padding: '6px 8px', background: 'var(--card)', borderRadius: '6px', border: '1px solid var(--line)' }}>
                   <div style={{ fontSize: '10.5px', color: 'var(--mute)' }}>高开砸盘率 (收阴占比)</div>
-                  <div style={{ fontSize: '12px', fontWeight: 700, fontFamily: 'monospace', color: dnaExp.gapUpSmashRate >= 60 ? '#dc2626' : '#334155' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 700, fontFamily: 'monospace', color: dnaExp.gapUpSmashRate >= 60 ? '#dc2626' : 'var(--sub)' }}>
                     {dnaExp.gapUpTotal > 0 ? `${dnaExp.gapUpSmashRate}% (${dnaExp.gapUpSmash}/${dnaExp.gapUpTotal}次高开收阴)` : '近期极少高开'}
                   </div>
                 </div>
-                <div style={{ padding: '6px 8px', background: '#fff', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                <div style={{ padding: '6px 8px', background: 'var(--card)', borderRadius: '6px', border: '1px solid var(--line)' }}>
                   <div style={{ fontSize: '10.5px', color: 'var(--mute)' }}>同今日开盘[{dnaExp.curBucketLabel}]</div>
                   <div style={{ fontSize: '12px', fontWeight: 700, fontFamily: 'monospace' }}>
                     {dnaExp.matchTotal > 0 ? `收涨${dnaExp.matchUpRate}% · 均冲+${dnaExp.matchAvgSurge}% / 探${dnaExp.matchAvgDip}%` : '同档样本较少'}
                   </div>
                 </div>
               </div>
-              <div style={{ fontSize: '11.5px', color: '#475569', lineHeight: 1.5 }}>
+              <div style={{ fontSize: '11.5px', color: 'var(--sub)', lineHeight: 1.5 }}>
                 🧬 <b>基因特征总结：</b>{dnaExp.dnaDesc}
                 <span style={{ color: '#94a3b8', marginLeft: '6px' }}>（⚠️ 基于历史 {dnaExp.sampleDays} 日纯统计学回顾，不代表未来必然重复，仅作弱参考）</span>
               </div>
@@ -1907,7 +1907,7 @@ export default function StockCard({
                       fontFamily: 'monospace',
                       borderRadius: '5px',
                       border: '1px solid var(--line2)',
-                      background: '#fff'
+                      background: 'var(--card)'
                     }}
                   />
                   <button
@@ -1965,7 +1965,7 @@ export default function StockCard({
                       fontFamily: 'monospace',
                       borderRadius: '5px',
                       border: '1px solid var(--line2)',
-                      background: '#fff'
+                      background: 'var(--card)'
                     }}
                   />
                   {[500, 1000].map(q => (
@@ -2086,7 +2086,7 @@ export default function StockCard({
                   type="button"
                   className="mini"
                   style={{
-                    background: '#fff',
+                    background: 'var(--card)',
                     color: 'var(--text)',
                     fontWeight: 700,
                     borderColor: beFeasibility.border,

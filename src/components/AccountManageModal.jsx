@@ -287,8 +287,8 @@ export default function AccountManageModal({
                       fontSize: '11px',
                       padding: '1px 7px',
                       borderRadius: '99px',
-                      background: isOwner ? '#fef3c7' : '#e0f2fe',
-                      color: isOwner ? '#b45309' : '#0369a1',
+                      background: isOwner ? 'var(--warn-bg)' : 'var(--info-bg)',
+                      color: isOwner ? 'var(--warn-d)' : 'var(--accent-d)',
                       fontWeight: 700,
                     }}>
                       {isOwner ? '主理人' : '独立成员'}
@@ -371,8 +371,8 @@ export default function AccountManageModal({
                 <div style={{
                   padding: '10px 13px',
                   borderRadius: '10px',
-                  background: openReg ? '#f0fdf4' : '#fff7ed',
-                  border: `1px solid ${openReg ? '#86efac' : '#fed7aa'}`,
+                  background: openReg ? 'var(--down-bg)' : 'var(--warn-bg)',
+                  border: `1px solid ${openReg ? 'var(--down-b)' : 'var(--warn-b)'}`,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
@@ -394,9 +394,9 @@ export default function AccountManageModal({
                     onClick={handleToggleOpenRegister}
                     style={{
                       fontWeight: 700,
-                      borderColor: openReg ? '#fdba74' : '#86efac',
-                      background: '#fff',
-                      color: openReg ? '#c2410c' : '#15803d',
+                      borderColor: openReg ? 'var(--warn-b)' : 'var(--down-b)',
+                      background: 'var(--card)',
+                      color: openReg ? 'var(--warn-d)' : 'var(--down-d)',
                     }}
                   >
                     {openReg ? '🔒 切换为仅凭邀请码' : '🟢 开启免邀请码注册'}
@@ -460,7 +460,7 @@ export default function AccountManageModal({
                 <button
                   type="button"
                   className="mini"
-                  style={{ borderColor: '#fca5a5', color: '#dc2626', background: '#fef2f2', fontWeight: 700 }}
+                  style={{ borderColor: 'var(--up-b)', color: '#dc2626', background: 'var(--up-bg)', fontWeight: 700 }}
                   onClick={onLogout}
                 >
                   🚪 退出当前账号
@@ -474,8 +474,8 @@ export default function AccountManageModal({
               <div style={{
                 padding: '10px 13px',
                 borderRadius: '10px',
-                background: openReg ? '#f0fdf4' : '#fff7ed',
-                border: `1px solid ${openReg ? '#86efac' : '#fed7aa'}`,
+                background: openReg ? 'var(--down-bg)' : 'var(--warn-bg)',
+                border: `1px solid ${openReg ? 'var(--down-b)' : 'var(--warn-b)'}`,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
@@ -497,9 +497,9 @@ export default function AccountManageModal({
                   onClick={handleToggleOpenRegister}
                   style={{
                     fontWeight: 700,
-                    borderColor: openReg ? '#fdba74' : '#86efac',
-                    background: '#fff',
-                    color: openReg ? '#c2410c' : '#15803d',
+                    borderColor: openReg ? 'var(--warn-b)' : 'var(--down-b)',
+                    background: 'var(--card)',
+                    color: openReg ? 'var(--warn-d)' : 'var(--down-d)',
                   }}
                 >
                   {openReg ? '🔒 切换为仅凭邀请码' : '🟢 开启免邀请码注册'}
@@ -509,7 +509,7 @@ export default function AccountManageModal({
               <div style={{
                 padding: '11px 13px',
                 borderRadius: '10px',
-                background: '#f8fafc',
+                background: 'var(--surface)',
                 border: '1px solid var(--line)',
                 display: 'flex',
                 flexWrap: 'wrap',
@@ -562,7 +562,7 @@ export default function AccountManageModal({
                           padding: '10px 12px',
                           borderRadius: '8px',
                           border: '1px solid var(--line)',
-                          background: disabled ? 'var(--surface)' : '#fff',
+                          background: disabled ? 'var(--surface)' : 'var(--card)',
                           opacity: disabled ? 0.72 : 1,
                           display: 'flex',
                           alignItems: 'center',
@@ -573,7 +573,7 @@ export default function AccountManageModal({
                       >
                         <div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                            <b style={{ fontFamily: 'monospace', fontSize: '14px', color: disabled ? 'var(--mute)' : '#1d4ed8' }}>
+                            <b style={{ fontFamily: 'monospace', fontSize: '14px', color: disabled ? 'var(--mute)' : 'var(--info-d)' }}>
                               {inv.code}
                             </b>
                             <span style={{ fontSize: '12px', color: 'var(--text)', fontWeight: 600 }}>
@@ -583,8 +583,8 @@ export default function AccountManageModal({
                               fontSize: '11px',
                               padding: '1px 6px',
                               borderRadius: '4px',
-                              background: disabled ? '#f1f5f9' : '#dcfce7',
-                              color: disabled ? '#64748b' : '#15803d',
+                              background: disabled ? 'var(--surface2)' : 'var(--down-bg)',
+                              color: disabled ? 'var(--mute)' : 'var(--down-d)',
                               fontWeight: 700,
                             }}>
                               {inv.revoked ? '已作废' : exhausted ? `已用完 (${usedU}/${maxU})` : maxU === 0 ? `已用 ${usedU} 次 (不限)` : `已用 ${usedU}/${maxU}`}
@@ -634,7 +634,7 @@ export default function AccountManageModal({
                       padding: '10px 12px',
                       borderRadius: '8px',
                       border: '1px solid var(--line)',
-                      background: '#fff',
+                      background: 'var(--card)',
                       display: 'flex',
                       flexDirection: 'column',
                       gap: '8px',
@@ -670,7 +670,7 @@ export default function AccountManageModal({
                           <button
                             type="button"
                             className="mini"
-                            style={{ color: '#dc2626', borderColor: '#fca5a5' }}
+                            style={{ color: '#dc2626', borderColor: 'var(--up-b)' }}
                             onClick={() => handleOwnerDeleteUser(u.username)}
                           >
                             移除

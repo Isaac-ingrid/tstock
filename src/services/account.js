@@ -183,7 +183,7 @@ export function renderEquity(){
   const plotH = H - padT - padB;
 
   // 坐标网格
-  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.strokeStyle = (typeof document !== 'undefined' && document.documentElement?.dataset?.theme === 'light') ? '#e5e7eb' : 'rgba(255,255,255,0.08)';
   ctx.lineWidth = 1;
   ctx.beginPath();
   for (let i = 0; i <= 4; i++) {

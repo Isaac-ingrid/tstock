@@ -241,9 +241,9 @@ function QuickTModalInner({
               padding: '8px 11px',
               marginBottom: '12px',
               borderRadius: '7px',
-              background: '#fef2f2',
+              background: 'var(--up-bg)',
               border: '1px solid #f87171',
-              color: '#991b1b',
+              color: 'var(--up-d)',
               fontSize: '11.5px',
               lineHeight: 1.5
             }}>
@@ -258,9 +258,9 @@ function QuickTModalInner({
               padding: '8px 11px',
               marginBottom: '12px',
               borderRadius: '7px',
-              background: channelDisc.forbidAddPosition ? '#fef2f2' : '#fff7ed',
+              background: channelDisc.forbidAddPosition ? 'var(--up-bg)' : 'var(--warn-bg)',
               border: `1px solid ${channelDisc.forbidAddPosition ? '#f87171' : '#fb923c'}`,
-              color: channelDisc.forbidAddPosition ? '#991b1b' : '#9a3412',
+              color: channelDisc.forbidAddPosition ? 'var(--up-d)' : '#9a3412',
               fontSize: '11.5px',
               lineHeight: 1.55
             }}>
@@ -277,7 +277,7 @@ function QuickTModalInner({
               style={{
                 flex: 1, padding: '7px 0', borderRadius: '7px', fontWeight: 700, fontSize: '12px',
                 border: '1px solid', borderColor: dir === '正T' ? 'var(--down)' : 'var(--line)',
-                background: dir === '正T' ? 'var(--down-bg)' : '#fff',
+                background: dir === '正T' ? 'var(--down-bg)' : 'var(--card)',
                 color: dir === '正T' ? 'var(--down)' : 'var(--sub)',
                 opacity: isTiltLocked ? 0.55 : 1
               }}
@@ -295,7 +295,7 @@ function QuickTModalInner({
               style={{
                 flex: 1, padding: '7px 0', borderRadius: '7px', fontWeight: 700, fontSize: '12px',
                 border: '1px solid', borderColor: dir === '倒T' ? 'var(--up)' : 'var(--line)',
-                background: dir === '倒T' ? 'var(--up-bg)' : '#fff',
+                background: dir === '倒T' ? 'var(--up-bg)' : 'var(--card)',
                 color: dir === '倒T' ? 'var(--up)' : 'var(--sub)'
               }}
               onClick={() => {
@@ -312,7 +312,7 @@ function QuickTModalInner({
               style={{
                 flex: 1.15, padding: '7px 0', borderRadius: '7px', fontWeight: 700, fontSize: '12px',
                 border: '1px solid', borderColor: isDirectBuy ? '#1677ff' : 'var(--line)',
-                background: isDirectBuy ? '#e6f4ff' : '#fff',
+                background: isDirectBuy ? 'var(--info-bg)' : 'var(--card)',
                 color: isDirectBuy ? '#1677ff' : 'var(--sub)',
                 opacity: isTiltLocked ? 0.55 : 1
               }}
@@ -329,9 +329,9 @@ function QuickTModalInner({
               className={`m-dir-btn ${isDirectSell ? 'active' : ''}`}
               style={{
                 flex: 1.15, padding: '7px 0', borderRadius: '7px', fontWeight: 700, fontSize: '12px',
-                border: '1px solid', borderColor: isDirectSell ? '#cf1322' : 'var(--line)',
-                background: isDirectSell ? '#fff1f0' : '#fff',
-                color: isDirectSell ? '#cf1322' : 'var(--sub)'
+                border: '1px solid', borderColor: isDirectSell ? 'var(--up)' : 'var(--line)',
+                background: isDirectSell ? 'var(--up-bg)' : 'var(--card)',
+                color: isDirectSell ? 'var(--up)' : 'var(--sub)'
               }}
               onClick={() => {
                 setDir('直接卖出');
@@ -447,7 +447,7 @@ function QuickTModalInner({
 
               {/* 实时买入/加仓试算面板 */}
               <div style={{
-                padding: '10px 14px', background: '#f0f5ff', border: '1px solid #adc6ff',
+                padding: '10px 14px', background: 'var(--info-bg)', border: '1px solid #adc6ff',
                 borderRadius: '8px', fontSize: '12.5px'
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
@@ -484,9 +484,9 @@ function QuickTModalInner({
                     marginTop: '10px',
                     padding: '8px 11px',
                     borderRadius: '7px',
-                    background: 'linear-gradient(90deg, #fffbeb 0%, #fff7ed 100%)',
+                    background: 'var(--warn-bg)',
                     border: '1px solid #f59e0b',
-                    color: '#78350f',
+                    color: 'var(--warn-d)',
                     fontSize: '11.5px',
                     lineHeight: 1.55,
                   }}
@@ -498,13 +498,13 @@ function QuickTModalInner({
                     <b>{preBuyHolidayGuard.afterPosPct.toFixed(1)}%</b>，超{preBuyHolidayGuard.capSourceLabel}{' '}
                     <b>{preBuyHolidayGuard.overPct}%</b>。
                   </div>
-                  <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px', color: '#92400e' }}>
+                  <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px', color: 'var(--warn-d)' }}>
                     <span>{preBuyHolidayGuard.safeCapHint}</span>
                     {preBuyHolidayGuard.maxSafeShares >= 100 && (
                       <button
                         type="button"
                         className="qt-chip"
-                        style={{ background: '#fef3c7', borderColor: '#f59e0b', color: '#92400e', fontWeight: 700 }}
+                        style={{ background: 'var(--warn-bg)', borderColor: '#f59e0b', color: 'var(--warn-d)', fontWeight: 700 }}
                         onClick={() => setQty(preBuyHolidayGuard.maxSafeShares)}
                       >
                         按节前上限 ({preBuyHolidayGuard.maxSafeShares}股)
@@ -518,15 +518,15 @@ function QuickTModalInner({
             /* ===== 直接卖出界面 ===== */
             <div>
               <div style={{
-                padding: '8px 12px', background: todayT.sellableShares <= 0 && totalHeld > 0 ? '#fff1f0' : 'var(--surface2)',
-                border: todayT.sellableShares <= 0 && totalHeld > 0 ? '1px solid #ffa39e' : 'none',
+                padding: '8px 12px', background: todayT.sellableShares <= 0 && totalHeld > 0 ? 'var(--up-bg)' : 'var(--surface2)',
+                border: todayT.sellableShares <= 0 && totalHeld > 0 ? '1px solid var(--up-b)' : 'none',
                 borderRadius: '7px', fontSize: '12px', marginBottom: '12px', color: 'var(--sub)', lineHeight: 1.6
               }}>
-                💼 当前总持仓: <b>{totalHeld} 股</b> ｜ <b>今日可卖: <span style={{ color: todayT.sellableShares > 0 ? '#1677ff' : '#cf1322' }}>{todayT.sellableShares} 股</span></b>
+                💼 当前总持仓: <b>{totalHeld} 股</b> ｜ <b>今日可卖: <span style={{ color: todayT.sellableShares > 0 ? '#1677ff' : 'var(--up)' }}>{todayT.sellableShares} 股</span></b>
                 {todayT.t1LockedShares > 0 && (
-                  <span style={{ color: '#64748b', marginLeft: '6px' }}>(含 T+1 今日新买锁仓 {todayT.t1LockedShares} 股)</span>
+                  <span style={{ color: 'var(--mute)', marginLeft: '6px' }}>(含 T+1 今日新买锁仓 {todayT.t1LockedShares} 股)</span>
                 )}
-                <div style={{ fontSize: '11px', color: todayT.sellableShares <= 0 && totalHeld > 0 ? '#cf1322' : 'var(--mute)', marginTop: '2px', fontWeight: todayT.sellableShares <= 0 && totalHeld > 0 ? 700 : 400 }}>
+                <div style={{ fontSize: '11px', color: todayT.sellableShares <= 0 && totalHeld > 0 ? 'var(--up)' : 'var(--mute)', marginTop: '2px', fontWeight: todayT.sellableShares <= 0 && totalHeld > 0 ? 700 : 400 }}>
                   {todayT.sellableShares <= 0 && totalHeld > 0
                     ? '🔒 受 A 股 T+1 制度限制：今日新买入股份当日无法卖出，需待明日开盘解锁！'
                     : '确认卖出后将直接扣减可用底仓并回笼现金。若全卖则自动完成清仓。'}
@@ -594,7 +594,7 @@ function QuickTModalInner({
               <div className="fld" style={{ marginBottom: '14px' }}>
                 <label style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>卖出股数 (股)</span>
-                  <span style={{ color: todayT.sellableShares > 0 ? 'var(--sub)' : '#cf1322', fontWeight: todayT.sellableShares > 0 ? 400 : 700 }}>
+                  <span style={{ color: todayT.sellableShares > 0 ? 'var(--sub)' : 'var(--up)', fontWeight: todayT.sellableShares > 0 ? 400 : 700 }}>
                     今日可用可卖: {todayT.sellableShares} 股
                   </span>
                 </label>
@@ -663,7 +663,7 @@ function QuickTModalInner({
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '3px' }}>
                   <span>卖出后剩余持仓:</span>
-                  <b style={{ color: remainingShares === 0 ? '#cf1322' : 'var(--text)' }}>
+                  <b style={{ color: remainingShares === 0 ? 'var(--up)' : 'var(--text)' }}>
                     {remainingShares === 0 ? '全部清仓（持仓归零）' : `${remainingShares} 股`}
                   </b>
                 </div>
@@ -746,7 +746,7 @@ function QuickTModalInner({
               </div>
 
               {todayT.isFirstDayLocked && (
-                <div style={{ padding: '7px 10px', marginBottom: '10px', borderRadius: '6px', background: '#fffbe6', border: '1px solid #ffe58f', color: '#d46b08', fontSize: '11.5px', fontWeight: 600 }}>
+                <div style={{ padding: '7px 10px', marginBottom: '10px', borderRadius: '6px', background: 'var(--warn-bg)', border: '1px solid var(--warn-b)', color: 'var(--warn-d)', fontSize: '11.5px', fontWeight: 600 }}>
                   🔒 T+1 提示：该股当前持仓全为今日新买入（今日可卖底仓 0 股），当日无法完成成对做T（正T/倒T），仅适合补录历史对倒流水或明日再做T！
                 </div>
               )}
@@ -818,7 +818,7 @@ function QuickTModalInner({
           )}
         </div>
         <div className="modal-ft" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', padding: '10px 14px', borderTop: '1px solid var(--line)' }}>
-          <button className="btn-cancel" onClick={onClose} style={{ padding: '6px 14px', borderRadius: '6px', border: '1px solid var(--line)', background: '#fff', cursor: 'pointer' }}>
+          <button className="btn-cancel" onClick={onClose} style={{ padding: '6px 14px', borderRadius: '6px', border: '1px solid var(--line)', background: 'var(--card)', cursor: 'pointer' }}>
             取消
           </button>
           <button
@@ -829,14 +829,14 @@ function QuickTModalInner({
               padding: '6px 18px',
               borderRadius: '6px',
               background: isLockedAction
-                ? '#fee2e2'
+                ? 'var(--up-bg)'
                 : isDirectBuy
                 ? '#1677ff'
                 : isDirectSell
-                ? '#cf1322'
+                ? 'var(--up)'
                 : 'var(--accent)',
-              color: isLockedAction ? '#991b1b' : '#fff',
-              border: isLockedAction ? '1px solid #fca5a5' : 'none',
+              color: isLockedAction ? 'var(--up-d)' : '#fff',
+              border: isLockedAction ? '1px solid var(--up-b)' : 'none',
               fontWeight: 700,
               cursor: isLockedAction ? 'not-allowed' : 'pointer'
             }}
@@ -933,7 +933,7 @@ function StockReasonModalInner({ stock, inPool, onClose, onAdd, onJumpCard, onJu
                     placeholder="如 1000"
                     value={initShares}
                     onChange={e => setInitShares(e.target.value)}
-                    style={{ width: '85px', padding: '4px 6px', fontSize: '12px', borderRadius: '4px', border: '1px solid var(--line)', background: '#fff' }}
+                    style={{ width: '85px', padding: '4px 6px', fontSize: '12px', borderRadius: '4px', border: '1px solid var(--line)', background: 'var(--card)' }}
                   />
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -944,7 +944,7 @@ function StockReasonModalInner({ stock, inPool, onClose, onAdd, onJumpCard, onJu
                     placeholder="如 30.50"
                     value={initCost}
                     onChange={e => setInitCost(e.target.value)}
-                    style={{ width: '85px', padding: '4px 6px', fontSize: '12px', borderRadius: '4px', border: '1px solid var(--line)', background: '#fff' }}
+                    style={{ width: '85px', padding: '4px 6px', fontSize: '12px', borderRadius: '4px', border: '1px solid var(--line)', background: 'var(--card)' }}
                   />
                 </div>
                 <button
@@ -989,7 +989,7 @@ function StockReasonModalInner({ stock, inPool, onClose, onAdd, onJumpCard, onJu
             )}
           </div>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginLeft: 'auto' }}>
-            <button type="button" className="btn-cancel" onClick={onClose} style={{ padding: '6px 14px', borderRadius: '6px', border: '1px solid var(--line)', background: '#fff', cursor: 'pointer' }}>关闭</button>
+            <button type="button" className="btn-cancel" onClick={onClose} style={{ padding: '6px 14px', borderRadius: '6px', border: '1px solid var(--line)', background: 'var(--card)', cursor: 'pointer' }}>关闭</button>
             {inPool && onJumpCard ? (
               <button
                 type="button"
@@ -1079,12 +1079,12 @@ export function TradingClockModal({
     : Math.min(Number(allowedCapPct || 80), Number(reminder?.suggestedMaxPosPct) || (closedDays >= 7 ? 30 : 50));
 
   const sessionTone = (snap.isInHoliday || snap.isHoliday)
-    ? { bg: '#fef2f2', bd: '#fecaca', fg: '#b91c1c' }
+    ? { bg: 'var(--up-bg)', bd: 'var(--up-b)', fg: 'var(--up-d)' }
     : !snap.isTradeDay
-      ? { bg: '#f8fafc', bd: '#cbd5e1', fg: '#475569' }
+      ? { bg: 'var(--surface)', bd: 'var(--line2)', fg: 'var(--sub)' }
       : isUrgentPreHoliday
-        ? { bg: '#fffbeb', bd: '#fcd34d', fg: '#b45309' }
-        : { bg: '#eff6ff', bd: '#bfdbfe', fg: '#1d4ed8' };
+        ? { bg: 'var(--warn-bg)', bd: 'var(--warn-b)', fg: 'var(--warn-d)' }
+        : { bg: 'var(--info-bg)', bd: 'var(--info-b)', fg: 'var(--info-d)' };
 
   const slots = [
     {
@@ -1117,7 +1117,7 @@ export function TradingClockModal({
         <>
           方向确立，缩量回踩分时均线低吸正T，放量冲高乏力倒T
           {isUrgentPreHoliday && (
-            <div style={{ marginTop: '3px', color: '#b45309', fontWeight: 600 }}>
+            <div style={{ marginTop: '3px', color: 'var(--warn-d)', fontWeight: 600 }}>
               🏮 节前窗口纪律：逢分时冲高优先执行倒T减仓，将总仓位压降至 ≤{capPct}% 安全线内
             </div>
           )}
@@ -1154,7 +1154,7 @@ export function TradingClockModal({
         <>
           主力抢跑与方向突变窗口，警惕破位跳水
           {isUrgentPreHoliday && remDays === 2 && (
-            <div style={{ marginTop: '3px', color: '#b45309', fontWeight: 600 }}>
+            <div style={{ marginTop: '3px', color: 'var(--warn-d)', fontWeight: 600 }}>
               💸 节前倒数第 2 日（提现出金兑现高峰）：警惕避险资金集中抛压引发午后回落
             </div>
           )}
@@ -1170,7 +1170,7 @@ export function TradingClockModal({
         <>
           <b>做T绝不过夜变加仓！</b>必须在此窗口将今日T仓平掉归位或止损
           {isUrgentPreHoliday && (
-            <div style={{ marginTop: '3px', color: isFinalPreHolidayDay ? '#b91c1c' : '#b45309', fontWeight: 700 }}>
+            <div style={{ marginTop: '3px', color: isFinalPreHolidayDay ? 'var(--up-d)' : 'var(--warn-d)', fontWeight: 700 }}>
               {isFinalPreHolidayDay
                 ? `🔒 节前收官日铁律：今日任何新买单受 T+1 限制将强制锁仓跨假 ${closedDays} 天！严禁尾盘博弈抄底，超限仓位务必在 14:55 前清退至 ≤${capPct}%`
                 : `🟡 节前控仓核查：收盘前核对实际总仓位，超 ≤${capPct}% 上限部分主动择机减仓`}
@@ -1214,7 +1214,7 @@ export function TradingClockModal({
                 fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                 fontWeight: 800,
                 fontSize: '13.5px',
-                color: '#0f172a'
+                color: 'var(--text)'
               }}>
                 🕒 北京时间 {snap.dateStr} {snap.weekdayLabel} {snap.timeStr}
               </span>
@@ -1223,16 +1223,16 @@ export function TradingClockModal({
                 borderRadius: '999px',
                 fontSize: '11.5px',
                 fontWeight: 700,
-                background: '#fff',
+                background: 'var(--card)',
                 color: sessionTone.fg,
                 border: `1px solid ${sessionTone.bd}`
               }}>
                 {snap.sessionBadge}
               </span>
             </div>
-            <div style={{ fontSize: '11.5px', color: '#475569', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+            <div style={{ fontSize: '11.5px', color: 'var(--sub)', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
               <span>上个交易日：<b>{snap.prevTradeDate || '--'}</b></span>
-              <span>下个开市日：<b style={{ color: '#1d4ed8' }}>{snap.nextTradeDate || '--'}</b></span>
+              <span>下个开市日：<b style={{ color: 'var(--info-d)' }}>{snap.nextTradeDate || '--'}</b></span>
             </div>
           </div>
 
@@ -1242,16 +1242,16 @@ export function TradingClockModal({
               marginBottom: '10px',
               padding: '9px 12px',
               borderRadius: '8px',
-              background: 'linear-gradient(90deg, #fef2f2 0%, #fff7ed 100%)',
-              border: '1px solid #fca5a5',
-              color: '#991b1b',
+              background: 'var(--up-bg)',
+              border: '1px solid var(--up-b)',
+              color: 'var(--up-d)',
               fontSize: '12px'
             }}>
               <div style={{ fontWeight: 800, marginBottom: '2px' }}>
                 🏮 法定节假日休市期：【{reminder?.holidayName || snap.holidayName || '节假日休市'}】
                 {reminder?.closureStart && reminder?.closureEnd ? `（${reminder.closureStart} ~ ${reminder.closureEnd}，连休 ${closedDays || 1} 天）` : ''}
               </div>
-              <div style={{ color: '#7f1d1d' }}>
+              <div style={{ color: 'var(--up-d)' }}>
                 当前 A 股全天不开市、不接受日内撮合。节后首个开市日为 <b>{reminder?.reopenDate || snap.nextTradeDate || '--'}</b>，建议提前梳理外盘与假期消息面，制定节后首日 <b>09:15-09:25</b> 竞价应对与去弱留强预案。
               </div>
             </div>
@@ -1260,16 +1260,16 @@ export function TradingClockModal({
               marginBottom: '10px',
               padding: '8px 12px',
               borderRadius: '8px',
-              background: '#f8fafc',
-              border: '1px solid #cbd5e1',
-              color: '#334155',
+              background: 'var(--surface)',
+              border: '1px solid var(--line2)',
+              color: 'var(--sub)',
               fontSize: '12px'
             }}>
               <b>🛋️ 周末休市时段：</b>今日非 A 股交易日，下个交易日为 <b>{snap.nextTradeDate || '--'}</b>。
               {reminder && reminder.phase !== 'in_holiday' && (
                 <span>
                   {' '}另请注意：距【<b>{reminder.holidayName}</b>】（连休 {closedDays} 天）仅剩{' '}
-                  <b style={{ color: remDays <= 2 && isLongHoliday ? '#b45309' : '#1d4ed8' }}>
+                  <b style={{ color: remDays <= 2 && isLongHoliday ? 'var(--warn-d)' : 'var(--info-d)' }}>
                     {remDays}
                   </b>{' '}个交易日
                   {remDays <= 2 && isLongHoliday
@@ -1284,10 +1284,10 @@ export function TradingClockModal({
               padding: '9px 12px',
               borderRadius: '8px',
               background: holidayGuard.isYellowCard
-                ? 'linear-gradient(90deg, #fffbeb 0%, #fef3c7 100%)'
-                : 'linear-gradient(90deg, #f0fdf4 0%, #fffbeb 100%)',
-              border: `1px solid ${holidayGuard.isYellowCard ? '#f59e0b' : '#86efac'}`,
-              color: holidayGuard.isYellowCard ? '#92400e' : '#166534',
+                ? 'var(--warn-bg)'
+                : 'var(--warn-bg)',
+              border: `1px solid ${holidayGuard.isYellowCard ? '#f59e0b' : 'var(--down-b)'}`,
+              color: holidayGuard.isYellowCard ? 'var(--warn-d)' : 'var(--down-d)',
               fontSize: '12px'
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px', marginBottom: '3px' }}>
@@ -1297,11 +1297,11 @@ export function TradingClockModal({
                 <span style={{
                   padding: '1px 7px',
                   borderRadius: '999px',
-                  background: holidayGuard.isYellowCard ? '#fde68a' : '#dcfce7',
-                  border: `1px solid ${holidayGuard.isYellowCard ? '#f59e0b' : '#86efac'}`,
+                  background: holidayGuard.isYellowCard ? 'var(--warn-b)' : 'var(--down-bg)',
+                  border: `1px solid ${holidayGuard.isYellowCard ? '#f59e0b' : 'var(--down-b)'}`,
                   fontWeight: 800,
                   fontSize: '11px',
-                  color: holidayGuard.isYellowCard ? '#78350f' : '#166534'
+                  color: holidayGuard.isYellowCard ? 'var(--warn-d)' : 'var(--down-d)'
                 }}>
                   {holidayGuard.isYellowCard
                     ? `当前 ${Number(posRate).toFixed(1)}% · 超≤${capPct}%线 ${holidayGuard.excessPct}%`
@@ -1310,7 +1310,7 @@ export function TradingClockModal({
               </div>
               <div>
                 {holidayGuard.isYellowCard && (
-                  <div style={{ fontWeight: 700, marginBottom: '2px', color: '#b45309' }}>
+                  <div style={{ fontWeight: 700, marginBottom: '2px', color: 'var(--warn-d)' }}>
                     建议在收盘前逢高降仓约 ¥{holidayGuard.excessAmt.toLocaleString('zh-CN')}，压回 ≤{capPct}% 跨假安全水位。
                   </div>
                 )}
@@ -1324,9 +1324,9 @@ export function TradingClockModal({
               marginBottom: '10px',
               padding: '7px 12px',
               borderRadius: '8px',
-              background: '#eff6ff',
-              border: '1px solid #bfdbfe',
-              color: '#1e40af',
+              background: 'var(--info-bg)',
+              border: '1px solid var(--info-b)',
+              color: 'var(--info-d)',
               fontSize: '12px'
             }}>
               📅 <b>近期节假日预告：</b>距【{reminder.holidayName}】（{reminder.closureStart} ~ {reminder.closureEnd}，连休 {closedDays} 天）还有 <b>{remDays}</b> 个交易日
@@ -1337,10 +1337,10 @@ export function TradingClockModal({
           <div style={{ marginBottom: '10px', padding: '8px 12px', background: 'var(--surface2)', borderRadius: '7px', border: '1px solid var(--line)' }}>
             <b>核心铁律：</b>A 股做T有极其残酷的时段效应，在错误的时间挂单（如 09:30 追高或中午垃圾时间乱买），胜率会断崖式暴跌。
             {snap.isTradeDay && snap.activeSlotId === 'pre_open' && (
-              <span style={{ color: '#1d4ed8', fontWeight: 700 }}> 当前处于 09:15 盘前准备期，请核查隔夜仓位与预埋挂单。</span>
+              <span style={{ color: 'var(--info-d)', fontWeight: 700 }}> 当前处于 09:15 盘前准备期，请核查隔夜仓位与预埋挂单。</span>
             )}
             {snap.isTradeDay && snap.activeSlotId === 'post_eod' && (
-              <span style={{ color: '#475569', fontWeight: 700 }}> 今日已收盘定盘，请完成 15:05 盘后归档与次日预案复盘。</span>
+              <span style={{ color: 'var(--sub)', fontWeight: 700 }}> 今日已收盘定盘，请完成 15:05 盘后归档与次日预案复盘。</span>
             )}
           </div>
 
@@ -1374,13 +1374,13 @@ export function TradingClockModal({
                   <tr
                     key={slot.id}
                     style={{
-                      background: isActive ? '#dbeafe' : baseBg,
+                      background: isActive ? 'var(--info-bg)' : baseBg,
                       boxShadow: isActive ? 'inset 3px 0 0 #2563eb' : undefined,
                       borderBottom: '1px solid var(--line)',
                       opacity: !snap.isTradeDay ? 0.86 : 1
                     }}
                   >
-                    <td style={{ padding: '6px 8px', fontWeight: 700, color: isActive ? '#1d4ed8' : toneColor, whiteSpace: 'nowrap' }}>
+                    <td style={{ padding: '6px 8px', fontWeight: 700, color: isActive ? 'var(--info-d)' : toneColor, whiteSpace: 'nowrap' }}>
                       {isActive ? '👉 ' : ''}{slot.time}
                       {isActive && (
                         <span style={{
@@ -1416,9 +1416,9 @@ export function TradingClockModal({
                 style={{
                   padding: '6px 12px',
                   borderRadius: '6px',
-                  border: '1px solid #bfdbfe',
-                  background: '#eff6ff',
-                  color: '#1d4ed8',
+                  border: '1px solid var(--info-b)',
+                  background: 'var(--info-bg)',
+                  color: 'var(--info-d)',
                   fontSize: '12px',
                   fontWeight: 700,
                   cursor: 'pointer'
@@ -1428,7 +1428,7 @@ export function TradingClockModal({
               </button>
             )}
           </div>
-          <button className="btn-cancel" onClick={onClose} style={{ padding: '6px 14px', borderRadius: '6px', border: '1px solid var(--line)', background: '#fff', cursor: 'pointer' }}>关闭 (Esc)</button>
+          <button className="btn-cancel" onClick={onClose} style={{ padding: '6px 14px', borderRadius: '6px', border: '1px solid var(--line)', background: 'var(--card)', cursor: 'pointer' }}>关闭 (Esc)</button>
         </div>
       </div>
     </div>
@@ -1469,9 +1469,9 @@ export function OvernightBanner({
       id="overnightAlertBanner"
       className="overnight-alert-banner tail-alert-pulse"
       style={{
-        background: 'linear-gradient(90deg, #fff1f0, #fff7e6, #fff)',
+        background: 'var(--up-bg)',
         borderLeft: '6px solid #cf1322',
-        borderTop: '1px solid #ffa39e',
+        borderTop: '1px solid var(--up-b)',
         borderBottom: '1.5px solid #ff4d4f',
         padding: '12px 20px',
         display: 'flex',
@@ -1485,7 +1485,7 @@ export function OvernightBanner({
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '24px' }}>🚨</span>
           <div>
-            <div style={{ fontSize: '13.5px', fontWeight: 800, color: '#cf1322', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <div style={{ fontSize: '13.5px', fontWeight: 800, color: 'var(--up)', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <span>【14:40 尾盘清T强制风控警报】做T绝不过夜！严禁被动变加仓套牢！</span>
               <span style={{
                 fontSize: '11px',
@@ -1498,7 +1498,7 @@ export function OvernightBanner({
                 {minsLeft > 0 ? `距 14:55 闭市平仓仅剩 ${minsLeft} 分钟` : '连续竞价已临近尾声'}
               </span>
               {simTailAlert && (
-                <span style={{ fontSize: '10.5px', background: '#e6f4ff', color: '#1677ff', border: '1px solid #91caff', padding: '1px 6px', borderRadius: '4px' }}>
+                <span style={{ fontSize: '10.5px', background: 'var(--info-bg)', color: '#1677ff', border: '1px solid var(--info-b)', padding: '1px 6px', borderRadius: '4px' }}>
                   🧪 模拟演练中
                 </span>
               )}
@@ -1523,8 +1523,8 @@ export function OvernightBanner({
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '6px',
-                  background: '#fff',
-                  border: '1px solid #ffa39e',
+                  background: 'var(--card)',
+                  border: '1px solid var(--up-b)',
                   borderRadius: '6px',
                   padding: '4px 10px',
                   fontSize: '12px',
@@ -1532,7 +1532,7 @@ export function OvernightBanner({
                 }}
               >
                 <span style={{ fontWeight: 700, color: 'var(--text)' }}>{stock.name} ({stock.code})</span>
-                <span style={{ color: '#cf1322', fontWeight: 600 }}>未平 <b>{unclosedShares}</b> 股</span>
+                <span style={{ color: 'var(--up)', fontWeight: 600 }}>未平 <b>{unclosedShares}</b> 股</span>
                 <span style={{ color: 'var(--sub)' }}>现价 ¥{f2(stock.price)}</span>
                 {onOpenQuickT && (
                   <button
@@ -1575,7 +1575,7 @@ export function OvernightBanner({
           className="oab-close"
           onClick={onClose}
           title="关闭警报条"
-          style={{ fontSize: '20px', fontWeight: 700, color: '#cf1322', cursor: 'pointer', background: 'none', border: 'none' }}
+          style={{ fontSize: '20px', fontWeight: 700, color: 'var(--up)', cursor: 'pointer', background: 'none', border: 'none' }}
         >
           ×
         </button>
@@ -1732,8 +1732,8 @@ function AlertCenterModalInner({
             justifyContent: 'space-between',
             flexWrap: 'wrap',
             padding: '11px 14px',
-            background: alertEnabled ? '#f0f5ff' : '#fff1f0',
-            border: alertEnabled ? '1px solid #adc6ff' : '1px solid #ffa39e',
+            background: alertEnabled ? 'var(--info-bg)' : 'var(--up-bg)',
+            border: alertEnabled ? '1px solid #adc6ff' : '1px solid var(--up-b)',
             borderRadius: '8px',
             marginBottom: '12px',
             gap: '10px'
@@ -1741,7 +1741,7 @@ function AlertCenterModalInner({
             <div style={{ flex: '1 1 220px', minWidth: 0 }}>
               <div style={{
                 fontWeight: 700,
-                color: alertEnabled ? '#1d39c4' : '#cf1322',
+                color: alertEnabled ? 'var(--info-d)' : 'var(--up)',
                 fontSize: '13.5px',
                 display: 'flex',
                 alignItems: 'center',
@@ -1783,14 +1783,14 @@ function AlertCenterModalInner({
             justifyContent: 'space-between',
             flexWrap: 'wrap',
             padding: '10px 14px',
-            background: 'linear-gradient(90deg, #faf5ff, #f8fafc)',
-            border: '1px solid #d8b4fe',
+            background: 'var(--accent-bg)',
+            border: '1px solid var(--accent-b)',
             borderRadius: '8px',
             marginBottom: '12px',
             gap: '10px'
           }}>
             <div style={{ flex: '1 1 220px', minWidth: 0 }}>
-              <div style={{ fontWeight: 700, color: '#6b21a8', fontSize: '13px' }}>
+              <div style={{ fontWeight: 700, color: 'var(--accent-d)', fontSize: '13px' }}>
                 🛡️ 15分钟防乒乓刷屏冷却 + P0 / P1 / P2 三级声音视觉分级
               </div>
               <div style={{ fontSize: '11.5px', color: 'var(--sub)', marginTop: '2px', lineHeight: 1.5 }}>
@@ -1809,8 +1809,8 @@ function AlertCenterModalInner({
                   fontWeight: 700,
                   cursor: 'pointer',
                   borderRadius: '6px',
-                  border: '1px solid #fca5a5',
-                  background: '#fef2f2',
+                  border: '1px solid var(--up-b)',
+                  background: 'var(--up-bg)',
                   color: '#dc2626'
                 }}
                 title="试听 P0 持仓救命级三连警报音"
@@ -1826,9 +1826,9 @@ function AlertCenterModalInner({
                   fontWeight: 700,
                   cursor: 'pointer',
                   borderRadius: '6px',
-                  border: '1px solid #93c5fd',
-                  background: '#eff6ff',
-                  color: '#1d4ed8'
+                  border: '1px solid var(--info-b)',
+                  background: 'var(--info-bg)',
+                  color: 'var(--info-d)'
                 }}
                 title="试听 P1 右侧确认级双音阶提示音"
               >
@@ -1845,9 +1845,9 @@ function AlertCenterModalInner({
                     whiteSpace: 'nowrap',
                     cursor: 'pointer',
                     borderRadius: '6px',
-                    border: '1px solid #fda4af',
-                    background: '#fff1f2',
-                    color: '#be123c'
+                    border: '1px solid var(--up-b)',
+                    background: 'var(--up-bg)',
+                    color: 'var(--up-d)'
                   }}
                   title="交替演练 3 维多头先导强共振(+84) 与 3 维诱多暗出共振(-78) 自动写入 P1 提醒流水"
                 >
@@ -1866,8 +1866,8 @@ function AlertCenterModalInner({
                     cursor: 'pointer',
                     borderRadius: '6px',
                     border: '1px solid #a855f7',
-                    background: '#fff',
-                    color: '#7e22ce'
+                    background: 'var(--card)',
+                    color: 'var(--accent-d)'
                   }}
                   title="交替模拟放量急拉(P1)与放量跳水(P0)，立即验证声音、顶栏应急红条与下方流水"
                 >
@@ -1884,13 +1884,13 @@ function AlertCenterModalInner({
               alignItems: 'center',
               justifyContent: 'space-between',
               padding: '9px 12px',
-              background: notifyActive ? '#f6ffed' : '#fffbe6',
-              border: notifyActive ? '1px solid #b7eb8f' : '1px solid #ffe58f',
+              background: notifyActive ? 'var(--down-bg)' : 'var(--warn-bg)',
+              border: notifyActive ? '1px solid var(--down-b)' : '1px solid var(--warn-b)',
               borderRadius: '8px',
               gap: '8px'
             }}>
               <div>
-                <div style={{ fontWeight: 700, color: notifyActive ? '#389e0d' : '#d48806', fontSize: '12.5px' }}>
+                <div style={{ fontWeight: 700, color: notifyActive ? 'var(--down-d)' : '#d48806', fontSize: '12.5px' }}>
                   {notifyActive ? '🟢 桌面弹窗已授权' : '🟡 桌面通知未授权'}
                 </div>
                 <div style={{ fontSize: '11px', color: 'var(--sub)' }}>仅 P0 / P1 触发桌面弹窗，P2 静默防骚扰</div>
@@ -1912,13 +1912,13 @@ function AlertCenterModalInner({
               alignItems: 'center',
               justifyContent: 'space-between',
               padding: '9px 12px',
-              background: simTailAlert ? '#fff1f0' : 'var(--surface2)',
-              border: simTailAlert ? '1px solid #ffa39e' : '1px solid var(--line)',
+              background: simTailAlert ? 'var(--up-bg)' : 'var(--surface2)',
+              border: simTailAlert ? '1px solid var(--up-b)' : '1px solid var(--line)',
               borderRadius: '8px',
               gap: '8px'
             }}>
               <div>
-                <div style={{ fontWeight: 700, color: simTailAlert ? '#cf1322' : 'var(--text)', fontSize: '12.5px' }}>
+                <div style={{ fontWeight: 700, color: simTailAlert ? 'var(--up)' : 'var(--text)', fontSize: '12.5px' }}>
                   🚨 14:40 清T警报 {unclosedCount > 0 ? `(${unclosedCount}只待平)` : ''}
                 </div>
                 <div style={{ fontSize: '11px', color: 'var(--sub)' }}>防日内T仓被动过夜变套牢</div>
@@ -1935,9 +1935,9 @@ function AlertCenterModalInner({
                     cursor: 'pointer',
                     borderRadius: '6px',
                     border: '1px solid',
-                    background: simTailAlert ? '#cf1322' : '#fff',
+                    background: simTailAlert ? 'var(--up)' : 'var(--card)',
                     color: simTailAlert ? '#fff' : 'var(--text)',
-                    borderColor: simTailAlert ? '#cf1322' : 'var(--line)'
+                    borderColor: simTailAlert ? 'var(--up)' : 'var(--line)'
                   }}
                 >
                   {simTailAlert ? '退出模拟' : '模拟14:40'}
@@ -1966,8 +1966,8 @@ function AlertCenterModalInner({
                     }}
                     style={{
                       padding: '8px 12px',
-                      background: isNear ? '#fff1f0' : 'var(--surface)',
-                      border: isNear ? '1px solid #ffa39e' : '1px solid var(--line)',
+                      background: isNear ? 'var(--up-bg)' : 'var(--surface)',
+                      border: isNear ? '1px solid var(--up-b)' : '1px solid var(--line)',
                       borderRadius: '7px',
                       cursor: 'pointer',
                       display: 'flex',
@@ -1986,16 +1986,16 @@ function AlertCenterModalInner({
                             borderRadius: '4px',
                             fontSize: '10.5px',
                             fontWeight: 700,
-                            background: item.liveLead.dir === 'bear' ? '#ecfdf5' : '#fff1f2',
-                            color: item.liveLead.dir === 'bear' ? '#047857' : '#be123c',
-                            border: `1px solid ${item.liveLead.dir === 'bear' ? '#6ee7b7' : '#fda4af'}`,
+                            background: item.liveLead.dir === 'bear' ? 'var(--down-bg)' : 'var(--up-bg)',
+                            color: item.liveLead.dir === 'bear' ? 'var(--down-d)' : 'var(--up-d)',
+                            border: `1px solid ${item.liveLead.dir === 'bear' ? 'var(--down-b)' : 'var(--up-b)'}`,
                           }}
                         >
                           {item.liveLead.text}
                         </span>
                       )}
                       {item.anomaly && (
-                        <span style={{ marginLeft: 6, fontSize: '10.5px', fontWeight: 700, color: item.anomaly.level === 'surge' ? '#cf1322' : '#15803d' }}>
+                        <span style={{ marginLeft: 6, fontSize: '10.5px', fontWeight: 700, color: item.anomaly.level === 'surge' ? 'var(--up)' : 'var(--down-d)' }}>
                           {item.anomaly.label}
                         </span>
                       )}
@@ -2055,19 +2055,19 @@ function AlertCenterModalInner({
             </div>
 
             {filteredAlerts.length > 0 ? (
-              <div className="alert-list" style={{ maxHeight: '195px', overflowY: 'auto', border: '1px solid var(--line)', borderRadius: '8px', background: '#fff' }}>
+              <div className="alert-list" style={{ maxHeight: '195px', overflowY: 'auto', border: '1px solid var(--line)', borderRadius: '8px', background: 'var(--card)' }}>
                 {filteredAlerts.map(a => {
                   const prio = inferPriority(a);
                   const isLead = a?.category === 'leading';
                   const prioStyle = isLead
                     ? a.leadDir === 'bear'
-                      ? { background: '#ecfdf5', color: '#047857', border: '1px solid #6ee7b7' }
-                      : { background: '#fff1f2', color: '#be123c', border: '1px solid #fda4af' }
+                      ? { background: 'var(--down-bg)', color: 'var(--down-d)', border: '1px solid var(--down-b)' }
+                      : { background: 'var(--up-bg)', color: 'var(--up-d)', border: '1px solid var(--up-b)' }
                     : prio === 'P0'
                     ? { background: '#dc2626', color: '#ffffff', border: '1px solid #b91c1c' }
                     : prio === 'P1'
-                    ? { background: '#eff6ff', color: '#1d4ed8', border: '1px solid #93c5fd' }
-                    : { background: '#f1f5f9', color: '#64748b', border: '1px solid #cbd5e1' };
+                    ? { background: 'var(--info-bg)', color: 'var(--info-d)', border: '1px solid var(--info-b)' }
+                    : { background: 'var(--surface2)', color: 'var(--mute)', border: '1px solid var(--line2)' };
 
                   return (
                     <div
@@ -2166,8 +2166,8 @@ export function P0EmergencyBanner({ pool = [], onJumpCard, onOpenQuickT }) {
         <span style={{
           padding: '2px 7px',
           borderRadius: '99px',
-          background: '#fef08a',
-          color: '#991b1b',
+          background: 'var(--warn-bg)',
+          color: 'var(--up-d)',
           fontWeight: 800,
           fontSize: '11px',
         }}>
@@ -2194,8 +2194,8 @@ export function P0EmergencyBanner({ pool = [], onJumpCard, onOpenQuickT }) {
               padding: '4px 10px',
               borderRadius: '6px',
               border: 'none',
-              background: '#ffffff',
-              color: '#b91c1c',
+              background: 'var(--card)',
+              color: 'var(--up-d)',
               fontWeight: 800,
               fontSize: '11.5px',
               cursor: 'pointer',
@@ -2233,7 +2233,7 @@ export function P0EmergencyBanner({ pool = [], onJumpCard, onOpenQuickT }) {
             borderRadius: '6px',
             border: 'none',
             background: 'transparent',
-            color: '#fee2e2',
+            color: 'var(--up-bg)',
             fontWeight: 700,
             fontSize: '11.5px',
             cursor: 'pointer',

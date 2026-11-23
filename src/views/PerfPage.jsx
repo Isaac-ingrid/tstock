@@ -12,12 +12,12 @@ import { f2, toastOk, toastErr, copyPlain } from '../services/utils.js';
 import { BoardStockActions } from '../components/board/boardShared.jsx';
 
 const STRAT_META = {
-  steady: { label: '稳健长线', color: '#0369a1', bg: '#f0f9ff', border: '#bae6fd', icon: '🛡️', route: '/trade' },
-  short: { label: '短线做T', color: '#0f766e', bg: '#f0fdfa', border: '#5eead4', icon: '🎯', route: '/trade' },
-  tail: { label: '尾盘黑马', color: '#7c3aed', bg: '#faf5ff', border: '#d8b4fe', icon: '⚡', route: '/tail' },
-  board: { label: '连板打板', color: '#cf1322', bg: '#fff1f0', border: '#ffa39e', icon: '🔥', route: '/board' },
-  ignition: { label: '横盘起爆', color: '#c2410c', bg: '#fff7ed', border: '#fed7aa', icon: '🚀', route: '/ignition' },
-  bottom: { label: '深跌抄底', color: '#15803d', bg: '#f0fdf4', border: '#86efac', icon: '🛟', route: '/ignition' },
+  steady: { label: '稳健长线', color: 'var(--accent-d)', bg: 'var(--info-bg)', border: 'var(--info-b)', icon: '🛡️', route: '/trade' },
+  short: { label: '短线做T', color: 'var(--teal)', bg: 'var(--teal-bg)', border: '#5eead4', icon: '🎯', route: '/trade' },
+  tail: { label: '尾盘黑马', color: 'var(--accent-d)', bg: 'var(--accent-bg)', border: 'var(--accent-b)', icon: '⚡', route: '/tail' },
+  board: { label: '连板打板', color: 'var(--up)', bg: 'var(--up-bg)', border: 'var(--up-b)', icon: '🔥', route: '/board' },
+  ignition: { label: '横盘起爆', color: 'var(--warn-d)', bg: 'var(--warn-bg)', border: 'var(--warn-b)', icon: '🚀', route: '/ignition' },
+  bottom: { label: '深跌抄底', color: 'var(--down-d)', bg: 'var(--down-bg)', border: 'var(--down-b)', icon: '🛟', route: '/ignition' },
 };
 
 function fmtRet(v, emptyText = '待结算') {
@@ -34,7 +34,7 @@ function retColor(v) {
 function MetricPill({ label, stats }) {
   const c = stats?.count || 0;
   return (
-    <div style={{ padding: '7px 9px', borderRadius: '6px', background: 'rgba(255,255,255,0.84)', border: '1px solid var(--line)', minWidth: 0 }}>
+    <div style={{ padding: '7px 9px', borderRadius: '6px', background: 'var(--card)', border: '1px solid var(--line)', minWidth: 0 }}>
       <div style={{ fontSize: '10.5px', color: 'var(--mute)', marginBottom: '2px' }}>{label}</div>
       {c === 0 ? (
         <div style={{ fontSize: '12px', color: 'var(--mute)', fontWeight: 600 }}>待 T+1 结算</div>
@@ -252,9 +252,9 @@ export default function PerfPage({
               fontSize: '10.5px',
               padding: '1px 5px',
               borderRadius: '4px',
-              background: v >= 0 ? '#fff1f0' : '#f0fdf4',
-              color: v >= 0 ? '#cf1322' : '#15803d',
-              border: `1px solid ${v >= 0 ? '#ffa39e' : '#bbf7d0'}`,
+              background: v >= 0 ? 'var(--up-bg)' : 'var(--down-bg)',
+              color: v >= 0 ? 'var(--up)' : 'var(--down-d)',
+              border: `1px solid ${v >= 0 ? 'var(--up-b)' : 'var(--down-b)'}`,
               fontFamily: 'monospace',
               fontWeight: 700,
               whiteSpace: 'nowrap',
@@ -289,18 +289,18 @@ export default function PerfPage({
           <div>
             <div style={{ fontSize: '18px', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <span>📊 六维策略胜率与收益率归因透视</span>
-              <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: 'rgba(16,185,129,0.25)', border: '1px solid #34d399', color: '#6ee7b7' }}>
+              <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: 'rgba(16,185,129,0.25)', border: '1px solid #34d399', color: 'var(--down-b)' }}>
                 建档基线：{data?.baselineDate || '2026-11-10'} 起
               </span>
             </div>
-            <div style={{ fontSize: '12px', color: '#cbd5e1', marginTop: '4px', lineHeight: 1.5 }}>
+            <div style={{ fontSize: '12px', color: 'var(--line2)', marginTop: '4px', lineHeight: 1.5 }}>
               已纳入 <b>稳健长线 / 短线做T(双列) / 尾盘黑马 / 连板打板 / 横盘起爆 / 深跌抄底</b> 六条赛道，统一扣除双边交易费率 <b>{data?.feeRatePct ?? 0.102}%</b>；
               连板打板已自动剔除「09:25 一字封死 ({bd.lastExclude?.excludedLocked ?? 0}只)」与「14:30+ 尾盘偷袭 ({bd.lastExclude?.excludedLate ?? 0}只)」。
             </div>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <button type="button" className="mini" onClick={handleCopyReport} style={{ marginLeft: 0, background: 'rgba(56,189,248,0.2)', color: '#bae6fd', borderColor: '#38bdf8', padding: '4px 10px' }}>
+            <button type="button" className="mini" onClick={handleCopyReport} style={{ marginLeft: 0, background: 'rgba(56,189,248,0.2)', color: 'var(--info-b)', borderColor: '#38bdf8', padding: '4px 10px' }}>
               📋 复制战绩摘要
             </button>
             <button
@@ -317,7 +317,7 @@ export default function PerfPage({
       </div>
 
       {error && (
-        <div style={{ padding: '14px', marginBottom: '12px', background: '#fff1f0', border: '1px solid #ffa39e', borderRadius: '8px', color: '#cf1322', fontSize: '13px' }}>
+        <div style={{ padding: '14px', marginBottom: '12px', background: 'var(--up-bg)', border: '1px solid var(--up-b)', borderRadius: '8px', color: 'var(--up)', fontSize: '13px' }}>
           <b>战绩数据加载失败：</b>{error}
         </div>
       )}
@@ -331,14 +331,14 @@ export default function PerfPage({
         gap: '10px',
         padding: '10px 14px',
         marginBottom: '14px',
-        background: '#f8fafc',
+        background: 'var(--surface)',
         border: '1px solid var(--line)',
         borderRadius: '10px',
         fontSize: '12px',
       }}>
         <div style={{ color: 'var(--sub)' }}>
           📌 <b>实时战绩核验：</b>累计建档 <b>{data?.totalSignals ?? 0}</b> 条信号（更新时间 {data?.evaluatedAt || '—'}）。
-          <span style={{ color: '#64748b', marginLeft: '6px' }}>
+          <span style={{ color: 'var(--mute)', marginLeft: '6px' }}>
             建档当日 (T+0) 标为「待结算」，自首个次日 (T+1) 起每日自动核算开盘/回踩/做T增厚与多周期节点收益。
           </span>
         </div>
@@ -624,7 +624,7 @@ export default function PerfPage({
 
                 <div className="pgr-col-date" style={{ fontFamily: 'monospace', fontSize: '11px' }}>
                   <div>{r.signalDate}</div>
-                  <div style={{ color: r.env === 'BAD' || r.env === 'RED' ? '#cf1322' : r.env === 'WARN' || r.env === 'YELLOW' ? '#d97706' : '#15803d', fontWeight: 700 }}>
+                  <div style={{ color: r.env === 'BAD' || r.env === 'RED' ? 'var(--up)' : r.env === 'WARN' || r.env === 'YELLOW' ? '#d97706' : 'var(--down-d)', fontWeight: 700 }}>
                     闸门:{r.env}
                   </div>
                 </div>
@@ -674,15 +674,15 @@ export default function PerfPage({
                       规则出 {fmtRet(r.horizons?.t1RuleExit, '待T+1')}
                     </div>
                   ) : r.strategy === 'ignition' ? (
-                    <div style={{ color: '#c2410c', fontWeight: 700 }}>
+                    <div style={{ color: 'var(--warn-d)', fontWeight: 700 }}>
                       月{r.monthVolRatio || '—'}x · 缩{r.volShrinkPct || '—'}%
                     </div>
                   ) : r.strategy === 'bottom' ? (
-                    <div style={{ color: '#15803d', fontWeight: 700 }}>
+                    <div style={{ color: 'var(--down-d)', fontWeight: 700 }}>
                       回撤{r.stockDrawdownPct || '—'}%
                     </div>
                   ) : (
-                    <div style={{ color: r.horizons?.promotedT1 ? '#cf1322' : 'var(--mute)', fontWeight: 700 }}>
+                    <div style={{ color: r.horizons?.promotedT1 ? 'var(--up)' : 'var(--mute)', fontWeight: 700 }}>
                       {r.horizons?.promotedT1 === true ? '🔥 次日晋级' : r.horizons?.promotedT1 === false ? '次日未晋级' : '待T+1开盘'}
                     </div>
                   )}

@@ -3,8 +3,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { fetchLimitUpPool, postHerdAction } from '../services/api.js';
 import { f2, money$, todayStr, toastOk, toastWarn, toastErr, copyPlain } from '../services/utils.js';
-import MarketSentimentBar from '../components/MarketSentimentBar.jsx';
 import { DEFAULT_MYSTIC_ROOTS, buildDailyReviewBrief, BoardStockActions } from '../components/board/boardShared.jsx';
+import BoardBentoOverview, { BoardBentoSkeleton } from '../components/board/BoardBentoOverview.jsx';
 import StrongPoolPanel from '../components/board/StrongPoolPanel.jsx';
 import HerdPoolPanel from '../components/board/HerdPoolPanel.jsx';
 import MainThemesPanel from '../components/board/MainThemesPanel.jsx';
@@ -142,9 +142,9 @@ export default function BoardPage({
           name: zb.name || s.name,
           kind: 'zb',
           label: `💥 曾涨停炸板 (回落 ${Number(zb.dropFromTop || 0).toFixed(1)}%)`,
-          bg: '#fff1f0',
-          color: '#cf1322',
-          border: '#ffa39e',
+          bg: 'var(--up-bg)',
+          color: 'var(--up)',
+          border: 'var(--up-b)',
           targetTab: 'zb',
         });
         return;
@@ -156,9 +156,9 @@ export default function BoardPage({
           name: hd.name || s.name,
           kind: 'warn',
           label: `🟡 ${hd.healthLabel || '抱团黄牌观察'} (${Number(hd.chg || 0).toFixed(1)}%)`,
-          bg: '#fffbeb',
-          color: '#b45309',
-          border: '#fcd34d',
+          bg: 'var(--warn-bg)',
+          color: 'var(--warn-d)',
+          border: 'var(--warn-b)',
           targetTab: 'herd',
         });
         return;
@@ -170,9 +170,9 @@ export default function BoardPage({
           name: zt.name || s.name,
           kind: 'zt',
           label: `🔥 今日封死${zt.statTag} (${zt.fbt})`,
-          bg: '#f0fdf4',
-          color: '#15803d',
-          border: '#86efac',
+          bg: 'var(--down-bg)',
+          color: 'var(--down-d)',
+          border: 'var(--down-b)',
           targetTab: 'all',
         });
       }
@@ -511,181 +511,44 @@ export default function BoardPage({
 
   return (
     <div className="board-page-wrap">
-      {/* 顶部聚合战况看板 */}
-      <div style={{
-        background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #2e1065 100%)',
-        color: '#fff',
-        borderRadius: '12px',
-        padding: '16px 20px',
-        marginBottom: '14px',
-        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2)'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', marginBottom: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{ fontSize: '26px' }}>🔥</span>
-            <div>
-              <div style={{ fontSize: '18px', fontWeight: 800, letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                <span>连板打板 · 强势抱团 · 主线中枢决策台</span>
-                <span style={{ fontSize: '11px', background: '#cf1322', padding: '2px 8px', borderRadius: '4px', fontWeight: 700 }}>
-                  超短打板 & 抱团
-                </span>
-                <span style={{ fontSize: '11px', background: 'rgba(16, 185, 129, 0.25)', border: '1px solid #34d399', color: '#6ee7b7', padding: '1px 7px', borderRadius: '4px', fontWeight: 700 }}>
-                  🛡️ 强势/抱团/主题材已剔除创业板(30)与科创板(68)
-                </span>
-              </div>
-              <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>
-                连板接力 · 一票多标签强势池 · 全自动抱团跟踪(断板高横监测/破位自动淘汰) · 全模块一键跟踪与加入自选
-              </div>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '12px', color: '#cbd5e1' }}>
-              基准日：<b style={{ color: '#fbbf24', fontFamily: 'monospace' }}>{data?.date || '—'}</b>
-            </span>
-            <input
-              type="date"
-              max={localTodayIso}
-              value={boardDate}
-              onChange={e => setBoardDate(e.target.value === localTodayIso ? '' : e.target.value)}
-              title="选择历史日期回看当日连板天梯与玄学字辈共振（只读）"
-              style={{ padding: '2px 6px', fontSize: '11.5px', borderRadius: '5px', border: '1px solid rgba(255,255,255,0.28)', background: 'rgba(15,23,42,0.7)', color: '#fff' }}
-            />
-            {boardDate && (
-              <button
-                type="button"
-                className="mini"
-                onClick={() => setBoardDate('')}
-                style={{ marginLeft: 0, background: 'rgba(251,191,36,0.2)', color: '#fde68a', borderColor: '#f59e0b', padding: '3px 8px', fontSize: '11.5px', fontWeight: 700 }}
-              >
-                回今日实时
-              </button>
-            )}
-            <label style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: '#cbd5e1', cursor: 'pointer', userSelect: 'none' }}>
-              <input
-                type="checkbox"
-                checked={autoRefresh}
-                disabled={isHistoryReplay}
-                onChange={e => setAutoRefresh(e.target.checked)}
-                style={{ cursor: 'pointer' }}
-              />
-              <span>30秒自动</span>
-            </label>
-            <button
-              type="button"
-              className="mini"
-              onClick={handleCopyBrief}
-              style={{ marginLeft: 0, background: 'rgba(56,189,248,0.18)', color: '#bae6fd', border: '1px solid rgba(56,189,248,0.45)', padding: '4px 9px' }}
-              title="一键复制今日情绪、四大核心、字辈暗线与抱团核心复盘简报"
-            >
-              📋 复制简报
-            </button>
-            <button
-              type="button"
-              className="mini"
-              style={{ marginLeft: 0, background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', padding: '4px 10px' }}
-              onClick={() => loadData(false)}
-              disabled={loading}
-            >
-              {loading ? '⟳ 同步中…' : '⟳ 立即刷新'}
-            </button>
-          </div>
-        </div>
-
-        {/* 6 维核心数据卡片 */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(165px, 1fr))', gap: '10px' }}>
-          <div
-            onClick={() => setFilterTier('all')}
-            style={{ background: 'rgba(255, 255, 255, 0.08)', borderRadius: '8px', padding: '10px 14px', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer' }}
-          >
-            <div style={{ fontSize: '11.5px', color: '#cbd5e1' }}>📈 涨停封死总数</div>
-            <div style={{ fontSize: '22px', fontWeight: 800, color: '#f87171', fontFamily: 'monospace', marginTop: '2px' }}>
-              {data ? allItems.length : '—'} <span style={{ fontSize: '12px', fontWeight: 400, color: '#e2e8f0' }}>家 ({onlyMainboard ? '纯主板' : '不含创业板'})</span>
-            </div>
-          </div>
-
-          <div
-            onClick={() => setFilterTier('herd')}
-            style={{ background: 'rgba(139, 92, 246, 0.18)', borderRadius: '8px', padding: '10px 14px', border: '1px solid rgba(196, 181, 253, 0.45)', cursor: 'pointer' }}
-            title="点击切入全自动抱团跟踪池"
-          >
-            <div style={{ fontSize: '11.5px', color: '#ddd6fe' }}>🤝 自动抱团跟踪</div>
-            <div style={{ fontSize: '22px', fontWeight: 800, color: '#c4b5fd', fontFamily: 'monospace', marginTop: '2px' }}>
-              {data ? herdPool.length : '—'} <span style={{ fontSize: '12px', fontWeight: 400, color: '#ede9fe' }}>只(淘汰{evictedPool.length})</span>
-            </div>
-          </div>
-
-          <div
-            onClick={() => !isHistoryReplay && setFilterTier('rushing')}
-            style={{ background: 'rgba(255, 255, 255, 0.08)', borderRadius: '8px', padding: '10px 14px', border: '1px solid rgba(255,255,255,0.1)', cursor: isHistoryReplay ? 'default' : 'pointer' }}
-          >
-            <div style={{ fontSize: '11.5px', color: '#cbd5e1' }}>⚡ 开盘冲板临界可买</div>
-            <div style={{ fontSize: '22px', fontWeight: 800, color: '#38bdf8', fontFamily: 'monospace', marginTop: '2px' }}>
-              {data ? rushingPool.length : '—'} <span style={{ fontSize: '12px', fontWeight: 400, color: '#e2e8f0' }}>家逼近涨停</span>
-            </div>
-          </div>
-
-          <div
-            onClick={() => setFilterTier('auction')}
-            style={{ background: 'rgba(255, 255, 255, 0.08)', borderRadius: '8px', padding: '10px 14px', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer' }}
-          >
-            <div style={{ fontSize: '11.5px', color: '#cbd5e1' }}>🌅 09:25 竞价可买</div>
-            <div style={{ fontSize: '22px', fontWeight: 800, color: '#4ade80', fontFamily: 'monospace', marginTop: '2px' }}>
-              {buyWindows.auctionBuy.length} <span style={{ fontSize: '12px', fontWeight: 400, color: '#e2e8f0' }}>家竞价放量</span>
-            </div>
-          </div>
-
-          <div
-            onClick={() => setFilterTier('high')}
-            style={{ background: 'rgba(255, 255, 255, 0.08)', borderRadius: '8px', padding: '10px 14px', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer' }}
-          >
-            <div style={{ fontSize: '11.5px', color: '#cbd5e1' }}>👑 最高连板高度</div>
-            <div style={{ fontSize: '22px', fontWeight: 800, color: '#fbbf24', fontFamily: 'monospace', marginTop: '2px' }}>
-              {data ? data.maxLadder : '—'} <span style={{ fontSize: '12px', fontWeight: 400, color: '#e2e8f0' }}>连板空间标杆</span>
-            </div>
-          </div>
-
-          <div
-            onClick={() => setFilterTier('themes')}
-            style={{ background: 'rgba(232, 121, 249, 0.14)', borderRadius: '8px', padding: '10px 14px', border: '1px solid rgba(232, 121, 249, 0.4)', cursor: 'pointer' }}
-            title="点击查看主题材及题材龙头/阶段核心/容量核心动态研判"
-          >
-            <div style={{ fontSize: '11.5px', color: '#f5d0fe' }}>🧭 动态第一主题材</div>
-            <div style={{ fontSize: '14.5px', fontWeight: 800, color: '#f0abfc', marginTop: '6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {mainThemes?.marketOverview?.topThemeName || (hotThemes.length > 0 ? `${hotThemes[0].name} (${hotThemes[0].count}家)` : '计算中…')}
-            </div>
-          </div>
-        </div>
-
-        {/* 纪律底栏 */}
-        <div style={{
-          marginTop: '10px',
-          paddingTop: '8px',
-          borderTop: '1px dashed rgba(255,255,255,0.15)',
-          fontSize: '12px',
-          color: '#fcd34d',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: '6px'
-        }}>
-          <div>
-            🛡️ <b>实战纪律：</b>一字板散户买不进不可盲目排队；开盘秒板与冲板点是扫板黄金期；<b>严禁挪用底仓资金向下补仓加死码</b>！
-          </div>
-          <a
-            href="#/trade"
-            onClick={(e) => { e.preventDefault(); if (onTabChange) onTabChange('/trade'); }}
-            style={{ color: '#38bdf8', textDecoration: 'none', fontWeight: 700 }}
-          >
-            前往今日作战台 ({pool?.length || 0}只自选) →
-          </a>
-        </div>
-      </div>
-
-      {/* 🌡️ 全市场超短情绪温度计 & 炸板率风控总阀 */}
-      {data?.sentiment && (
-        <MarketSentimentBar externalSentiment={data.sentiment} compact />
+      {/* 一屏高密度量化 Bento 看板（四大指数 + 6格广度脉冲 + 广度柱/六维雷达/盘中矩阵/梯队进度 + 热度与信号流） */}
+      {loading && !data ? (
+        <BoardBentoSkeleton />
+      ) : (
+        <BoardBentoOverview
+          data={data}
+          loading={loading}
+          isHistoryReplay={isHistoryReplay}
+          boardDate={boardDate}
+          localTodayIso={localTodayIso}
+          onChangeDate={setBoardDate}
+          autoRefresh={autoRefresh}
+          onToggleAutoRefresh={setAutoRefresh}
+          onlyMainboard={onlyMainboard}
+          onToggleMainboard={setOnlyMainboard}
+          onReload={() => loadData(false)}
+          onCopyBrief={handleCopyBrief}
+          allItems={allItems}
+          rushingPool={rushingPool}
+          zbPool={zbPool}
+          strongPool={strongPool}
+          strongEliteCount={strongEliteCount}
+          herdPool={herdPool}
+          evictedPool={evictedPool}
+          ladder={ladder}
+          buyWindows={buyWindows}
+          hotThemes={hotThemes}
+          mainThemes={mainThemes}
+          mysticClusters={mysticClusters}
+          poolAlerts={poolAlerts}
+          filterTier={filterTier}
+          onSelectTier={setFilterTier}
+          selectedTheme={selectedTheme}
+          onSelectTheme={setSelectedTheme}
+          inPoolCodes={inPoolCodes}
+          onAddSingle={handleAddSingle}
+          onSelectStock={onSelectStock}
+        />
       )}
 
       {/* 历史复盘只读提示条 */}
@@ -694,9 +557,9 @@ export default function BoardPage({
           marginBottom: '12px',
           padding: '8px 14px',
           borderRadius: '8px',
-          background: '#fffbeb',
-          border: '1px solid #fcd34d',
-          color: '#92400e',
+          background: 'var(--warn-bg)',
+          border: '1px solid var(--warn-b)',
+          color: 'var(--warn-d)',
           fontSize: '12.5px',
           display: 'flex',
           alignItems: 'center',
@@ -707,7 +570,7 @@ export default function BoardPage({
           <span>
             🕰️ <b>历史复盘只读模式（{data?.date}）：</b>已自动停止改写今日抱团跟踪池并屏蔽实时冲板盘口，仍可将心仪标的加入自选池。
           </span>
-          <button type="button" className="mini" onClick={() => setBoardDate('')} style={{ marginLeft: 0, fontSize: '11.5px', background: '#fff', borderColor: '#f59e0b', color: '#b45309', fontWeight: 700 }}>
+          <button type="button" className="mini" onClick={() => setBoardDate('')} style={{ marginLeft: 0, fontSize: '11.5px', background: 'var(--card)', borderColor: '#f59e0b', color: 'var(--warn-d)', fontWeight: 700 }}>
             回到今日实时
           </button>
         </div>
@@ -719,15 +582,15 @@ export default function BoardPage({
           marginBottom: '12px',
           padding: '8px 12px',
           borderRadius: '8px',
-          background: '#f8fafc',
-          border: '1px solid #cbd5e1',
+          background: 'var(--surface)',
+          border: '1px solid var(--line2)',
           display: 'flex',
           alignItems: 'center',
           gap: '8px',
           flexWrap: 'wrap',
           fontSize: '12px',
         }}>
-          <b style={{ color: '#0f172a' }}>🔔 自选池持仓联动：</b>
+          <b style={{ color: 'var(--text)' }}>🔔 自选池持仓联动：</b>
           {poolAlerts.map(al => (
             <span
               key={`${al.kind}_${al.code}`}
@@ -764,7 +627,7 @@ export default function BoardPage({
             type="button"
             className={`mini ${filterTier === 'themes' ? 'primary' : ''}`}
             onClick={() => setFilterTier('themes')}
-            style={{ marginLeft: 0, color: filterTier === 'themes' ? '#fff' : '#9333ea', background: filterTier === 'themes' ? '#9333ea' : '#faf5ff', borderColor: '#d8b4fe', fontWeight: 800 }}
+            style={{ marginLeft: 0, color: filterTier === 'themes' ? '#fff' : 'var(--info)', background: filterTier === 'themes' ? 'var(--info)' : 'var(--accent-bg)', borderColor: 'var(--accent-b)', fontWeight: 800 }}
           >
             🧭 主题材与四大核心 ({(mainThemes.themes || []).length})
           </button>
@@ -772,7 +635,7 @@ export default function BoardPage({
             type="button"
             className={`mini ${filterTier === 'strong' ? 'primary' : ''}`}
             onClick={() => setFilterTier('strong')}
-            style={{ marginLeft: 0, color: filterTier === 'strong' ? '#fff' : '#0f766e', background: filterTier === 'strong' ? '#0f766e' : '#f0fdfa', borderColor: '#5eead4', fontWeight: 800 }}
+            style={{ marginLeft: 0, color: filterTier === 'strong' ? '#fff' : 'var(--teal)', background: filterTier === 'strong' ? 'var(--teal)' : 'var(--teal-bg)', borderColor: '#5eead4', fontWeight: 800 }}
           >
             💪 强共振多标签 ({strongMulti2Count}/{strongPool.length})
           </button>
@@ -780,7 +643,7 @@ export default function BoardPage({
             type="button"
             className={`mini ${filterTier === 'herd' ? 'primary' : ''}`}
             onClick={() => setFilterTier('herd')}
-            style={{ marginLeft: 0, color: filterTier === 'herd' ? '#fff' : '#6d28d9', background: filterTier === 'herd' ? '#6d28d9' : '#f5f3ff', borderColor: '#c4b5fd', fontWeight: 800 }}
+            style={{ marginLeft: 0, color: filterTier === 'herd' ? '#fff' : 'var(--accent-d)', background: filterTier === 'herd' ? 'var(--info)' : 'var(--accent-bg)', borderColor: 'var(--accent-b)', fontWeight: 800 }}
           >
             🤝 自动抱团跟踪 ({herdPool.length})
           </button>
@@ -789,7 +652,7 @@ export default function BoardPage({
               type="button"
               className={`mini ${filterTier === 'rushing' ? 'primary' : ''}`}
               onClick={() => setFilterTier('rushing')}
-              style={{ marginLeft: 0, color: filterTier === 'rushing' ? '#fff' : '#0284c7', background: filterTier === 'rushing' ? '#0284c7' : '#e0f2fe', borderColor: '#38bdf8', fontWeight: 800 }}
+              style={{ marginLeft: 0, color: filterTier === 'rushing' ? '#fff' : 'var(--accent)', background: filterTier === 'rushing' ? 'var(--info)' : 'var(--info-bg)', borderColor: '#38bdf8', fontWeight: 800 }}
             >
               ⚡ 正在冲板临界可买 ({rushingPool.length})
             </button>
@@ -798,7 +661,7 @@ export default function BoardPage({
             type="button"
             className={`mini ${filterTier === 'auction' ? 'primary' : ''}`}
             onClick={() => setFilterTier('auction')}
-            style={{ marginLeft: 0, color: filterTier === 'auction' ? '#fff' : '#15803d', background: filterTier === 'auction' ? '#15803d' : '#dcfce7', borderColor: '#4ade80', fontWeight: 800 }}
+            style={{ marginLeft: 0, color: filterTier === 'auction' ? '#fff' : 'var(--down-d)', background: filterTier === 'auction' ? 'var(--down)' : 'var(--down-bg)', borderColor: '#4ade80', fontWeight: 800 }}
           >
             🌅 09:25 竞价可买 ({buyWindows.auctionBuy.length})
           </button>
@@ -806,7 +669,7 @@ export default function BoardPage({
             type="button"
             className={`mini ${filterTier === 'rush' ? 'primary' : ''}`}
             onClick={() => setFilterTier('rush')}
-            style={{ marginLeft: 0, color: filterTier === 'rush' ? '#fff' : '#c2410c', background: filterTier === 'rush' ? '#c2410c' : '#ffedd5', borderColor: '#fb923c', fontWeight: 800 }}
+            style={{ marginLeft: 0, color: filterTier === 'rush' ? '#fff' : 'var(--warn-d)', background: filterTier === 'rush' ? 'var(--warn)' : 'var(--warn-bg)', borderColor: '#fb923c', fontWeight: 800 }}
           >
             🚀 09:30 秒板扫板 ({buyWindows.rushBuy.length})
           </button>
@@ -814,7 +677,7 @@ export default function BoardPage({
             type="button"
             className={`mini ${filterTier === 'reseal' ? 'primary' : ''}`}
             onClick={() => setFilterTier('reseal')}
-            style={{ marginLeft: 0, color: filterTier === 'reseal' ? '#fff' : '#b45309', fontWeight: 700 }}
+            style={{ marginLeft: 0, color: filterTier === 'reseal' ? '#fff' : 'var(--warn-d)', fontWeight: 700 }}
           >
             🔄 炸板回封 ({buyWindows.reSealBuy.length})
           </button>
@@ -822,7 +685,7 @@ export default function BoardPage({
             type="button"
             className={`mini ${filterTier === 'high' ? 'primary' : ''}`}
             onClick={() => setFilterTier('high')}
-            style={{ marginLeft: 0, color: filterTier === 'high' ? '#fff' : '#cf1322', fontWeight: 700 }}
+            style={{ marginLeft: 0, color: filterTier === 'high' ? '#fff' : 'var(--up)', fontWeight: 700 }}
           >
             👑 高标龙头(≥4板) ({ladder.high.length})
           </button>
@@ -830,7 +693,7 @@ export default function BoardPage({
             type="button"
             className={`mini ${filterTier === 'board3' ? 'primary' : ''}`}
             onClick={() => setFilterTier('board3')}
-            style={{ marginLeft: 0, color: filterTier === 'board3' ? '#fff' : '#d4380d', fontWeight: 700 }}
+            style={{ marginLeft: 0, color: filterTier === 'board3' ? '#fff' : 'var(--up-d)', fontWeight: 700 }}
           >
             🔥 3连板(梯队) ({ladder.board3.length})
           </button>
@@ -846,7 +709,7 @@ export default function BoardPage({
             type="button"
             className={`mini ${filterTier === 'late' ? 'primary' : ''}`}
             onClick={() => setFilterTier('late')}
-            style={{ marginLeft: 0, color: filterTier === 'late' ? '#fff' : '#b45309', background: filterTier === 'late' ? '#b45309' : '#fffbeb', borderColor: '#fde68a', fontWeight: 700 }}
+            style={{ marginLeft: 0, color: filterTier === 'late' ? '#fff' : 'var(--warn-d)', background: filterTier === 'late' ? 'var(--warn)' : 'var(--warn-bg)', borderColor: 'var(--warn-b)', fontWeight: 700 }}
             title="14:30 及以后（最后30分钟）才首次封板的尾盘偷袭股"
           >
             ⚠️ 尾盘偷袭(14:30+) ({buyWindows.lateBuy.length})
@@ -863,7 +726,7 @@ export default function BoardPage({
             type="button"
             className={`mini ${filterTier === 'zb' ? 'primary' : ''}`}
             onClick={() => setFilterTier('zb')}
-            style={{ marginLeft: 0, color: filterTier === 'zb' ? '#fff' : '#cf1322', background: filterTier === 'zb' ? '#cf1322' : '#fff1f0', borderColor: '#ffa39e', fontWeight: 700 }}
+            style={{ marginLeft: 0, color: filterTier === 'zb' ? '#fff' : 'var(--up)', background: filterTier === 'zb' ? 'var(--up)' : 'var(--up-bg)', borderColor: 'var(--up-b)', fontWeight: 700 }}
           >
             💥 曾涨停炸板 ({zbPool.length})
           </button>
@@ -871,7 +734,7 @@ export default function BoardPage({
 
         {/* 搜索与排序 */}
         <div className="board-search-controls">
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--text)', cursor: 'pointer', padding: '4px 8px', borderRadius: '6px', background: onlyMainboard ? '#e6f4ff' : 'var(--surface2)', border: '1px solid', borderColor: onlyMainboard ? '#91caff' : 'var(--line)', fontWeight: onlyMainboard ? 700 : 500, whiteSpace: 'nowrap' }}>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--text)', cursor: 'pointer', padding: '4px 8px', borderRadius: '6px', background: onlyMainboard ? 'var(--info-bg)' : 'var(--surface2)', border: '1px solid', borderColor: onlyMainboard ? 'var(--info-b)' : 'var(--line)', fontWeight: onlyMainboard ? 700 : 500, whiteSpace: 'nowrap' }}>
             <input type="checkbox" checked={onlyMainboard} onChange={e => setOnlyMainboard(e.target.checked)} style={{ cursor: 'pointer' }} />
             <span>仅10cm主板</span>
           </label>
@@ -884,7 +747,7 @@ export default function BoardPage({
                 setStrongSort(k);
                 setStrongSortAsc(k === 'fbt');
               }}
-              style={{ padding: '4px 8px', fontSize: '12px', borderRadius: '6px', border: '1px solid #5eead4', background: '#f0fdfa', color: '#0f766e', fontWeight: 700 }}
+              style={{ padding: '4px 8px', fontSize: '12px', borderRadius: '6px', border: '1px solid #5eead4', background: 'var(--teal-bg)', color: 'var(--teal)', fontWeight: 700 }}
             >
               <option value="resonance">排序：多维共振 + 接力分优先</option>
               <option value="relay">排序：接力分(可接力性)优先</option>
@@ -899,7 +762,7 @@ export default function BoardPage({
             <select
               value={herdSort}
               onChange={e => setHerdSort(e.target.value)}
-              style={{ padding: '4px 8px', fontSize: '12px', borderRadius: '6px', border: '1px solid #c4b5fd', background: '#f5f3ff', color: '#6d28d9', fontWeight: 700 }}
+              style={{ padding: '4px 8px', fontSize: '12px', borderRadius: '6px', border: '1px solid var(--accent-b)', background: 'var(--accent-bg)', color: 'var(--accent-d)', fontWeight: 700 }}
             >
               <option value="health">排序：健康状态优先</option>
               <option value="cumReturn">排序：跟踪累计收益优先</option>
@@ -921,7 +784,7 @@ export default function BoardPage({
           )}
 
           {!['rushing', 'zb', 'themes', 'strong', 'herd'].includes(filterTier) && (
-            <div style={{ display: 'inline-flex', borderRadius: '6px', overflow: 'hidden', border: '1px solid var(--line)', background: '#fff' }}>
+            <div style={{ display: 'inline-flex', borderRadius: '6px', overflow: 'hidden', border: '1px solid var(--line)', background: 'var(--card)' }}>
               {[
                 { mode: 'card', label: '📄 卡片' },
                 { mode: 'table', label: '📋 表格' },
@@ -935,7 +798,7 @@ export default function BoardPage({
                     fontSize: '11.5px',
                     border: 'none',
                     cursor: 'pointer',
-                    background: ladderViewMode === v.mode ? '#0958d9' : 'transparent',
+                    background: ladderViewMode === v.mode ? 'var(--info-d)' : 'transparent',
                     color: ladderViewMode === v.mode ? '#fff' : 'var(--sub)',
                     fontWeight: ladderViewMode === v.mode ? 700 : 500,
                   }}
@@ -968,9 +831,9 @@ export default function BoardPage({
               gap: '8px',
               padding: '8px 12px',
               borderRadius: '8px',
-              background: '#e6f4ff',
-              border: '1px solid #91caff',
-              color: '#0958d9',
+              background: 'var(--info-bg)',
+              border: '1px solid var(--info-b)',
+              color: 'var(--info-d)',
               marginBottom: '10px',
               fontSize: '12.5px'
             }}>
@@ -982,7 +845,7 @@ export default function BoardPage({
           )}
 
           {error && (
-            <div style={{ padding: '16px', background: '#fff1f0', border: '1px solid #ffa39e', borderRadius: '8px', color: '#cf1322', fontSize: '13px', marginBottom: '14px' }}>
+            <div style={{ padding: '16px', background: 'var(--up-bg)', border: '1px solid var(--up-b)', borderRadius: '8px', color: 'var(--up)', fontSize: '13px', marginBottom: '14px' }}>
               <b>连板池接口异常：</b>{error}
               <div style={{ marginTop: '6px' }}>
                 <button className="mini primary" onClick={() => loadData(false)} style={{ marginLeft: 0 }}>重新尝试连接</button>
@@ -990,19 +853,34 @@ export default function BoardPage({
             </div>
           )}
 
-          {loading && !data && (
-            <div style={{ padding: '30px', textAlign: 'center', color: 'var(--mute)', fontSize: '13px', background: 'var(--surface)', borderRadius: '10px', border: '1px solid var(--line)' }}>
-              正在拉取今日东方财富全市场涨停板池、连板天梯与冲板标的…
-            </div>
-          )}
-
           {!loading && displayItems.length === 0 && !(filterTier === 'herd' && evictedPool.length > 0) && (
-            <div style={{ padding: '30px', textAlign: 'center', color: 'var(--sub)', fontSize: '13px', background: 'var(--surface)', borderRadius: '10px', border: '1px solid var(--line)' }}>
-              {filterTier === 'herd'
-                ? '当前暂无符合筛选条件的抱团跟踪标的（可在上方输入代码或股票名手动添加）'
-                : filterTier === 'themes'
-                  ? '暂无动态主题材聚合结果，请点击右上角“立即刷新”'
-                  : '未检索到符合条件的股票标的'}
+            <div style={{ padding: '26px 20px', textAlign: 'center', color: 'var(--sub)', fontSize: '13px', background: 'var(--card)', borderRadius: 'var(--radius-card)', border: '1px solid var(--line)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+              <span>
+                {filterTier === 'herd'
+                  ? '当前暂无符合筛选条件的抱团跟踪标的（可在上方输入代码或股票名手动添加）'
+                  : filterTier === 'themes'
+                    ? '暂无动态主题材聚合结果'
+                    : '当前筛选条件下暂无匹配标的'}
+              </span>
+              {(filterTier !== 'all' || selectedTheme !== 'all' || searchKw.trim()) ? (
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() => {
+                    setFilterTier('all');
+                    setSelectedTheme('all');
+                    setSearchKw('');
+                    setStrongSelectedTags([]);
+                    setHerdHealthFilter('all');
+                  }}
+                >
+                  重置全部筛选条件
+                </button>
+              ) : (
+                <button type="button" onClick={() => loadData(false)}>
+                  重新加载数据
+                </button>
+              )}
             </div>
           )}
 
@@ -1092,14 +970,14 @@ export default function BoardPage({
           {/* 正在冲板临界池 */}
           {filterTier === 'rushing' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <div style={{ padding: '8px 12px', background: '#e0f2fe', border: '1px solid #7dd3fc', borderRadius: '8px', color: '#0369a1', fontSize: '12px' }}>
+              <div style={{ padding: '8px 12px', background: 'var(--info-bg)', border: '1px solid #7dd3fc', borderRadius: '8px', color: 'var(--accent-d)', fontSize: '12px' }}>
                 💡 <b>开盘冲板可买说明：</b>以下标的开盘后快速放量拉升至 +7%~+9.5%，现价逼近涨停价（仅差 0.2%~2.0%），处于游资挂涨停价扫板打入的黄金决策临界点！
               </div>
               {displayItems.map(item => (
                 <div
                   key={item.code}
                   style={{
-                    background: 'linear-gradient(180deg, #fff, #f8fafc)',
+                    background: 'var(--surface)',
                     border: '1.5px solid #38bdf8',
                     borderRadius: '10px',
                     padding: '12px 16px',
@@ -1115,28 +993,28 @@ export default function BoardPage({
                       <span style={{ fontFamily: 'monospace', fontSize: '13px', color: 'var(--mute)' }}>{item.code}</span>
                       <span
                         onClick={() => setSelectedTheme(item.hybk)}
-                        style={{ fontSize: '11px', padding: '1px 6px', borderRadius: '4px', background: '#f0f5ff', color: '#1d39c4', cursor: 'pointer' }}
+                        style={{ fontSize: '11px', padding: '1px 6px', borderRadius: '4px', background: 'var(--info-bg)', color: 'var(--info-d)', cursor: 'pointer' }}
                       >
                         🔥 {item.hybk}
                       </span>
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: '12px', fontWeight: 800, color: '#0284c7' }}>距涨停仅差 {item.distCeiling.toFixed(1)}%</span>
+                      <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--accent)' }}>距涨停仅差 {item.distCeiling.toFixed(1)}%</span>
                       <span style={{ fontSize: '12px', fontFamily: 'monospace', fontWeight: 700, color: 'var(--up)' }}>涨停价 ¥{f2(item.ceiling)}</span>
                     </div>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px', padding: '8px 10px', background: '#f0f9ff', borderRadius: '6px', fontSize: '12px', marginBottom: '8px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px', padding: '8px 10px', background: 'var(--info-bg)', borderRadius: '6px', fontSize: '12px', marginBottom: '8px' }}>
                     <div>现价: <b style={{ color: 'var(--up)', fontFamily: 'monospace' }}>¥{f2(item.price)}</b> (+{item.chg.toFixed(1)}%)</div>
-                    <div>距涨停差额: <b style={{ color: '#0284c7', fontFamily: 'monospace' }}>¥{f2(item.ceiling - item.price)}</b></div>
+                    <div>距涨停差额: <b style={{ color: 'var(--accent)', fontFamily: 'monospace' }}>¥{f2(item.ceiling - item.price)}</b></div>
                     <div>换手率: <b style={{ fontFamily: 'monospace' }}>{item.turnover.toFixed(1)}%</b></div>
                     <div>成交额: <b style={{ fontFamily: 'monospace' }}>{money$(item.amount)}</b></div>
                     <div>量比: <b style={{ fontFamily: 'monospace' }}>{item.vr ? item.vr.toFixed(1) : '—'}倍</b></div>
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
-                    <div style={{ fontSize: '11.5px', color: '#0369a1' }}>
+                    <div style={{ fontSize: '11.5px', color: 'var(--accent-d)' }}>
                       🎯 <b>打板动作：</b>{item.buyAction}
                     </div>
                     <BoardStockActions
@@ -1160,11 +1038,11 @@ export default function BoardPage({
           {/* 曾涨停炸板大面警报池（补齐跟踪与加入自选能力） */}
           {filterTier === 'zb' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <div style={{ padding: '8px 12px', background: '#fff1f0', border: '1px solid #ffa39e', borderRadius: '8px', color: '#cf1322', fontSize: '12px' }}>
+              <div style={{ padding: '8px 12px', background: 'var(--up-bg)', border: '1px solid var(--up-b)', borderRadius: '8px', color: 'var(--up)', fontSize: '12px' }}>
                 🚨 <b>炸板大面避险提示：</b>以下标的今日曾封涨停但遭大单砸开且至今未能回封！严禁盲目抄底打回封，可先加入自选或跟踪观察次日竞价能否弱转强反包。
               </div>
               {displayItems.map(item => (
-                <div key={item.code} style={{ background: '#fffafa', border: '1.5px solid #ffa39e', borderRadius: '10px', padding: '12px 16px' }}>
+                <div key={item.code} style={{ background: 'var(--up-bg)', border: '1.5px solid var(--up-b)', borderRadius: '10px', padding: '12px 16px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '6px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                       <span style={{ fontSize: '11px', fontWeight: 800, padding: '2px 8px', borderRadius: '4px', background: '#cf1322', color: '#fff' }}>
@@ -1172,11 +1050,11 @@ export default function BoardPage({
                       </span>
                       <span style={{ fontSize: '16px', fontWeight: 800 }}>{item.name}</span>
                       <span style={{ fontFamily: 'monospace', fontSize: '13px', color: 'var(--mute)' }}>{item.code}</span>
-                      <span onClick={() => setSelectedTheme(item.hybk)} style={{ fontSize: '11px', padding: '1px 6px', borderRadius: '4px', background: '#f0f5ff', color: '#1d39c4', cursor: 'pointer' }}>
+                      <span onClick={() => setSelectedTheme(item.hybk)} style={{ fontSize: '11px', padding: '1px 6px', borderRadius: '4px', background: 'var(--info-bg)', color: 'var(--info-d)', cursor: 'pointer' }}>
                         {item.hybk}
                       </span>
                     </div>
-                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#cf1322' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--up)' }}>
                       曾炸板 {item.zbc} 次 · 现价 ¥{f2(item.price)} ({item.chg >= 0 ? '+' : ''}{item.chg.toFixed(1)}%)
                     </div>
                   </div>
@@ -1234,12 +1112,12 @@ export default function BoardPage({
                           fontSize: '11px',
                           fontWeight: 800,
                           color: '#fff',
-                          background: isHigh ? '#cf1322' : isLadder3 ? '#d4380d' : isLadder2 ? '#1677ff' : '#52c41a',
+                          background: isHigh ? 'var(--up)' : isLadder3 ? 'var(--up-d)' : isLadder2 ? '#1677ff' : '#52c41a',
                           whiteSpace: 'nowrap',
                         }}>
                           {item.statTag}
                         </span>
-                        <div style={{ fontSize: '10.5px', fontWeight: 700, color: '#0958d9', marginTop: '2px', whiteSpace: 'nowrap' }}>{item.verdict}</div>
+                        <div style={{ fontSize: '10.5px', fontWeight: 700, color: 'var(--info-d)', marginTop: '2px', whiteSpace: 'nowrap' }}>{item.verdict}</div>
                       </div>
                       <div className="blr-col-ident">
                         <div style={{ display: 'flex', alignItems: 'baseline', gap: '5px', flexWrap: 'wrap' }}>
@@ -1248,7 +1126,7 @@ export default function BoardPage({
                         </div>
                         <div
                           onClick={() => setSelectedTheme(selectedTheme === item.hybk ? 'all' : item.hybk)}
-                          style={{ fontSize: '10.5px', color: '#1d39c4', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                          style={{ fontSize: '10.5px', color: 'var(--info-d)', cursor: 'pointer', whiteSpace: 'nowrap' }}
                         >
                           {item.hybk}
                         </div>
@@ -1258,20 +1136,20 @@ export default function BoardPage({
                         <div style={{ fontSize: '10.5px', color: 'var(--sub)', whiteSpace: 'nowrap' }}>{item.buyTag}</div>
                       </div>
                       <div className="blr-col-time" style={{ fontFamily: 'monospace' }}>
-                        <div style={{ fontWeight: 700, color: item.fbt <= '09:35:00' ? '#cf1322' : 'var(--text)' }}>{item.fbt}</div>
-                        <div style={{ fontSize: '10.5px', color: item.zbc > 0 ? '#cf1322' : 'var(--mute)', whiteSpace: 'nowrap' }}>
+                        <div style={{ fontWeight: 700, color: item.fbt <= '09:35:00' ? 'var(--up)' : 'var(--text)' }}>{item.fbt}</div>
+                        <div style={{ fontSize: '10.5px', color: item.zbc > 0 ? 'var(--up)' : 'var(--mute)', whiteSpace: 'nowrap' }}>
                           {item.zbc > 0 ? `炸板${item.zbc}次` : `末封 ${item.lbt}`}
                         </div>
                       </div>
                       <div className="blr-col-seal" style={{ fontFamily: 'monospace' }}>
-                        <div style={{ fontWeight: 700, color: '#cf1322', whiteSpace: 'nowrap' }}>{money$(item.fund)}</div>
+                        <div style={{ fontWeight: 700, color: 'var(--up)', whiteSpace: 'nowrap' }}>{money$(item.fund)}</div>
                         <div style={{ fontSize: '10.5px', color: 'var(--mute)', whiteSpace: 'nowrap' }}>封成比 {item.sealRatio.toFixed(2)}x</div>
                       </div>
                       <div className="blr-col-amt" style={{ fontFamily: 'monospace', fontSize: '11px', color: 'var(--sub)' }}>
                         <div style={{ whiteSpace: 'nowrap' }}>{money$(item.amount)}</div>
                         <div style={{ whiteSpace: 'nowrap' }}>{item.turnover.toFixed(1)}%</div>
                       </div>
-                      <div className="blr-col-score" style={{ fontFamily: 'monospace', fontWeight: 800, color: '#cf1322', whiteSpace: 'nowrap' }}>{item.score}分</div>
+                      <div className="blr-col-score" style={{ fontFamily: 'monospace', fontWeight: 800, color: 'var(--up)', whiteSpace: 'nowrap' }}>{item.score}分</div>
                       <div className="blr-col-acts">
                         <BoardStockActions
                           stock={item}
@@ -1336,7 +1214,7 @@ export default function BoardPage({
                           fontWeight: 800,
                           padding: '2px 8px',
                           borderRadius: '4px',
-                          background: isHigh ? '#cf1322' : isLadder3 ? '#d4380d' : isLadder2 ? '#1677ff' : '#52c41a',
+                          background: isHigh ? 'var(--up)' : isLadder3 ? 'var(--up-d)' : isLadder2 ? '#1677ff' : '#52c41a',
                           color: '#fff',
                           letterSpacing: '0.5px'
                         }}>
@@ -1346,7 +1224,7 @@ export default function BoardPage({
                         <span style={{ fontFamily: 'monospace', fontSize: '13px', color: 'var(--mute)' }}>{item.code}</span>
                         <span
                           onClick={() => setSelectedTheme(item.hybk)}
-                          style={{ fontSize: '11.5px', padding: '2px 8px', borderRadius: '4px', background: '#f0f5ff', color: '#1d39c4', border: '1px solid #adc6ff', cursor: 'pointer', fontWeight: 600 }}
+                          style={{ fontSize: '11.5px', padding: '2px 8px', borderRadius: '4px', background: 'var(--info-bg)', color: 'var(--info-d)', border: '1px solid #adc6ff', cursor: 'pointer', fontWeight: 600 }}
                         >
                           🔥 {item.hybk}
                         </span>
@@ -1355,15 +1233,15 @@ export default function BoardPage({
                           fontWeight: 700,
                           padding: '1px 6px',
                           borderRadius: '4px',
-                          background: isAuctionBuy ? '#dcfce7' : isRushBuy ? '#ffedd5' : isLocked ? '#f1f5f9' : '#e0f2fe',
-                          color: isAuctionBuy ? '#15803d' : isRushBuy ? '#c2410c' : isLocked ? '#64748b' : '#0369a1',
+                          background: isAuctionBuy ? 'var(--down-bg)' : isRushBuy ? 'var(--warn-bg)' : isLocked ? 'var(--surface2)' : 'var(--info-bg)',
+                          color: isAuctionBuy ? 'var(--down-d)' : isRushBuy ? 'var(--warn-d)' : isLocked ? 'var(--mute)' : 'var(--accent-d)',
                           border: '1px solid',
-                          borderColor: isAuctionBuy ? '#86efac' : isRushBuy ? '#fdba74' : isLocked ? '#cbd5e1' : '#7dd3fc'
+                          borderColor: isAuctionBuy ? 'var(--down-b)' : isRushBuy ? 'var(--warn-b)' : isLocked ? 'var(--line2)' : '#7dd3fc'
                         }}>
                           {item.buyTag}
                         </span>
                         {item.zbc > 0 && (
-                          <span style={{ fontSize: '11px', padding: '1px 6px', borderRadius: '4px', background: '#fff1f0', color: '#cf1322', border: '1px solid #ffa39e', fontWeight: 700 }}>
+                          <span style={{ fontSize: '11px', padding: '1px 6px', borderRadius: '4px', background: 'var(--up-bg)', color: 'var(--up)', border: '1px solid var(--up-b)', fontWeight: 700 }}>
                             🚨 曾炸板 {item.zbc} 次
                           </span>
                         )}
@@ -1375,10 +1253,10 @@ export default function BoardPage({
                           fontWeight: 800,
                           padding: '3px 8px',
                           borderRadius: '6px',
-                          background: item.score >= 80 ? '#fff1f0' : item.score >= 65 ? '#fff7e6' : 'var(--surface2)',
-                          color: item.score >= 80 ? '#cf1322' : item.score >= 65 ? '#d46b08' : 'var(--sub)',
+                          background: item.score >= 80 ? 'var(--up-bg)' : item.score >= 65 ? 'var(--warn-bg)' : 'var(--surface2)',
+                          color: item.score >= 80 ? 'var(--up)' : item.score >= 65 ? 'var(--warn-d)' : 'var(--sub)',
                           border: '1px solid',
-                          borderColor: item.score >= 80 ? '#ffa39e' : item.score >= 65 ? '#ffd591' : 'var(--line)'
+                          borderColor: item.score >= 80 ? 'var(--up-b)' : item.score >= 65 ? 'var(--warn-b)' : 'var(--line)'
                         }}>
                           {item.verdict}
                         </span>
@@ -1398,10 +1276,10 @@ export default function BoardPage({
                       marginBottom: '8px'
                     }}>
                       <div><span style={{ color: 'var(--mute)' }}>现价: </span><b style={{ color: 'var(--up)', fontFamily: 'monospace' }}>¥{f2(item.price)}</b> <span style={{ fontSize: '11px', color: 'var(--up)' }}>(+{item.chg.toFixed(1)}%)</span></div>
-                      <div><span style={{ color: 'var(--mute)' }}>首封时点: </span><b style={{ fontFamily: 'monospace', color: item.fbt <= '09:35:00' ? '#cf1322' : 'inherit' }}>{item.fbt}</b></div>
+                      <div><span style={{ color: 'var(--mute)' }}>首封时点: </span><b style={{ fontFamily: 'monospace', color: item.fbt <= '09:35:00' ? 'var(--up)' : 'inherit' }}>{item.fbt}</b></div>
                       <div><span style={{ color: 'var(--mute)' }}>最后封板: </span><b style={{ fontFamily: 'monospace' }}>{item.lbt}</b></div>
-                      <div><span style={{ color: 'var(--mute)' }}>买一封单: </span><b style={{ color: '#cf1322', fontFamily: 'monospace' }}>{money$(item.fund)}</b></div>
-                      <div><span style={{ color: 'var(--mute)' }}>封成比: </span><b style={{ color: item.sealRatio >= 1.0 ? '#cf1322' : 'inherit', fontFamily: 'monospace' }}>{item.sealRatio.toFixed(2)}倍</b></div>
+                      <div><span style={{ color: 'var(--mute)' }}>买一封单: </span><b style={{ color: 'var(--up)', fontFamily: 'monospace' }}>{money$(item.fund)}</b></div>
+                      <div><span style={{ color: 'var(--mute)' }}>封成比: </span><b style={{ color: item.sealRatio >= 1.0 ? 'var(--up)' : 'inherit', fontFamily: 'monospace' }}>{item.sealRatio.toFixed(2)}倍</b></div>
                       <div><span style={{ color: 'var(--mute)' }}>换手率: </span><b style={{ fontFamily: 'monospace' }}>{item.turnover.toFixed(1)}%</b></div>
                       <div><span style={{ color: 'var(--mute)' }}>成交额: </span><b style={{ fontFamily: 'monospace' }}>{money$(item.amount)}</b></div>
                       <div><span style={{ color: 'var(--mute)' }}>流通市值: </span><b style={{ fontFamily: 'monospace' }}>{money$(item.mcap)}</b></div>
@@ -1409,9 +1287,9 @@ export default function BoardPage({
 
                     <div style={{
                       padding: '6px 10px',
-                      background: isAuctionBuy ? '#f0fdf4' : isRushBuy ? '#fff7ed' : isLocked ? '#f8fafc' : '#f0f9ff',
+                      background: isAuctionBuy ? 'var(--down-bg)' : isRushBuy ? 'var(--warn-bg)' : isLocked ? 'var(--surface)' : 'var(--info-bg)',
                       border: '1px dashed',
-                      borderColor: isAuctionBuy ? '#86efac' : isRushBuy ? '#fdba74' : isLocked ? '#cbd5e1' : '#bae6fd',
+                      borderColor: isAuctionBuy ? 'var(--down-b)' : isRushBuy ? 'var(--warn-b)' : isLocked ? 'var(--line2)' : 'var(--info-b)',
                       borderRadius: '6px',
                       fontSize: '11.5px',
                       marginBottom: '6px',
@@ -1424,12 +1302,12 @@ export default function BoardPage({
                     </div>
 
                     <details style={{ marginBottom: '8px', fontSize: '11.5px' }}>
-                      <summary style={{ cursor: 'pointer', color: '#0958d9', fontWeight: 600, userSelect: 'none', padding: '2px 0' }}>
+                      <summary style={{ cursor: 'pointer', color: 'var(--info-d)', fontWeight: 600, userSelect: 'none', padding: '2px 0' }}>
                         ▾ 查看次日卖点预演与出场指引（高开怎么卖 / 平低开怎么抢跑）
                       </summary>
-                      <div style={{ marginTop: '4px', padding: '6px 10px', borderRadius: '6px', background: '#f8fafc', border: '1px solid #e2e8f0', color: '#334155', lineHeight: '1.5' }}>
-                        <div style={{ color: '#0958d9', fontWeight: 700, marginBottom: '2px' }}>🎯 {nextDayPlan}</div>
-                        <div style={{ fontSize: '11px', color: '#64748b' }}>
+                      <div style={{ marginTop: '4px', padding: '6px 10px', borderRadius: '6px', background: 'var(--surface)', border: '1px solid var(--line)', color: 'var(--sub)', lineHeight: '1.5' }}>
+                        <div style={{ color: 'var(--info-d)', fontWeight: 700, marginBottom: '2px' }}>🎯 {nextDayPlan}</div>
+                        <div style={{ fontSize: '11px', color: 'var(--mute)' }}>
                           <b>超短四档出场铁律：</b>① 大高开(&gt;+4%)锁仓，冲高不板且放量滞涨止盈一半；② 小高开冲高至+4%先落袋半仓；③ 平开5分钟内不翻红逢抽保本走；④ 恶劣低开第一时间挂跌停止损，绝不幻想日内反包！
                         </div>
                       </div>
@@ -1437,7 +1315,7 @@ export default function BoardPage({
 
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
                       <div style={{ fontSize: '11.5px', color: 'var(--sub)', display: 'flex', alignItems: 'center', gap: '6px', flex: '1 1 260px' }}>
-                        <span style={{ fontWeight: 700, color: item.riskLevel === '高' ? '#cf1322' : item.riskLevel === '中偏高' ? '#d46b08' : '#389e0d', flexShrink: 0 }}>
+                        <span style={{ fontWeight: 700, color: item.riskLevel === '高' ? 'var(--up)' : item.riskLevel === '中偏高' ? 'var(--warn-d)' : 'var(--down-d)', flexShrink: 0 }}>
                           [{item.riskLevel}风险]
                         </span>
                         <span>{item.riskDesc}</span>
@@ -1484,8 +1362,8 @@ export default function BoardPage({
                       gap: '5px',
                       padding: '6px 8px',
                       borderRadius: '6px',
-                      background: isSelected ? '#e6f4ff' : 'var(--surface2)',
-                      border: isSelected ? '1px solid #91caff' : '1px solid transparent',
+                      background: isSelected ? 'var(--info-bg)' : 'var(--surface2)',
+                      border: isSelected ? '1px solid var(--info-b)' : '1px solid transparent',
                       fontSize: '12px'
                     }}
                   >
@@ -1494,12 +1372,12 @@ export default function BoardPage({
                       style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', cursor: 'pointer' }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
-                        <span style={{ width: '18px', height: '18px', borderRadius: '4px', background: idx < 3 ? '#cf1322' : 'var(--mute)', color: '#fff', fontSize: '10.5px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <span style={{ width: '18px', height: '18px', borderRadius: '4px', background: idx < 3 ? 'var(--up)' : 'var(--mute)', color: '#fff', fontSize: '10.5px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                           {idx + 1}
                         </span>
-                        <span style={{ fontWeight: isSelected ? 800 : 600, color: isSelected ? '#0958d9' : 'var(--text)', whiteSpace: 'nowrap' }}>{th.name}</span>
+                        <span style={{ fontWeight: isSelected ? 800 : 600, color: isSelected ? 'var(--info-d)' : 'var(--text)', whiteSpace: 'nowrap' }}>{th.name}</span>
                       </div>
-                      <span style={{ background: '#fff1f0', color: '#cf1322', padding: '1px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 700, flexShrink: 0 }}>
+                      <span style={{ background: 'var(--up-bg)', color: 'var(--up)', padding: '1px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 700, flexShrink: 0 }}>
                         {th.count}家
                       </span>
                     </div>
@@ -1529,10 +1407,10 @@ export default function BoardPage({
           </div>
 
           {mysticClusters.length > 0 && (
-            <div style={{ background: '#faf5ff', border: '1px solid #d8b4fe', borderRadius: '10px', padding: '12px 14px' }}>
+            <div style={{ background: 'var(--accent-bg)', border: '1px solid var(--accent-b)', borderRadius: '10px', padding: '12px 14px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ fontSize: '13px', fontWeight: 800, color: '#6d28d9' }}>🔮 跨行业字辈暗线</span>
-                <span style={{ fontSize: '10.5px', color: '#7c3aed' }}>同字根≥2板</span>
+                <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--accent-d)' }}>🔮 跨行业字辈暗线</span>
+                <span style={{ fontSize: '10.5px', color: 'var(--accent-d)' }}>同字根≥2板</span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
                 {mysticClusters.slice(0, 6).map(cl => {
@@ -1544,8 +1422,8 @@ export default function BoardPage({
                       style={{
                         padding: '7px 9px',
                         borderRadius: '6px',
-                        background: active ? '#f3e8ff' : '#fff',
-                        border: active ? '1px solid #9333ea' : '1px solid #e9d5ff',
+                        background: active ? 'var(--accent-bg)' : 'var(--card)',
+                        border: active ? '1px solid #9333ea' : '1px solid var(--accent-b)',
                         fontSize: '11.5px',
                       }}
                     >
@@ -1560,8 +1438,8 @@ export default function BoardPage({
                         }}
                         style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', marginBottom: '4px' }}
                       >
-                        <b style={{ color: '#6d28d9' }}>{cl.name}</b>
-                        <span style={{ fontWeight: 800, color: '#7c3aed', fontSize: '11px' }}>{cl.ztCount}板 →</span>
+                        <b style={{ color: 'var(--accent-d)' }}>{cl.name}</b>
+                        <span style={{ fontWeight: 800, color: 'var(--accent-d)', fontSize: '11px' }}>{cl.ztCount}板 →</span>
                       </div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
                         {(cl.leaders || []).map(l => {
@@ -1576,8 +1454,8 @@ export default function BoardPage({
                                 gap: '3px',
                                 padding: '1px 5px',
                                 borderRadius: '4px',
-                                background: '#faf5ff',
-                                border: '1px solid #e9d5ff',
+                                background: 'var(--accent-bg)',
+                                border: '1px solid var(--accent-b)',
                                 fontSize: '10.5px',
                               }}
                             >
@@ -1609,28 +1487,28 @@ export default function BoardPage({
           )}
 
           <div style={{
-            background: 'linear-gradient(180deg, #fff7e6, #fff)',
-            border: '1.5px solid #ffd591',
+            background: 'var(--warn-bg)',
+            border: '1.5px solid var(--warn-b)',
             borderRadius: '10px',
             padding: '14px',
             boxShadow: '0 2px 8px rgba(250, 140, 22, 0.08)'
           }}>
-            <div style={{ fontSize: '13.5px', fontWeight: 800, color: '#d46b08', marginBottom: '8px' }}>⚡ 游资打板「四不打」铁律</div>
+            <div style={{ fontSize: '13.5px', fontWeight: 800, color: 'var(--warn-d)', marginBottom: '8px' }}>⚡ 游资打板「四不打」铁律</div>
             <div style={{ fontSize: '12px', color: 'var(--text)', lineHeight: 1.6, display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <div>
-                <b style={{ color: '#cf1322' }}>① 尾盘偷袭板不打：</b>
+                <b style={{ color: 'var(--up)' }}>① 尾盘偷袭板不打：</b>
                 <span style={{ color: 'var(--sub)' }}>14:30 以后偷袭封板的标的，主力大多缺乏真金白银，次日开盘低开被砸率高达 72%。</span>
               </div>
               <div>
-                <b style={{ color: '#cf1322' }}>② 弱质虚封板不打：</b>
+                <b style={{ color: 'var(--up)' }}>② 弱质虚封板不打：</b>
                 <span style={{ color: 'var(--sub)' }}>封成比低于 0.3 且买一封单不足 2000 万的弱板不排，极易遭遇空头反扑砸成天地板。</span>
               </div>
               <div>
-                <b style={{ color: '#cf1322' }}>③ 巨量炸板板不打：</b>
+                <b style={{ color: 'var(--up)' }}>③ 巨量炸板板不打：</b>
                 <span style={{ color: 'var(--sub)' }}>日内反复炸板 2 次以上且换手率超过 30% 的高位分歧板，筹码剧烈松动，严禁打板接飞刀。</span>
               </div>
               <div>
-                <b style={{ color: '#cf1322' }}>④ 严防资金混淆：</b>
+                <b style={{ color: 'var(--up)' }}>④ 严防资金混淆：</b>
                 <span style={{ color: 'var(--sub)' }}>打板失利时必须在次日开盘坚决按纪律平仓，严禁动用 70% 底仓资金向下补仓变成股东！</span>
               </div>
             </div>

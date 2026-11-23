@@ -184,7 +184,7 @@ export default function PreMarketPanel({
           <span className="pm-stat">
             高开 <b className="up">{highOpenCnt}</b> · 低开 <b className="down">{lowOpenCnt}</b>
             {rushLeadCnt > 0 && (
-              <span style={{ color: '#b91c1c', fontWeight: 700 }}>
+              <span style={{ color: 'var(--up-d)', fontWeight: 700 }}>
                 {' '}· 🔥 抢筹/弱转强 {rushLeadCnt}
               </span>
             )}
@@ -350,9 +350,9 @@ export default function PreMarketPanel({
                           style={{
                             marginRight: '5px',
                             fontWeight: 800,
-                            color: r.aucLead.score > 0 ? '#b91c1c' : '#047857',
-                            borderColor: r.aucLead.score > 0 ? '#fca5a5' : '#6ee7b7',
-                            background: r.aucLead.score > 0 ? '#fff1f2' : '#ecfdf5',
+                            color: r.aucLead.score > 0 ? 'var(--up-d)' : 'var(--down-d)',
+                            borderColor: r.aucLead.score > 0 ? 'var(--up-b)' : 'var(--down-b)',
+                            background: r.aucLead.score > 0 ? 'var(--up-bg)' : 'var(--down-bg)',
                           }}
                           title={r.aucLead.desc}
                         >

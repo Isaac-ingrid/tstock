@@ -125,10 +125,10 @@ function CyqFlameChart({ chips, curPrice, holdCost = 0, holdBePrice = 0 }) {
     key: 'cur',
     label: `现价 ¥${f2(px)}`,
     price: px,
-    stroke: '#0f172a',
+    stroke: 'var(--text)',
     bg: '#0f172a',
     fg: '#ffffff',
-    border: '#0f172a',
+    border: 'var(--text)',
     dash: undefined,
     sw: 1.35,
   });
@@ -137,7 +137,7 @@ function CyqFlameChart({ chips, curPrice, holdCost = 0, holdBePrice = 0 }) {
     label: `主峰 ¥${f2(peakPrice)}`,
     price: peakPrice,
     stroke: '#0e7490',
-    bg: '#ecfeff',
+    bg: 'var(--teal-bg)',
     fg: '#0e7490',
     border: '#67e8f9',
     dash: '4 2.5',
@@ -147,10 +147,10 @@ function CyqFlameChart({ chips, curPrice, holdCost = 0, holdBePrice = 0 }) {
     key: 'avg',
     label: `均价 ¥${f2(avgCost)}`,
     price: avgCost,
-    stroke: '#475569',
-    bg: '#f1f5f9',
-    fg: '#334155',
-    border: '#cbd5e1',
+    stroke: 'var(--sub)',
+    bg: 'var(--surface2)',
+    fg: 'var(--sub)',
+    border: 'var(--line2)',
     dash: '2.5 2.5',
     sw: 1.15,
   });
@@ -159,10 +159,10 @@ function CyqFlameChart({ chips, curPrice, holdCost = 0, holdBePrice = 0 }) {
       key: 'cost',
       label: `持仓 ¥${f2(hCost)}`,
       price: hCost,
-      stroke: '#7c3aed',
+      stroke: 'var(--accent-d)',
       bg: '#7c3aed',
       fg: '#ffffff',
-      border: '#6d28d9',
+      border: 'var(--accent-d)',
       dash: '5 3',
       sw: 1.3,
     });
@@ -175,7 +175,7 @@ function CyqFlameChart({ chips, curPrice, holdCost = 0, holdBePrice = 0 }) {
       stroke: '#d97706',
       bg: '#d97706',
       fg: '#ffffff',
-      border: '#b45309',
+      border: 'var(--warn-d)',
       dash: '3.5 2',
       sw: 1.3,
     });
@@ -221,25 +221,25 @@ function CyqFlameChart({ chips, curPrice, holdCost = 0, holdBePrice = 0 }) {
     if (trappedPeakAbove && hBe <= peakPrice) {
       bePeakInsight = {
         tone: 'good',
-        bg: '#f0fdf4',
-        border: '#bbf7d0',
-        color: '#166534',
+        bg: 'var(--down-bg)',
+        border: 'var(--down-b)',
+        color: 'var(--down-d)',
         text: `✅ 保本位低于上方套牢主峰：做T保本 ¥${f2(hBe)} 位于主峰 ¥${f2(peakPrice)} 下方 (${diffPct.toFixed(1)}%)，日内反抽无需穿过主峰解套抛压墙即可保本出局`,
       };
     } else if (trappedPeakAbove && hBe > peakPrice) {
       bePeakInsight = {
         tone: 'warn',
-        bg: '#fffbeb',
-        border: '#fde68a',
-        color: '#92400e',
+        bg: 'var(--warn-bg)',
+        border: 'var(--warn-b)',
+        color: 'var(--warn-d)',
         text: `⚠️ 保本位需跨过上方套牢主峰：做T保本 ¥${f2(hBe)} 高于主峰 ¥${f2(peakPrice)} (+${diffPct.toFixed(1)}%)，触及保本前易遇主峰抛压阻击，反抽主峰附近宜先倒T磨低成本`,
       };
     } else {
       bePeakInsight = {
         tone: 'info',
-        bg: '#eff6ff',
-        border: '#bfdbfe',
-        color: '#1e40af',
+        bg: 'var(--info-bg)',
+        border: 'var(--info-b)',
+        color: 'var(--info-d)',
         text: `🛡️ 现价已站上筹码主峰（¥${f2(peakPrice)}）：做T保本 ¥${f2(hBe)} (${diffPct >= 0 ? '+' : ''}${diffPct.toFixed(1)}% vs 主峰)${hCost > px ? `，可依托主峰支撑波段做T逐步摊薄底仓 ¥${f2(hCost)}` : '，筹码支撑与持仓均处于顺势区'}`,
       };
     }
@@ -251,7 +251,7 @@ function CyqFlameChart({ chips, curPrice, holdCost = 0, holdBePrice = 0 }) {
         marginBottom: '10px',
         padding: '9px 10px 7px',
         borderRadius: '8px',
-        background: 'linear-gradient(180deg, #fcfcfd 0%, #f8fafc 100%)',
+        background: 'var(--surface)',
         border: '1px solid var(--line)',
       }}
     >
@@ -333,7 +333,7 @@ function CyqFlameChart({ chips, curPrice, holdCost = 0, holdBePrice = 0 }) {
           const ty = pToY(tv);
           return (
             <g key={idx}>
-              <line x1={axisX} y1={ty} x2={axisX + barMaxW + 8} y2={ty} stroke="#e2e8f0" strokeWidth="0.8" strokeDasharray="2 3" />
+              <line x1={axisX} y1={ty} x2={axisX + barMaxW + 8} y2={ty} stroke="var(--line)" strokeWidth="0.8" strokeDasharray="2 3" />
               <text
                 x="45"
                 y={ty}
@@ -341,7 +341,7 @@ function CyqFlameChart({ chips, curPrice, holdCost = 0, holdBePrice = 0 }) {
                 dominantBaseline="central"
                 fontSize="10"
                 fontFamily="ui-monospace, Consolas, monospace"
-                fill="#64748b"
+                fill="var(--mute)"
               >
                 ¥{f2(tv)}
               </text>
@@ -374,7 +374,7 @@ function CyqFlameChart({ chips, curPrice, holdCost = 0, holdBePrice = 0 }) {
         )}
 
         {/* 纵向价格基轴 */}
-        <line x1={axisX} y1={padTop - 2} x2={axisX} y2={svgH - padBot + 2} stroke="#cbd5e1" strokeWidth="1.1" />
+        <line x1={axisX} y1={padTop - 2} x2={axisX} y2={svgH - padBot + 2} stroke="var(--line2)" strokeWidth="1.1" />
 
         {/* 横向筹码峰火焰柱 */}
         {profile.map((row, idx) => {
@@ -398,7 +398,7 @@ function CyqFlameChart({ chips, curPrice, holdCost = 0, holdBePrice = 0 }) {
               rx={Math.min(1.6, bH * 0.45)}
               fill={isProfit ? 'url(#cyqProfitGrad)' : 'url(#cyqTrapGrad)'}
               fillOpacity={isHovered || isPeak ? '1' : '0.84'}
-              stroke={isPeak ? '#0e7490' : isHovered ? '#0f172a' : 'none'}
+              stroke={isPeak ? '#0e7490' : isHovered ? 'var(--text)' : 'none'}
               strokeWidth={isPeak || isHovered ? '1' : '0'}
             />
           );
@@ -411,7 +411,7 @@ function CyqFlameChart({ chips, curPrice, holdCost = 0, holdBePrice = 0 }) {
             y1={pToY(Number(hRow.p))}
             x2={axisX + barMaxW + 8}
             y2={pToY(Number(hRow.p))}
-            stroke="#475569"
+            stroke="var(--sub)"
             strokeWidth="0.9"
             strokeDasharray="1.5 2"
           />
@@ -1190,8 +1190,8 @@ export default function DiagnosisPage({
                 padding: '16px 18px',
                 marginBottom: '14px',
                 border: '1.5px solid',
-                borderColor: dec.canBuyLevel === 'STRONG_BUY' ? '#86efac' : dec.canBuyLevel === 'BUY_DIP' ? '#7dd3fc' : dec.canBuyLevel === 'WAIT' ? '#fde68a' : '#fca5a5',
-                background: 'linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)',
+                borderColor: dec.canBuyLevel === 'STRONG_BUY' ? 'var(--down-b)' : dec.canBuyLevel === 'BUY_DIP' ? '#7dd3fc' : dec.canBuyLevel === 'WAIT' ? 'var(--warn-b)' : 'var(--up-b)',
+                background: 'var(--surface)',
                 boxShadow: '0 4px 16px rgba(0, 0, 0, 0.05)'
               }}
             >
@@ -1228,7 +1228,7 @@ export default function DiagnosisPage({
                           style={{
                             fontSize: '16px',
                             fontWeight: 800,
-                            color: dec.canBuyLevel === 'STRONG_BUY' ? '#15803d' : dec.canBuyLevel === 'BUY_DIP' ? '#0369a1' : dec.canBuyLevel === 'WAIT' ? '#b45309' : '#cf1322'
+                            color: dec.canBuyLevel === 'STRONG_BUY' ? 'var(--down-d)' : dec.canBuyLevel === 'BUY_DIP' ? 'var(--accent-d)' : dec.canBuyLevel === 'WAIT' ? 'var(--warn-d)' : 'var(--up)'
                           }}
                         >
                           {dec.canBuyVerdict}
@@ -1239,9 +1239,9 @@ export default function DiagnosisPage({
                             fontWeight: 700,
                             padding: '2px 8px',
                             borderRadius: '4px',
-                            background: dec.riskColor === 'red' ? '#fef2f2' : dec.riskColor === 'yellow' ? '#fffbeb' : '#f0fdf4',
+                            background: dec.riskColor === 'red' ? 'var(--up-bg)' : dec.riskColor === 'yellow' ? 'var(--warn-bg)' : 'var(--down-bg)',
                             color: dec.riskColor === 'red' ? '#dc2626' : dec.riskColor === 'yellow' ? '#d97706' : '#16a34a',
-                            border: `1px solid ${dec.riskColor === 'red' ? '#fca5a5' : dec.riskColor === 'yellow' ? '#fde68a' : '#86efac'}`
+                            border: `1px solid ${dec.riskColor === 'red' ? 'var(--up-b)' : dec.riskColor === 'yellow' ? 'var(--warn-b)' : 'var(--down-b)'}`
                           }}
                         >
                           风险：{dec.riskRating}
@@ -1268,9 +1268,9 @@ export default function DiagnosisPage({
                             fontWeight: 600,
                             padding: '2px 8px',
                             borderRadius: '4px',
-                            background: dec.styleFitLevel === 'narrow' ? '#f1f5f9' : dec.styleFitLevel === 'high_vol' ? '#fffbeb' : '#f0f9ff',
-                            color: dec.styleFitLevel === 'narrow' ? '#475569' : dec.styleFitLevel === 'high_vol' ? '#b45309' : '#0369a1',
-                            border: `1px solid ${dec.styleFitLevel === 'narrow' ? '#cbd5e1' : dec.styleFitLevel === 'high_vol' ? '#fde68a' : '#bae6fd'}`
+                            background: dec.styleFitLevel === 'narrow' ? 'var(--surface2)' : dec.styleFitLevel === 'high_vol' ? 'var(--warn-bg)' : 'var(--info-bg)',
+                            color: dec.styleFitLevel === 'narrow' ? 'var(--sub)' : dec.styleFitLevel === 'high_vol' ? 'var(--warn-d)' : 'var(--accent-d)',
+                            border: `1px solid ${dec.styleFitLevel === 'narrow' ? 'var(--line2)' : dec.styleFitLevel === 'high_vol' ? 'var(--warn-b)' : 'var(--info-b)'}`
                           }}
                         >
                           {dec.styleFit}
@@ -1284,15 +1284,15 @@ export default function DiagnosisPage({
                     style={{
                       padding: '10px 13px',
                       borderRadius: '8px',
-                      background: dec.isBuyPointNow ? '#f0fdf4' : '#fff7ed',
-                      border: `1px solid ${dec.isBuyPointNow ? '#86efac' : '#fdba74'}`,
+                      background: dec.isBuyPointNow ? 'var(--down-bg)' : 'var(--warn-bg)',
+                      border: `1px solid ${dec.isBuyPointNow ? 'var(--down-b)' : 'var(--warn-b)'}`,
                       marginBottom: '12px'
                     }}
                   >
-                    <div style={{ fontSize: '13.5px', fontWeight: 800, color: dec.isBuyPointNow ? '#15803d' : '#c2410c', marginBottom: '4px' }}>
+                    <div style={{ fontSize: '13.5px', fontWeight: 800, color: dec.isBuyPointNow ? 'var(--down-d)' : 'var(--warn-d)', marginBottom: '4px' }}>
                       ⏱️ 【时点判定】{dec.timingHeadline}
                     </div>
-                    <div style={{ fontSize: '12.5px', color: '#334155', lineHeight: 1.55 }}>
+                    <div style={{ fontSize: '12.5px', color: 'var(--sub)', lineHeight: 1.55 }}>
                       {dec.timingAnalysis}
                     </div>
                   </div>
@@ -1304,27 +1304,27 @@ export default function DiagnosisPage({
                   {dec.tradePlan && (
                     <div>
                       <div className="diag-grid-4">
-                        <div style={{ padding: '8px 10px', background: '#f8fafc', borderRadius: '6px', border: '1px solid var(--line)', minWidth: 0 }}>
+                        <div style={{ padding: '8px 10px', background: 'var(--surface)', borderRadius: '6px', border: '1px solid var(--line)', minWidth: 0 }}>
                           <div style={{ fontSize: '11px', color: 'var(--mute)' }}>建议仓位配比</div>
                           <div style={{ fontSize: '12.5px', fontWeight: 800, color: 'var(--text)', marginTop: '2px' }}>
                             {dec.tradePlan.suggestedPosition}
                           </div>
                         </div>
-                        <div style={{ padding: '8px 10px', background: '#f0fdf4', borderRadius: '6px', border: '1px solid #bbf7d0', minWidth: 0 }}>
-                          <div style={{ fontSize: '11px', color: '#15803d' }}>理想低吸区间</div>
-                          <div style={{ fontSize: '12.5px', fontWeight: 800, fontFamily: 'monospace', color: '#15803d', marginTop: '2px', overflowWrap: 'anywhere' }}>
+                        <div style={{ padding: '8px 10px', background: 'var(--down-bg)', borderRadius: '6px', border: '1px solid var(--down-b)', minWidth: 0 }}>
+                          <div style={{ fontSize: '11px', color: 'var(--down-d)' }}>理想低吸区间</div>
+                          <div style={{ fontSize: '12.5px', fontWeight: 800, fontFamily: 'monospace', color: 'var(--down-d)', marginTop: '2px', overflowWrap: 'anywhere' }}>
                             ¥{f2(dec.tradePlan.idealBuyLow)}~¥{f2(dec.tradePlan.idealBuyHigh)}
                           </div>
                         </div>
-                        <div style={{ padding: '8px 10px', background: '#fef2f2', borderRadius: '6px', border: '1px solid #fecaca', minWidth: 0 }}>
+                        <div style={{ padding: '8px 10px', background: 'var(--up-bg)', borderRadius: '6px', border: '1px solid var(--up-b)', minWidth: 0 }}>
                           <div style={{ fontSize: '11px', color: '#dc2626' }}>破位防套止损线</div>
                           <div style={{ fontSize: '12.5px', fontWeight: 800, fontFamily: 'monospace', color: '#dc2626', marginTop: '2px' }}>
                             ¥{f2(dec.tradePlan.stopLossPrice)}
                           </div>
                         </div>
-                        <div style={{ padding: '8px 10px', background: '#eff6ff', borderRadius: '6px', border: '1px solid #bfdbfe', minWidth: 0 }}>
-                          <div style={{ fontSize: '11px', color: '#1d4ed8' }}>上方压力/目标位</div>
-                          <div style={{ fontSize: '12.5px', fontWeight: 800, fontFamily: 'monospace', color: '#1d4ed8', marginTop: '2px' }}>
+                        <div style={{ padding: '8px 10px', background: 'var(--info-bg)', borderRadius: '6px', border: '1px solid var(--info-b)', minWidth: 0 }}>
+                          <div style={{ fontSize: '11px', color: 'var(--info-d)' }}>上方压力/目标位</div>
+                          <div style={{ fontSize: '12.5px', fontWeight: 800, fontFamily: 'monospace', color: 'var(--info-d)', marginTop: '2px' }}>
                             ¥{f2(dec.tradePlan.targetPrice1)}
                           </div>
                         </div>
@@ -1339,7 +1339,7 @@ export default function DiagnosisPage({
                 </div>
 
                 {/* 右侧：5 维量化评分拆解条 */}
-                <div style={{ padding: '12px 14px', background: '#fff', borderRadius: '8px', border: '1px solid var(--line)', minWidth: 0 }}>
+                <div style={{ padding: '12px 14px', background: 'var(--card)', borderRadius: '8px', border: '1px solid var(--line)', minWidth: 0 }}>
                   <div style={{ fontSize: '13px', fontWeight: 700, marginBottom: '10px', color: 'var(--text)', display: 'flex', justifyContent: 'space-between' }}>
                     <span>📊 五维量化得分拆解</span>
                     <span style={{ fontSize: '11.5px', fontWeight: 400, color: 'var(--mute)' }}>总分 {dec.totalScore}/100</span>
@@ -1347,7 +1347,7 @@ export default function DiagnosisPage({
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {(dec.scoreBreakdown || []).map((item, idx) => {
                       const ratio = item.max > 0 ? (item.score / item.max) * 100 : 0;
-                      const barCol = ratio >= 75 ? '#16a34a' : ratio >= 55 ? '#0284c7' : ratio >= 40 ? '#d97706' : '#dc2626';
+                      const barCol = ratio >= 75 ? '#16a34a' : ratio >= 55 ? 'var(--accent)' : ratio >= 40 ? '#d97706' : '#dc2626';
                       return (
                         <div key={idx}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '6px', fontSize: '11.5px', marginBottom: '3px', flexWrap: 'wrap' }}>
@@ -1357,7 +1357,7 @@ export default function DiagnosisPage({
                               <span style={{ color: 'var(--mute)', fontSize: '11px' }}>/{item.max} · {item.desc}</span>
                             </span>
                           </div>
-                          <div style={{ height: '6px', background: '#f1f5f9', borderRadius: '3px', overflow: 'hidden' }}>
+                          <div style={{ height: '6px', background: 'var(--surface2)', borderRadius: '3px', overflow: 'hidden' }}>
                             <div style={{ width: `${ratio}%`, height: '100%', background: barCol, borderRadius: '3px', transition: 'width 0.4s ease' }} />
                           </div>
                         </div>
@@ -1369,12 +1369,12 @@ export default function DiagnosisPage({
 
               {/* 第二层：支撑买入依据 vs 风险隐患提示 双栏明细（窄屏自动单列） */}
               <div className="diag-grid-2" style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px dashed var(--line)' }}>
-                <div style={{ padding: '10px 12px', background: '#f0fdf4', borderRadius: '6px', border: '1px solid #dcfce7' }}>
-                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#15803d', marginBottom: '6px' }}>
+                <div style={{ padding: '10px 12px', background: 'var(--down-bg)', borderRadius: '6px', border: '1px solid #dcfce7' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--down-d)', marginBottom: '6px' }}>
                     ✅ 积极加分与买入依据 ({dec.positivePoints?.length || 0})
                   </div>
                   {dec.positivePoints && dec.positivePoints.length > 0 ? (
-                    <ul style={{ margin: 0, paddingLeft: '16px', fontSize: '12px', color: '#166534', lineHeight: 1.6 }}>
+                    <ul style={{ margin: 0, paddingLeft: '16px', fontSize: '12px', color: 'var(--down-d)', lineHeight: 1.6 }}>
                       {dec.positivePoints.map((pt, idx) => <li key={idx}>{pt}</li>)}
                     </ul>
                   ) : (
@@ -1382,16 +1382,16 @@ export default function DiagnosisPage({
                   )}
                 </div>
 
-                <div style={{ padding: '10px 12px', background: '#fef2f2', borderRadius: '6px', border: '1px solid #fee2e2' }}>
-                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#cf1322', marginBottom: '6px' }}>
+                <div style={{ padding: '10px 12px', background: 'var(--up-bg)', borderRadius: '6px', border: '1px solid #fee2e2' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--up)', marginBottom: '6px' }}>
                     ⚠️ 核心隐患与风险排查 ({dec.riskPoints?.length || 0})
                   </div>
                   {dec.riskPoints && dec.riskPoints.length > 0 ? (
-                    <ul style={{ margin: 0, paddingLeft: '16px', fontSize: '12px', color: '#991b1b', lineHeight: 1.6 }}>
+                    <ul style={{ margin: 0, paddingLeft: '16px', fontSize: '12px', color: 'var(--up-d)', lineHeight: 1.6 }}>
                       {dec.riskPoints.map((pt, idx) => <li key={idx}>{pt}</li>)}
                     </ul>
                   ) : (
-                    <div style={{ fontSize: '12px', color: '#166534' }}>当前多维度排查暂无显著硬伤风险</div>
+                    <div style={{ fontSize: '12px', color: 'var(--down-d)' }}>当前多维度排查暂无显著硬伤风险</div>
                   )}
                 </div>
               </div>
@@ -1403,8 +1403,8 @@ export default function DiagnosisPage({
             <section style={{
               padding: '14px 16px',
               marginBottom: '14px',
-              background: sts.isBrokenBoard ? '#fffafa' : 'linear-gradient(135deg, #f8fafc 0%, #f5f3ff 100%)',
-              border: sts.isBrokenBoard ? '1.5px solid #ffa39e' : '1.5px solid #c4b5fd',
+              background: sts.isBrokenBoard ? 'var(--up-bg)' : 'var(--accent-bg)',
+              border: sts.isBrokenBoard ? '1.5px solid var(--up-b)' : '1.5px solid var(--accent-b)',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
@@ -1412,27 +1412,27 @@ export default function DiagnosisPage({
                     ⚡ 今日短线身位与连板 / 抱团雷达
                   </span>
                   {sts.statTag && (
-                    <span style={{ fontSize: '11.5px', fontWeight: 800, padding: '2px 8px', borderRadius: '4px', background: sts.isLimitUp ? '#cf1322' : '#475569', color: '#fff' }}>
+                    <span style={{ fontSize: '11.5px', fontWeight: 800, padding: '2px 8px', borderRadius: '4px', background: sts.isLimitUp ? 'var(--up)' : 'var(--sub)', color: '#fff' }}>
                       {sts.statTag}
                     </span>
                   )}
                   {sts.isBrokenBoard && (
-                    <span style={{ fontSize: '11.5px', fontWeight: 800, padding: '2px 8px', borderRadius: '4px', background: '#fff1f0', color: '#cf1322', border: '1px solid #ffa39e' }}>
+                    <span style={{ fontSize: '11.5px', fontWeight: 800, padding: '2px 8px', borderRadius: '4px', background: 'var(--up-bg)', color: 'var(--up)', border: '1px solid var(--up-b)' }}>
                       💥 曾涨停炸板 (回落 {sts.dropFromTop != null ? `${Number(sts.dropFromTop).toFixed(1)}%` : '—'} · 炸{sts.zbc}次)
                     </span>
                   )}
                   {sts.isRushing && (
-                    <span style={{ fontSize: '11.5px', fontWeight: 800, padding: '2px 8px', borderRadius: '4px', background: '#e0f2fe', color: '#0284c7', border: '1px solid #38bdf8' }}>
+                    <span style={{ fontSize: '11.5px', fontWeight: 800, padding: '2px 8px', borderRadius: '4px', background: 'var(--info-bg)', color: 'var(--accent)', border: '1px solid #38bdf8' }}>
                       ⚡ 冲板临界中 (距涨停 {sts.distCeiling != null ? `${Number(sts.distCeiling).toFixed(1)}%` : '—'})
                     </span>
                   )}
                   {sts.inHerdPool && (
-                    <span style={{ fontSize: '11.5px', fontWeight: 800, padding: '2px 8px', borderRadius: '4px', background: '#f5f3ff', color: '#6d28d9', border: '1px solid #c4b5fd' }}>
+                    <span style={{ fontSize: '11.5px', fontWeight: 800, padding: '2px 8px', borderRadius: '4px', background: 'var(--accent-bg)', color: 'var(--accent-d)', border: '1px solid var(--accent-b)' }}>
                       {sts.herdLabel || '🤝 自动抱团跟踪中'}
                     </span>
                   )}
                   {sts.isMysticResonant && sts.mysticCluster && (
-                    <span style={{ fontSize: '11.5px', fontWeight: 800, padding: '2px 8px', borderRadius: '4px', background: '#faf5ff', color: '#7c3aed', border: '1px solid #d8b4fe' }}>
+                    <span style={{ fontSize: '11.5px', fontWeight: 800, padding: '2px 8px', borderRadius: '4px', background: 'var(--accent-bg)', color: 'var(--accent-d)', border: '1px solid var(--accent-b)' }}>
                       🔮 {sts.mysticCluster} ({sts.mysticZtCount}板共振)
                     </span>
                   )}
@@ -1440,7 +1440,7 @@ export default function DiagnosisPage({
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   {sts.inHerdPool || addedHerdCode === String(report.code).padStart(6, '0') ? (
-                    <a href="#/board" style={{ fontSize: '11.5px', fontWeight: 700, color: '#6d28d9', textDecoration: 'none', padding: '4px 9px', borderRadius: '5px', background: '#f5f3ff', border: '1px solid #c4b5fd' }}>
+                    <a href="#/board" style={{ fontSize: '11.5px', fontWeight: 700, color: 'var(--accent-d)', textDecoration: 'none', padding: '4px 9px', borderRadius: '5px', background: 'var(--accent-bg)', border: '1px solid var(--accent-b)' }}>
                       ✓ 已在抱团池 · 去看板 →
                     </a>
                   ) : (String(report.code).startsWith('00') || String(report.code).startsWith('60')) && (
@@ -1449,7 +1449,7 @@ export default function DiagnosisPage({
                       className="mini"
                       disabled={addingHerd}
                       onClick={handleQuickAddHerd}
-                      style={{ fontSize: '11.5px', color: '#6d28d9', borderColor: '#c4b5fd', background: '#fff', fontWeight: 700, marginLeft: 0 }}
+                      style={{ fontSize: '11.5px', color: 'var(--accent-d)', borderColor: 'var(--accent-b)', background: 'var(--card)', fontWeight: 700, marginLeft: 0 }}
                     >
                       {addingHerd ? '加入中…' : '📌 加入抱团跟踪池'}
                     </button>
@@ -1467,9 +1467,9 @@ export default function DiagnosisPage({
                         fontWeight: 700,
                         padding: '1px 7px',
                         borderRadius: '4px',
-                        background: tg.bg || '#f1f5f9',
-                        color: tg.color || '#334155',
-                        border: `1px solid ${tg.border || '#cbd5e1'}`,
+                        background: tg.bg || 'var(--surface2)',
+                        color: tg.color || 'var(--sub)',
+                        border: `1px solid ${tg.border || 'var(--line2)'}`,
                       }}
                     >
                       {tg.label}
@@ -1480,28 +1480,28 @@ export default function DiagnosisPage({
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px', marginBottom: '8px' }}>
                 {sts.identityScore != null && (
-                  <div style={{ padding: '8px 12px', borderRadius: '8px', background: '#eff6ff', border: '1px solid #bfdbfe' }}>
+                  <div style={{ padding: '8px 12px', borderRadius: '8px', background: 'var(--info-bg)', border: '1px solid var(--info-b)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                      <span style={{ fontSize: '12px', fontWeight: 800, color: '#1d4ed8' }}>👑 身份分（市场地位）</span>
-                      <span style={{ fontSize: '17px', fontWeight: 900, fontFamily: 'monospace', color: '#1d4ed8' }}>{sts.identityScore}</span>
+                      <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--info-d)' }}>👑 身份分（市场地位）</span>
+                      <span style={{ fontSize: '17px', fontWeight: 900, fontFamily: 'monospace', color: 'var(--info-d)' }}>{sts.identityScore}</span>
                     </div>
-                    <div style={{ fontSize: '11px', color: '#1e40af' }}>
+                    <div style={{ fontSize: '11px', color: 'var(--info-d)' }}>
                       连板{sts.scoreDims?.identity?.height ?? 0} · 记忆{sts.scoreDims?.identity?.memory ?? 0} · 板块{sts.scoreDims?.identity?.sector ?? 0} · 人气{sts.scoreDims?.identity?.popularity ?? 0}
                     </div>
                   </div>
                 )}
                 {sts.relayScore != null && (
-                  <div style={{ padding: '8px 12px', borderRadius: '8px', background: '#fff1f2', border: '1px solid #fecdd3' }}>
+                  <div style={{ padding: '8px 12px', borderRadius: '8px', background: 'var(--up-bg)', border: '1px solid #fecdd3' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                      <span style={{ fontSize: '12px', fontWeight: 800, color: '#be123c' }}>⚡ 接力分（次日赔率）</span>
-                      <span style={{ fontSize: '17px', fontWeight: 900, fontFamily: 'monospace', color: '#be123c' }}>{sts.relayScore}</span>
+                      <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--up-d)' }}>⚡ 接力分（次日赔率）</span>
+                      <span style={{ fontSize: '17px', fontWeight: 900, fontFamily: 'monospace', color: 'var(--up-d)' }}>{sts.relayScore}</span>
                     </div>
                     <div style={{ fontSize: '11px', color: '#9f1239' }}>
                       首封{sts.scoreDims?.relay?.firstSeal ?? 0} · 封质{sts.scoreDims?.relay?.sealQuality ?? 0} · 换手{sts.scoreDims?.relay?.tradability ?? 0} · 周期{sts.scoreDims?.relay?.cycle ?? 0} · 强度{sts.scoreDims?.relay?.strength ?? 0}
                     </div>
                   </div>
                 )}
-                <div style={{ padding: '8px 12px', borderRadius: '8px', background: '#fff', border: '1px solid var(--line)', fontSize: '12px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '3px' }}>
+                <div style={{ padding: '8px 12px', borderRadius: '8px', background: 'var(--card)', border: '1px solid var(--line)', fontSize: '12px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '3px' }}>
                   {sts.isLimitUp ? (
                     <>
                       <div>首封 <b>{sts.fbt || '—'}</b> · 买一封单 <b>{sts.fund >= 1e6 ? money$(sts.fund) : '弱封'}</b></div>
@@ -1519,7 +1519,7 @@ export default function DiagnosisPage({
               </div>
 
               {(sts.cycleAdvice || sts.buyAction || sts.herdDesc) && (
-                <div style={{ fontSize: '12px', padding: '7px 10px', borderRadius: '6px', background: '#fff', border: '1px dashed #c4b5fd', color: '#334155', lineHeight: 1.55 }}>
+                <div style={{ fontSize: '12px', padding: '7px 10px', borderRadius: '6px', background: 'var(--card)', border: '1px dashed var(--accent-b)', color: 'var(--sub)', lineHeight: 1.55 }}>
                   🧭 <b>短线窗口应对：</b>{sts.cycleAdvice || sts.buyAction || sts.herdDesc}
                 </div>
               )}
@@ -1872,10 +1872,10 @@ export default function DiagnosisPage({
 
                     {/* 🧬 实验性弱参考 */}
                     {(report.atrProfile || report.experimentalDNA) && (
-                      <details style={{ marginTop: '10px', padding: '7px 10px', background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: '6px', fontSize: '11.5px', color: 'var(--sub)' }}>
+                      <details style={{ marginTop: '10px', padding: '7px 10px', background: 'var(--surface)', border: '1px dashed var(--line2)', borderRadius: '6px', fontSize: '11.5px', color: 'var(--sub)' }}>
                         <summary style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '4px', userSelect: 'none' }}>
                           <span>
-                            <b style={{ color: '#0369a1' }}>🧬 [实验·弱参考] 波动与基因:</b>
+                            <b style={{ color: 'var(--accent-d)' }}>🧬 [实验·弱参考] 波动与基因:</b>
                             {report.atrProfile && (
                               <> ATR(14) <b>¥{f2(report.atrProfile.atr14)}</b> ({report.atrProfile.atrPct}%) · 建议格距 <b>{report.atrProfile.adaptiveGrid}%</b></>
                             )}
@@ -1884,9 +1884,9 @@ export default function DiagnosisPage({
                               <>{report.experimentalDNA.dnaTag} · 低吸胜率 <b>{report.experimentalDNA.dipWinRate}%</b></>
                             )}
                           </span>
-                          <span style={{ color: '#0369a1', fontSize: '11px', fontWeight: 600 }}>▾ 展开</span>
+                          <span style={{ color: 'var(--accent-d)', fontSize: '11px', fontWeight: 600 }}>▾ 展开</span>
                         </summary>
-                        <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px dashed #e2e8f0', lineHeight: 1.55 }}>
+                        <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px dashed var(--line)', lineHeight: 1.55 }}>
                           {report.atrProfile && (
                             <div style={{ marginBottom: report.experimentalDNA ? '4px' : 0 }}>
                               <b>📏 ATR 波动剖面 ({report.atrProfile.sampleDays}日):</b> {report.atrProfile.volType} ·
@@ -1902,7 +1902,7 @@ export default function DiagnosisPage({
                                 深跌反抽≥1.2% 胜率 <b>{report.experimentalDNA.dipWinRate}%</b> ({report.experimentalDNA.dipWin}/{report.experimentalDNA.dipTotal}次，均抽 +{report.experimentalDNA.dipAvgRebound}%) ｜
                                 高开砸盘率 <b>{report.experimentalDNA.gapUpSmashRate}%</b>
                               </div>
-                              <div style={{ color: '#475569', marginTop: '3px' }}>
+                              <div style={{ color: 'var(--sub)', marginTop: '3px' }}>
                                 💡 {report.experimentalDNA.dnaDesc} <span style={{ color: '#94a3b8' }}>（仅弱参考/校准辅助，不推翻一票否决结论）</span>
                               </div>
                             </>
@@ -2031,7 +2031,7 @@ export default function DiagnosisPage({
           style={{
             textAlign: 'center',
             padding: '38px 20px',
-            background: 'linear-gradient(180deg, #ffffff 0%, #fafbfc 100%)',
+            background: 'var(--surface)',
             border: '1px dashed var(--line2)',
           }}
         >
@@ -2061,8 +2061,8 @@ export default function DiagnosisPage({
                         display: 'inline-flex',
                         alignItems: 'center',
                         gap: '5px',
-                        background: hasPos ? '#faf5ff' : '#fff',
-                        borderColor: hasPos ? '#d8b4fe' : 'var(--line2)',
+                        background: hasPos ? 'var(--accent-bg)' : 'var(--card)',
+                        borderColor: hasPos ? 'var(--accent-b)' : 'var(--line2)',
                       }}
                     >
                       <span style={{ fontSize: '11px' }}>{hasPos ? '📦' : '👀'}</span>

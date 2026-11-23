@@ -1,81 +1,73 @@
 /* ============================================================
    A股做T执行台 · 动态视觉与动效样式 (anim.css)
+   遵循 fixing-motion-performance：仅驱动 transform / opacity，
+   限制交互反馈 <= 180ms ease-out，并完整兼容 prefers-reduced-motion
    ============================================================ */
 
-/* 呼吸发光特效 */
-@keyframes radar-glow {
-  0% {
-    box-shadow: 0 0 0 0 rgba(124, 58, 237, 0.4);
-    border-color: rgba(124, 58, 237, 0.6);
+@keyframes pulse-opacity {
+  0%, 100% {
+    opacity: 1;
   }
-  70% {
-    box-shadow: 0 0 0 10px rgba(124, 58, 237, 0);
-    border-color: rgba(124, 58, 237, 1);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(124, 58, 237, 0);
-    border-color: rgba(124, 58, 237, 0.6);
+  50% {
+    opacity: 0.55;
   }
 }
 
 .tail-radar-box.live-pulse {
-  animation: radar-glow 2.5s infinite ease-in-out;
+  border-color: var(--info-b);
+  animation: pulse-opacity 2.4s infinite ease-in-out;
 }
 
-/* 价格上涨闪烁 */
+/* 价格上涨闪烁（单次短促背景过渡，不触发重排） */
 @keyframes flash-up {
-  0% { background-color: rgba(211, 47, 47, 0.25); color: #d32f2f; }
+  0% { background-color: var(--up-bg); color: var(--up); }
   100% { background-color: transparent; }
 }
 
 /* 价格下跌闪烁 */
 @keyframes flash-down {
-  0% { background-color: rgba(10, 127, 66, 0.25); color: #0a7f42; }
+  0% { background-color: var(--down-bg); color: var(--down); }
   100% { background-color: transparent; }
 }
 
 .anim-flash-up {
-  animation: flash-up 1.2s ease-out;
-  border-radius: 4px;
+  animation: flash-up 0.9s ease-out;
+  border-radius: var(--radius-xs, 4px);
 }
 
 .anim-flash-dn {
-  animation: flash-down 1.2s ease-out;
-  border-radius: 4px;
+  animation: flash-down 0.9s ease-out;
+  border-radius: var(--radius-xs, 4px);
 }
 
-/* 数字翻滚过渡 */
+/* 数字跳动过渡（严禁 transition: all，仅允许合成层属性） */
 .anim-num-roll {
   display: inline-block;
   font-variant-numeric: tabular-nums;
-  transition: all .25s ease;
+  transition: transform 0.16s ease-out, opacity 0.16s ease-out;
 }
 
 /* 微小触觉按压反馈 */
 .btn-press {
   transform: scale(0.97);
-  transition: transform 0.1s ease;
-}
-
-/* 脉冲药丸 */
-@keyframes pill-pulse-glow {
-  0% { box-shadow: 0 0 0 0 rgba(219, 39, 119, 0.4); }
-  70% { box-shadow: 0 0 0 6px rgba(219, 39, 119, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(219, 39, 119, 0); }
+  transition: transform 0.12s ease-out;
 }
 
 .nt-badge.pulse {
-  animation: pill-pulse-glow 2s infinite ease-out;
+  animation: pulse-opacity 2s infinite ease-out;
 }
 
-/* 14:40 尾盘清T紧急风控警报发光脉冲 */
-@keyframes tail-alert-pulse {
-  0% { box-shadow: 0 0 0 0 rgba(207, 19, 34, 0.45); border-color: rgba(207, 19, 34, 0.8); }
-  50% { box-shadow: 0 0 16px 4px rgba(207, 19, 34, 0.28); border-color: #ff4d4f; }
-  100% { box-shadow: 0 0 0 0 rgba(207, 19, 34, 0.45); border-color: rgba(207, 19, 34, 0.8); }
-}
-
+/* 14:40 尾盘清T紧急风控警报提示 */
 .tail-alert-pulse {
-  animation: tail-alert-pulse 1.8s infinite ease-in-out;
+  border-color: var(--up) !important;
+  animation: pulse-opacity 1.8s infinite ease-in-out;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

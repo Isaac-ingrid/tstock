@@ -10,9 +10,9 @@ const STEP_DEFS = [
 ];
 
 function statusStyle(st) {
-  if (st === 'done') return { bg: '#f0fdf4', border: '#86efac', color: '#15803d', icon: '✅' };
-  if (st === 'warn') return { bg: '#fffbeb', border: '#fcd34d', color: '#b45309', icon: '⚠️' };
-  if (st === 'running') return { bg: '#eff6ff', border: '#93c5fd', color: '#1d4ed8', icon: '⏳' };
+  if (st === 'done') return { bg: 'var(--down-bg)', border: 'var(--down-b)', color: 'var(--down-d)', icon: '✅' };
+  if (st === 'warn') return { bg: 'var(--warn-bg)', border: 'var(--warn-b)', color: 'var(--warn-d)', icon: '⚠️' };
+  if (st === 'running') return { bg: 'var(--info-bg)', border: 'var(--info-b)', color: 'var(--info-d)', icon: '⏳' };
   return { bg: 'var(--surface2)', border: 'var(--line)', color: 'var(--mute)', icon: '○' };
 }
 
@@ -93,9 +93,9 @@ export default function PostMarketModal({
                 padding: '2px 8px',
                 borderRadius: '999px',
                 fontWeight: 700,
-                background: todayArchive ? '#f0fdf4' : '#fffbeb',
-                color: todayArchive ? '#15803d' : '#b45309',
-                border: `1px solid ${todayArchive ? '#86efac' : '#fcd34d'}`,
+                background: todayArchive ? 'var(--down-bg)' : 'var(--warn-bg)',
+                color: todayArchive ? 'var(--down-d)' : 'var(--warn-d)',
+                border: `1px solid ${todayArchive ? 'var(--down-b)' : 'var(--warn-b)'}`,
               }}
             >
               {todayArchive
@@ -130,11 +130,11 @@ export default function PostMarketModal({
               gap: '10px',
               padding: '10px 14px',
               borderRadius: '10px',
-              background: 'linear-gradient(135deg, #eff6ff 0%, #f5f3ff 100%)',
-              border: '1px solid #c7d2fe',
+              background: 'var(--info-bg)',
+              border: '1px solid var(--info-b)',
             }}
           >
-            <div style={{ fontSize: '12.5px', color: '#1e3a8a', lineHeight: 1.5 }}>
+            <div style={{ fontSize: '12.5px', color: 'var(--info-d)', lineHeight: 1.5 }}>
               <b>每日 15:05 标准收盘动作：</b>
               一键完成收盘价同步、未平T仓排查、账户净值曲线打点、今日纪律复盘与明日挂单预案生成，并自动双写至本地磁盘金库。
             </div>
@@ -147,8 +147,8 @@ export default function PostMarketModal({
                     padding: '6px 10px',
                     fontSize: '12px',
                     borderRadius: '6px',
-                    border: '1px solid #cbd5e1',
-                    background: '#fff',
+                    border: '1px solid var(--line2)',
+                    background: 'var(--card)',
                     fontWeight: 600,
                   }}
                   title="切换查看历史收盘归档报告"
@@ -232,14 +232,14 @@ export default function PostMarketModal({
               style={{
                 padding: '12px 14px',
                 borderRadius: '9px',
-                background: '#fff1f0',
-                border: '1.5px solid #ffa39e',
+                background: 'var(--up-bg)',
+                border: '1.5px solid var(--up-b)',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '8px',
               }}
             >
-              <div style={{ fontSize: '13px', fontWeight: 800, color: '#cf1322', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ fontSize: '13px', fontWeight: 800, color: 'var(--up)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <span>🚨</span>
                 <span>发现 {unclosedList.length} 只标的今日尚有未平做T仓！请确认实盘交割状态：</span>
               </div>
@@ -254,8 +254,8 @@ export default function PostMarketModal({
                     gap: '8px',
                     padding: '7px 10px',
                     borderRadius: '6px',
-                    background: '#fff',
-                    border: '1px solid #fecaca',
+                    background: 'var(--card)',
+                    border: '1px solid var(--up-b)',
                     fontSize: '12px',
                   }}
                 >
@@ -271,7 +271,7 @@ export default function PostMarketModal({
                           onClose();
                           onOpenQuickT(u.stock, '直接卖出', f2(u.price), u.unclosedShares);
                         }}
-                        style={{ background: '#eff6ff', color: '#1d4ed8', borderColor: '#93c5fd', fontWeight: 700 }}
+                        style={{ background: 'var(--info-bg)', color: 'var(--info-d)', borderColor: 'var(--info-b)', fontWeight: 700 }}
                         title="若券商实盘其实已卖出只是漏记账，点击补录今日平仓卖单"
                       >
                         📝 补录今日已卖平仓
@@ -282,7 +282,7 @@ export default function PostMarketModal({
                         type="button"
                         className="mini"
                         onClick={() => onMarkOvernightT(u)}
-                        style={{ background: '#fffbeb', color: '#b45309', borderColor: '#fcd34d', fontWeight: 700 }}
+                        style={{ background: 'var(--warn-bg)', color: 'var(--warn-d)', borderColor: 'var(--warn-b)', fontWeight: 700 }}
                         title="确认实盘未卖出，自动标记『做T做反变加仓』失误标签并结转隔夜底仓"
                       >
                         🏷️ 确认未卖 · 记入「做T变加仓」
@@ -300,7 +300,7 @@ export default function PostMarketModal({
               style={{
                 padding: '12px 14px',
                 borderRadius: '9px',
-                background: '#fffbeb',
+                background: 'var(--warn-bg)',
                 border: '1.5px solid #f59e0b',
                 display: 'flex',
                 flexDirection: 'column',
@@ -316,7 +316,7 @@ export default function PostMarketModal({
                   gap: '8px',
                 }}
               >
-                <div style={{ fontSize: '13px', fontWeight: 800, color: '#92400e', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                <div style={{ fontSize: '13px', fontWeight: 800, color: 'var(--warn-d)', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                   <span>🟨</span>
                   <span>{activeHolidayAudit.actionTitle || `节前长假超上限持仓黄牌预警（超上限 ${activeHolidayAudit.excessPct}%）`}</span>
                   <span
@@ -324,9 +324,9 @@ export default function PostMarketModal({
                       fontSize: '11px',
                       padding: '1px 7px',
                       borderRadius: '999px',
-                      background: '#fef3c7',
-                      color: '#b45309',
-                      border: '1px solid #fcd34d',
+                      background: 'var(--warn-bg)',
+                      color: 'var(--warn-d)',
+                      border: '1px solid var(--warn-b)',
                     }}
                   >
                     收盘总仓 {Number(activeHolidayAudit.totalPosPct || 0).toFixed(1)}% / 上限 ≤{activeHolidayAudit.effectiveCapPct}% · 待降约 ¥{money(activeHolidayAudit.excessAmt || 0)}
@@ -336,7 +336,7 @@ export default function PostMarketModal({
                   <button
                     type="button"
                     className="mini"
-                    style={{ marginLeft: 0, background: '#fff', color: '#b45309', borderColor: '#f59e0b', fontWeight: 700 }}
+                    style={{ marginLeft: 0, background: 'var(--card)', color: 'var(--warn-d)', borderColor: '#f59e0b', fontWeight: 700 }}
                     onClick={() => {
                       onClose();
                       onTabChange('/trade');
@@ -347,7 +347,7 @@ export default function PostMarketModal({
                 )}
               </div>
               {activeHolidayAudit.actionSummary && (
-                <div style={{ fontSize: '12px', color: '#78350f', lineHeight: 1.55 }}>
+                <div style={{ fontSize: '12px', color: 'var(--warn-d)', lineHeight: 1.55 }}>
                   {activeHolidayAudit.actionSummary}
                 </div>
               )}
@@ -360,9 +360,9 @@ export default function PostMarketModal({
                         fontSize: '11.5px',
                         padding: '4px 9px',
                         borderRadius: '6px',
-                        background: '#fff',
-                        border: '1px solid #fde68a',
-                        color: '#92400e',
+                        background: 'var(--card)',
+                        border: '1px solid var(--warn-b)',
+                        color: 'var(--warn-d)',
                       }}
                     >
                       <b>{rt.name}({rt.code})</b>：建议减 <b>{rt.trimShares}股</b>(≈¥{money(rt.trimAmt)}) · 锚点 <b>¥{f2(rt.refAnchor)}</b> / 防守 <b>¥{f2(rt.stopAnchor)}</b>
@@ -379,10 +379,10 @@ export default function PostMarketModal({
               style={{
                 padding: '10px 14px',
                 borderRadius: '8px',
-                background: '#f5f3ff',
-                border: '1px solid #ddd6fe',
+                background: 'var(--accent-bg)',
+                border: '1px solid var(--accent-b)',
                 fontSize: '12px',
-                color: '#5b21b6',
+                color: 'var(--accent-d)',
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
@@ -402,7 +402,7 @@ export default function PostMarketModal({
                 <button
                   type="button"
                   className="mini"
-                  style={{ marginLeft: 0, background: '#fff', color: '#6d28d9', borderColor: '#c4b5fd', fontWeight: 700 }}
+                  style={{ marginLeft: 0, background: 'var(--card)', color: 'var(--accent-d)', borderColor: 'var(--accent-b)', fontWeight: 700 }}
                   onClick={() => {
                     onClose();
                     onTabChange('/tail');
@@ -441,7 +441,7 @@ export default function PostMarketModal({
 
                 <div className="card" style={{ padding: '10px 12px', background: 'var(--surface2)', borderLeft: '4px solid #0f766e' }}>
                   <div style={{ fontSize: '11px', color: 'var(--mute)' }}>📦 收盘仓位与现金水位</div>
-                  <div style={{ fontSize: '18px', fontWeight: 800, fontFamily: 'monospace', marginTop: '3px', color: '#0f766e' }}>
+                  <div style={{ fontSize: '18px', fontWeight: 800, fontFamily: 'monospace', marginTop: '3px', color: 'var(--teal)' }}>
                     {activeArchive.snapshot?.rate || '0.0'}%
                   </div>
                   <div style={{ fontSize: '11px', color: 'var(--sub)', marginTop: '2px' }}>
@@ -451,7 +451,7 @@ export default function PostMarketModal({
 
                 <div className="card" style={{ padding: '10px 12px', background: 'var(--surface2)', borderLeft: '4px solid #7c3aed' }}>
                   <div style={{ fontSize: '11px', color: 'var(--mute)' }}>🛡️ 当日操盘纪律评分</div>
-                  <div style={{ fontSize: '18px', fontWeight: 800, fontFamily: 'monospace', marginTop: '3px', color: '#7c3aed' }}>
+                  <div style={{ fontSize: '18px', fontWeight: 800, fontFamily: 'monospace', marginTop: '3px', color: 'var(--accent-d)' }}>
                     {activeArchive.disciplineScore}/100
                   </div>
                   <div style={{ fontSize: '11px', color: 'var(--sub)', marginTop: '2px' }}>
@@ -461,7 +461,7 @@ export default function PostMarketModal({
 
                 <div className="card" style={{ padding: '10px 12px', background: 'var(--surface2)', borderLeft: `4px solid ${activeArchive.vaultSynced ? '#16a34a' : '#d97706'}` }}>
                   <div style={{ fontSize: '11px', color: 'var(--mute)' }}>💾 金库持久化状态</div>
-                  <div style={{ fontSize: '15px', fontWeight: 800, marginTop: '5px', color: activeArchive.vaultSynced ? '#15803d' : '#b45309' }}>
+                  <div style={{ fontSize: '15px', fontWeight: 800, marginTop: '5px', color: activeArchive.vaultSynced ? 'var(--down-d)' : 'var(--warn-d)' }}>
                     {activeArchive.vaultSynced ? '已双写本地磁盘' : '已存浏览器缓存'}
                   </div>
                   <div style={{ fontSize: '11px', color: 'var(--sub)', marginTop: '2px' }}>
@@ -475,7 +475,7 @@ export default function PostMarketModal({
                 <div
                   style={{
                     background: activeArchive.leadingReview.totalCount > 0 ? '#fffaf5' : 'var(--surface2)',
-                    border: `1px solid ${activeArchive.leadingReview.totalCount > 0 ? '#fed7aa' : 'var(--line)'}`,
+                    border: `1px solid ${activeArchive.leadingReview.totalCount > 0 ? 'var(--warn-b)' : 'var(--line)'}`,
                     borderRadius: '9px',
                     padding: '12px 14px',
                     display: 'flex',
@@ -504,9 +504,9 @@ export default function PostMarketModal({
                               padding: '2px 8px',
                               borderRadius: '999px',
                               fontWeight: 800,
-                              background: '#ffedd5',
-                              color: '#c2410c',
-                              border: '1px solid #fdba74',
+                              background: 'var(--warn-bg)',
+                              color: 'var(--warn-d)',
+                              border: '1px solid var(--warn-b)',
                             }}
                           >
                             命中 {activeArchive.leadingReview.hitCount}/{activeArchive.leadingReview.totalCount} (
@@ -534,8 +534,8 @@ export default function PostMarketModal({
                           style={{
                             padding: '2px 7px',
                             borderRadius: '6px',
-                            background: '#dcfce7',
-                            color: '#15803d',
+                            background: 'var(--down-bg)',
+                            color: 'var(--down-d)',
                           }}
                         >
                           ✅ 顺向执行 {activeArchive.leadingReview.alignedCount}
@@ -547,8 +547,8 @@ export default function PostMarketModal({
                           style={{
                             padding: '2px 7px',
                             borderRadius: '6px',
-                            background: '#eff6ff',
-                            color: '#1d4ed8',
+                            background: 'var(--info-bg)',
+                            color: 'var(--info-d)',
                           }}
                         >
                           🛡️ 守纪/观望 {activeArchive.leadingReview.disciplinedPassCount}
@@ -557,8 +557,8 @@ export default function PostMarketModal({
                           style={{
                             padding: '2px 7px',
                             borderRadius: '6px',
-                            background: '#fef3c7',
-                            color: '#b45309',
+                            background: 'var(--warn-bg)',
+                            color: 'var(--warn-d)',
                           }}
                         >
                           👀 踏空好球 {activeArchive.leadingReview.missedCount}
@@ -568,8 +568,8 @@ export default function PostMarketModal({
                             style={{
                               padding: '2px 7px',
                               borderRadius: '6px',
-                              background: '#fee2e2',
-                              color: '#b91c1c',
+                              background: 'var(--up-bg)',
+                              color: 'var(--up-d)',
                             }}
                           >
                             🚨 逆向违背 {activeArchive.leadingReview.contraryCount}
@@ -586,18 +586,18 @@ export default function PostMarketModal({
                           width: '100%',
                           borderCollapse: 'collapse',
                           fontSize: '12px',
-                          background: '#fff',
+                          background: 'var(--card)',
                           borderRadius: '7px',
                           overflow: 'hidden',
                         }}
                       >
                         <thead>
-                          <tr style={{ background: '#fff7ed', color: '#7c2d12', textAlign: 'left' }}>
-                            <th style={{ padding: '7px 9px', borderBottom: '1px solid #fed7aa', whiteSpace: 'nowrap' }}>触发时刻</th>
-                            <th style={{ padding: '7px 9px', borderBottom: '1px solid #fed7aa' }}>标的 / 共振维度</th>
-                            <th style={{ padding: '7px 9px', borderBottom: '1px solid #fed7aa' }}>触发价 → 信号后验证</th>
-                            <th style={{ padding: '7px 9px', borderBottom: '1px solid #fed7aa', whiteSpace: 'nowrap' }}>命中判定</th>
-                            <th style={{ padding: '7px 9px', borderBottom: '1px solid #fed7aa' }}>实盘做T执行对照</th>
+                          <tr style={{ background: 'var(--warn-bg)', color: '#7c2d12', textAlign: 'left' }}>
+                            <th style={{ padding: '7px 9px', borderBottom: '1px solid var(--warn-b)', whiteSpace: 'nowrap' }}>触发时刻</th>
+                            <th style={{ padding: '7px 9px', borderBottom: '1px solid var(--warn-b)' }}>标的 / 共振维度</th>
+                            <th style={{ padding: '7px 9px', borderBottom: '1px solid var(--warn-b)' }}>触发价 → 信号后验证</th>
+                            <th style={{ padding: '7px 9px', borderBottom: '1px solid var(--warn-b)', whiteSpace: 'nowrap' }}>命中判定</th>
+                            <th style={{ padding: '7px 9px', borderBottom: '1px solid var(--warn-b)' }}>实盘做T执行对照</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -605,20 +605,20 @@ export default function PostMarketModal({
                             const isBull = it.dir !== 'bear';
                             const execBg =
                               it.execStatus === 'ALIGNED_EXEC'
-                                ? '#f0fdf4'
+                                ? 'var(--down-bg)'
                                 : it.execStatus === 'CONTRARY_EXEC'
-                                ? '#fef2f2'
+                                ? 'var(--up-bg)'
                                 : it.execStatus === 'MISSED_OPPORTUNITY'
-                                ? '#fffbeb'
-                                : '#f8fafc';
+                                ? 'var(--warn-bg)'
+                                : 'var(--surface)';
                             const execColor =
                               it.execStatus === 'ALIGNED_EXEC'
-                                ? '#15803d'
+                                ? 'var(--down-d)'
                                 : it.execStatus === 'CONTRARY_EXEC'
-                                ? '#b91c1c'
+                                ? 'var(--up-d)'
                                 : it.execStatus === 'MISSED_OPPORTUNITY'
-                                ? '#b45309'
-                                : '#475569';
+                                ? 'var(--warn-d)'
+                                : 'var(--sub)';
                             return (
                               <tr key={it.id || idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
                                 <td style={{ padding: '7px 9px', fontFamily: 'monospace', whiteSpace: 'nowrap', color: 'var(--sub)' }}>
@@ -628,7 +628,7 @@ export default function PostMarketModal({
                                   <div style={{ fontWeight: 700 }}>
                                     {it.name} <span style={{ color: 'var(--mute)', fontFamily: 'monospace' }}>({it.code})</span>
                                   </div>
-                                  <div style={{ fontSize: '11px', color: isBull ? '#c2410c' : '#0f766e', fontWeight: 700, marginTop: '2px' }}>
+                                  <div style={{ fontSize: '11px', color: isBull ? 'var(--warn-d)' : 'var(--teal)', fontWeight: 700, marginTop: '2px' }}>
                                     {isBull ? '🔥' : '🚨'} {it.label} ({it.scoreTxt})
                                     {Array.isArray(it.tags) && it.tags.length > 0 ? ` · ${it.tags.join(' + ')}` : ''}
                                   </div>
@@ -637,7 +637,7 @@ export default function PostMarketModal({
                                   <div style={{ fontWeight: 700, fontFamily: 'monospace' }}>触发 ¥{f2(it.triggerPrice)}</div>
                                   <div style={{ color: 'var(--sub)' }}>{it.outcomeNote}</div>
                                 </td>
-                                <td style={{ padding: '7px 9px', whiteSpace: 'nowrap', fontWeight: 800, color: it.hit ? '#15803d' : 'var(--mute)' }}>
+                                <td style={{ padding: '7px 9px', whiteSpace: 'nowrap', fontWeight: 800, color: it.hit ? 'var(--down-d)' : 'var(--mute)' }}>
                                   {it.hit ? '🎯 命中' : '⚪ 未达标'}
                                 </td>
                                 <td style={{ padding: '7px 9px', background: execBg }}>
@@ -657,8 +657,8 @@ export default function PostMarketModal({
               {/* 完整复盘简报正文 */}
               <div
                 style={{
-                  background: '#fcfdff',
-                  border: '1px solid #cbd5e1',
+                  background: 'var(--surface)',
+                  border: '1px solid var(--line2)',
                   borderRadius: '9px',
                   padding: '14px 16px',
                 }}
@@ -670,12 +670,12 @@ export default function PostMarketModal({
                     alignItems: 'center',
                     flexWrap: 'wrap',
                     gap: '8px',
-                    borderBottom: '1px dashed #cbd5e1',
+                    borderBottom: '1px dashed var(--line2)',
                     paddingBottom: '8px',
                     marginBottom: '10px',
                   }}
                 >
-                  <div style={{ fontWeight: 800, fontSize: '13.5px', color: '#0f172a' }}>
+                  <div style={{ fontWeight: 800, fontSize: '13.5px', color: 'var(--text)' }}>
                     📋 收盘复盘与明日挂单简报 · {activeArchive.date}
                   </div>
                   <div style={{ display: 'flex', gap: '6px' }}>

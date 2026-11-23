@@ -163,28 +163,11 @@ export default function ConsoleSection({
 
   return (
     <section id="secPlan" className="console-v2">
-      {/* 标题与分组统计 */}
-      <div className="console-head">
-        <div>
-          <h2 style={{ margin: 0 }}>二、今日作战台（实盘持仓 · 自选买卖点）</h2>
-          <p className="console-sub">
-            卡片一眼看清当前是否是<b>买点 / 卖点</b>，点击任意卡片再展开完整 K 线、分时与挂单面板
-          </p>
-        </div>
-
-        <div className="console-head-actions">
-          <button type="button" className="primary" onClick={() => onRefresh(false)}>↻ 重新计算</button>
-          <button type="button" onClick={onAddBlank}>＋ 新增标的</button>
-          <button type="button" onClick={onSaveLocal}>保存参数</button>
-          <button type="button" onClick={onResetDefault}>恢复默认</button>
-        </div>
-      </div>
-
-      {/* 精简版资金隔离条（含总资产/可用现金直输 + 70%底仓/30%机动一键筛选） */}
+      {/* 顶排 4 格等高资金隔离 Bento 指标卡（总资产/现金直输 + 70%底仓/30%机动一键筛选 + 实时总浮盈） */}
       <div className="funding-strip">
         <div className="fund-pill asset-edit" title="点击数字即可直接输入账户总资产或可用现金">
-          <span className="fp-title">💰 账户总账</span>
-          <span className="fp-meta" style={{ display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+          <span className="fp-title"><i className="fp-dot is-neutral" />账户总账</span>
+          <span className="fp-meta num-mono" style={{ display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
             <span>
               总资产{' '}
               {onUpdateTotalAssets ? (
@@ -226,9 +209,9 @@ export default function ConsoleSection({
           onClick={() => setTierFilter((f) => (f === 'long' ? 'all' : 'long'))}
           title="点击仅看底仓做T区标的（再次点击恢复全部）"
         >
-          <span className="fp-title">🛡️ 底仓做T池 (70%)</span>
-          <span className="fp-meta">
-            {baseStocks.length}只 · 已用 <b>¥{money(baseMktVal)}</b> · 备用金 <b>¥{money(baseCash)}</b>
+          <span className="fp-title"><i className="fp-dot is-info" />底仓做T池 (70%)</span>
+          <span className="fp-meta num-mono">
+            {baseStocks.length}只 · 已用 <b>¥{money(baseMktVal)}</b> · 备用 <b>¥{money(baseCash)}</b>
           </span>
         </div>
 
@@ -237,20 +220,18 @@ export default function ConsoleSection({
           onClick={() => setTierFilter((f) => (f === 'short' ? 'all' : 'short'))}
           title="点击仅看短线机动区标的（再次点击恢复全部）"
         >
-          <span className="fp-title">⚡ 短线机动池 (30%)</span>
-          <span className="fp-meta">
+          <span className="fp-title"><i className="fp-dot is-warn" />短线机动池 (30%)</span>
+          <span className="fp-meta num-mono">
             {tacticalStocks.length}只{tailMktVal > 0 ? '+尾盘' : ''} · 持仓 <b>¥{money(tacticalMktVal)}</b> · 可用 <b>¥{money(tacticalCash)}</b>
           </span>
         </div>
 
-        {holdingList.length > 0 && (
-          <div className="fund-pill pnl">
-            <span className="fp-title">📦 持仓总盈亏</span>
-            <span className={`fp-meta ${holdingPL >= 0 ? 'up' : 'down'}`}>
-              市值 <b>¥{money(holdingMkt)}</b> · 浮盈 <b>{holdingPL >= 0 ? '+' : ''}¥{money(holdingPL)}</b>
-            </span>
-          </div>
-        )}
+        <div className="fund-pill pnl">
+          <span className="fp-title"><i className="fp-dot is-accent" />持仓总盈亏</span>
+          <span className={`fp-meta num-mono ${holdingPL >= 0 ? 'up' : 'down'}`}>
+            市值 <b>¥{money(holdingMkt)}</b> · 浮盈 <b>{holdingPL >= 0 ? '+' : ''}¥{money(holdingPL)}</b>
+          </span>
+        </div>
       </div>
 
       {/* ⚖️ 动态仓位风控条 & 单日防上头熔断锁 */}
@@ -272,57 +253,59 @@ export default function ConsoleSection({
         onSelectStock={handleToggleExpand}
       />
 
-      {/* 分组切换栏：全部 / 实盘持仓 / 自选观察 + 周期过滤 + 展开全部 */}
+      {/* 单行紧凑作战控制栏：分组 Tab + 分层筛选 + 股池维护动作 */}
       <div className="battle-toolbar">
-        <div className="bt-tabs">
-          <button
-            type="button"
-            className={`bt-tab ${groupTab === 'all' ? 'active' : ''}`}
-            onClick={() => setGroupTab('all')}
-          >
-            全部作战 <span>{allFiltered.length}</span>
-          </button>
-          <button
-            type="button"
-            className={`bt-tab ${groupTab === 'holding' ? 'active' : ''}`}
-            onClick={() => setGroupTab('holding')}
-          >
-            📦 实盘持仓 <span>{holdingList.length}</span>
-          </button>
-          <button
-            type="button"
-            className={`bt-tab ${groupTab === 'watch' ? 'active' : ''}`}
-            onClick={() => setGroupTab('watch')}
-          >
-            👀 自选观察 <span>{watchList.length}</span>
-          </button>
-        </div>
+        <div className="bt-left-cluster">
+          <div className="bt-tabs">
+            <button
+              type="button"
+              className={`bt-tab ${groupTab === 'all' ? 'active' : ''}`}
+              onClick={() => setGroupTab('all')}
+            >
+              全部 <span className="num-mono">{allFiltered.length}</span>
+            </button>
+            <button
+              type="button"
+              className={`bt-tab ${groupTab === 'holding' ? 'active' : ''}`}
+              onClick={() => setGroupTab('holding')}
+            >
+              实盘持仓 <span className="num-mono">{holdingList.length}</span>
+            </button>
+            <button
+              type="button"
+              className={`bt-tab ${groupTab === 'watch' ? 'active' : ''}`}
+              onClick={() => setGroupTab('watch')}
+            >
+              自选观察 <span className="num-mono">{watchList.length}</span>
+            </button>
+          </div>
 
-        <div className="bt-right">
           <span className="tier-bar" style={{ marginLeft: 0 }}>
             <button
               type="button"
               className={`tier-btn ${tierFilter === 'all' ? 'cur' : ''}`}
               onClick={() => setTierFilter('all')}
             >
-              全部周期
+              全池
             </button>
             <button
               type="button"
               className={`tier-btn ${tierFilter === 'long' ? 'cur' : ''}`}
               onClick={() => setTierFilter('long')}
             >
-              🛡️ 稳健 <b>{baseStocks.length}</b>
+              底仓 <b className="num-mono">{baseStocks.length}</b>
             </button>
             <button
               type="button"
               className={`tier-btn ${tierFilter === 'short' ? 'cur' : ''}`}
               onClick={() => setTierFilter('short')}
             >
-              ⚡ 短线 <b>{tacticalStocks.length}</b>
+              短线 <b className="num-mono">{tacticalStocks.length}</b>
             </button>
           </span>
+        </div>
 
+        <div className="bt-right">
           {allFiltered.length > 0 && (
             <button
               type="button"
@@ -333,9 +316,13 @@ export default function ConsoleSection({
                 if (!expandAll) setExpandedCode('');
               }}
             >
-              {expandAll ? '收起全部详情' : '全部展开'}
+              {expandAll ? '收起详情' : '全部展开'}
             </button>
           )}
+          <button type="button" className="mini" style={{ marginLeft: 0 }} onClick={onAddBlank}>＋ 新增标的</button>
+          <button type="button" className="mini" style={{ marginLeft: 0 }} onClick={onSaveLocal}>保存参数</button>
+          <button type="button" className="mini" style={{ marginLeft: 0 }} onClick={onResetDefault}>恢复默认</button>
+          <button type="button" className="mini primary" style={{ marginLeft: 0 }} onClick={() => onRefresh(false)}>↻ 重算</button>
         </div>
       </div>
 
@@ -345,7 +332,7 @@ export default function ConsoleSection({
           {groupTab === 'all' && (
             <div className="bg-header">
               <div className="bg-title">
-                <span>📦 实盘持仓（{holdingList.length} 只）</span>
+                <span>实盘持仓（{holdingList.length} 只）</span>
                 <span className="bg-desc">优先盯卖点、倒T高抛与止损风控</span>
               </div>
             </div>
@@ -380,7 +367,7 @@ export default function ConsoleSection({
           {groupTab === 'all' && (
             <div className="bg-header">
               <div className="bg-title">
-                <span>👀 自选观察（{watchList.length} 只）</span>
+                <span>自选观察（{watchList.length} 只）</span>
                 <span className="bg-desc">一眼核对当前是否是买点，不到低吸位坚决观望</span>
               </div>
             </div>

@@ -599,7 +599,7 @@ export default function LedgerSection({
 
     const pathD = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${xCoord(i).toFixed(1)} ${yCoord(p.val).toFixed(1)}`).join(' ');
     const isCostMode = chartData.mode === 'STOCK';
-    const strokeColor = isCostMode ? '#0a7f42' : '#cf1322';
+    const strokeColor = isCostMode ? 'var(--down)' : 'var(--up)';
 
     return (
       <div style={{ position: 'relative', width: '100%' }}>
@@ -679,14 +679,14 @@ export default function LedgerSection({
   };
 
   const scoreColor =
-    scorecard.totalScore >= 85 ? '#15803d' : scorecard.totalScore >= 70 ? '#0958d9' : scorecard.totalScore >= 55 ? '#d97706' : '#cf1322';
+    scorecard.totalScore >= 85 ? 'var(--down-d)' : scorecard.totalScore >= 70 ? 'var(--info-d)' : scorecard.totalScore >= 55 ? '#d97706' : 'var(--up)';
 
   return (
     <div className="ledger-wrap" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {/* 🛡️ 本地磁盘自动双写金库防丢保护提示横幅 */}
       {vaultStatus?.guarded && vaultStatus?.remoteSummary && (
         <div className="ledger-vault-guard">
-          <div style={{ color: '#92400e' }}>
+          <div style={{ color: 'var(--warn-d)' }}>
             <b>🛡️ 本地磁盘金库防误删保护已触发：</b>
             检测到本机 <code>data/user_vault.json</code> 存有 <b>{vaultStatus.remoteSummary.logCount}</b> 笔成交流水与 <b>{vaultStatus.remoteSummary.snapshotCount}</b> 条净值快照（更新于 {vaultStatus.remoteSummary.updatedAt}），已阻止当前空白浏览器缓存覆盖磁盘。
           </div>
@@ -728,9 +728,9 @@ export default function LedgerSection({
                     padding: '2px 8px',
                     borderRadius: '999px',
                     fontWeight: 600,
-                    background: vaultStatus.connected ? '#f0fdf4' : '#f8fafc',
-                    color: vaultStatus.connected ? '#15803d' : '#64748b',
-                    border: `1px solid ${vaultStatus.connected ? '#86efac' : '#cbd5e1'}`,
+                    background: vaultStatus.connected ? 'var(--down-bg)' : 'var(--surface)',
+                    color: vaultStatus.connected ? 'var(--down-d)' : 'var(--mute)',
+                    border: `1px solid ${vaultStatus.connected ? 'var(--down-b)' : 'var(--line2)'}`,
                   }}
                   title={
                     vaultStatus.connected
@@ -758,9 +758,9 @@ export default function LedgerSection({
                 onClick={onOpenEodModal}
                 className="ledger-btn-eod"
                 style={{
-                  background: todayArchived ? '#f0fdf4' : '#0f766e',
-                  color: todayArchived ? '#15803d' : '#fff',
-                  border: todayArchived ? '1px solid #86efac' : 'none',
+                  background: todayArchived ? 'var(--down-bg)' : 'var(--teal)',
+                  color: todayArchived ? 'var(--down-d)' : '#fff',
+                  border: todayArchived ? '1px solid var(--down-b)' : 'none',
                 }}
                 title="15:05 盘后一键收盘归档（同步收盘价 · 排查未平T · 净值快照 · 复盘简报 · 本地金库落盘）"
               >
@@ -817,7 +817,7 @@ export default function LedgerSection({
                 padding: '2px 7px',
                 borderRadius: '4px',
                 fontWeight: 700,
-                background: '#fff',
+                background: 'var(--card)',
                 color: scoreColor,
                 border: `1px solid ${scoreColor}`
               }}>
@@ -826,11 +826,11 @@ export default function LedgerSection({
             </div>
             <div style={{ fontSize: '11px', color: 'var(--sub)', marginTop: '6px' }}>
               买点均偏:{' '}
-              <b style={{ fontFamily: 'monospace', color: scorecard.avgBuyDevPct != null && scorecard.avgBuyDevPct > 0.6 ? '#cf1322' : '#15803d' }}>
+              <b style={{ fontFamily: 'monospace', color: scorecard.avgBuyDevPct != null && scorecard.avgBuyDevPct > 0.6 ? 'var(--up)' : 'var(--down-d)' }}>
                 {scorecard.avgBuyDevPct != null ? `${scorecard.avgBuyDevPct >= 0 ? '+' : ''}${scorecard.avgBuyDevPct.toFixed(2)}%` : '0.00%'}
               </b>
               {' ｜ '}摩擦损耗:{' '}
-              <b style={{ fontFamily: 'monospace', color: scorecard.frictionLoss > 0 ? '#cf1322' : '#15803d' }}>
+              <b style={{ fontFamily: 'monospace', color: scorecard.frictionLoss > 0 ? 'var(--up)' : 'var(--down-d)' }}>
                 ¥{money(scorecard.frictionLoss)}
               </b>
             </div>
@@ -838,17 +838,17 @@ export default function LedgerSection({
 
           <div className="ledger-dim-grid">
             {[
-              { label: '🎯 买点精准度', val: scorecard.buyScore, max: 25, desc: '防追高/锚定低吸区', color: '#0284c7' },
+              { label: '🎯 买点精准度', val: scorecard.buyScore, max: 25, desc: '防追高/锚定低吸区', color: 'var(--accent)' },
               { label: '💰 止盈兑现度', val: scorecard.sellScore, max: 25, desc: '按目标分批锁盈', color: '#16a34a' },
               { label: '🛡️ 止损铁律度', val: scorecard.stopScore, max: 25, desc: '破位秒砍绝不死扛', color: '#dc2626' },
-              { label: '🧭 环境与仓位', val: scorecard.envScore, max: 25, desc: '顺应大盘防报复单', color: '#7c3aed' },
+              { label: '🧭 环境与仓位', val: scorecard.envScore, max: 25, desc: '顺应大盘防报复单', color: 'var(--accent-d)' },
             ].map((dim) => (
-              <div key={dim.label} style={{ background: '#fff', padding: '8px 10px', borderRadius: '8px', border: '1px solid #e2e8f0', minWidth: 0 }}>
+              <div key={dim.label} style={{ background: 'var(--card)', padding: '8px 10px', borderRadius: '8px', border: '1px solid var(--line)', minWidth: 0 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', fontWeight: 700, gap: '4px' }}>
                   <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{dim.label}</span>
                   <span style={{ fontFamily: 'monospace', color: dim.color, flexShrink: 0 }}>{dim.val}/{dim.max}</span>
                 </div>
-                <div style={{ height: '6px', background: '#f1f5f9', borderRadius: '999px', overflow: 'hidden', margin: '6px 0 4px' }}>
+                <div style={{ height: '6px', background: 'var(--surface2)', borderRadius: '999px', overflow: 'hidden', margin: '6px 0 4px' }}>
                   <div style={{ width: `${(dim.val / dim.max) * 100}%`, height: '100%', background: dim.color, borderRadius: '999px' }} />
                 </div>
                 <div style={{ fontSize: '10.5px', color: 'var(--mute)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{dim.desc}</div>
@@ -878,14 +878,14 @@ export default function LedgerSection({
 
         {/* 🏆 4 维核心绩效战报 KPI 卡片（手机端紧凑 2×2 双列宫格） */}
         <div className="ledger-kpi-grid">
-          <div className="card ledger-kpi-card" style={{ borderLeft: `4px solid ${stats.todayNet >= 0 ? '#cf1322' : '#0a7f42'}` }}>
+          <div className="card ledger-kpi-card" style={{ borderLeft: `4px solid ${stats.todayNet >= 0 ? 'var(--up)' : 'var(--down)'}` }}>
             <div className="ledger-kpi-k">☀️ 今日净落袋 ({stats.todayCount}笔)</div>
             <div className={`ledger-kpi-v ${stats.todayNet >= 0 ? 'up' : 'down'}`}>
               {stats.todayNet >= 0 ? '+' : ''}{money(stats.todayNet)}
             </div>
           </div>
 
-          <div className="card ledger-kpi-card" style={{ borderLeft: `4px solid ${stats.totalNet >= 0 ? '#cf1322' : '#0a7f42'}` }}>
+          <div className="card ledger-kpi-card" style={{ borderLeft: `4px solid ${stats.totalNet >= 0 ? 'var(--up)' : 'var(--down)'}` }}>
             <div className="ledger-kpi-k">
               {activeTrackTab === 'long_t' ? '💰 累计做T套利' : activeTrackTab === 'short_swing' ? '⚡ 短线闭环净利' : '💰 历史累计落袋'}
             </div>
@@ -896,7 +896,7 @@ export default function LedgerSection({
 
           <div className="card ledger-kpi-card" style={{ borderLeft: '4px solid #0958d9' }}>
             <div className="ledger-kpi-k">🎯 综合平仓胜率</div>
-            <div className="ledger-kpi-v" style={{ color: '#0958d9' }}>
+            <div className="ledger-kpi-v" style={{ color: 'var(--info-d)' }}>
               {stats.winRate.toFixed(1)}%
               <span className="ledger-kpi-sub">
                 ({stats.winCount}胜/{stats.lossCount}负)
@@ -906,7 +906,7 @@ export default function LedgerSection({
 
           <div className="card ledger-kpi-card" style={{ borderLeft: '4px solid #7c3aed' }}>
             <div className="ledger-kpi-k">🛡️ 计划内纪律率</div>
-            <div className="ledger-kpi-v" style={{ color: '#7c3aed' }}>
+            <div className="ledger-kpi-v" style={{ color: 'var(--accent-d)' }}>
               {stats.disciplineRate.toFixed(0)}%
               {stats.bestTrade && (
                 <span className="ledger-kpi-sub">
@@ -919,7 +919,7 @@ export default function LedgerSection({
 
         {/* ⚖️ 人机对决收益对照专区 */}
         {activeTrackTab === 'BENCHMARK' && (
-          <div style={{ background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '10px', padding: '14px', marginBottom: '16px' }}>
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: '10px', padding: '14px', marginBottom: '16px' }}>
             <div style={{ fontSize: '14px', fontWeight: 800, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span>⚖️</span> 【人机对决战报】：交易员实操净利 vs 系统量化网格 SOP 理论基准
             </div>
@@ -928,30 +928,30 @@ export default function LedgerSection({
             </div>
 
             <div className="ledger-bench-grid">
-              <div style={{ padding: '10px 12px', background: '#fff', borderRadius: '6px', border: '1px solid var(--line)' }}>
+              <div style={{ padding: '10px 12px', background: 'var(--card)', borderRadius: '6px', border: '1px solid var(--line)' }}>
                 <div style={{ fontSize: '11.5px', color: 'var(--mute)' }}>🤖 系统理论 SOP 预期净收益 ({stats.benchmarkCompareCount}笔)</div>
                 <div style={{ fontSize: '18px', fontWeight: 800, fontFamily: 'monospace', marginTop: '4px', color: stats.benchmarkTotalNet >= 0 ? 'var(--up)' : 'var(--down)' }}>
                   {stats.benchmarkTotalNet >= 0 ? '+' : ''}{money(stats.benchmarkTotalNet)}
                 </div>
               </div>
-              <div style={{ padding: '10px 12px', background: '#fff', borderRadius: '6px', border: '1px solid var(--line)' }}>
+              <div style={{ padding: '10px 12px', background: 'var(--card)', borderRadius: '6px', border: '1px solid var(--line)' }}>
                 <div style={{ fontSize: '11.5px', color: 'var(--mute)' }}>👤 交易员实盘实际落袋</div>
                 <div style={{ fontSize: '18px', fontWeight: 800, fontFamily: 'monospace', marginTop: '4px', color: stats.realMatchedNet >= 0 ? 'var(--up)' : 'var(--down)' }}>
                   {stats.realMatchedNet >= 0 ? '+' : ''}{money(stats.realMatchedNet)}
                 </div>
               </div>
-              <div style={{ padding: '10px 12px', background: stats.emotionFrictionCost > 0 ? '#fff1f0' : '#f0fdf4', borderRadius: '6px', border: `1px solid ${stats.emotionFrictionCost > 0 ? '#ffa39e' : '#86efac'}` }}>
-                <div style={{ fontSize: '11.5px', color: stats.emotionFrictionCost > 0 ? '#cf1322' : '#15803d', fontWeight: 700 }}>
+              <div style={{ padding: '10px 12px', background: stats.emotionFrictionCost > 0 ? 'var(--up-bg)' : 'var(--down-bg)', borderRadius: '6px', border: `1px solid ${stats.emotionFrictionCost > 0 ? 'var(--up-b)' : 'var(--down-b)'}` }}>
+                <div style={{ fontSize: '11.5px', color: stats.emotionFrictionCost > 0 ? 'var(--up)' : 'var(--down-d)', fontWeight: 700 }}>
                   {stats.emotionFrictionCost > 0 ? '🚨 主观情绪净摩擦损耗 (少赚/多亏)' : '🌟 交易员超额 Alpha 收益'}
                 </div>
-                <div style={{ fontSize: '18px', fontWeight: 800, fontFamily: 'monospace', marginTop: '4px', color: stats.emotionFrictionCost > 0 ? '#cf1322' : '#15803d' }}>
+                <div style={{ fontSize: '18px', fontWeight: 800, fontFamily: 'monospace', marginTop: '4px', color: stats.emotionFrictionCost > 0 ? 'var(--up)' : 'var(--down-d)' }}>
                   {stats.emotionFrictionCost > 0 ? '-' : '+'}{money(Math.abs(stats.emotionFrictionCost))}
                 </div>
               </div>
             </div>
 
             {/* 失误归因排行 */}
-            <div style={{ background: '#fff', borderRadius: '6px', padding: '10px 12px', border: '1px solid var(--line)' }}>
+            <div style={{ background: 'var(--card)', borderRadius: '6px', padding: '10px 12px', border: '1px solid var(--line)' }}>
               <div style={{ fontSize: '12.5px', fontWeight: 700, marginBottom: '8px' }}>🏷️ 高频失误类型损耗排行（含系统盘口自动审计识别）：</div>
               {stats.mistakeRank.length ? (
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -1088,9 +1088,9 @@ export default function LedgerSection({
                       <span
                         className="llc-score-pill"
                         style={{
-                          background: dScore >= 85 ? '#f0fdf4' : dScore >= 70 ? '#eff6ff' : '#fffbeb',
-                          color: dScore >= 85 ? '#15803d' : dScore >= 70 ? '#1d4ed8' : '#b45309',
-                          border: `1px solid ${dScore >= 85 ? '#86efac' : dScore >= 70 ? '#bfdbfe' : '#fcd34d'}`
+                          background: dScore >= 85 ? 'var(--down-bg)' : dScore >= 70 ? 'var(--info-bg)' : 'var(--warn-bg)',
+                          color: dScore >= 85 ? 'var(--down-d)' : dScore >= 70 ? 'var(--info-d)' : 'var(--warn-d)',
+                          border: `1px solid ${dScore >= 85 ? 'var(--down-b)' : dScore >= 70 ? 'var(--info-b)' : 'var(--warn-b)'}`
                         }}
                       >
                         🛡️ {dScore}分 · {lg.plan || '计划内'}
@@ -1105,14 +1105,14 @@ export default function LedgerSection({
                         <span>
                           SOP买 <b>¥{f2(lg.systemBenchmark.sysBuy)}</b>
                           {lg.buyDevPct != null && (
-                            <em style={{ color: lg.buyDevPct > 0.6 ? '#cf1322' : '#15803d' }}>
+                            <em style={{ color: lg.buyDevPct > 0.6 ? 'var(--up)' : 'var(--down-d)' }}>
                               ({lg.buyDevPct >= 0 ? '+' : ''}{lg.buyDevPct.toFixed(1)}%)
                             </em>
                           )}
                           {' ｜ '}目标 <b>¥{f2(lg.systemBenchmark.sysSell1)}</b>
                         </span>
                         {lg.alphaNet != null && (
-                          <b style={{ color: lg.alphaNet >= 0 ? '#15803d' : '#cf1322' }}>
+                          <b style={{ color: lg.alphaNet >= 0 ? 'var(--down-d)' : 'var(--up)' }}>
                             {lg.alphaNet >= 0 ? `跑赢SOP +¥${money(lg.alphaNet)}` : `情绪损耗 -¥${money(Math.abs(lg.alphaNet))}`}
                           </b>
                         )}
@@ -1223,9 +1223,9 @@ export default function LedgerSection({
                           fontSize: '10.5px',
                           padding: '1px 6px',
                           borderRadius: '4px',
-                          background: lg.track === 'short_swing' ? '#faf5ff' : '#f0f9ff',
-                          color: lg.track === 'short_swing' ? '#7c3aed' : '#0369a1',
-                          border: `1px solid ${lg.track === 'short_swing' ? '#d8b4fe' : '#bae6fd'}`,
+                          background: lg.track === 'short_swing' ? 'var(--accent-bg)' : 'var(--info-bg)',
+                          color: lg.track === 'short_swing' ? 'var(--accent-d)' : 'var(--accent-d)',
+                          border: `1px solid ${lg.track === 'short_swing' ? 'var(--accent-b)' : 'var(--info-b)'}`,
                           fontWeight: 600,
                           whiteSpace: 'nowrap'
                         }}>
@@ -1269,14 +1269,14 @@ export default function LedgerSection({
                             padding: '1px 5px',
                             borderRadius: '3px',
                             fontWeight: 700,
-                            background: dScore >= 85 ? '#f0fdf4' : dScore >= 70 ? '#eff6ff' : '#fffbeb',
-                            color: dScore >= 85 ? '#15803d' : dScore >= 70 ? '#1d4ed8' : '#b45309',
-                            border: `1px solid ${dScore >= 85 ? '#86efac' : dScore >= 70 ? '#bfdbfe' : '#fcd34d'}`
+                            background: dScore >= 85 ? 'var(--down-bg)' : dScore >= 70 ? 'var(--info-bg)' : 'var(--warn-bg)',
+                            color: dScore >= 85 ? 'var(--down-d)' : dScore >= 70 ? 'var(--info-d)' : 'var(--warn-d)',
+                            border: `1px solid ${dScore >= 85 ? 'var(--down-b)' : dScore >= 70 ? 'var(--info-b)' : 'var(--warn-b)'}`
                           }}>
                             {dScore}分·{lg.plan || '计划内'}
                           </span>
                           {tagList.map((t, idx) => (
-                            <span key={idx} style={{ fontSize: '10.5px', padding: '1px 5px', borderRadius: '3px', background: '#fff1f0', color: '#cf1322', border: '1px solid #ffa39e' }}>
+                            <span key={idx} style={{ fontSize: '10.5px', padding: '1px 5px', borderRadius: '3px', background: 'var(--up-bg)', color: 'var(--up)', border: '1px solid var(--up-b)' }}>
                               {t}
                             </span>
                           ))}
@@ -1288,14 +1288,14 @@ export default function LedgerSection({
                             <div style={{ color: 'var(--sub)' }}>
                               SOP买 <b>{f2(lg.systemBenchmark.sysBuy)}</b>
                               {lg.buyDevPct != null && (
-                                <span style={{ marginLeft: '3px', color: lg.buyDevPct > 0.6 ? '#cf1322' : '#15803d', fontFamily: 'monospace' }}>
+                                <span style={{ marginLeft: '3px', color: lg.buyDevPct > 0.6 ? 'var(--up)' : 'var(--down-d)', fontFamily: 'monospace' }}>
                                   ({lg.buyDevPct >= 0 ? '+' : ''}{lg.buyDevPct.toFixed(1)}%)
                                 </span>
                               )}
                               {' ｜ '}标 <b>{f2(lg.systemBenchmark.sysSell1)}</b>
                             </div>
                             {lg.alphaNet != null && (
-                              <div style={{ color: lg.alphaNet >= 0 ? '#15803d' : '#cf1322', fontWeight: 700 }}>
+                              <div style={{ color: lg.alphaNet >= 0 ? 'var(--down-d)' : 'var(--up)', fontWeight: 700 }}>
                                 {lg.alphaNet >= 0 ? `跑赢SOP +¥${money(lg.alphaNet)}` : `情绪损耗 -¥${money(Math.abs(lg.alphaNet))}`}
                               </div>
                             )}
@@ -1325,7 +1325,7 @@ export default function LedgerSection({
                               type="button"
                               className="mini"
                               onClick={() => openEditLogModal(lg)}
-                              style={{ color: '#0958d9', marginLeft: 0 }}
+                              style={{ color: 'var(--info-d)', marginLeft: 0 }}
                               title="补充或修改本笔成交的失误归因标签与复盘心得"
                             >
                               复盘
@@ -1338,8 +1338,8 @@ export default function LedgerSection({
                             style={{
                               marginLeft: 0,
                               color: isConfirmingDel ? '#fff' : 'var(--up)',
-                              background: isConfirmingDel ? '#cf1322' : '#fff',
-                              borderColor: isConfirmingDel ? '#cf1322' : 'var(--line)'
+                              background: isConfirmingDel ? 'var(--up)' : 'var(--card)',
+                              borderColor: isConfirmingDel ? 'var(--up)' : 'var(--line)'
                             }}
                           >
                             {isConfirmingDel ? '确认删?' : '删除'}
@@ -1459,9 +1459,9 @@ export default function LedgerSection({
                   fontSize: '11px',
                   padding: '2px 8px',
                   borderRadius: '4px',
-                  background: hasAiKey ? '#eff6ff' : '#f0fdf4',
-                  color: hasAiKey ? '#1d4ed8' : '#15803d',
-                  border: `1px solid ${hasAiKey ? '#bfdbfe' : '#86efac'}`
+                  background: hasAiKey ? 'var(--info-bg)' : 'var(--down-bg)',
+                  color: hasAiKey ? 'var(--info-d)' : 'var(--down-d)',
+                  border: `1px solid ${hasAiKey ? 'var(--info-b)' : 'var(--down-b)'}`
                 }}>
                   {hasAiKey ? `双引擎：${aiConfig.model} + 量化规则` : '⚡ 内置量化规则教练就绪'}
                 </span>
@@ -1497,7 +1497,7 @@ export default function LedgerSection({
                   📋 诊断标的范围：{coachDate} 共 {enrichedAllLogs.filter(l => l.date === coachDate).length} 笔流水
                 </div>
                 {!enrichedAllLogs.filter(l => l.date === coachDate).length ? (
-                  <div style={{ fontSize: '12px', color: 'var(--warn)', padding: '8px', background: '#fffbe6', borderRadius: '4px' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--warn)', padding: '8px', background: 'var(--warn-bg)', borderRadius: '4px' }}>
                     ⚠️ {coachDate} 暂无任何成交流水记录，请切换有交易的日期或先录入今日买卖记录！
                   </div>
                 ) : (
@@ -1556,16 +1556,16 @@ export default function LedgerSection({
               </div>
 
               {coachReviewResult && (
-                <div style={{ marginTop: '16px', background: '#fdfdfe', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '14px', lineHeight: 1.65 }}>
+                <div style={{ marginTop: '16px', background: '#fdfdfe', border: '1px solid var(--info-b)', borderRadius: '8px', padding: '14px', lineHeight: 1.65 }}>
                   {coachReviewResult.fallbackReason && (
-                    <div style={{ marginBottom: '10px', padding: '6px 10px', borderRadius: '6px', background: '#fffbeb', border: '1px solid #fcd34d', color: '#92400e', fontSize: '11.5px' }}>
+                    <div style={{ marginBottom: '10px', padding: '6px 10px', borderRadius: '6px', background: 'var(--warn-bg)', border: '1px solid var(--warn-b)', color: 'var(--warn-d)', fontSize: '11.5px' }}>
                       ℹ️ {coachReviewResult.fallbackReason}
                     </div>
                   )}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', borderBottom: '1px dashed #cbd5e1', paddingBottom: '8px', marginBottom: '12px' }}>
-                    <div style={{ fontWeight: 800, fontSize: '14px', color: '#1e3a8a' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', borderBottom: '1px dashed var(--line2)', paddingBottom: '8px', marginBottom: '12px' }}>
+                    <div style={{ fontWeight: 800, fontSize: '14px', color: 'var(--info-d)' }}>
                       📋 【交易教练操盘诊断报告】· {coachReviewResult.date}
-                      <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', marginLeft: '8px' }}>
+                      <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--mute)', marginLeft: '8px' }}>
                         引擎: {coachReviewResult.model}
                       </span>
                     </div>
@@ -1596,7 +1596,7 @@ export default function LedgerSection({
               <button className="modal-close" onClick={() => setShowSettingsModal(false)}>×</button>
             </div>
             <div className="modal-bd" style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '12.5px' }}>
-              <div style={{ background: '#f0f9ff', padding: '10px 12px', borderRadius: '6px', border: '1px solid #bae6fd', color: '#0369a1', lineHeight: 1.5 }}>
+              <div style={{ background: 'var(--info-bg)', padding: '10px 12px', borderRadius: '6px', border: '1px solid var(--info-b)', color: 'var(--accent-d)', lineHeight: 1.5 }}>
                 💡 <b>双模说明</b>：不配置密钥时，系统默认启用<b>内置量化规则教练 v2</b>（毫秒级精准计算四维纪律分与点位偏离）；填入天翼云或任意 OpenAI 兼容 API Key 后，可解锁大模型自然语言深度心理剖析。
               </div>
 
@@ -1638,9 +1638,9 @@ export default function LedgerSection({
                   padding: '8px 10px',
                   borderRadius: '5px',
                   fontSize: '12px',
-                  background: testResult.ok ? '#f0fdf4' : '#fff1f0',
-                  color: testResult.ok ? '#15803d' : '#cf1322',
-                  border: `1px solid ${testResult.ok ? '#86efac' : '#ffa39e'}`
+                  background: testResult.ok ? 'var(--down-bg)' : 'var(--up-bg)',
+                  color: testResult.ok ? 'var(--down-d)' : 'var(--up)',
+                  border: `1px solid ${testResult.ok ? 'var(--down-b)' : 'var(--up-b)'}`
                 }}>
                   {testResult.text}
                 </div>
@@ -1694,8 +1694,8 @@ export default function LedgerSection({
                         padding: '8px 10px',
                         borderRadius: '6px',
                         border: form.track === 'long_t' ? '2px solid #0369a1' : '1px solid var(--line)',
-                        background: form.track === 'long_t' ? '#f0f9ff' : 'var(--surface)',
-                        color: form.track === 'long_t' ? '#0369a1' : 'var(--text)',
+                        background: form.track === 'long_t' ? 'var(--info-bg)' : 'var(--surface)',
+                        color: form.track === 'long_t' ? 'var(--accent-d)' : 'var(--text)',
                         fontWeight: form.track === 'long_t' ? 700 : 500,
                         cursor: 'pointer'
                       }}
@@ -1709,8 +1709,8 @@ export default function LedgerSection({
                         padding: '8px 10px',
                         borderRadius: '6px',
                         border: form.track === 'short_swing' ? '2px solid #7c3aed' : '1px solid var(--line)',
-                        background: form.track === 'short_swing' ? '#faf5ff' : 'var(--surface)',
-                        color: form.track === 'short_swing' ? '#7c3aed' : 'var(--text)',
+                        background: form.track === 'short_swing' ? 'var(--accent-bg)' : 'var(--surface)',
+                        color: form.track === 'short_swing' ? 'var(--accent-d)' : 'var(--text)',
                         fontWeight: form.track === 'short_swing' ? 700 : 500,
                         cursor: 'pointer'
                       }}
@@ -1752,7 +1752,7 @@ export default function LedgerSection({
                 )}
 
                 {matchedSysBenchmark && (
-                  <div style={{ gridColumn: '1 / -1', padding: '7px 10px', borderRadius: '6px', background: '#f0fdf4', border: '1px solid #86efac', color: '#15803d', fontSize: '11.5px', lineHeight: 1.45 }}>
+                  <div style={{ gridColumn: '1 / -1', padding: '7px 10px', borderRadius: '6px', background: 'var(--down-bg)', border: '1px solid var(--down-b)', color: 'var(--down-d)', fontSize: '11.5px', lineHeight: 1.45 }}>
                     🎯 <b>已匹配【{matchedSysBenchmark.source}】量化点位</b>：
                     买价 <b>¥{f2(matchedSysBenchmark.sysBuy)}</b> ｜ 止盈1 <b>¥{f2(matchedSysBenchmark.sysSell1)}</b> ｜ 止损 <b>¥{f2(matchedSysBenchmark.sysStop)}</b>
                   </div>

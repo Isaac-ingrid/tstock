@@ -154,7 +154,7 @@ export default function MemeRadarSection({
               实战真共振 · 杜绝孤狼自嗨
             </span>
           </div>
-          <div style={{ fontSize: '12.5px', color: '#c7d2fe', lineHeight: 1.5, maxWidth: '780px' }}>
+          <div style={{ fontSize: '12.5px', color: 'var(--info-b)', lineHeight: 1.5, maxWidth: '780px' }}>
             穿透全市场 5,000+ 标的，量化 14 大字辈门派红盘率、涨停合力、空间盘眼、领涨前排与低位蓄势标的，所有个股均支持原位加入自选与在轨跟踪。
           </div>
         </div>
@@ -240,19 +240,19 @@ export default function MemeRadarSection({
               borderRadius: '8px',
               background:
                 diagResult.verdict.type === 'LONE_WOLF'
-                  ? '#fff1f0'
+                  ? 'var(--up-bg)'
                   : diagResult.verdict.type === 'FLAGSHIP_LEADER'
                   ? '#fefce8'
                   : diagResult.verdict.type === 'AMBUSH_OPPORTUNITY'
-                  ? '#f0fdf4'
+                  ? 'var(--down-bg)'
                   : 'var(--bg)',
               border: `1px solid ${
                 diagResult.verdict.type === 'LONE_WOLF'
-                  ? '#fca5a5'
+                  ? 'var(--up-b)'
                   : diagResult.verdict.type === 'FLAGSHIP_LEADER'
                   ? '#fde047'
                   : diagResult.verdict.type === 'AMBUSH_OPPORTUNITY'
-                  ? '#86efac'
+                  ? 'var(--down-b)'
                   : 'var(--line)'
               }`,
             }}
@@ -290,12 +290,12 @@ export default function MemeRadarSection({
                     borderRadius: '999px',
                     background:
                       diagResult.verdict.type === 'LONE_WOLF'
-                        ? '#cf1322'
+                        ? 'var(--up)'
                         : diagResult.verdict.type === 'FLAGSHIP_LEADER'
                         ? '#d97706'
                         : diagResult.verdict.type === 'AMBUSH_OPPORTUNITY'
                         ? '#16a34a'
-                        : '#475569',
+                        : 'var(--sub)',
                     color: '#fff',
                   }}
                 >
@@ -346,7 +346,7 @@ export default function MemeRadarSection({
                       fontSize: '11.5px',
                       padding: '4px 10px',
                       borderRadius: '5px',
-                      background: 'rgba(255,255,255,0.8)',
+                      background: 'var(--card)',
                       border: '1px solid var(--line)',
                     }}
                   >
@@ -436,7 +436,7 @@ export default function MemeRadarSection({
                           style={{
                             fontSize: '12px',
                             fontWeight: 800,
-                            color: idx < 3 ? '#cf1322' : 'var(--sub)',
+                            color: idx < 3 ? 'var(--up)' : 'var(--sub)',
                           }}
                         >
                           #{idx + 1}
@@ -453,19 +453,19 @@ export default function MemeRadarSection({
                           borderRadius: '4px',
                           background:
                             clan.statusTag === 'BOOM'
-                              ? '#fee2e2'
+                              ? 'var(--up-bg)'
                               : clan.statusTag === 'WARM'
-                              ? '#dcfce7'
+                              ? 'var(--down-bg)'
                               : clan.statusTag === 'LONE_LEADER'
-                              ? '#fef3c7'
+                              ? 'var(--warn-bg)'
                               : 'var(--surface)',
                           color:
                             clan.statusTag === 'BOOM'
-                              ? '#b91c1c'
+                              ? 'var(--up-d)'
                               : clan.statusTag === 'WARM'
-                              ? '#15803d'
+                              ? 'var(--down-d)'
                               : clan.statusTag === 'LONE_LEADER'
-                              ? '#b45309'
+                              ? 'var(--warn-d)'
                               : 'var(--sub)',
                           border: '1px solid rgba(0,0,0,0.06)',
                         }}
@@ -583,7 +583,7 @@ export default function MemeRadarSection({
                     style={{
                       fontSize: '14px',
                       fontWeight: 700,
-                      color: activeClan.limitUps > 0 ? '#cf1322' : 'inherit',
+                      color: activeClan.limitUps > 0 ? 'var(--up)' : 'inherit',
                     }}
                   >
                     {activeClan.limitUps} 家
@@ -611,11 +611,11 @@ export default function MemeRadarSection({
                   borderRadius: '6px',
                   background:
                     activeClan.statusTag === 'BOOM'
-                      ? '#fff1f0'
+                      ? 'var(--up-bg)'
                       : activeClan.statusTag === 'WARM'
-                      ? '#f0fdf4'
+                      ? 'var(--down-bg)'
                       : activeClan.statusTag === 'LONE_LEADER'
-                      ? '#fffbe6'
+                      ? 'var(--warn-bg)'
                       : 'var(--bg)',
                   border: '1px solid var(--line)',
                   fontSize: '12px',
@@ -637,7 +637,7 @@ export default function MemeRadarSection({
                     style={{
                       padding: '11px 13px',
                       borderRadius: '8px',
-                      background: 'linear-gradient(90deg, #fef3c7 0%, var(--surface) 100%)',
+                      background: 'var(--warn-bg)',
                       border: '1px solid #fde047',
                       display: 'flex',
                       justifyContent: 'space-between',
@@ -648,7 +648,7 @@ export default function MemeRadarSection({
                   >
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '7px', flexWrap: 'wrap' }}>
-                        <b style={{ fontSize: '15px', color: '#854d0e' }}>{activeClan.leader.name}</b>
+                        <b style={{ fontSize: '15px', color: 'var(--warn-d)' }}>{activeClan.leader.name}</b>
                         <span style={{ fontSize: '12px', fontFamily: 'monospace', color: 'var(--sub)' }}>
                           {toCode6(activeClan.leader)}
                         </span>

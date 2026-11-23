@@ -22,9 +22,9 @@ export function TagBadges({ tags = [] }) {
             fontWeight: 700,
             padding: '1px 7px',
             borderRadius: '4px',
-            background: tg.bg || '#f1f5f9',
-            color: tg.color || '#334155',
-            border: `1px solid ${tg.border || '#cbd5e1'}`,
+            background: tg.bg || 'var(--surface2)',
+            color: tg.color || 'var(--sub)',
+            border: `1px solid ${tg.border || 'var(--line2)'}`,
             whiteSpace: 'nowrap',
           }}
         >
@@ -186,7 +186,7 @@ export function CoreRoleBox({
 }) {
   if (!stock) {
     return (
-      <div style={{ padding: '10px', borderRadius: '8px', border: '1px dashed var(--line)', background: '#f8fafc', fontSize: '12px', color: 'var(--mute)' }}>
+      <div style={{ padding: '10px', borderRadius: '8px', border: '1px dashed var(--line)', background: 'var(--surface)', fontSize: '12px', color: 'var(--mute)' }}>
         <div style={{ fontWeight: 700, marginBottom: '4px' }}>{roleLabel}</div>
         暂无明显主板对应标的
       </div>
@@ -198,7 +198,7 @@ export function CoreRoleBox({
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', flexWrap: 'wrap' }}>
         <span style={{ fontSize: '11.5px', fontWeight: 800, color: accent }}>{roleLabel}</span>
         {stock.popRank && (
-          <span style={{ fontSize: '10.5px', padding: '1px 5px', borderRadius: '4px', background: '#fff7ed', color: '#c2410c', border: '1px solid #fdba74', fontWeight: 700 }}>
+          <span style={{ fontSize: '10.5px', padding: '1px 5px', borderRadius: '4px', background: 'var(--warn-bg)', color: 'var(--warn-d)', border: '1px solid var(--warn-b)', fontWeight: 700 }}>
             🔥人气#{stock.popRank}
           </span>
         )}
@@ -212,7 +212,7 @@ export function CoreRoleBox({
           ¥{f2(stock.price)} ({chgVal >= 0 ? `+${chgVal.toFixed(2)}%` : `${chgVal.toFixed(2)}%`})
         </div>
       </div>
-      <div style={{ fontSize: '11.5px', color: '#334155', lineHeight: 1.45 }}>
+      <div style={{ fontSize: '11.5px', color: 'var(--sub)', lineHeight: 1.45 }}>
         {stock.roleReason || stock.statTag}
       </div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px', fontSize: '11px', color: 'var(--sub)', paddingTop: '2px' }}>

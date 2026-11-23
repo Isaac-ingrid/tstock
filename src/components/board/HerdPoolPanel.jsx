@@ -121,12 +121,12 @@ export default function HerdPoolPanel({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-      <div style={{ padding: '10px 14px', background: '#f5f3ff', border: '1.5px solid #c4b5fd', borderRadius: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      <div style={{ padding: '10px 14px', background: 'var(--accent-bg)', border: '1.5px solid var(--accent-b)', borderRadius: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
         <div style={{ fontSize: '12px', color: '#4c1d95', lineHeight: 1.55 }}>
           🤝 <b>全自动抱团跟踪引擎（严格剔除创业板30 & 科创板68）：</b>
           自动收录<b>近日连板高标</b>、<b>多板抱团妖股</b>及<b>人气Top30强势核</b>，跨日连续追踪。<b>今日未涨停只要稳在均线高横区间仍留在池内！</b>
           <br />
-          <span style={{ color: '#6d28d9', fontSize: '11.5px' }}>
+          <span style={{ color: 'var(--accent-d)', fontSize: '11.5px' }}>
             🛡️ <b>宽松防误杀破位淘汰标准：</b>仅当触发「跌停(-9.5%) / 跌破20日生命线(-1.5%) / 入池后回撤≥20% / 连续2日失守10日线超-3% / 3日累跌≥15% / 5日破MA10且无人气」时自动移出；单日洗盘先挂黄牌观察，今日涨停或放量强修复(+5.5%站上MA5)自动豁免。
           </span>
         </div>
@@ -166,14 +166,14 @@ export default function HerdPoolPanel({
                   setShowSuggest(false);
                 }
               }}
-              style={{ padding: '3px 8px', fontSize: '11.5px', borderRadius: '5px', border: '1px solid #c4b5fd', width: '175px', background: '#fff' }}
+              style={{ padding: '3px 8px', fontSize: '11.5px', borderRadius: '5px', border: '1px solid var(--accent-b)', width: '175px', background: 'var(--card)' }}
             />
             <button
               type="button"
               className="mini"
               disabled={readOnlyHistory || !herdQuery.trim() || searching || Boolean(herdBusyCode)}
               onClick={handleManualAdd}
-              style={{ marginLeft: 0, fontSize: '11.5px', background: '#6d28d9', color: '#fff', borderColor: '#6d28d9', fontWeight: 700 }}
+              style={{ marginLeft: 0, fontSize: '11.5px', background: 'var(--info)', color: '#fff', borderColor: 'var(--accent-d)', fontWeight: 700 }}
             >
               {searching ? '匹配中…' : '＋ 加池锁定'}
             </button>
@@ -186,7 +186,7 @@ export default function HerdPoolPanel({
                 width: '250px',
                 zIndex: 90,
                 background: 'var(--surface)',
-                border: '1px solid #c4b5fd',
+                border: '1px solid var(--accent-b)',
                 borderRadius: '8px',
                 boxShadow: '0 8px 24px rgba(15, 23, 42, 0.16)',
                 overflow: 'hidden',
@@ -209,7 +209,7 @@ export default function HerdPoolPanel({
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        background: '#fff',
+                        background: 'var(--card)',
                         cursor: okMain ? 'pointer' : 'not-allowed',
                         opacity: okMain ? 1 : 0.55,
                         fontSize: '12px',
@@ -217,7 +217,7 @@ export default function HerdPoolPanel({
                       }}
                     >
                       <span style={{ fontWeight: 700 }}>{c.name}</span>
-                      <span style={{ fontFamily: 'monospace', fontSize: '11px', color: okMain ? '#6d28d9' : 'var(--mute)' }}>
+                      <span style={{ fontFamily: 'monospace', fontSize: '11px', color: okMain ? 'var(--accent-d)' : 'var(--mute)' }}>
                         {c.code} {!okMain && '(非主板)'}
                       </span>
                     </button>
@@ -229,8 +229,8 @@ export default function HerdPoolPanel({
         </div>
 
         {herdSectors.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap', paddingTop: '4px', borderTop: '1px dashed #ddd6fe' }}>
-            <span style={{ fontSize: '11px', color: '#6d28d9', fontWeight: 700 }}>📂 按板块筛选：</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap', paddingTop: '4px', borderTop: '1px dashed var(--accent-b)' }}>
+            <span style={{ fontSize: '11px', color: 'var(--accent-d)', fontWeight: 700 }}>📂 按板块筛选：</span>
             <button
               type="button"
               className="mini"
@@ -240,9 +240,9 @@ export default function HerdPoolPanel({
                 fontSize: '11px',
                 padding: '1px 7px',
                 fontWeight: selectedTheme === 'all' ? 800 : 600,
-                background: selectedTheme === 'all' ? '#6d28d9' : '#fff',
-                color: selectedTheme === 'all' ? '#fff' : '#334155',
-                borderColor: selectedTheme === 'all' ? '#6d28d9' : '#cbd5e1',
+                background: selectedTheme === 'all' ? 'var(--info)' : 'var(--card)',
+                color: selectedTheme === 'all' ? '#fff' : 'var(--sub)',
+                borderColor: selectedTheme === 'all' ? 'var(--accent-d)' : 'var(--line2)',
               }}
             >
               全部板块
@@ -260,9 +260,9 @@ export default function HerdPoolPanel({
                     fontSize: '11px',
                     padding: '1px 7px',
                     fontWeight: active ? 800 : 600,
-                    background: active ? '#6d28d9' : '#fff',
-                    color: active ? '#fff' : '#334155',
-                    borderColor: active ? '#6d28d9' : '#cbd5e1',
+                    background: active ? 'var(--info)' : 'var(--card)',
+                    color: active ? '#fff' : 'var(--sub)',
+                    borderColor: active ? 'var(--accent-d)' : 'var(--line2)',
                   }}
                 >
                   {sec.name} ({sec.count})
@@ -278,7 +278,7 @@ export default function HerdPoolPanel({
           key={item.code}
           style={{
             background: 'var(--surface)',
-            border: `1.5px solid ${item.healthBorder || '#cbd5e1'}`,
+            border: `1.5px solid ${item.healthBorder || 'var(--line2)'}`,
             borderRadius: '10px',
             padding: '12px 16px',
             boxShadow: '0 2px 6px rgba(109, 40, 217, 0.06)',
@@ -303,20 +303,20 @@ export default function HerdPoolPanel({
               <span style={{ fontFamily: 'monospace', fontSize: '13px', color: 'var(--mute)' }}>{item.code}</span>
               <span
                 onClick={() => setSelectedTheme(selectedTheme === item.hybk ? 'all' : item.hybk)}
-                style={{ fontSize: '11px', padding: '1px 6px', borderRadius: '4px', background: '#f0f5ff', color: '#1d39c4', cursor: 'pointer' }}
+                style={{ fontSize: '11px', padding: '1px 6px', borderRadius: '4px', background: 'var(--info-bg)', color: 'var(--info-d)', cursor: 'pointer' }}
               >
                 🔥 {item.hybk}
               </span>
               {item.isMysticResonant && item.mysticCluster && (
-                <span style={{ fontSize: '11px', padding: '1px 6px', borderRadius: '4px', background: '#f5f3ff', color: '#7c3aed', border: '1px solid #d8b4fe', fontWeight: 700 }}>
+                <span style={{ fontSize: '11px', padding: '1px 6px', borderRadius: '4px', background: 'var(--accent-bg)', color: 'var(--accent-d)', border: '1px solid var(--accent-b)', fontWeight: 700 }}>
                   🔮 {item.mysticCluster}
                 </span>
               )}
-              <span style={{ fontSize: '11px', color: '#64748b' }}>
+              <span style={{ fontSize: '11px', color: 'var(--mute)' }}>
                 已跟踪 <b>D{item.trackDays}</b>天 · 入池 {item.entryDate} (¥{f2(item.entryPrice)})
               </span>
               {item.pinned && (
-                <span style={{ fontSize: '10.5px', padding: '1px 5px', borderRadius: '4px', background: '#fef3c7', color: '#b45309', border: '1px solid #fcd34d', fontWeight: 700 }}>
+                <span style={{ fontSize: '10.5px', padding: '1px 5px', borderRadius: '4px', background: 'var(--warn-bg)', color: 'var(--warn-d)', border: '1px solid var(--warn-b)', fontWeight: 700 }}>
                   🔒 已锁定防踢
                 </span>
               )}
@@ -340,14 +340,14 @@ export default function HerdPoolPanel({
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '8px', padding: '6px 10px', background: 'var(--surface2)', borderRadius: '6px', fontSize: '12px', marginBottom: '8px' }}>
             <div>偏离 MA5: <b style={{ fontFamily: 'monospace', color: item.vsMa5 >= 0 ? 'var(--up)' : '#d97706' }}>{item.vsMa5 >= 0 ? `+${item.vsMa5}%` : `${item.vsMa5}%`}</b></div>
             <div>偏离 MA10: <b style={{ fontFamily: 'monospace', color: item.vsMa10 >= 0 ? 'var(--up)' : '#d97706' }}>{item.vsMa10 >= 0 ? `+${item.vsMa10}%` : `${item.vsMa10}%`}</b></div>
-            <div>偏离 MA20: <b style={{ fontFamily: 'monospace', color: item.vsMa20 >= 0 ? '#15803d' : '#cf1322' }}>{item.vsMa20 >= 0 ? `+${item.vsMa20}%` : `${item.vsMa20}%`}</b></div>
-            <div>高点回撤: <b style={{ fontFamily: 'monospace', color: item.ddFromPeak <= -14 ? '#cf1322' : 'var(--text)' }}>{item.ddFromPeak}%</b> <span style={{ fontSize: '10.5px', color: 'var(--mute)' }}>(峰¥{f2(item.peakPrice)})</span></div>
+            <div>偏离 MA20: <b style={{ fontFamily: 'monospace', color: item.vsMa20 >= 0 ? 'var(--down-d)' : 'var(--up)' }}>{item.vsMa20 >= 0 ? `+${item.vsMa20}%` : `${item.vsMa20}%`}</b></div>
+            <div>高点回撤: <b style={{ fontFamily: 'monospace', color: item.ddFromPeak <= -14 ? 'var(--up)' : 'var(--text)' }}>{item.ddFromPeak}%</b> <span style={{ fontSize: '10.5px', color: 'var(--mute)' }}>(峰¥{f2(item.peakPrice)})</span></div>
             <div>成交额: <b style={{ fontFamily: 'monospace' }}>{money$(item.amount)}</b></div>
-            <div>人气: <b style={{ color: item.popRank ? '#c2410c' : 'var(--mute)' }}>{item.popRank ? `#${item.popRank}` : '—'}</b></div>
+            <div>人气: <b style={{ color: item.popRank ? 'var(--warn-d)' : 'var(--mute)' }}>{item.popRank ? `#${item.popRank}` : '—'}</b></div>
           </div>
 
-          <div style={{ padding: '6px 10px', borderRadius: '6px', background: item.healthBg, border: `1px dashed ${item.healthBorder}`, fontSize: '11.5px', color: '#334155', marginBottom: '8px' }}>
-            <b>承接与破位边界评估：</b>{item.healthDesc} <span style={{ color: '#64748b' }}>（入池依据：{item.entryReason}）</span>
+          <div style={{ padding: '6px 10px', borderRadius: '6px', background: item.healthBg, border: `1px dashed ${item.healthBorder}`, fontSize: '11.5px', color: 'var(--sub)', marginBottom: '8px' }}>
+            <b>承接与破位边界评估：</b>{item.healthDesc} <span style={{ color: 'var(--mute)' }}>（入池依据：{item.entryReason}）</span>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
@@ -366,7 +366,7 @@ export default function HerdPoolPanel({
                 className="mini"
                 disabled={readOnlyHistory || herdBusyCode === item.code}
                 onClick={() => onHerdAction('remove', { ...item, reason: '手动移出抱团池' })}
-                style={{ marginLeft: 0, fontSize: '11px', color: '#cf1322', borderColor: '#ffa39e', background: '#fff1f0' }}
+                style={{ marginLeft: 0, fontSize: '11px', color: 'var(--up)', borderColor: 'var(--up-b)', background: 'var(--up-bg)' }}
               >
                 🗑️ 移出池子
               </button>
@@ -386,8 +386,8 @@ export default function HerdPoolPanel({
       ))}
 
       {/* 破位自动 / 手动移出记录折叠区（同样支持诊股与加入自选观察） */}
-      <details style={{ marginTop: '6px', padding: '10px 14px', background: '#fafafa', border: '1px dashed #cbd5e1', borderRadius: '8px' }}>
-        <summary style={{ cursor: 'pointer', fontSize: '12.5px', fontWeight: 700, color: '#475569', userSelect: 'none' }}>
+      <details style={{ marginTop: '6px', padding: '10px 14px', background: 'var(--surface)', border: '1px dashed var(--line2)', borderRadius: '8px' }}>
+        <summary style={{ cursor: 'pointer', fontSize: '12.5px', fontWeight: 700, color: 'var(--sub)', userSelect: 'none' }}>
           🗑️ 查看破位自动/手动移出记录 ({evictedPool.length} 只) —— 避免盲目抄底死猫跳
         </summary>
         {evictedPool.length === 0 ? (
@@ -402,11 +402,11 @@ export default function HerdPoolPanel({
               return (
                 <div
                   key={`${evCode}_${i}`}
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', padding: '8px 10px', background: '#fff', border: '1px solid #fee2e2', borderRadius: '6px', fontSize: '12px' }}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', padding: '8px 10px', background: 'var(--card)', border: '1px solid #fee2e2', borderRadius: '6px', fontSize: '12px' }}
                 >
                   <div style={{ minWidth: 0 }}>
                     <b>{ev.name}</b> <span style={{ fontFamily: 'monospace', color: 'var(--mute)' }}>{evCode}</span>
-                    <span style={{ marginLeft: '8px', color: '#cf1322', fontWeight: 600 }}>踢出原因：{ev.reason}</span>
+                    <span style={{ marginLeft: '8px', color: 'var(--up)', fontWeight: 600 }}>踢出原因：{ev.reason}</span>
                     <div style={{ fontSize: '11px', color: 'var(--mute)', marginTop: '2px' }}>
                       入池 {ev.entryDate} ¥{f2(ev.entryPrice)} → 移出 {ev.evictedDate} ¥{f2(ev.evictPrice)} ({ev.returnPct >= 0 ? `+${ev.returnPct}%` : `${ev.returnPct}%`})
                     </div>

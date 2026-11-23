@@ -287,11 +287,11 @@ export default function PositionRiskBar({
                 style={{
                   fontSize: 11.5,
                   fontWeight: 800,
-                  color: '#991b1b',
-                  background: '#fee2e2',
+                  color: 'var(--up-d)',
+                  background: 'var(--up-bg)',
                   padding: '4px 10px',
                   borderRadius: 6,
-                  border: '1px solid #fca5a5',
+                  border: '1px solid var(--up-b)',
                 }}
               >
                 ⛔ 二次硬锁死（今日禁再解锁，明日再战）
@@ -300,7 +300,7 @@ export default function PositionRiskBar({
               <button
                 type="button"
                 className="mini"
-                style={{ marginLeft: 0, borderColor: '#f87171', color: '#b91c1c', background: '#fff' }}
+                style={{ marginLeft: 0, borderColor: '#f87171', color: 'var(--up-d)', background: 'var(--card)' }}
                 onClick={() => setConfirmingUnlock(true)}
               >
                 🧘 冷静复盘申请解锁

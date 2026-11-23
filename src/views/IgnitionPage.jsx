@@ -16,17 +16,17 @@ import { BoardStockActions } from '../components/board/boardShared.jsx';
 const CUSTOM_US_KEY = 't-ignition-custom-us';
 
 const STAGE_STYLE = {
-  SHAKEOUT_READY: { bg: '#fff1f0', color: '#cf1322', border: '#ffa39e' },
-  CONVERGED_WAIT: { bg: '#fffbeb', color: '#b45309', border: '#fcd34d' },
-  DIGESTING: { bg: '#f0f9ff', color: '#0369a1', border: '#bae6fd' },
-  PULLBACK_RISK: { bg: '#f8fafc', color: '#64748b', border: '#cbd5e1' },
+  SHAKEOUT_READY: { bg: 'var(--up-bg)', color: 'var(--up)', border: 'var(--up-b)' },
+  CONVERGED_WAIT: { bg: 'var(--warn-bg)', color: 'var(--warn-d)', border: 'var(--warn-b)' },
+  DIGESTING: { bg: 'var(--info-bg)', color: 'var(--accent-d)', border: 'var(--info-b)' },
+  PULLBACK_RISK: { bg: 'var(--surface)', color: 'var(--mute)', border: 'var(--line2)' },
 };
 
 const DIP_STYLE = {
-  ANTI_DROP_BOTTOM: { bg: '#f0fdf4', color: '#15803d', border: '#86efac' },
-  SHRINK_WATCH: { bg: '#fffbeb', color: '#b45309', border: '#fcd34d' },
-  DIGESTING_DROP: { bg: '#f8fafc', color: '#475569', border: '#cbd5e1' },
-  FALLING_KNIFE: { bg: '#fef2f2', color: '#b91c1c', border: '#fca5a5' },
+  ANTI_DROP_BOTTOM: { bg: 'var(--down-bg)', color: 'var(--down-d)', border: 'var(--down-b)' },
+  SHRINK_WATCH: { bg: 'var(--warn-bg)', color: 'var(--warn-d)', border: 'var(--warn-b)' },
+  DIGESTING_DROP: { bg: 'var(--surface)', color: 'var(--sub)', border: 'var(--line2)' },
+  FALLING_KNIFE: { bg: 'var(--up-bg)', color: 'var(--up-d)', border: 'var(--up-b)' },
 };
 
 function fmtSignedPct(v, digits = 2, fallback = '—') {
@@ -42,15 +42,15 @@ function chgColor(v) {
 
 function boardBadge(code) {
   const c = String(code || '').padStart(6, '0');
-  if (c.startsWith('30')) return { text: '创', bg: '#faf5ff', color: '#7c3aed', border: '#ddd6fe' };
-  if (c.startsWith('688')) return { text: '科', bg: '#eff6ff', color: '#1d4ed8', border: '#bfdbfe' };
-  return { text: '主', bg: '#f1f5f9', color: '#475569', border: '#cbd5e1' };
+  if (c.startsWith('30')) return { text: '创', bg: 'var(--accent-bg)', color: 'var(--accent-d)', border: 'var(--accent-b)' };
+  if (c.startsWith('688')) return { text: '科', bg: 'var(--info-bg)', color: 'var(--info-d)', border: 'var(--info-b)' };
+  return { text: '主', bg: 'var(--surface2)', color: 'var(--sub)', border: 'var(--line2)' };
 }
 
 function riskBadge(riskLevel) {
-  if (riskLevel === '高风险') return { text: '高风险雷', bg: '#fef2f2', color: '#dc2626', border: '#fecaca' };
-  if (riskLevel === '留意') return { text: '留意', bg: '#fffbeb', color: '#d97706', border: '#fde68a' };
-  return { text: '排雷安全', bg: '#f0fdf4', color: '#15803d', border: '#bbf7d0' };
+  if (riskLevel === '高风险') return { text: '高风险雷', bg: 'var(--up-bg)', color: '#dc2626', border: 'var(--up-b)' };
+  if (riskLevel === '留意') return { text: '留意', bg: 'var(--warn-bg)', color: '#d97706', border: 'var(--warn-b)' };
+  return { text: '排雷安全', bg: 'var(--down-bg)', color: 'var(--down-d)', border: 'var(--down-b)' };
 }
 
 export default function IgnitionPage({
@@ -107,17 +107,67 @@ export default function IgnitionPage({
   );
 
   const loadScan = useCallback(
-    async (forceRefresh = false) => {
+    async (forceRefresh = false, { silent = false } = {}) => {
+      const seq = ++reqSeqRef.current;
+      const hasVisibleItems =
+        ((dataRef.current?.breakout?.items || []).length > 0) ||
+        ((dataRef.current?.dipLeaders?.items || []).length > 0);
+
+      if (forceRefresh) {
+        if (!hasVisibleItems) setLoading(true);
+        setSyncingLive(true);
+        if (!silent) setError('');
+        try {
+          const t0 = Date.now();
+          const res = await fetchIgnitionPool({
+            includeCyb,
+            lookbackDays,
+            sectorDdMin,
+            stockDdMin,
+            customMappings,
+            refresh: true,
+            timeoutMs: 35000,
+          });
+          if (seq !== reqSeqRef.current) return;
+          if (res && res.ok) {
+            setData(res);
+            if (!silent) {
+              const sec = ((res.elapsedMs || Date.now() - t0) / 1000).toFixed(1);
+              toastOk(`✓ 最新起爆挖掘扫盘完成（耗时 ${sec}s）`);
+            }
+          } else {
+            throw new Error(res?.detail || '起爆挖掘扫盘返回异常');
+          }
+        } catch (err) {
+          if (seq !== reqSeqRef.current) return;
+          if (!silent || !hasVisibleItems) {
+            setError(err?.message || '扫描请求失败，请确认后端 18765 已启动');
+          }
+        } finally {
+          if (seq === reqSeqRef.current) {
+            setLoading(false);
+            setSyncingLive(false);
+          }
+        }
+        return;
+      }
+
+      // 入页/切换参数双阶段加载：先毫秒级垫底快照防白屏，若非45秒内最新实盘扫描则立即自动后台拉新
+      if (!hasVisibleItems) setLoading(true);
+      setError('');
+      let paintedSnapshot = hasVisibleItems;
+      let alreadyFresh = false;
+
       try {
-        setLoading(true);
-        setError('');
-        const res = await fetchIgnitionPool({
+        const snapRes = await fetchIgnitionPool({
           includeCyb,
           lookbackDays,
           sectorDdMin,
           stockDdMin,
           customMappings,
-          refresh: forceRefresh,
+          refresh: false,
+          fastSnapshot: true,
+          timeoutMs: 6500,
         });
         if (res && res.ok) {
           setData(res);
@@ -125,9 +175,15 @@ export default function IgnitionPage({
           throw new Error(res?.detail || '起爆挖掘扫盘返回异常');
         }
       } catch (err) {
-        setError(err?.message || '扫描请求失败，请确认后端 18765 已启动');
+        if (seq !== reqSeqRef.current) return;
+        if (!paintedSnapshot) {
+          setError(err?.message || '扫描请求失败，请确认后端 18765 已启动');
+        }
       } finally {
-        setLoading(false);
+        if (seq === reqSeqRef.current) {
+          setLoading(false);
+          setSyncingLive(false);
+        }
       }
     },
     [includeCyb, lookbackDays, sectorDdMin, stockDdMin, customMappings]
@@ -541,10 +597,10 @@ export default function IgnitionPage({
           style={{
             padding: '12px 14px',
             marginBottom: '12px',
-            background: '#fff1f0',
-            border: '1px solid #ffa39e',
+            background: 'var(--up-bg)',
+            border: '1px solid var(--up-b)',
             borderRadius: '8px',
-            color: '#cf1322',
+            color: 'var(--up)',
             fontSize: '13px',
           }}
         >
@@ -569,8 +625,8 @@ export default function IgnitionPage({
                   marginLeft: '5px',
                   padding: '1px 6px',
                   borderRadius: '99px',
-                  background: '#fff1f0',
-                  color: '#cf1322',
+                  background: 'var(--up-bg)',
+                  color: 'var(--up)',
                   fontSize: '11px',
                 }}
               >
@@ -591,8 +647,8 @@ export default function IgnitionPage({
                   marginLeft: '5px',
                   padding: '1px 6px',
                   borderRadius: '99px',
-                  background: '#dcfce7',
-                  color: '#15803d',
+                  background: 'var(--down-bg)',
+                  color: 'var(--down-d)',
                   fontSize: '11px',
                 }}
               >
@@ -613,8 +669,8 @@ export default function IgnitionPage({
                   marginLeft: '5px',
                   padding: '1px 6px',
                   borderRadius: '99px',
-                  background: '#ecfdf5',
-                  color: '#047857',
+                  background: 'var(--down-bg)',
+                  color: 'var(--down-d)',
                   fontSize: '11px',
                   fontWeight: 700,
                 }}
@@ -660,8 +716,8 @@ export default function IgnitionPage({
           {/* 自选横盘标的·专属起爆成色体检台 */}
           <div
             style={{
-              background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
-              border: '1px solid #cbd5e1',
+              background: 'var(--surface)',
+              border: '1px solid var(--line2)',
               borderRadius: '12px',
               padding: '14px 16px',
               marginBottom: '12px',
@@ -683,7 +739,7 @@ export default function IgnitionPage({
                   style={{
                     fontSize: '14px',
                     fontWeight: 800,
-                    color: '#0f172a',
+                    color: 'var(--text)',
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: '6px',
@@ -696,15 +752,15 @@ export default function IgnitionPage({
                       fontSize: '11px',
                       padding: '1px 7px',
                       borderRadius: '99px',
-                      background: '#e0e7ff',
-                      color: '#4338ca',
+                      background: 'var(--info-bg)',
+                      color: 'var(--info-d)',
                       fontWeight: 700,
                     }}
                   >
                     输入任意个股六维体检
                   </span>
                 </span>
-                <div style={{ fontSize: '11.5px', color: '#64748b', marginTop: '3px' }}>
+                <div style={{ fontSize: '11.5px', color: 'var(--mute)', marginTop: '3px' }}>
                   按「首板试盘 + 月放量 + 周向上 + 日缩量 + 均线震仓 + 底座防守」六维全景体检，并一键加入自选或跟踪。
                 </div>
               </div>
@@ -730,8 +786,8 @@ export default function IgnitionPage({
                         marginLeft: 0,
                         fontSize: '11px',
                         padding: '2px 8px',
-                        background: '#fff',
-                        border: '1px solid #cbd5e1',
+                        background: 'var(--card)',
+                        border: '1px solid var(--line2)',
                         flexShrink: 0,
                       }}
                     >
@@ -785,8 +841,8 @@ export default function IgnitionPage({
               <div
                 style={{
                   marginTop: '12px',
-                  background: '#fff',
-                  border: '1px solid #cbd5e1',
+                  background: 'var(--card)',
+                  border: '1px solid var(--line2)',
                   borderRadius: '10px',
                   padding: '14px 16px',
                   boxShadow: '0 4px 14px rgba(0,0,0,0.05)',
@@ -805,7 +861,7 @@ export default function IgnitionPage({
                 >
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: '18px', fontWeight: 900, color: '#0f172a' }}>
+                      <span style={{ fontSize: '18px', fontWeight: 900, color: 'var(--text)' }}>
                         {diagResult.name}
                       </span>
                       <span style={{ fontFamily: 'monospace', fontSize: '14px', color: 'var(--mute)', fontWeight: 700 }}>
@@ -858,10 +914,10 @@ export default function IgnitionPage({
                           fontFamily: 'monospace',
                           color:
                             diagResult.ignitionScore >= 75
-                              ? '#cf1322'
+                              ? 'var(--up)'
                               : diagResult.ignitionScore >= 60
-                              ? '#b45309'
-                              : '#64748b',
+                              ? 'var(--warn-d)'
+                              : 'var(--mute)',
                         }}
                       >
                         {diagResult.ignitionScore}{' '}
@@ -923,15 +979,15 @@ export default function IgnitionPage({
                   style={{
                     marginTop: '10px',
                     padding: '8px 12px',
-                    background: '#f8fafc',
-                    border: '1px solid #e2e8f0',
+                    background: 'var(--surface)',
+                    border: '1px solid var(--line)',
                     borderRadius: '8px',
                     fontSize: '12px',
                     lineHeight: 1.5,
-                    color: '#334155',
+                    color: 'var(--sub)',
                   }}
                 >
-                  <b style={{ color: '#0f172a' }}>💡 智能诊断总评：</b>
+                  <b style={{ color: 'var(--text)' }}>💡 智能诊断总评：</b>
                   {diagResult.stageTip}
                 </div>
 
@@ -947,9 +1003,9 @@ export default function IgnitionPage({
                     const isPass = item.passed === true;
                     const isWarn = item.passed === 'warn';
                     const icon = isPass ? '✅' : isWarn ? '⚠️' : '❌';
-                    const cardBorder = isPass ? '#86efac' : isWarn ? '#fde68a' : '#fecaca';
-                    const cardBg = isPass ? '#f0fdf4' : isWarn ? '#fffbeb' : '#fef2f2';
-                    const badgeCls = isPass ? '#15803d' : isWarn ? '#b45309' : '#dc2626';
+                    const cardBorder = isPass ? 'var(--down-b)' : isWarn ? 'var(--warn-b)' : 'var(--up-b)';
+                    const cardBg = isPass ? 'var(--down-bg)' : isWarn ? 'var(--warn-bg)' : 'var(--up-bg)';
+                    const badgeCls = isPass ? 'var(--down-d)' : isWarn ? 'var(--warn-d)' : '#dc2626';
                     return (
                       <div
                         key={item.id}
@@ -971,7 +1027,7 @@ export default function IgnitionPage({
                         >
                           <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                             <span>{icon}</span>
-                            <b style={{ color: '#0f172a', fontSize: '12px' }}>{item.title}</b>
+                            <b style={{ color: 'var(--text)', fontSize: '12px' }}>{item.title}</b>
                           </div>
                           <span style={{ fontWeight: 800, fontSize: '11px', color: badgeCls }}>
                             {item.badge}
@@ -982,13 +1038,13 @@ export default function IgnitionPage({
                             fontFamily: 'monospace',
                             fontWeight: 700,
                             fontSize: '12px',
-                            color: '#1e293b',
+                            color: 'var(--text)',
                             marginBottom: '3px',
                           }}
                         >
                           {item.val}
                         </div>
-                        <div style={{ fontSize: '11px', color: '#475569', lineHeight: 1.4 }}>
+                        <div style={{ fontSize: '11px', color: 'var(--sub)', lineHeight: 1.4 }}>
                           {item.detail}
                         </div>
                       </div>
@@ -1001,8 +1057,8 @@ export default function IgnitionPage({
                     marginTop: '12px',
                     padding: '10px 14px',
                     borderRadius: '8px',
-                    background: '#fff7ed',
-                    border: '1px solid #fed7aa',
+                    background: 'var(--warn-bg)',
+                    border: '1px solid var(--warn-b)',
                     fontSize: '11.5px',
                   }}
                 >
@@ -1026,10 +1082,10 @@ export default function IgnitionPage({
                       <span style={{ color: '#dc2626' }}>
                         🛡️ 防守线 <b style={{ fontFamily: 'monospace' }}>¥{f2(diagResult.sop?.defensePrice)}</b> (-4.5%)
                       </span>
-                      <span style={{ color: '#15803d' }}>
+                      <span style={{ color: 'var(--down-d)' }}>
                         🏹 倒T1 <b style={{ fontFamily: 'monospace' }}>¥{f2(diagResult.sop?.targetT1)}</b> (+5%)
                       </span>
-                      <span style={{ color: '#b45309' }}>
+                      <span style={{ color: 'var(--warn-d)' }}>
                         🏁 目标2 <b style={{ fontFamily: 'monospace' }}>¥{f2(diagResult.sop?.targetT2)}</b> (+10%)
                       </span>
                     </div>
@@ -1044,8 +1100,8 @@ export default function IgnitionPage({
             style={{
               padding: '10px 14px',
               marginBottom: '12px',
-              background: '#fff7ed',
-              border: '1px solid #fed7aa',
+              background: 'var(--warn-bg)',
+              border: '1px solid var(--warn-b)',
               borderRadius: '10px',
               fontSize: '12px',
               display: 'flex',
@@ -1087,8 +1143,8 @@ export default function IgnitionPage({
                   padding: '4px 8px',
                   fontSize: '12px',
                   borderRadius: '6px',
-                  border: '1px solid #fdba74',
-                  background: '#fff',
+                  border: '1px solid var(--warn-b)',
+                  background: 'var(--card)',
                 }}
               >
                 <option value={10}>近10日涨停</option>
@@ -1239,14 +1295,14 @@ export default function IgnitionPage({
                     <div className="igr-col-wm" style={{ fontSize: '11px', lineHeight: 1.5 }}>
                       <div>
                         月放量:{' '}
-                        <b style={{ fontFamily: 'monospace', color: '#b45309' }}>{item.monthVolRatio}x</b>
+                        <b style={{ fontFamily: 'monospace', color: 'var(--warn-d)' }}>{item.monthVolRatio}x</b>
                         {item.monthHighWarn ? (
                           <span style={{ color: '#dc2626', marginLeft: '4px' }}>(月高位)</span>
                         ) : (
                           ''
                         )}
                       </div>
-                      <div style={{ color: '#15803d', fontWeight: 700 }}>{item.weeklyTrendDesc}</div>
+                      <div style={{ color: 'var(--down-d)', fontWeight: 700 }}>{item.weeklyTrendDesc}</div>
                       <div style={{ color: 'var(--mute)', fontFamily: 'monospace' }}>
                         月位 {item.monthPricePosPct}%
                       </div>
@@ -1255,14 +1311,14 @@ export default function IgnitionPage({
                     <div className="igr-col-daily" style={{ fontSize: '11px', lineHeight: 1.5 }}>
                       <div>
                         缩至板:{' '}
-                        <b style={{ fontFamily: 'monospace', color: '#0369a1' }}>{item.volShrinkPct}%</b>{' '}
+                        <b style={{ fontFamily: 'monospace', color: 'var(--accent-d)' }}>{item.volShrinkPct}%</b>{' '}
                         (连缩{item.shrinkStreak}日)
                       </div>
                       <div style={{ fontFamily: 'monospace' }}>
                         均线极差 {item.maSpreadPct}% · 乖离 {fmtSignedPct(item.biasMa5, 1)}
                       </div>
                       {item.shakeoutSignals && item.shakeoutSignals.length > 0 && (
-                        <div style={{ color: '#cf1322', fontWeight: 700 }}>
+                        <div style={{ color: 'var(--up)', fontWeight: 700 }}>
                           ⚡ {item.shakeoutSignals.join(' + ')}
                         </div>
                       )}
@@ -1275,7 +1331,7 @@ export default function IgnitionPage({
                         fontFamily: 'monospace',
                         fontSize: '16px',
                         fontWeight: 800,
-                        color: item.ignitionScore >= 80 ? '#cf1322' : '#0369a1',
+                        color: item.ignitionScore >= 80 ? 'var(--up)' : 'var(--accent-d)',
                       }}
                     >
                       {item.ignitionScore}
@@ -1321,17 +1377,17 @@ export default function IgnitionPage({
                     {/* 操盘SOP结构化预案条 */}
                     <div className="igr-sop-bar">
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                        <span style={{ fontWeight: 700, color: '#0f172a' }}>🎯 操盘SOP：</span>
+                        <span style={{ fontWeight: 700, color: 'var(--text)' }}>🎯 操盘SOP：</span>
                         <span>
                           参考 <b style={{ fontFamily: 'monospace' }}>¥{f2(item.price)}</b>
                         </span>
                         <span style={{ color: '#dc2626' }}>
                           🛡️ 止损 <b style={{ fontFamily: 'monospace' }}>¥{f2(item.price * 0.955)}</b> (-4.5%)
                         </span>
-                        <span style={{ color: '#15803d' }}>
+                        <span style={{ color: 'var(--down-d)' }}>
                           🏹 倒T1 <b style={{ fontFamily: 'monospace' }}>¥{f2(item.price * 1.05)}</b> (+5%)
                         </span>
-                        <span style={{ color: '#b45309' }}>
+                        <span style={{ color: 'var(--warn-d)' }}>
                           🏁 目标2 <b style={{ fontFamily: 'monospace' }}>¥{f2(item.price * 1.1)}</b> (+10%)
                         </span>
                       </div>
@@ -1355,7 +1411,7 @@ export default function IgnitionPage({
             style={{
               padding: '10px 14px',
               marginBottom: '12px',
-              background: '#f8fafc',
+              background: 'var(--surface)',
               border: '1px solid var(--line)',
               borderRadius: '10px',
             }}
@@ -1399,8 +1455,8 @@ export default function IgnitionPage({
                     style={{
                       padding: '8px 10px',
                       borderRadius: '8px',
-                      background: isBig ? '#fef2f2' : isMod ? '#fffbeb' : '#fff',
-                      border: `1px solid ${isBig ? '#fca5a5' : isMod ? '#fcd34d' : 'var(--line)'}`,
+                      background: isBig ? 'var(--up-bg)' : isMod ? 'var(--warn-bg)' : 'var(--card)',
+                      border: `1px solid ${isBig ? 'var(--up-b)' : isMod ? 'var(--warn-b)' : 'var(--line)'}`,
                       fontSize: '11.5px',
                     }}
                   >
@@ -1508,8 +1564,8 @@ export default function IgnitionPage({
                     style={{
                       padding: '2px 7px',
                       borderRadius: '99px',
-                      background: '#e0f2fe',
-                      color: '#0369a1',
+                      background: 'var(--info-bg)',
+                      color: 'var(--accent-d)',
                       fontSize: '11px',
                       display: 'inline-flex',
                       alignItems: 'center',
@@ -1524,7 +1580,7 @@ export default function IgnitionPage({
                         border: 'none',
                         background: 'transparent',
                         cursor: 'pointer',
-                        color: '#0369a1',
+                        color: 'var(--accent-d)',
                         fontWeight: 800,
                         minHeight: '18px',
                         padding: '0 2px',
@@ -1543,8 +1599,8 @@ export default function IgnitionPage({
             style={{
               padding: '10px 14px',
               marginBottom: '10px',
-              background: '#f0fdf4',
-              border: '1px solid #bbf7d0',
+              background: 'var(--down-bg)',
+              border: '1px solid var(--down-b)',
               borderRadius: '10px',
               fontSize: '12px',
               display: 'flex',
@@ -1766,11 +1822,11 @@ export default function IgnitionPage({
                     <div className="igr-col-zt" style={{ fontSize: '11px', lineHeight: 1.5 }}>
                       <div>
                         <b>{item.primaryBoardName}</b>:{' '}
-                        <b style={{ fontFamily: 'monospace', color: '#15803d' }}>{item.worstBoardDd}%</b>
+                        <b style={{ fontFamily: 'monospace', color: 'var(--down-d)' }}>{item.worstBoardDd}%</b>
                       </div>
                       <div>
                         个股回撤:{' '}
-                        <b style={{ fontFamily: 'monospace', color: '#15803d' }}>
+                        <b style={{ fontFamily: 'monospace', color: 'var(--down-d)' }}>
                           {item.stockDrawdownPct}%
                         </b>
                       </div>
@@ -1782,9 +1838,9 @@ export default function IgnitionPage({
                     <div className="igr-col-wm" style={{ fontSize: '11px', lineHeight: 1.5 }}>
                       <div>
                         5日/峰值:{' '}
-                        <b style={{ fontFamily: 'monospace', color: '#0369a1' }}>{item.volExhaustPct}%</b>
+                        <b style={{ fontFamily: 'monospace', color: 'var(--accent-d)' }}>{item.volExhaustPct}%</b>
                       </div>
-                      <div style={{ color: item.notNewLow ? '#15803d' : '#dc2626', fontWeight: 700 }}>
+                      <div style={{ color: item.notNewLow ? 'var(--down-d)' : '#dc2626', fontWeight: 700 }}>
                         {item.notNewLow ? '✓ 未破近5日低' : '✗ 仍在破位新低'}
                       </div>
                     </div>
@@ -1812,7 +1868,7 @@ export default function IgnitionPage({
                         fontFamily: 'monospace',
                         fontSize: '16px',
                         fontWeight: 800,
-                        color: item.dipSignal === 'ANTI_DROP_BOTTOM' ? '#15803d' : '#475569',
+                        color: item.dipSignal === 'ANTI_DROP_BOTTOM' ? 'var(--down-d)' : 'var(--sub)',
                       }}
                     >
                       {item.dipScore}
@@ -1857,21 +1913,21 @@ export default function IgnitionPage({
 
                     <div
                       className="igr-sop-bar"
-                      style={{ background: '#f0fdf4', borderColor: '#86efac' }}
+                      style={{ background: 'var(--down-bg)', borderColor: 'var(--down-b)' }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                        <span style={{ fontWeight: 700, color: '#166534' }}>🛟 抄底SOP：</span>
+                        <span style={{ fontWeight: 700, color: 'var(--down-d)' }}>🛟 抄底SOP：</span>
                         <span>
                           建仓参考 <b style={{ fontFamily: 'monospace' }}>¥{f2(item.price)}</b>
                         </span>
                         <span style={{ color: '#dc2626' }}>
                           🛡️ 防守线 <b style={{ fontFamily: 'monospace' }}>¥{f2(item.price * 0.94)}</b> (-6%)
                         </span>
-                        <span style={{ color: '#15803d' }}>
+                        <span style={{ color: 'var(--down-d)' }}>
                           🏹 反弹目标 <b style={{ fontFamily: 'monospace' }}>¥{f2(item.price * 1.08)}</b> (+8%)
                         </span>
                       </div>
-                      <div style={{ color: '#166534' }}>
+                      <div style={{ color: 'var(--down-d)' }}>
                         {inT ? '✓ 已在自选池持续盯盘（点「✓已自选」直达作战台）' : '点「＋自选」原位入池不跳走，可连续多选'}
                       </div>
                     </div>
@@ -1932,7 +1988,7 @@ export default function IgnitionPage({
                 <div
                   style={{
                     fontSize: '12px',
-                    color: '#cbd5e1',
+                    color: 'var(--line2)',
                     marginTop: '4px',
                     lineHeight: 1.55,
                     maxWidth: '960px',
@@ -1985,13 +2041,13 @@ export default function IgnitionPage({
                   border: '1px solid rgba(239, 68, 68, 0.3)',
                 }}
               >
-                <div style={{ fontSize: '11px', color: '#fca5a5' }}>🚀 放量起爆 / 大胜</div>
+                <div style={{ fontSize: '11px', color: 'var(--up-b)' }}>🚀 放量起爆 / 大胜</div>
                 <div
                   style={{
                     fontSize: '18px',
                     fontWeight: 800,
                     fontFamily: 'monospace',
-                    color: '#fca5a5',
+                    color: 'var(--up-b)',
                     marginTop: '2px',
                   }}
                 >
@@ -2007,13 +2063,13 @@ export default function IgnitionPage({
                   border: '1px solid rgba(56, 189, 248, 0.25)',
                 }}
               >
-                <div style={{ fontSize: '11px', color: '#bae6fd' }}>⏳ 缩量蓄势中</div>
+                <div style={{ fontSize: '11px', color: 'var(--info-b)' }}>⏳ 缩量蓄势中</div>
                 <div
                   style={{
                     fontSize: '18px',
                     fontWeight: 800,
                     fontFamily: 'monospace',
-                    color: '#bae6fd',
+                    color: 'var(--info-b)',
                     marginTop: '2px',
                   }}
                 >
@@ -2029,13 +2085,13 @@ export default function IgnitionPage({
                   border: '1px solid rgba(148, 163, 184, 0.2)',
                 }}
               >
-                <div style={{ fontSize: '11px', color: '#cbd5e1' }}>🛑 触及防守线</div>
+                <div style={{ fontSize: '11px', color: 'var(--line2)' }}>🛑 触及防守线</div>
                 <div
                   style={{
                     fontSize: '18px',
                     fontWeight: 800,
                     fontFamily: 'monospace',
-                    color: '#e2e8f0',
+                    color: 'var(--line)',
                     marginTop: '2px',
                   }}
                 >
@@ -2050,7 +2106,7 @@ export default function IgnitionPage({
                     fontSize: '18px',
                     fontWeight: 800,
                     fontFamily: 'monospace',
-                    color: (trackingSummary.winRate || 0) >= 50 ? '#86efac' : '#fde047',
+                    color: (trackingSummary.winRate || 0) >= 50 ? 'var(--down-b)' : '#fde047',
                     marginTop: '2px',
                   }}
                 >
@@ -2064,7 +2120,7 @@ export default function IgnitionPage({
                     fontSize: '18px',
                     fontWeight: 800,
                     fontFamily: 'monospace',
-                    color: (trackingSummary.avgGainPct || 0) >= 0 ? '#fca5a5' : '#86efac',
+                    color: (trackingSummary.avgGainPct || 0) >= 0 ? 'var(--up-b)' : 'var(--down-b)',
                     marginTop: '2px',
                   }}
                 >
@@ -2159,8 +2215,8 @@ export default function IgnitionPage({
                           style={{
                             padding: '1px 5px',
                             borderRadius: '4px',
-                            background: '#f1f5f9',
-                            color: '#475569',
+                            background: 'var(--surface2)',
+                            color: 'var(--sub)',
                             fontSize: '10px',
                             fontWeight: 600,
                           }}
@@ -2174,7 +2230,7 @@ export default function IgnitionPage({
                       <div style={{ fontFamily: 'monospace', color: 'var(--mute)' }}>
                         {item.signalDate} 入选
                       </div>
-                      <div style={{ fontWeight: 700, color: '#334155' }}>
+                      <div style={{ fontWeight: 700, color: 'var(--sub)' }}>
                         {item.verdict || item.subType}
                       </div>
                       <div>
@@ -2206,9 +2262,9 @@ export default function IgnitionPage({
                           fontWeight: 800,
                           padding: '3px 8px',
                           borderRadius: '6px',
-                          background: item.stageBg || '#f1f5f9',
-                          color: item.stageColor || '#334155',
-                          border: `1px solid ${item.stageBorder || '#cbd5e1'}`,
+                          background: item.stageBg || 'var(--surface2)',
+                          color: item.stageColor || 'var(--sub)',
+                          border: `1px solid ${item.stageBorder || 'var(--line2)'}`,
                         }}
                       >
                         {item.stageDesc}
@@ -2220,20 +2276,20 @@ export default function IgnitionPage({
                       style={{
                         background:
                           item.trackStage === 'TARGET_REACHED'
-                            ? '#fffbeb'
+                            ? 'var(--warn-bg)'
                             : item.trackStage === 'IGNITED'
-                            ? '#fef2f2'
+                            ? 'var(--up-bg)'
                             : item.trackStage === 'STOPPED'
-                            ? '#f8fafc'
-                            : '#f0f9ff',
+                            ? 'var(--surface)'
+                            : 'var(--info-bg)',
                         border: `1px solid ${
                           item.trackStage === 'TARGET_REACHED'
-                            ? '#fde68a'
+                            ? 'var(--warn-b)'
                             : item.trackStage === 'IGNITED'
-                            ? '#fecaca'
+                            ? 'var(--up-b)'
                             : item.trackStage === 'STOPPED'
-                            ? '#e2e8f0'
-                            : '#bae6fd'
+                            ? 'var(--line)'
+                            : 'var(--info-b)'
                         }`,
                         borderRadius: '7px',
                         padding: '7px 9px',
@@ -2241,7 +2297,7 @@ export default function IgnitionPage({
                         lineHeight: 1.45,
                       }}
                     >
-                      <div style={{ color: '#0f172a', fontWeight: 600 }}>
+                      <div style={{ color: 'var(--text)', fontWeight: 600 }}>
                         💡 {sop.advice || '根据日内分时均价线择机做T'}
                       </div>
                       <div
@@ -2262,13 +2318,13 @@ export default function IgnitionPage({
                         </span>
                         <span>
                           🏹 做T1:{' '}
-                          <b style={{ fontFamily: 'monospace', color: '#15803d' }}>
+                          <b style={{ fontFamily: 'monospace', color: 'var(--down-d)' }}>
                             ¥{f2(sop.targetT1)}
                           </b>
                         </span>
                         <span>
                           🏁 目标2:{' '}
-                          <b style={{ fontFamily: 'monospace', color: '#b45309' }}>
+                          <b style={{ fontFamily: 'monospace', color: 'var(--warn-d)' }}>
                             ¥{f2(sop.targetT2)}
                           </b>
                         </span>

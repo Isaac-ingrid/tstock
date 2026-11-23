@@ -214,9 +214,9 @@ export function computeAuctionPattern(stock) {
       tag: '🚀 弱转强爆量开',
       title: '09:25 弱转强超预期逆转',
       desc: `${reason}，今日竞价逆势高开 ${gap >= 0 ? '+' : ''}${gap.toFixed(2)}%（量比 ${vr.toFixed(2)}倍）！主力真金白银扭转空头预期，早盘极速上板概率极高！`,
-      color: '#cf1322',
-      bg: '#fff1f0',
-      border: '#ffa39e',
+      color: 'var(--up)',
+      bg: 'var(--up-bg)',
+      border: 'var(--up-b)',
       gap,
       vr,
       score: 92,
@@ -232,7 +232,7 @@ export function computeAuctionPattern(stock) {
       tag: '⚡ 竞价抢筹冲板',
       title: '高开爆量主力抢筹',
       desc: `高开 ${gap.toFixed(2)}% 且竞价量比高达 ${vr.toFixed(2)}，场内资金开盘抢筹，具备冲击涨停潜质，需盯紧开盘分时均线不破可轻仓跟进。`,
-      color: '#d4380d',
+      color: 'var(--up-d)',
       bg: '#fff2e8',
       border: '#ffbb96',
       gap,
@@ -390,8 +390,8 @@ export function computeLimitUpRigidity(stock) {
     hardnessScore = Math.max(10, Math.round(35 + brokenDrop * 3));
     label = `🚨 曾炸板 (现跌落${Math.abs(brokenDrop).toFixed(1)}%)`;
     desc = `今日盘中曾触碰涨停 ¥${f2(ceiling)}，但随后被抛盘砸开，当前自涨停回落 ${Math.abs(brokenDrop).toFixed(1)}%！严禁盲目打板接飞刀！`;
-    badgeColor = '#cf1322';
-    badgeBg = '#fff1f0';
+    badgeColor = 'var(--up)';
+    badgeBg = 'var(--up-bg)';
   } else if (isLimitUp) {
     status = 'limit_up';
     // 1. 封成比与封单额得分 (0 - 45分)
@@ -419,18 +419,18 @@ export function computeLimitUpRigidity(stock) {
     if (hardnessScore >= 85) {
       label = isBefore940 ? '💎 9:40前顶级硬板' : '💎 超级硬板 (封死)';
       desc = `买一封单 ¥${(sealAmtYuan / 1e8).toFixed(2)}亿，封成比 ${sealRatio.toFixed(2)}倍，封单坚决，次日溢价预期极高。`;
-      badgeColor = '#cf1322';
-      badgeBg = '#fff1f0';
+      badgeColor = 'var(--up)';
+      badgeBg = 'var(--up-bg)';
     } else if (hardnessScore >= 70) {
       label = '🔥 强势封死 (硬度良好)';
       desc = `买一封单 ¥${(sealAmtYuan / 1e4).toFixed(0)}万，封成比 ${sealRatio.toFixed(2)}倍，硬度良好，注意盘中单量变动。`;
-      badgeColor = '#d4380d';
+      badgeColor = 'var(--up-d)';
       badgeBg = '#fff2e8';
     } else {
       label = '🟡 常规板 (防尾盘漏单)';
       desc = `买一封单金额偏弱或换手不足，需警惕尾盘炸板漏单风险。`;
-      badgeColor = '#d46b08';
-      badgeBg = '#fffbe6';
+      badgeColor = 'var(--warn-d)';
+      badgeBg = 'var(--warn-bg)';
     }
   } else if (isNearLimit) {
     status = 'rush';
@@ -438,21 +438,21 @@ export function computeLimitUpRigidity(stock) {
     label = `⚡ 逼近涨停冲板中 (+${chg.toFixed(1)}%)`;
     desc = `现价 ¥${f2(px)} 距涨停仅差 ${distCeiling.toFixed(1)}%，场内多头正猛烈冲击封板，进入打板扫板/排单临界决策窗口！`;
     badgeColor = '#1677ff';
-    badgeBg = '#e6f4ff';
+    badgeBg = 'var(--info-bg)';
   } else if (hadPrevLimitUp) {
     status = 'prev_relay';
     hardnessScore = Math.round(50 + chg * 2);
     label = `🎯 昨日涨停 · 连板接力观察`;
     desc = `昨日强势涨停，今日当前涨跌幅 ${chg >= 0 ? '+' : ''}${chg.toFixed(1)}%，重点观察能否快速突破分时均线走出 1进2 / 连板！`;
-    badgeColor = '#389e0d';
-    badgeBg = '#f6ffed';
+    badgeColor = 'var(--down-d)';
+    badgeBg = 'var(--down-bg)';
   } else if (hadPrevBroken) {
     status = 'prev_broken';
     hardnessScore = 40;
     label = `⚠️ 昨炸板烂板 · 分歧修复观察`;
     desc = `昨日曾触及涨停但被砸开收烂板，今日重点观察是否有资金逆势承接走出弱转强修复。`;
-    badgeColor = '#d46b08';
-    badgeBg = '#fffbe6';
+    badgeColor = 'var(--warn-d)';
+    badgeBg = 'var(--warn-bg)';
   }
 
   return {
@@ -518,9 +518,9 @@ export function computeNextDayExitDecision(stock) {
     title: `正常小高开 (${openGap >= 0 ? '+' : ''}${openGap.toFixed(1)}%) · 冲高分批止盈`,
     desc: '开盘溢价合理，主力未出现极端抢筹或弃庄。',
     action: '开盘冲高至 +3%~+5% 择机挂单先止盈锁利 1/2；剩余半仓以分时黄线为防守底线，破线全走。',
-    color: '#0284c7',
-    bg: '#f0f9ff',
-    border: '#bae6fd',
+    color: 'var(--accent)',
+    bg: 'var(--info-bg)',
+    border: 'var(--info-b)',
     urgency: 'medium'
   };
 
@@ -532,8 +532,8 @@ export function computeNextDayExitDecision(stock) {
       desc: '主力资金竞价爆量顶板或大幅高开，弱转强或加速连板意图明显。',
       action: '锁仓拿住！严禁盲目开盘抢跑；若 9:35 前秒板继续格局；若冲高未能封死且放天量跌破分时黄线，分批止盈 1/2。',
       color: '#16a34a',
-      bg: '#f0fdf4',
-      border: '#86efac',
+      bg: 'var(--down-bg)',
+      border: 'var(--down-b)',
       urgency: 'low'
     };
   } else if (openGap >= -1.0 && openGap < 1.0) {
@@ -544,8 +544,8 @@ export function computeNextDayExitDecision(stock) {
       desc: '昨日涨停次日未获主力溢价认可，交投出现严重分歧。',
       action: '盯紧开盘前 5 分钟！若无法迅速放量翻红站上分时均线，逢脉冲抽高保本或微亏保本离场，绝不恋战！',
       color: '#ea580c',
-      bg: '#fff7ed',
-      border: '#fdba74',
+      bg: 'var(--warn-bg)',
+      border: 'var(--warn-b)',
       urgency: 'high'
     };
   } else if (openGap < -1.0) {
@@ -556,8 +556,8 @@ export function computeNextDayExitDecision(stock) {
       desc: '主力大单竞价砸盘抢跑，昨日追高跟风盘全线深套踩踏。',
       action: '严禁幻想日内反包或抄底摊平！开盘第一时间市价直接挂单排队止损出局，防吃日内大长阴！',
       color: '#dc2626',
-      bg: '#fef2f2',
-      border: '#fca5a5',
+      bg: 'var(--up-bg)',
+      border: 'var(--up-b)',
       urgency: 'critical'
     };
   }

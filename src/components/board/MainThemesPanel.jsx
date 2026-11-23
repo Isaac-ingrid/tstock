@@ -31,30 +31,30 @@ export default function MainThemesPanel({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      <div style={{ padding: '10px 14px', background: 'linear-gradient(135deg, #faf5ff, #f0f9ff)', border: '1.5px solid #d8b4fe', borderRadius: '10px' }}>
-        <div style={{ fontSize: '13.5px', fontWeight: 800, color: '#6b21a8', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
+      <div style={{ padding: '10px 14px', background: 'var(--info-bg)', border: '1.5px solid var(--accent-b)', borderRadius: '10px' }}>
+        <div style={{ fontSize: '13.5px', fontWeight: 800, color: 'var(--accent-d)', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
           <span>🧭 全市场动态主线与四大核心中枢（已严格剔除创业板30与科创板68）</span>
-          <span style={{ fontSize: '11.5px', fontWeight: 600, color: '#0369a1' }}>
+          <span style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--accent-d)' }}>
             第一主线：{mo.topThemeName || '—'}
           </span>
         </div>
-        <div style={{ fontSize: '12px', color: '#475569', marginBottom: '10px' }}>
+        <div style={{ fontSize: '12px', color: 'var(--sub)', marginBottom: '10px' }}>
           💡 {mo.topThemeReason || '实时统计概念风口与涨停集群资金合力'}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(248px, 1fr))', gap: '10px' }}>
-          <CoreRoleBox roleLabel="👑 全场题材/连板总龙头" accent="#cf1322" bdColor="#ffa39e" bgColor="#fff" stock={mo.heightLeader} {...roleProps} />
-          <CoreRoleBox roleLabel="🔥 全场阶段抱团核心" accent="#7c3aed" bdColor="#c4b5fd" bgColor="#fff" stock={mo.phaseCore} {...roleProps} />
-          <CoreRoleBox roleLabel="🐳 全场流动性容量核心" accent="#1d4ed8" bdColor="#93c5fd" bgColor="#fff" stock={mo.capacityCore} {...roleProps} />
+          <CoreRoleBox roleLabel="👑 全场题材/连板总龙头" accent="var(--up)" bdColor="var(--up-b)" bgColor="var(--card)" stock={mo.heightLeader} {...roleProps} />
+          <CoreRoleBox roleLabel="🔥 全场阶段抱团核心" accent="var(--accent-d)" bdColor="var(--accent-b)" bgColor="var(--card)" stock={mo.phaseCore} {...roleProps} />
+          <CoreRoleBox roleLabel="🐳 全场流动性容量核心" accent="var(--info-d)" bdColor="var(--info-b)" bgColor="var(--card)" stock={mo.capacityCore} {...roleProps} />
         </div>
       </div>
 
       {mysticClusters.length > 0 && (
-        <div style={{ padding: '10px 14px', background: '#faf5ff', border: '1px solid #d8b4fe', borderRadius: '10px' }}>
+        <div style={{ padding: '10px 14px', background: 'var(--accent-bg)', border: '1px solid var(--accent-b)', borderRadius: '10px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
-            <span style={{ fontSize: '13px', fontWeight: 800, color: '#6d28d9' }}>
+            <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--accent-d)' }}>
               🔮 今日跨行业玄学 / 同音字辈共振暗线（独立于东财行业分类）
             </span>
-            <span style={{ fontSize: '11px', color: '#7c3aed' }}>点击标题切入强势池 · 具体股支持一键跟踪与加自选</span>
+            <span style={{ fontSize: '11px', color: 'var(--accent-d)' }}>点击标题切入强势池 · 具体股支持一键跟踪与加自选</span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '8px' }}>
             {mysticClusters.map(cl => (
@@ -63,8 +63,8 @@ export default function MainThemesPanel({
                 style={{
                   padding: '9px 11px',
                   borderRadius: '8px',
-                  background: '#fff',
-                  border: '1px solid #e9d5ff',
+                  background: 'var(--card)',
+                  border: '1px solid var(--accent-b)',
                   display: 'flex',
                   flexDirection: 'column',
                   gap: '6px',
@@ -74,10 +74,10 @@ export default function MainThemesPanel({
                   onClick={() => onFilterThemeToStrong(`字辈·${cl.name}`)}
                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', gap: '6px' }}
                 >
-                  <b style={{ fontSize: '13px', color: '#6d28d9' }}>
+                  <b style={{ fontSize: '13px', color: 'var(--accent-d)' }}>
                     {cl.name} {cl.isAuto && <span style={{ fontSize: '10px', color: '#9333ea', fontWeight: 500 }}>(自动字头)</span>}
                   </b>
-                  <span style={{ fontSize: '11px', fontWeight: 800, padding: '1px 6px', borderRadius: '4px', background: '#f3e8ff', color: '#7c3aed', whiteSpace: 'nowrap' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 800, padding: '1px 6px', borderRadius: '4px', background: 'var(--accent-bg)', color: 'var(--accent-d)', whiteSpace: 'nowrap' }}>
                     {cl.ztCount} 板 · 最高{cl.maxLbc}板 →
                   </span>
                 </div>
@@ -98,7 +98,7 @@ export default function MainThemesPanel({
                             gap: '6px',
                             padding: '4px 6px',
                             borderRadius: '6px',
-                            background: '#faf5ff',
+                            background: 'var(--accent-bg)',
                             border: '1px solid #f3e8ff',
                             fontSize: '11.5px',
                           }}
@@ -106,11 +106,11 @@ export default function MainThemesPanel({
                           <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap', minWidth: 0 }}>
                             <b style={{ color: 'var(--text)' }}>{st.name}</b>
                             <span style={{ fontFamily: 'monospace', fontSize: '10.5px', color: 'var(--mute)' }}>{c6}</span>
-                            <span style={{ fontSize: '10px', padding: '0 4px', borderRadius: '3px', background: '#fff1f0', color: '#cf1322', fontWeight: 700 }}>
+                            <span style={{ fontSize: '10px', padding: '0 4px', borderRadius: '3px', background: 'var(--up-bg)', color: 'var(--up)', fontWeight: 700 }}>
                               {st.lbc}板
                             </span>
                             {st.hybk && (
-                              <span style={{ fontSize: '10.5px', color: '#64748b' }}>{st.hybk}</span>
+                              <span style={{ fontSize: '10.5px', color: 'var(--mute)' }}>{st.hybk}</span>
                             )}
                           </div>
                           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
@@ -161,7 +161,7 @@ export default function MainThemesPanel({
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '11px', fontWeight: 800, padding: '2px 7px', borderRadius: '4px', background: idx === 0 ? '#9333ea' : '#475569', color: '#fff' }}>
+                <span style={{ fontSize: '11px', fontWeight: 800, padding: '2px 7px', borderRadius: '4px', background: idx === 0 ? 'var(--info)' : 'var(--surface2)', color: idx === 0 ? '#fff' : 'var(--sub)', color: '#fff' }}>
                   主线 #{idx + 1} · {th.sourceType}
                 </span>
                 <span style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text)' }}>{th.name}</span>
@@ -175,7 +175,7 @@ export default function MainThemesPanel({
                   type="button"
                   className="mini"
                   onClick={() => onFilterThemeToStrong(th.name)}
-                  style={{ marginLeft: 0, fontSize: '11px', color: '#0958d9', borderColor: '#91caff', background: '#e6f4ff' }}
+                  style={{ marginLeft: 0, fontSize: '11px', color: 'var(--info-d)', borderColor: 'var(--info-b)', background: 'var(--info-bg)' }}
                 >
                   🔍 切入强共振筛选
                 </button>
@@ -187,9 +187,9 @@ export default function MainThemesPanel({
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '10px' }}>
-              <CoreRoleBox roleLabel="👑 题材龙头" accent="#cf1322" bdColor="#fecaca" bgColor="#fffafa" stock={th.roles?.themeLeader} {...roleProps} />
-              <CoreRoleBox roleLabel="🔥 阶段核心" accent="#7c3aed" bdColor="#ddd6fe" bgColor="#faf5ff" stock={th.roles?.phaseCore} {...roleProps} />
-              <CoreRoleBox roleLabel="🐳 容量核心" accent="#1d4ed8" bdColor="#bfdbfe" bgColor="#eff6ff" stock={th.roles?.capacityCore} {...roleProps} />
+              <CoreRoleBox roleLabel="👑 题材龙头" accent="var(--up)" bdColor="var(--up-b)" bgColor="var(--up-bg)" stock={th.roles?.themeLeader} {...roleProps} />
+              <CoreRoleBox roleLabel="🔥 阶段核心" accent="var(--accent-d)" bdColor="var(--accent-b)" bgColor="var(--accent-bg)" stock={th.roles?.phaseCore} {...roleProps} />
+              <CoreRoleBox roleLabel="🐳 容量核心" accent="var(--info-d)" bdColor="var(--info-b)" bgColor="var(--info-bg)" stock={th.roles?.capacityCore} {...roleProps} />
             </div>
 
             {themeStocks.length > 0 && (

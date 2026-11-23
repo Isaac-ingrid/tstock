@@ -13,15 +13,28 @@ import { pool } from './state.js';
    配色遵循 A 股惯例：涨红跌绿。悬停显示该根的时间、OHLC 与各指标取值。 */
 /* 图表配色：与 CSS 变量同源。涨红跌绿、线色对比度 ≥3:1（非文本标准），
    文字类（txt/mute）按 ≥4.5 取。注意 Canvas 读不到 CSS 变量，必须在这里同步改。 */
-export const CH = { up:'#d32f2f', dn:'#0a7f42', grid:'#eef1f4', txt:'#515c69', mute:'#66707c',
-             /* 均线 4 色：蓝 221° / 玫红 336° / 青 192° / 金 35° —— 两两色相 ≥35°，
-                原来 MA10/均价/BOLL中轨/箱体/MA60 五条线全挤在 21°–46° 的橙黄区，图上一片橙。 */
-             ma5:'#2563eb', ma10:'#c2185b', ma20:'#0891b2', ma60:'#a16207',
-             /* BOLL 是一族：上/下轨与中轨同色相同族、只差一档明度，靠线型再分 */
-             bollU:'#4f46e5', bollM:'#6366f1',
-             /* 参考线各归其位：压力=深红 0°、成本=紫 262°、均价=青 193°，
-                箱体与 VMA 都是中性参考，用同色相的一深一浅两档灰，避免完全同色 */
-             sr:'#991b1b', cost:'#7c3aed', box:'#6b7280', avg:'#0e7490', vma:'#4b5563' };
+const isDarkChart = () => typeof document !== 'undefined' && document.documentElement?.dataset?.theme !== 'light';
+const CH_LIGHT = {
+  up:'#d32f2f', dn:'#0a7f42', grid:'#eef1f4', grid2:'#e5e7eb', gridSub:'#f1f5f9', gridMid:'#c9d2dd',
+  bg:'#ffffff', tagBg:'rgba(255,255,255,0.92)', tipBg:'rgba(255,255,255,0.96)',
+  txt:'#515c69', mute:'#66707c',
+  ma5:'#2563eb', ma10:'#c2185b', ma20:'#0891b2', ma60:'#a16207',
+  bollU:'#4f46e5', bollM:'#6366f1',
+  sr:'#991b1b', cost:'#0284c7', box:'#6b7280', avg:'#0e7490', vma:'#4b5563'
+};
+const CH_DARK = {
+  up:'#f04438', dn:'#12b76a', grid:'rgba(255,255,255,0.07)', grid2:'rgba(255,255,255,0.13)', gridSub:'rgba(255,255,255,0.05)', gridMid:'rgba(255,255,255,0.18)',
+  bg:'#12161f', tagBg:'rgba(18,22,31,0.92)', tipBg:'rgba(23,28,39,0.96)',
+  txt:'#cbd5e1', mute:'#94a3b8',
+  ma5:'#60a5fa', ma10:'#f472b6', ma20:'#22d3ee', ma60:'#fbbf24',
+  bollU:'#818cf8', bollM:'#6366f1',
+  sr:'#f87171', cost:'#38bdf8', box:'#94a3b8', avg:'#2dd4bf', vma:'#94a3b8'
+};
+export const CH = new Proxy(CH_DARK, {
+  get(_, k) {
+    return (isDarkChart() ? CH_DARK : CH_LIGHT)[k];
+  }
+});
 export const _hover = {};                       // 每张图的悬停索引
 export function setHover(id, idx) { _hover[id] = idx; }
 export const OV_DEF = { ma:'均线', boll:'BOLL', box:'箱体', cost:'成本', sr:'支撑压力' };
@@ -316,7 +329,7 @@ export function analyzeIntradayDistribution(pts, prev, stock) {
       title: '⚠️ 疑似脉冲出货 (钓鱼波诱多，防追高)',
       badge: '⚠️ 脉冲诱多',
       color: '#ea580c',
-      bg: '#fff7ed',
+      bg: 'var(--warn-bg)',
       border: '#fdba74',
       desc: `${spikeDesc}。主力借脉冲拉高吸引跟风挂单后倾倒筹码，切忌冲动追高！`,
       bias
@@ -330,7 +343,7 @@ export function analyzeIntradayDistribution(pts, prev, stock) {
       title: '⚠️ 高位放量滞涨 (量大价滞，防主力开闸)',
       badge: '⚠️ 放量滞涨',
       color: '#b45309',
-      bg: '#fffbeb',
+      bg: 'var(--warn-bg)',
       border: '#fde68a',
       desc: `高位成交量放大至均量的 ${(recentVol / avgVol).toFixed(1)} 倍，但股价滞涨停顿，警惕主力高位对倒出货！`,
       bias
@@ -408,7 +421,7 @@ function chipText(ctx, txt, x, y, col, bg, maxW){
     out += '…';
   }
   const tw = ctx.measureText(out).width;
-  ctx.globalAlpha = .94; ctx.fillStyle = bg || '#fff';
+  ctx.globalAlpha = .94; ctx.fillStyle = bg || CH.tagBg;
   ctx.fillRect(x, y-8, tw+7, 15);
   ctx.globalAlpha = 1; ctx.fillStyle = col;
   ctx.fillText(out, x+3.5, y);
@@ -542,7 +555,7 @@ export function drawChart(cv, s){
     ctx.beginPath(); ctx.moveTo(PL, yy+.5); ctx.lineTo(W-PR, yy+.5); ctx.stroke();
     ctx.fillStyle = CH.mute; ctx.fillText(f2(pv), W-PR+5, yy);
   }
-  ctx.strokeStyle = '#e5e7eb';
+  ctx.strokeStyle = CH.grid2;
   ctx.beginPath(); ctx.moveTo(PL, v1+.5); ctx.lineTo(W-PR, v1+.5); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(PL, s1+.5); ctx.lineTo(W-PR, s1+.5); ctx.stroke();
 
@@ -565,7 +578,7 @@ export function drawChart(cv, s){
     ctx.beginPath(); ctx.moveTo(x, Y(k.high)); ctx.lineTo(x, Y(k.low)); ctx.stroke();
     const yo = Y(k.open), yc = Y(k.close);
     const top = Math.min(yo,yc), hgt = Math.max(1, Math.abs(yc-yo));
-    if (rise){ ctx.fillStyle = '#fff'; ctx.fillRect(x-bodyW/2, top, bodyW, hgt);
+    if (rise){ ctx.fillStyle = CH.bg; ctx.fillRect(x-bodyW/2, top, bodyW, hgt);
                ctx.strokeRect(x-bodyW/2+.5, top+.5, bodyW-1, hgt-1); }
     else     { ctx.fillRect(x-bodyW/2, top, bodyW, hgt); }
   });
@@ -603,7 +616,7 @@ export function drawChart(cv, s){
     ctx.restore();
     if (label){
       ctx.textAlign = 'left';
-      chipText(ctx, label, PL+2, above ? yy-9 : yy+10, col, 'rgba(255,255,255,.92)');
+      chipText(ctx, label, PL+2, above ? yy-9 : yy+10, col, CH.tagBg);
     }
   };
   if (ov.sr){
@@ -622,7 +635,7 @@ export function drawChart(cv, s){
       ctx.font = '9.5px ui-monospace,Consolas,monospace';
       const lab = (isRes ? '压' : '撑') + (i+1) + ' ' + f2(l.p);
       const tw = ctx.measureText(lab).width;
-      ctx.fillStyle = 'rgba(255,255,255,.86)';
+      ctx.fillStyle = CH.tagBg;
       ctx.fillRect(W-PR-4-tw, yy-16, tw+7, 14);
       ctx.fillStyle = col; ctx.textAlign = 'left';
       ctx.fillText(lab, W-PR-1-tw, yy-9);
@@ -669,7 +682,7 @@ export function drawChart(cv, s){
     const r6 = sv(ind.rsi6), r12 = sv(ind.rsi12), r24 = sv(ind.rsi24);
     const RY = v => s1 - (Math.max(0, Math.min(100, v)))/100*(s1-s0);
     [30,50,70].forEach(v=>{
-      ctx.strokeStyle = v===50 ? '#e2e8f0' : '#f1f5f9'; ctx.lineWidth = 1;
+      ctx.strokeStyle = v===50 ? CH.grid2 : CH.gridSub; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(PL, RY(v)+.5); ctx.lineTo(W-PR, RY(v)+.5); ctx.stroke();
       ctx.fillStyle = CH.mute; ctx.textAlign = 'left'; ctx.fillText(String(v), W-PR+5, RY(v));
     });
@@ -686,7 +699,7 @@ export function drawChart(cv, s){
       const span = Math.max(...[...difS, ...deaS, ...barS].map(v=> Math.abs(v||0)), 0.01)*1.15;
       const yMid = (s0+s1)/2;
       const MY = v => yMid - v/span*((s1-s0)/2 - 2);
-      ctx.strokeStyle = '#e5e7eb'; ctx.beginPath(); ctx.moveTo(PL, yMid+.5); ctx.lineTo(W-PR, yMid+.5); ctx.stroke();
+      ctx.strokeStyle = CH.grid2; ctx.beginPath(); ctx.moveTo(PL, yMid+.5); ctx.lineTo(W-PR, yMid+.5); ctx.stroke();
       view.forEach((k,i)=>{
         const v = barS[i]; if (v == null) return;
         const yy = MY(v);
@@ -734,7 +747,7 @@ export function drawChart(cv, s){
   if (ind.macd) p2.push('DIF ' + nf(g(ind.macd.dif),3), 'DEA ' + nf(g(ind.macd.dea),3));
   const row2 = p2.join('  ');
   ctx.textAlign = 'left';
-  chipText(ctx, row1, PL, 12, hv.close >= hv.open ? CH.up : CH.dn, 'rgba(255,255,255,.95)', W - PL - 4);
+  chipText(ctx, row1, PL, 12, hv.close >= hv.open ? CH.up : CH.dn, CH.tagBg, W - PL - 4);
   // 第二行：按可用宽度自适应取舍 —— 宁可少显示两项，也不要让文字溢出画布被裁掉
   if (row2){
     const parts = p2.slice();
@@ -744,7 +757,7 @@ export function drawChart(cv, s){
       if (ctx.measureText(t).width > W - PL - 12) break;
       line = t;
     }
-    if (line) chipText(ctx, line, PL, 27, CH.mute, 'rgba(255,255,255,.95)', W - PL - 4);
+    if (line) chipText(ctx, line, PL, 27, CH.mute, CH.tagBg, W - PL - 4);
   }
 }
 
@@ -868,7 +881,7 @@ function drawRt(cv, s, min, ctx, L){
       ctx.lineWidth = 1;
       ctx.setLineDash([4, 3]);
     } else {
-      ctx.strokeStyle = '#f1f5f9';
+      ctx.strokeStyle = CH.gridSub;
       ctx.lineWidth = 1;
     }
     ctx.beginPath();
@@ -1157,7 +1170,7 @@ function drawRt(cv, s, min, ctx, L){
   ctx.fillStyle = CH.mute; ctx.textAlign = 'left'; ctx.fillText('分时量', PL+1, v0+8);
 
   // 11) 第 2 副图位：支持一键切换「分时OBV能量潮先行（默认）」与「放量倍数（÷前5日同刻均量）」
-  ctx.strokeStyle = '#e5e7eb'; ctx.beginPath(); ctx.moveTo(PL, s1+.5); ctx.lineTo(W-PR, s1+.5); ctx.stroke();
+  ctx.strokeStyle = CH.grid2; ctx.beginPath(); ctx.moveTo(PL, s1+.5); ctx.lineTo(W-PR, s1+.5); ctx.stroke();
   const rtSub = s.rtSub || 'obv';
   if (rtSub === 'obv') {
     const is20 = String(s.code || '').startsWith('30') || String(s.code || '').startsWith('68');
@@ -1176,7 +1189,7 @@ function drawRt(cv, s, min, ctx, L){
     // 零轴与前高突破颈线
     if (0 >= oMin && 0 <= oMax) {
       const yZero = OY(0);
-      ctx.strokeStyle = '#e2e8f0';
+      ctx.strokeStyle = CH.grid2;
       ctx.beginPath(); ctx.moveTo(PL, yZero + 0.5); ctx.lineTo(W - PR, yZero + 0.5); ctx.stroke();
     }
     if (pts.length >= 18 && obvInfo.priorMax >= oMin && obvInfo.priorMax <= oMax) {
@@ -1269,7 +1282,7 @@ function drawRt(cv, s, min, ctx, L){
     const RY2 = r => s1 - Math.min(r, rMax)/rMax*(s1-s0);
     [1, 2, 3].forEach(r=>{
       if (r > rMax) return;
-      ctx.strokeStyle = r === 1 ? '#c9d2dd' : '#f1f5f9';
+      ctx.strokeStyle = r === 1 ? CH.gridMid : CH.gridSub;
       ctx.beginPath(); ctx.moveTo(PL, RY2(r)+.5); ctx.lineTo(W-PR, RY2(r)+.5); ctx.stroke();
       ctx.fillStyle = r === 1 ? CH.txt : CH.mute; ctx.textAlign='left';
       ctx.fillText(r + '×', W-PR+5, RY2(r));
@@ -1347,7 +1360,7 @@ function drawRt(cv, s, min, ctx, L){
       let by = sy - boxH - 8;
       if (by < y0 + 4) by = Math.min(y1 - boxH - 4, sy + 10);
 
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.96)';
+      ctx.fillStyle = CH.tipBg;
       ctx.strokeStyle = accentCol;
       ctx.lineWidth = 1.25;
       ctx.beginPath();
@@ -1393,7 +1406,7 @@ function drawRt(cv, s, min, ctx, L){
       + (nearSig ? `  | ${sigTag}` : '');
   ctx.textAlign = 'left';
   const row1MaxW = radarBadgeW > 0 ? (W - PR - radarBadgeW - PL - 6) : (W - PL - 4);
-  chipText(ctx, row, PL, 12, pctv >= 0 ? CH.up : CH.dn, 'rgba(255,255,255,.95)', row1MaxW);
+  chipText(ctx, row, PL, 12, pctv >= 0 ? CH.up : CH.dn, CH.tagBg, row1MaxW);
 
   const row2Parts = [
     '昨收 ' + f2(prev),
@@ -1412,7 +1425,7 @@ function drawRt(cv, s, min, ctx, L){
     if (ctx.measureText(cand).width > W - PL - 12 && row2Line) break;
     row2Line = cand;
   }
-  chipText(ctx, row2Line, PL, 27, CH.txt, 'rgba(255,255,255,.95)', W - PL - 4);
+  chipText(ctx, row2Line, PL, 27, CH.txt, CH.tagBg, W - PL - 4);
 }
 
 /* ===================== 图表工具条（周期 / 叠加 / 副图） ===================== */

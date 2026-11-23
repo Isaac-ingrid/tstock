@@ -340,7 +340,7 @@ export default function AccountSection({
             className="card"
             style={{
               padding: '14px',
-              background: holidayWm.isYellowCard ? '#fffbeb' : 'var(--surface2)',
+              background: holidayWm.isYellowCard ? 'var(--warn-bg)' : 'var(--surface2)',
               border: holidayWm.isYellowCard ? '1px solid #f59e0b' : undefined,
               marginBottom: 0,
             }}
@@ -353,9 +353,9 @@ export default function AccountSection({
                   padding: '1px 6px',
                   borderRadius: '999px',
                   fontWeight: 700,
-                  background: holidayWm.isYellowCard ? '#fef3c7' : holidayWm.showChartLine ? '#ecfdf5' : 'var(--surface)',
-                  color: holidayWm.isYellowCard ? '#b45309' : holidayWm.showChartLine ? '#047857' : 'var(--mute)',
-                  border: `1px solid ${holidayWm.isYellowCard ? '#fcd34d' : holidayWm.showChartLine ? '#a7f3d0' : 'var(--line)'}`,
+                  background: holidayWm.isYellowCard ? 'var(--warn-bg)' : holidayWm.showChartLine ? 'var(--down-bg)' : 'var(--surface)',
+                  color: holidayWm.isYellowCard ? 'var(--warn-d)' : holidayWm.showChartLine ? 'var(--down-d)' : 'var(--mute)',
+                  border: `1px solid ${holidayWm.isYellowCard ? 'var(--warn-b)' : holidayWm.showChartLine ? 'var(--down-b)' : 'var(--line)'}`,
                 }}
               >
                 {holidayWm.showChartLine
@@ -370,7 +370,7 @@ export default function AccountSection({
                 fontFamily: 'ui-monospace,Consolas,monospace',
                 marginTop: '4px',
                 color: holidayWm.isYellowCard
-                  ? '#b45309'
+                  ? 'var(--warn-d)'
                   : posRate > effEmotionCap + 0.1
                   ? 'var(--up)'
                   : 'var(--text)',
@@ -384,7 +384,7 @@ export default function AccountSection({
                 position: 'relative',
                 height: '6px',
                 borderRadius: '999px',
-                background: '#e2e8f0',
+                background: 'var(--line)',
                 marginTop: '6px',
                 overflow: 'visible',
               }}
@@ -399,7 +399,7 @@ export default function AccountSection({
                     ? '#f59e0b'
                     : posRate > effEmotionCap + 0.1
                     ? '#dc2626'
-                    : '#0f766e',
+                    : 'var(--teal)',
                 }}
               />
               {holidayWm.showChartLine && (
@@ -434,7 +434,7 @@ export default function AccountSection({
             <div
               style={{
                 fontSize: '11px',
-                color: holidayWm.isYellowCard ? '#b45309' : posRate > effEmotionCap + 0.1 ? 'var(--up)' : 'var(--mute)',
+                color: holidayWm.isYellowCard ? 'var(--warn-d)' : posRate > effEmotionCap + 0.1 ? 'var(--up)' : 'var(--mute)',
                 fontWeight: holidayWm.isYellowCard ? 700 : 400,
                 marginTop: '5px',
               }}
@@ -490,12 +490,12 @@ export default function AccountSection({
               marginBottom: '16px',
               borderRadius: '10px',
               background: holidayWm.isYellowCard
-                ? 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)'
+                ? 'var(--warn-bg)'
                 : holidayWm.mode === 'safe_urgent'
-                ? 'linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%)'
-                : 'linear-gradient(135deg, #f8fafc 0%, #eff6ff 100%)',
+                ? 'var(--down-bg)'
+                : 'var(--info-bg)',
               border: `1.5px solid ${
-                holidayWm.isYellowCard ? '#f59e0b' : holidayWm.mode === 'safe_urgent' ? '#86efac' : '#bfdbfe'
+                holidayWm.isYellowCard ? '#f59e0b' : holidayWm.mode === 'safe_urgent' ? 'var(--down-b)' : 'var(--info-b)'
               }`,
               display: 'flex',
               flexDirection: 'column',
@@ -503,7 +503,7 @@ export default function AccountSection({
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', fontSize: '13px', fontWeight: 800, color: holidayWm.isYellowCard ? '#92400e' : holidayWm.mode === 'safe_urgent' ? '#166534' : '#1e3a8a' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', fontSize: '13px', fontWeight: 800, color: holidayWm.isYellowCard ? 'var(--warn-d)' : holidayWm.mode === 'safe_urgent' ? 'var(--down-d)' : 'var(--info-d)' }}>
                 <span>{holidayWm.isYellowCard ? '🟨' : '🏮'}</span>
                 <span>
                   {holidayWm.mode === 'in_holiday'
@@ -515,7 +515,7 @@ export default function AccountSection({
                     fontSize: '11px',
                     padding: '1px 8px',
                     borderRadius: '999px',
-                    background: '#fff',
+                    background: 'var(--card)',
                     border: '1px solid rgba(0,0,0,0.08)',
                     fontFamily: 'ui-monospace,Consolas,monospace',
                   }}
@@ -529,9 +529,9 @@ export default function AccountSection({
                   className="mini"
                   style={{
                     marginLeft: 0,
-                    background: '#fff',
-                    color: holidayWm.isYellowCard ? '#b45309' : '#0f766e',
-                    borderColor: holidayWm.isYellowCard ? '#f59e0b' : '#86efac',
+                    background: 'var(--card)',
+                    color: holidayWm.isYellowCard ? 'var(--warn-d)' : 'var(--teal)',
+                    borderColor: holidayWm.isYellowCard ? '#f59e0b' : 'var(--down-b)',
                     fontWeight: 700,
                   }}
                   onClick={() => onTabChange('/trade')}
@@ -549,14 +549,14 @@ export default function AccountSection({
                 fontSize: '12px',
               }}
             >
-              <div style={{ padding: '7px 10px', borderRadius: '7px', background: 'rgba(255,255,255,0.82)', border: '1px solid rgba(0,0,0,0.06)' }}>
+              <div style={{ padding: '7px 10px', borderRadius: '7px', background: 'var(--card)', border: '1px solid rgba(0,0,0,0.06)' }}>
                 <div style={{ fontSize: '11px', color: 'var(--mute)' }}>节前安全市值水位线</div>
                 <div style={{ fontWeight: 800, fontFamily: 'ui-monospace,Consolas,monospace', marginTop: '2px' }}>
                   ≤{holidayWm.watermarkPct}%（¥{money(holidayWm.watermarkMkt)}）
                 </div>
               </div>
 
-              <div style={{ padding: '7px 10px', borderRadius: '7px', background: 'rgba(255,255,255,0.82)', border: '1px solid rgba(0,0,0,0.06)' }}>
+              <div style={{ padding: '7px 10px', borderRadius: '7px', background: 'var(--card)', border: '1px solid rgba(0,0,0,0.06)' }}>
                 <div style={{ fontSize: '11px', color: 'var(--mute)' }}>
                   {holidayWm.excessAmt > 0 ? '超额跨假风险敞口（建议减仓）' : '跨假安全可开仓余量'}
                 </div>
@@ -565,7 +565,7 @@ export default function AccountSection({
                     fontWeight: 800,
                     fontFamily: 'ui-monospace,Consolas,monospace',
                     marginTop: '2px',
-                    color: holidayWm.excessAmt > 0 ? '#cf1322' : '#15803d',
+                    color: holidayWm.excessAmt > 0 ? 'var(--up)' : 'var(--down-d)',
                   }}
                 >
                   {holidayWm.excessAmt > 0
@@ -574,16 +574,16 @@ export default function AccountSection({
                 </div>
               </div>
 
-              <div style={{ padding: '7px 10px', borderRadius: '7px', background: 'rgba(255,255,255,0.82)', border: '1px solid rgba(0,0,0,0.06)' }}>
+              <div style={{ padding: '7px 10px', borderRadius: '7px', background: 'var(--card)', border: '1px solid rgba(0,0,0,0.06)' }}>
                 <div style={{ fontSize: '11px', color: 'var(--mute)' }}>可用现金拆解（动用额度 / 避险储备）</div>
                 <div style={{ fontWeight: 700, fontFamily: 'ui-monospace,Consolas,monospace', marginTop: '2px' }}>
-                  可动用 <b style={{ color: '#0958d9' }}>¥{money(holidayWm.deployableCash)}</b> · 护城河储备 <b>¥{money(holidayWm.reserveCash)}</b>
+                  可动用 <b style={{ color: 'var(--info-d)' }}>¥{money(holidayWm.deployableCash)}</b> · 护城河储备 <b>¥{money(holidayWm.reserveCash)}</b>
                 </div>
               </div>
             </div>
 
             {holidayWm.windowNote && (
-              <div style={{ fontSize: '11.5px', color: holidayWm.isYellowCard ? '#78350f' : 'var(--sub)', lineHeight: 1.5 }}>
+              <div style={{ fontSize: '11.5px', color: holidayWm.isYellowCard ? 'var(--warn-d)' : 'var(--sub)', lineHeight: 1.5 }}>
                 💡 {holidayWm.windowNote}
               </div>
             )}
@@ -662,7 +662,7 @@ export default function AccountSection({
                     y1={chartGeom.Y(summary.baseCap)}
                     x2={chartGeom.PL + chartGeom.iw}
                     y2={chartGeom.Y(summary.baseCap)}
-                    stroke="#64748b"
+                    stroke="var(--mute)"
                     strokeDasharray="4 4"
                     strokeWidth="1"
                   />
@@ -670,7 +670,7 @@ export default function AccountSection({
                     x={chartGeom.PL + chartGeom.iw + 4}
                     y={chartGeom.Y(summary.baseCap) + 3}
                     fontSize="10"
-                    fill="#64748b"
+                    fill="var(--mute)"
                   >
                     本金线
                   </text>
@@ -718,7 +718,7 @@ export default function AccountSection({
                     y={chartGeom.YRate(holidayWm.watermarkPct) + 3}
                     fontSize="9.5"
                     fontWeight="700"
-                    fill="#b45309"
+                    fill="var(--warn-d)"
                   >
                     节前≤{holidayWm.watermarkPct}%
                   </text>
@@ -751,7 +751,7 @@ export default function AccountSection({
                     onClick={() => setHoverIdx(i)}
                     style={{ cursor: 'pointer' }}
                   >
-                    <circle cx={cx} cy={cy} r={isActive ? 4.5 : 3} fill={p.live ? '#dc2626' : '#fff'} stroke="#dc2626" strokeWidth="2" />
+                    <circle cx={cx} cy={cy} r={isActive ? 4.5 : 3} fill={p.live ? '#dc2626' : 'var(--card)'} stroke="#dc2626" strokeWidth="2" />
                     {showDateLabel && (
                       <text
                         x={cx}

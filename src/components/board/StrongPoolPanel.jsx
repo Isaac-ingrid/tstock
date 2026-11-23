@@ -46,10 +46,10 @@ export default function StrongPoolPanel({
 
   const renderCompactStrongRow = (item, idx, totalLen) => {
     const tCnt = item.tagCount || item.tags?.length || 0;
-    const starBg = tCnt >= 5 ? '#cf1322' : tCnt === 4 ? '#d97706' : tCnt === 3 ? '#0f766e' : '#64748b';
+    const starBg = tCnt >= 5 ? 'var(--up)' : tCnt === 4 ? '#d97706' : tCnt === 3 ? 'var(--teal)' : 'var(--mute)';
     const rScore = item.relayScore ?? 0;
     const iScore = item.identityScore ?? 0;
-    const rColor = rScore >= 78 ? '#cf1322' : rScore >= 65 ? '#d97706' : '#0f766e';
+    const rColor = rScore >= 78 ? 'var(--up)' : rScore >= 65 ? '#d97706' : 'var(--teal)';
     const isOneWord = item.isLimitUp && item.fbtSec && item.fbtSec <= 92500 && Number(item.turnover || 0) <= 2.5 && (item.zbc || 0) === 0;
     const chgVal = Number(item.chg || 0);
 
@@ -94,7 +94,7 @@ export default function StrongPoolPanel({
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap', marginTop: '2px' }}>
             <span
               onClick={() => setSelectedTheme(selectedTheme === item.hybk ? 'all' : item.hybk)}
-              style={{ fontSize: '10.5px', color: '#1d39c4', cursor: 'pointer', whiteSpace: 'nowrap' }}
+              style={{ fontSize: '10.5px', color: 'var(--info-d)', cursor: 'pointer', whiteSpace: 'nowrap' }}
               title={`按板块筛选：${item.hybk}`}
             >
               {item.hybk}
@@ -106,7 +106,7 @@ export default function StrongPoolPanel({
                   if (nextKey !== 'all' && strongMinTags > 1) setStrongMinTags(1);
                   setSelectedTheme(nextKey);
                 }}
-                style={{ fontSize: '10px', padding: '0 4px', borderRadius: '3px', background: '#f5f3ff', color: '#7c3aed', border: '1px solid #d8b4fe', cursor: 'pointer', fontWeight: 700, whiteSpace: 'nowrap' }}
+                style={{ fontSize: '10px', padding: '0 4px', borderRadius: '3px', background: 'var(--accent-bg)', color: 'var(--accent-d)', border: '1px solid var(--accent-b)', cursor: 'pointer', fontWeight: 700, whiteSpace: 'nowrap' }}
                 title={`点击筛选同字辈共振：${item.mysticCluster}`}
               >
                 🔮{item.mysticCluster}
@@ -126,11 +126,11 @@ export default function StrongPoolPanel({
           {item.isLimitUp ? (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>
-                <b style={{ color: isOneWord ? '#64748b' : '#cf1322' }}>
+                <b style={{ color: isOneWord ? 'var(--mute)' : 'var(--up)' }}>
                   {isOneWord ? '一字锁死' : `首封 ${item.fbt || '—'}`}
                 </b>
                 {(item.zbc || 0) > 0 && (
-                  <span style={{ fontSize: '10px', color: '#cf1322', fontWeight: 700 }}>{item.zbc}炸</span>
+                  <span style={{ fontSize: '10px', color: 'var(--up)', fontWeight: 700 }}>{item.zbc}炸</span>
                 )}
               </div>
               <div style={{ color: 'var(--mute)', fontSize: '10.5px', whiteSpace: 'nowrap' }}>
@@ -139,7 +139,7 @@ export default function StrongPoolPanel({
             </>
           ) : (
             <>
-              <div style={{ fontWeight: 700, color: item.vsMa5 != null && item.vsMa5 >= 0 ? '#15803d' : '#c2410c', whiteSpace: 'nowrap' }}>
+              <div style={{ fontWeight: 700, color: item.vsMa5 != null && item.vsMa5 >= 0 ? 'var(--down-d)' : 'var(--warn-d)', whiteSpace: 'nowrap' }}>
                 {item.vsMa5 != null ? `MA5 ${item.vsMa5 >= 0 ? '+' : ''}${Number(item.vsMa5).toFixed(1)}%` : '趋势活跃(未板)'}
               </div>
               <div style={{ color: 'var(--mute)', fontSize: '10.5px', whiteSpace: 'nowrap' }}>
@@ -157,7 +157,7 @@ export default function StrongPoolPanel({
         {/* 6. 成交额 / 人气 */}
         <div className="bsr-col-amt" style={{ fontSize: '11px', color: 'var(--sub)', fontFamily: 'monospace' }}>
           <div style={{ whiteSpace: 'nowrap' }}>{money$(item.amount)}</div>
-          <div style={{ color: item.popRank ? '#c2410c' : 'var(--mute)', fontWeight: item.popRank ? 700 : 400, whiteSpace: 'nowrap' }}>
+          <div style={{ color: item.popRank ? 'var(--warn-d)' : 'var(--mute)', fontWeight: item.popRank ? 700 : 400, whiteSpace: 'nowrap' }}>
             {item.popRank ? `🔥 人气#${item.popRank}` : `换手 ${Number(item.turnover || 0).toFixed(1)}%`}
           </div>
         </div>
@@ -185,10 +185,10 @@ export default function StrongPoolPanel({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
       {/* 顶部控制栏 */}
-      <div style={{ padding: '10px 12px', background: '#f0fdfa', border: '1px solid #5eead4', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      <div style={{ padding: '10px 12px', background: 'var(--teal-bg)', border: '1px solid #5eead4', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '12px', fontWeight: 800, color: '#0f766e' }}>💪 共振强度：</span>
+            <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--teal)' }}>💪 共振强度：</span>
             {[
               { min: 3, label: `🔥 强共振(≥3标签) (${strongEliteCount})` },
               { min: 2, label: `⚡ 多标签(≥2标签) (${strongMulti2Count})` },
@@ -203,9 +203,9 @@ export default function StrongPoolPanel({
                   marginLeft: 0,
                   fontSize: '11.5px',
                   fontWeight: strongMinTags === opt.min ? 800 : 600,
-                  background: strongMinTags === opt.min ? '#0f766e' : '#fff',
-                  borderColor: strongMinTags === opt.min ? '#0f766e' : '#99f6e4',
-                  color: strongMinTags === opt.min ? '#fff' : '#0f766e',
+                  background: strongMinTags === opt.min ? 'var(--teal)' : 'var(--card)',
+                  borderColor: strongMinTags === opt.min ? 'var(--teal)' : '#99f6e4',
+                  color: strongMinTags === opt.min ? '#fff' : 'var(--teal)',
                 }}
               >
                 {opt.label}
@@ -223,9 +223,9 @@ export default function StrongPoolPanel({
                 cursor: 'pointer',
                 padding: '3px 8px',
                 borderRadius: '5px',
-                background: strongOnlyNonZt ? '#fff7ed' : '#fff',
-                border: `1px solid ${strongOnlyNonZt ? '#fb923c' : '#cbd5e1'}`,
-                color: strongOnlyNonZt ? '#c2410c' : 'var(--text)',
+                background: strongOnlyNonZt ? 'var(--warn-bg)' : 'var(--card)',
+                border: `1px solid ${strongOnlyNonZt ? '#fb923c' : 'var(--line2)'}`,
+                color: strongOnlyNonZt ? 'var(--warn-d)' : 'var(--text)',
                 fontWeight: strongOnlyNonZt ? 800 : 600,
               }}
               title="屏蔽已封涨停的标的，只把未涨停的断板高横、人气核心与新高趋势股拎出来"
@@ -239,7 +239,7 @@ export default function StrongPoolPanel({
               <span>🎯 仅看未涨停</span>
             </label>
 
-            <div style={{ display: 'inline-flex', borderRadius: '5px', overflow: 'hidden', border: '1px solid #cbd5e1', background: '#fff' }}>
+            <div style={{ display: 'inline-flex', borderRadius: '5px', overflow: 'hidden', border: '1px solid var(--line2)', background: 'var(--card)' }}>
               {[
                 { mode: 'compact', label: '📋 紧凑列表' },
                 { mode: 'bySector', label: '🗂️ 按板块聚合' },
@@ -254,7 +254,7 @@ export default function StrongPoolPanel({
                     fontSize: '11px',
                     border: 'none',
                     cursor: 'pointer',
-                    background: strongViewMode === v.mode ? '#0f766e' : 'transparent',
+                    background: strongViewMode === v.mode ? 'var(--teal)' : 'transparent',
                     color: strongViewMode === v.mode ? '#fff' : 'var(--sub)',
                     fontWeight: strongViewMode === v.mode ? 700 : 500,
                   }}
@@ -268,7 +268,7 @@ export default function StrongPoolPanel({
 
         {/* 多选交集标签条 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: '11px', color: '#0f766e', fontWeight: 700 }}>标签交集叠加(可多选)：</span>
+          <span style={{ fontSize: '11px', color: 'var(--teal)', fontWeight: 700 }}>标签交集叠加(可多选)：</span>
           <button
             type="button"
             className={`mini ${strongSelectedTags.length === 0 ? 'primary' : ''}`}
@@ -298,9 +298,9 @@ export default function StrongPoolPanel({
                   fontSize: '11px',
                   padding: '2px 7px',
                   fontWeight: active ? 800 : 600,
-                  background: active ? '#0f766e' : '#fff',
-                  color: active ? '#fff' : '#334155',
-                  borderColor: active ? '#0f766e' : '#cbd5e1',
+                  background: active ? 'var(--teal)' : 'var(--card)',
+                  color: active ? '#fff' : 'var(--sub)',
+                  borderColor: active ? 'var(--teal)' : 'var(--line2)',
                 }}
               >
                 {active ? '✓ ' : ''}{tab.label}
@@ -313,7 +313,7 @@ export default function StrongPoolPanel({
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', paddingTop: '4px', borderTop: '1px dashed #99f6e4' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '11px', color: '#7c3aed', fontWeight: 800 }}>🔮 今日字辈暗线共振：</span>
+              <span style={{ fontSize: '11px', color: 'var(--accent-d)', fontWeight: 800 }}>🔮 今日字辈暗线共振：</span>
               {mysticClusters.length === 0 ? (
                 <span style={{ fontSize: '11px', color: 'var(--mute)' }}>暂无≥2家同字辈/同音字根涨停共振</span>
               ) : (
@@ -337,9 +337,9 @@ export default function StrongPoolPanel({
                         fontSize: '11px',
                         padding: '1px 7px',
                         fontWeight: active ? 800 : 700,
-                        background: active ? '#7c3aed' : '#faf5ff',
-                        color: active ? '#fff' : '#6d28d9',
-                        borderColor: active ? '#7c3aed' : '#d8b4fe',
+                        background: active ? 'var(--info)' : 'var(--accent-bg)',
+                        color: active ? '#fff' : 'var(--accent-d)',
+                        borderColor: active ? 'var(--accent-d)' : 'var(--accent-b)',
                       }}
                     >
                       {cl.name} ({cl.ztCount}板{cl.isAuto ? '·自动字头' : ''}{cl.leaders?.length ? `：${cl.leaders.slice(0, 2).map(l => l.name).join('/')}` : ''})
@@ -352,15 +352,15 @@ export default function StrongPoolPanel({
               type="button"
               className="mini"
               onClick={() => setShowMysticConfig(v => !v)}
-              style={{ marginLeft: 0, fontSize: '11px', padding: '1px 7px', color: '#6d28d9', borderColor: '#d8b4fe', background: '#fff' }}
+              style={{ marginLeft: 0, fontSize: '11px', padding: '1px 7px', color: 'var(--accent-d)', borderColor: 'var(--accent-b)', background: 'var(--card)' }}
             >
               {showMysticConfig ? '▲ 收起字根配置' : '⚙️ 自定义玄学字根'}
             </button>
           </div>
 
           {activeMysticCluster && (activeMysticCluster.leaders || []).length > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', padding: '6px 8px', borderRadius: '6px', background: '#faf5ff', border: '1px solid #e9d5ff' }}>
-              <span style={{ fontSize: '11px', fontWeight: 800, color: '#6d28d9' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', padding: '6px 8px', borderRadius: '6px', background: 'var(--accent-bg)', border: '1px solid var(--accent-b)' }}>
+              <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--accent-d)' }}>
                 ✨ {activeMysticCluster.name} 具体涨停标的：
               </span>
               {(activeMysticCluster.leaders || []).map(st => {
@@ -394,20 +394,20 @@ export default function StrongPoolPanel({
           )}
 
           {showMysticConfig && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', padding: '6px 8px', borderRadius: '6px', background: '#faf5ff', border: '1px solid #e9d5ff' }}>
-              <span style={{ fontSize: '11px', color: '#6d28d9', fontWeight: 700 }}>玄学字根词表(逗号分隔)：</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', padding: '6px 8px', borderRadius: '6px', background: 'var(--accent-bg)', border: '1px solid var(--accent-b)' }}>
+              <span style={{ fontSize: '11px', color: 'var(--accent-d)', fontWeight: 700 }}>玄学字根词表(逗号分隔)：</span>
               <input
                 type="text"
                 value={mysticDraft}
                 onChange={e => setMysticDraft(e.target.value)}
                 placeholder="如: 东方,阳,洋,祥,羊,龙,凤,福,瑞,泰,昌,盛,金,马,猴"
-                style={{ flex: '1 1 280px', padding: '3px 8px', fontSize: '11.5px', borderRadius: '5px', border: '1px solid #d8b4fe', background: '#fff' }}
+                style={{ flex: '1 1 280px', padding: '3px 8px', fontSize: '11.5px', borderRadius: '5px', border: '1px solid var(--accent-b)', background: 'var(--card)' }}
               />
               <button
                 type="button"
                 className="mini primary"
                 onClick={() => onSaveMysticRoots(mysticDraft)}
-                style={{ marginLeft: 0, fontSize: '11px', padding: '3px 9px', background: '#7c3aed', borderColor: '#7c3aed' }}
+                style={{ marginLeft: 0, fontSize: '11px', padding: '3px 9px', background: 'var(--info)', borderColor: 'var(--accent-d)' }}
               >
                 应用并重算
               </button>
@@ -426,7 +426,7 @@ export default function StrongPoolPanel({
         {/* 板块分布快筛胶囊条 */}
         {strongSectors.length > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap', paddingTop: '4px', borderTop: '1px dashed #99f6e4' }}>
-            <span style={{ fontSize: '11px', color: '#0f766e', fontWeight: 700 }}>📂 按板块筛选：</span>
+            <span style={{ fontSize: '11px', color: 'var(--teal)', fontWeight: 700 }}>📂 按板块筛选：</span>
             <button
               type="button"
               className="mini"
@@ -436,9 +436,9 @@ export default function StrongPoolPanel({
                 fontSize: '11px',
                 padding: '1px 7px',
                 fontWeight: selectedTheme === 'all' ? 800 : 600,
-                background: selectedTheme === 'all' ? '#0958d9' : '#fff',
-                color: selectedTheme === 'all' ? '#fff' : '#334155',
-                borderColor: selectedTheme === 'all' ? '#0958d9' : '#cbd5e1',
+                background: selectedTheme === 'all' ? 'var(--info)' : 'var(--card)',
+                color: selectedTheme === 'all' ? '#fff' : 'var(--sub)',
+                borderColor: selectedTheme === 'all' ? 'var(--info-d)' : 'var(--line2)',
               }}
             >
               全部板块
@@ -456,9 +456,9 @@ export default function StrongPoolPanel({
                     fontSize: '11px',
                     padding: '1px 7px',
                     fontWeight: active ? 800 : 600,
-                    background: active ? '#0958d9' : (sec.isConcept ? '#faf5ff' : '#fff'),
-                    color: active ? '#fff' : (sec.isConcept ? '#7c3aed' : '#1e293b'),
-                    borderColor: active ? '#0958d9' : (sec.isConcept ? '#d8b4fe' : '#cbd5e1'),
+                    background: active ? 'var(--info)' : (sec.isConcept ? 'var(--accent-bg)' : 'var(--card)'),
+                    color: active ? '#fff' : (sec.isConcept ? 'var(--accent-d)' : 'var(--text)'),
+                    borderColor: active ? 'var(--info-d)' : (sec.isConcept ? 'var(--accent-b)' : 'var(--line2)'),
                   }}
                 >
                   {sec.isConcept ? `✨${sec.name}` : sec.name} ({sec.count})
@@ -475,25 +475,25 @@ export default function StrongPoolPanel({
           <div className="board-strong-scroll-inner">
             <div className="board-strong-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <span onClick={() => toggleStrongSort('resonance')} style={{ cursor: 'pointer', color: strongSort === 'resonance' ? '#0f766e' : 'inherit' }}>
+                <span onClick={() => toggleStrongSort('resonance')} style={{ cursor: 'pointer', color: strongSort === 'resonance' ? 'var(--teal)' : 'inherit' }}>
                   共振{strongSort === 'resonance' ? (strongSortAsc ? '▲' : '▼') : ''}
                 </span>
                 <span>/</span>
-                <span onClick={() => toggleStrongSort('relay')} style={{ cursor: 'pointer', color: strongSort === 'relay' ? '#cf1322' : 'inherit' }}>
+                <span onClick={() => toggleStrongSort('relay')} style={{ cursor: 'pointer', color: strongSort === 'relay' ? 'var(--up)' : 'inherit' }}>
                   接力{strongSort === 'relay' ? (strongSortAsc ? '▲' : '▼') : ''}
                 </span>
               </div>
-              <div onClick={() => toggleStrongSort('identity')} style={{ cursor: 'pointer', color: strongSort === 'identity' ? '#0958d9' : 'inherit' }}>
+              <div onClick={() => toggleStrongSort('identity')} style={{ cursor: 'pointer', color: strongSort === 'identity' ? 'var(--info-d)' : 'inherit' }}>
                 标的 / 板块 (身{strongSort === 'identity' ? (strongSortAsc ? '▲' : '▼') : '↕'})
               </div>
-              <div onClick={() => toggleStrongSort('chg')} style={{ cursor: 'pointer', color: strongSort === 'chg' ? '#cf1322' : 'inherit' }}>
+              <div onClick={() => toggleStrongSort('chg')} style={{ cursor: 'pointer', color: strongSort === 'chg' ? 'var(--up)' : 'inherit' }}>
                 现价 / 涨跌{strongSort === 'chg' ? (strongSortAsc ? '▲' : '▼') : ''}
               </div>
-              <div onClick={() => toggleStrongSort('fbt')} style={{ cursor: 'pointer', color: strongSort === 'fbt' ? '#cf1322' : 'inherit' }}>
+              <div onClick={() => toggleStrongSort('fbt')} style={{ cursor: 'pointer', color: strongSort === 'fbt' ? 'var(--up)' : 'inherit' }}>
                 首封 / 封单承接{strongSort === 'fbt' ? (strongSortAsc ? '▲' : '▼') : ''}
               </div>
               <div>多维标签徽章</div>
-              <div onClick={() => toggleStrongSort('amount')} style={{ cursor: 'pointer', color: strongSort === 'amount' ? '#0958d9' : 'inherit' }}>
+              <div onClick={() => toggleStrongSort('amount')} style={{ cursor: 'pointer', color: strongSort === 'amount' ? 'var(--info-d)' : 'inherit' }}>
                 成交 / 人气{strongSort === 'amount' ? (strongSortAsc ? '▲' : '▼') : ''}
               </div>
               <div style={{ textAlign: 'right' }}>跟踪 / 加入自选</div>
@@ -518,16 +518,16 @@ export default function StrongPoolPanel({
                 flexWrap: 'wrap',
                 gap: '8px',
                 padding: '8px 12px',
-                background: 'linear-gradient(90deg, #f0f9ff, #f8fafc)',
+                background: 'var(--info-bg)',
                 borderBottom: '1px solid var(--line)',
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: '13.5px', fontWeight: 800, color: '#0369a1' }}>📂 {grp.sector}</span>
-                  <span style={{ fontSize: '11px', padding: '1px 7px', borderRadius: '4px', background: '#e0f2fe', color: '#0369a1', fontWeight: 700 }}>
+                  <span style={{ fontSize: '13.5px', fontWeight: 800, color: 'var(--accent-d)' }}>📂 {grp.sector}</span>
+                  <span style={{ fontSize: '11px', padding: '1px 7px', borderRadius: '4px', background: 'var(--info-bg)', color: 'var(--accent-d)', fontWeight: 700 }}>
                     {grp.stocks.length} 只强共振
                   </span>
                   {grp.ztCount > 0 && (
-                    <span style={{ fontSize: '11px', padding: '1px 7px', borderRadius: '4px', background: '#fff1f0', color: '#cf1322', fontWeight: 700 }}>
+                    <span style={{ fontSize: '11px', padding: '1px 7px', borderRadius: '4px', background: 'var(--up-bg)', color: 'var(--up)', fontWeight: 700 }}>
                       涨停 {grp.ztCount} 只
                     </span>
                   )}
@@ -542,7 +542,7 @@ export default function StrongPoolPanel({
                   type="button"
                   className="mini"
                   onClick={() => setSelectedTheme(selectedTheme === grp.sector ? 'all' : grp.sector)}
-                  style={{ marginLeft: 0, fontSize: '11px', color: '#0958d9', borderColor: '#91caff', background: '#fff' }}
+                  style={{ marginLeft: 0, fontSize: '11px', color: 'var(--info-d)', borderColor: 'var(--info-b)', background: 'var(--card)' }}
                 >
                   {selectedTheme === grp.sector ? '✕ 恢复全板块' : '🎯 只看该板块'}
                 </button>
@@ -565,7 +565,7 @@ export default function StrongPoolPanel({
             key={item.code}
             style={{
               background: 'var(--surface)',
-              border: item.isLimitUp ? '1.5px solid #fca5a5' : '1px solid var(--line)',
+              border: item.isLimitUp ? '1.5px solid var(--up-b)' : '1px solid var(--line)',
               borderRadius: '10px',
               padding: '12px 16px',
               boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
@@ -576,30 +576,30 @@ export default function StrongPoolPanel({
                 <span style={{ fontSize: '11px', fontWeight: 800, padding: '1px 6px', borderRadius: '4px', background: '#0f766e', color: '#fff', fontFamily: 'monospace' }}>
                   {item.tagCount || item.tags?.length || 0}★共振
                 </span>
-                <span style={{ fontSize: '11px', fontWeight: 800, padding: '1px 6px', borderRadius: '4px', background: '#eff6ff', color: '#1d4ed8', fontFamily: 'monospace', border: '1px solid #bfdbfe' }}>
+                <span style={{ fontSize: '11px', fontWeight: 800, padding: '1px 6px', borderRadius: '4px', background: 'var(--info-bg)', color: 'var(--info-d)', fontFamily: 'monospace', border: '1px solid var(--info-b)' }}>
                   身份 {item.identityScore ?? 0}
                 </span>
-                <span style={{ fontSize: '11px', fontWeight: 800, padding: '1px 6px', borderRadius: '4px', background: '#fff1f2', color: '#be123c', fontFamily: 'monospace', border: '1px solid #fecdd3' }}>
+                <span style={{ fontSize: '11px', fontWeight: 800, padding: '1px 6px', borderRadius: '4px', background: 'var(--up-bg)', color: 'var(--up-d)', fontFamily: 'monospace', border: '1px solid var(--up-b)' }}>
                   接力 {item.relayScore ?? 0}
                 </span>
                 <span style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text)' }}>{item.name}</span>
                 <span style={{ fontFamily: 'monospace', fontSize: '13px', color: 'var(--mute)' }}>{item.code}</span>
                 <span
                   onClick={() => setSelectedTheme(item.hybk)}
-                  style={{ fontSize: '11px', padding: '1px 6px', borderRadius: '4px', background: '#f0f5ff', color: '#1d39c4', cursor: 'pointer' }}
+                  style={{ fontSize: '11px', padding: '1px 6px', borderRadius: '4px', background: 'var(--info-bg)', color: 'var(--info-d)', cursor: 'pointer' }}
                 >
                   🔥 {item.hybk}
                 </span>
                 {item.isMysticResonant && item.mysticCluster && (
                   <span
                     onClick={() => setSelectedTheme(`字辈·${item.mysticCluster}`)}
-                    style={{ fontSize: '11px', padding: '1px 6px', borderRadius: '4px', background: '#f5f3ff', color: '#7c3aed', border: '1px solid #d8b4fe', cursor: 'pointer', fontWeight: 700 }}
+                    style={{ fontSize: '11px', padding: '1px 6px', borderRadius: '4px', background: 'var(--accent-bg)', color: 'var(--accent-d)', border: '1px solid var(--accent-b)', cursor: 'pointer', fontWeight: 700 }}
                   >
                     🔮 {item.mysticCluster} ({item.mysticZtCount}板)
                   </span>
                 )}
                 {item.statTag && (
-                  <span style={{ fontSize: '11px', fontWeight: 700, color: '#475569' }}>[{item.statTag}]</span>
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--sub)' }}>[{item.statTag}]</span>
                 )}
               </div>
               <div style={{ fontFamily: 'monospace', fontSize: '15px', fontWeight: 800, color: item.chg >= 0 ? 'var(--up)' : 'var(--down)' }}>
@@ -616,16 +616,16 @@ export default function StrongPoolPanel({
               <div>流通市值: <b style={{ fontFamily: 'monospace' }}>{money$(item.mcap)}</b></div>
               <div>换手率: <b style={{ fontFamily: 'monospace' }}>{Number(item.turnover || 0).toFixed(1)}%</b></div>
               {item.isLimitUp ? (
-                <div>首封/封单: <b style={{ fontFamily: 'monospace', color: '#cf1322' }}>{item.fbt || '—'} · {item.fund >= 1e7 ? money$(item.fund) : '弱封'}</b></div>
+                <div>首封/封单: <b style={{ fontFamily: 'monospace', color: 'var(--up)' }}>{item.fbt || '—'} · {item.fund >= 1e7 ? money$(item.fund) : '弱封'}</b></div>
               ) : (
-                <div>均线承接: <b style={{ fontFamily: 'monospace', color: item.vsMa5 != null && item.vsMa5 >= 0 ? '#15803d' : '#c2410c' }}>{item.vsMa5 != null ? `MA5 ${item.vsMa5 >= 0 ? '+' : ''}${Number(item.vsMa5).toFixed(1)}%` : '未封趋势'}</b></div>
+                <div>均线承接: <b style={{ fontFamily: 'monospace', color: item.vsMa5 != null && item.vsMa5 >= 0 ? 'var(--down-d)' : 'var(--warn-d)' }}>{item.vsMa5 != null ? `MA5 ${item.vsMa5 >= 0 ? '+' : ''}${Number(item.vsMa5).toFixed(1)}%` : '未封趋势'}</b></div>
               )}
-              <div>东财人气: <b style={{ color: item.popRank ? '#c2410c' : 'var(--mute)' }}>{item.popRank ? `第 ${item.popRank} 名` : 'Top100外'}</b></div>
-              <div>跟踪状态: <b style={{ color: inH ? '#6d28d9' : 'var(--mute)' }}>{inH ? (item.healthLabel || '跟踪中') : '未入跟踪池'}</b></div>
+              <div>东财人气: <b style={{ color: item.popRank ? 'var(--warn-d)' : 'var(--mute)' }}>{item.popRank ? `第 ${item.popRank} 名` : 'Top100外'}</b></div>
+              <div>跟踪状态: <b style={{ color: inH ? 'var(--accent-d)' : 'var(--mute)' }}>{inH ? (item.healthLabel || '跟踪中') : '未入跟踪池'}</b></div>
             </div>
 
             {item.cycleAdvice && (
-              <div style={{ fontSize: '11.5px', padding: '5px 9px', borderRadius: '5px', background: '#f8fafc', border: '1px solid #e2e8f0', color: '#334155', marginBottom: '8px' }}>
+              <div style={{ fontSize: '11.5px', padding: '5px 9px', borderRadius: '5px', background: 'var(--surface)', border: '1px solid var(--line)', color: 'var(--sub)', marginBottom: '8px' }}>
                 🧭 <b>周期适配提示：</b>{item.cycleAdvice}
               </div>
             )}
@@ -664,7 +664,7 @@ export default function StrongPoolPanel({
                 <span style={{ color: 'var(--sub)' }}>{label}</span>
                 <b style={{ fontFamily: 'monospace', color }}>{val ?? 0} / {maxVal}</b>
               </div>
-              <div style={{ height: '6px', background: '#e2e8f0', borderRadius: '99px', overflow: 'hidden' }}>
+              <div style={{ height: '6px', background: 'var(--line)', borderRadius: '99px', overflow: 'hidden' }}>
                 <div style={{ width: `${wPct}%`, height: '100%', background: color, borderRadius: '99px' }} />
               </div>
             </div>
@@ -702,8 +702,8 @@ export default function StrongPoolPanel({
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                   <span style={{ fontSize: '18px', fontWeight: 800 }}>{it.name}</span>
                   <span style={{ fontFamily: 'monospace', fontSize: '13px', color: 'var(--mute)' }}>{it.code}</span>
-                  <span style={{ fontSize: '11px', padding: '2px 7px', borderRadius: '4px', background: '#f0f5ff', color: '#1d39c4', fontWeight: 700 }}>{it.hybk}</span>
-                  {it.statTag && <span style={{ fontSize: '11px', fontWeight: 700, color: '#475569' }}>[{it.statTag}]</span>}
+                  <span style={{ fontSize: '11px', padding: '2px 7px', borderRadius: '4px', background: 'var(--info-bg)', color: 'var(--info-d)', fontWeight: 700 }}>{it.hybk}</span>
+                  {it.statTag && <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--sub)' }}>[{it.statTag}]</span>}
                 </div>
                 <button type="button" className="mini" onClick={() => setStrongDetailItem(null)} style={{ marginLeft: 0, fontSize: '12px' }}>✕ 关闭</button>
               </div>
@@ -711,32 +711,32 @@ export default function StrongPoolPanel({
               <div style={{ marginBottom: '10px' }}><TagBadges tags={it.tags} /></div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px', marginBottom: '12px' }}>
-                <div style={{ padding: '10px 12px', borderRadius: '8px', background: '#eff6ff', border: '1px solid #bfdbfe' }}>
+                <div style={{ padding: '10px 12px', borderRadius: '8px', background: 'var(--info-bg)', border: '1px solid var(--info-b)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                    <b style={{ color: '#1d4ed8', fontSize: '13px' }}>👑 身份分（它是谁）</b>
-                    <span style={{ fontSize: '18px', fontWeight: 900, color: '#1d4ed8', fontFamily: 'monospace' }}>{it.identityScore ?? 0}</span>
+                    <b style={{ color: 'var(--info-d)', fontSize: '13px' }}>👑 身份分（它是谁）</b>
+                    <span style={{ fontSize: '18px', fontWeight: 900, color: 'var(--info-d)', fontFamily: 'monospace' }}>{it.identityScore ?? 0}</span>
                   </div>
-                  {renderBar('连板高度', idDims.height, 35, '#1d4ed8')}
+                  {renderBar('连板高度', idDims.height, 35, 'var(--info-d)')}
                   {renderBar('多板记忆/抱团', idDims.memory, 20, '#2563eb')}
                   {renderBar('板块涨停效应', idDims.sector, 20, '#3b82f6')}
                   {renderBar(`人气/量能 (含玄学+${idDims.mysticBonus || 0})`, idDims.popularity, 25, '#6366f1')}
                 </div>
 
-                <div style={{ padding: '10px 12px', borderRadius: '8px', background: '#fff1f2', border: '1px solid #fecdd3' }}>
+                <div style={{ padding: '10px 12px', borderRadius: '8px', background: 'var(--up-bg)', border: '1px solid var(--up-b)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                    <b style={{ color: '#be123c', fontSize: '13px' }}>⚡ 接力分（能否接力）</b>
-                    <span style={{ fontSize: '18px', fontWeight: 900, color: '#be123c', fontFamily: 'monospace' }}>{it.relayScore ?? 0}</span>
+                    <b style={{ color: 'var(--up-d)', fontSize: '13px' }}>⚡ 接力分（能否接力）</b>
+                    <span style={{ fontSize: '18px', fontWeight: 900, color: 'var(--up-d)', fontFamily: 'monospace' }}>{it.relayScore ?? 0}</span>
                   </div>
-                  {renderBar('首封抢筹速度', rlDims.firstSeal, 24, '#be123c')}
+                  {renderBar('首封抢筹速度', rlDims.firstSeal, 24, 'var(--up-d)')}
                   {renderBar('封板/均线承接质量', rlDims.sealQuality, 24, '#e11d48')}
                   {renderBar('筹码换手可交易性', rlDims.tradability, 20, '#f43f5e')}
                   {renderBar('总阀周期交互适配', rlDims.cycle, 18, '#fb7185')}
-                  {renderBar('日内主动强度', rlDims.strength, 14, '#fda4af')}
+                  {renderBar('日内主动强度', rlDims.strength, 14, 'var(--up-b)')}
                 </div>
               </div>
 
               {(it.mysticRoots?.length > 0 || it.isMysticResonant) && (
-                <div style={{ fontSize: '12px', padding: '7px 10px', borderRadius: '6px', background: '#faf5ff', border: '1px solid #d8b4fe', color: '#6d28d9', marginBottom: '10px' }}>
+                <div style={{ fontSize: '12px', padding: '7px 10px', borderRadius: '6px', background: 'var(--accent-bg)', border: '1px solid var(--accent-b)', color: 'var(--accent-d)', marginBottom: '10px' }}>
                   🔮 <b>玄学字根共振：</b>命中字根「{it.mysticRoots?.join('、') || it.mysticCluster}」
                   {it.isMysticResonant ? ` · 今日主板「${it.mysticCluster}」已有 ${it.mysticZtCount} 家封板形成字辈暗线共振` : ' · 单标待扩散'}
                 </div>
@@ -752,7 +752,7 @@ export default function StrongPoolPanel({
               </div>
 
               {it.cycleAdvice && (
-                <div style={{ fontSize: '12px', padding: '8px 10px', borderRadius: '6px', background: '#f0fdf4', border: '1px solid #86efac', color: '#166534', marginBottom: '12px' }}>
+                <div style={{ fontSize: '12px', padding: '8px 10px', borderRadius: '6px', background: 'var(--down-bg)', border: '1px solid var(--down-b)', color: 'var(--down-d)', marginBottom: '12px' }}>
                   🧭 <b>当前周期操作策略：</b>{it.cycleAdvice}
                 </div>
               )}

@@ -146,10 +146,10 @@ export default function AuthScreen({
         ) : needsSetup ? (
           <>
             <div className="auth-setup-banner">
-              <div style={{ fontWeight: 800, fontSize: '13.5px', color: '#1e3a8a', marginBottom: '4px' }}>
+              <div style={{ fontWeight: 800, fontSize: '13.5px', color: 'var(--info-d)', marginBottom: '4px' }}>
                 👑 首次启用 · 创建主理人主账号
               </div>
-              <div style={{ fontSize: '12px', color: '#334155', lineHeight: 1.55 }}>
+              <div style={{ fontSize: '12px', color: 'var(--sub)', lineHeight: 1.55 }}>
                 {hasLegacyVault ? (
                   <>
                     检测到服务器已有原实盘金库数据

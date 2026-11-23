@@ -1601,10 +1601,10 @@ export function drawRS(cv, rs){
   const Y = v => PT + (hi-v)/(hi-lo)*ih;
   // 中位基准线
   const med = medOf(rs.pts.map(p=>p.rs));
-  if (med!=null){ g.strokeStyle='#e5e7eb'; g.setLineDash([3,3]); g.lineWidth=1;
+  if (med!=null){ g.strokeStyle=(typeof document!=='undefined'&&document.documentElement?.dataset?.theme!=='light')?'rgba(255,255,255,0.14)':'#e5e7eb'; g.setLineDash([3,3]); g.lineWidth=1;
     g.beginPath(); g.moveTo(PL, Y(med)); g.lineTo(PL+iw, Y(med)); g.stroke(); g.setLineDash([]); }
   // RS 线
-  g.strokeStyle='#7c3aed'; g.lineWidth=1.6; g.beginPath();
+  g.strokeStyle='#38bdf8'; g.lineWidth=1.6; g.beginPath();
   rs.pts.forEach((p,i)=>{ const x=X(i), y=Y(p.rs); i?g.lineTo(x,y):g.moveTo(x,y); }); g.stroke();
   // MA5
   g.strokeStyle='#c2185b'; g.lineWidth=1.1; g.beginPath();

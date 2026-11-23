@@ -300,7 +300,7 @@ export default function TechAndResearchSection({ stock, poolIndex, pool = [] }) 
         ) : (
           <div>
             <div className="rs-wrap">
-              <canvas ref={rsCanvasRef} style={{ width: '100%', height: '64px', display: 'block', border: '1px solid var(--line)', borderRadius: '8px', background: '#fff' }} />
+              <canvas ref={rsCanvasRef} style={{ width: '100%', height: '64px', display: 'block', border: '1px solid var(--line)', borderRadius: '8px', background: 'var(--card)' }} />
             </div>
             <div style={{ fontSize: '11.5px', color: 'var(--sub)', marginTop: '6px' }}>
               20日相对强弱 <b style={{ fontFamily: 'ui-monospace,Consolas,monospace', color: beat === null ? 'var(--sub)' : beat ? 'var(--up)' : 'var(--down)' }}>{rs.r20 == null ? '—' : pct(rs.r20)}</b>

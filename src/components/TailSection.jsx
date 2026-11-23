@@ -267,9 +267,9 @@ export default function TailSection({
                   fontSize: '11.5px',
                   padding: '2px 8px',
                   borderRadius: '999px',
-                  background: '#f0fdf4',
-                  color: '#15803d',
-                  border: '1px solid #bbf7d0',
+                  background: 'var(--down-bg)',
+                  color: 'var(--down-d)',
+                  border: '1px solid var(--down-b)',
                   fontWeight: 700,
                 }}
               >
@@ -511,7 +511,7 @@ export default function TailSection({
                       <span style={{ fontFamily: 'monospace', fontSize: '12px', color: 'var(--mute)' }}>
                         {code6}
                       </span>
-                      <span className="tag" style={{ background: '#fff', fontSize: '11px', padding: '1px 8px' }}>
+                      <span className="tag" style={{ background: 'var(--card)', fontSize: '11px', padding: '1px 8px' }}>
                         现价 ¥{f2(livePx)}
                       </span>
                     </div>
@@ -622,7 +622,7 @@ export default function TailSection({
                 fontWeight: 600,
                 borderRadius: '6px',
                 border: '1px solid var(--accent)',
-                background: scanning ? 'var(--surface2)' : '#fff',
+                background: scanning ? 'var(--surface2)' : 'var(--card)',
                 color: 'var(--accent)',
                 cursor: scanning ? 'not-allowed' : 'pointer',
               }}
@@ -811,9 +811,9 @@ export default function TailSection({
                     style={
                       isTiltLocked
                         ? {
-                            background: '#fef2f2',
-                            color: '#b91c1c',
-                            border: '1px solid #fca5a5',
+                            background: 'var(--up-bg)',
+                            color: 'var(--up-d)',
+                            border: '1px solid var(--up-b)',
                             cursor: 'not-allowed',
                           }
                         : candHolidayGuard.willExceedCap
@@ -1004,9 +1004,9 @@ export default function TailSection({
                             marginLeft: 'auto',
                             ...(isTiltLocked
                               ? {
-                                  background: '#fef2f2',
-                                  color: '#b91c1c',
-                                  border: '1px solid #fca5a5',
+                                  background: 'var(--up-bg)',
+                                  color: 'var(--up-d)',
+                                  border: '1px solid var(--up-b)',
                                   cursor: 'not-allowed',
                                 }
                               : extraHolidayGuard?.willExceedCap

@@ -291,9 +291,9 @@ export default function SelectionSection({
               fontSize: '10px',
               padding: '1px 5px',
               borderRadius: '4px',
-              background: r.sectorTier === 'HOT' ? '#fff1f0' : 'var(--surface2)',
-              color: r.sectorTier === 'HOT' ? '#cf1322' : 'var(--sub)',
-              border: `1px solid ${r.sectorTier === 'HOT' ? '#ffa39e' : 'var(--line)'}`,
+              background: r.sectorTier === 'HOT' ? 'var(--up-bg)' : 'var(--surface2)',
+              color: r.sectorTier === 'HOT' ? 'var(--up)' : 'var(--sub)',
+              border: `1px solid ${r.sectorTier === 'HOT' ? 'var(--up-b)' : 'var(--line)'}`,
               fontWeight: r.sectorTier === 'HOT' ? 700 : 500,
             }}
           >
@@ -306,9 +306,9 @@ export default function SelectionSection({
               fontSize: '10px',
               padding: '1px 5px',
               borderRadius: '4px',
-              background: r.leaderRole === 'dragon' ? '#fef3c7' : r.leaderRole === 'core' ? '#e0f2fe' : '#f1f5f9',
-              color: r.leaderRole === 'dragon' ? '#92400e' : r.leaderRole === 'core' ? '#075985' : '#475569',
-              border: `1px solid ${r.leaderRole === 'dragon' ? '#fcd34d' : r.leaderRole === 'core' ? '#7dd3fc' : '#cbd5e1'}`,
+              background: r.leaderRole === 'dragon' ? 'var(--warn-bg)' : r.leaderRole === 'core' ? 'var(--info-bg)' : 'var(--surface2)',
+              color: r.leaderRole === 'dragon' ? 'var(--warn-d)' : r.leaderRole === 'core' ? 'var(--accent-d)' : 'var(--sub)',
+              border: `1px solid ${r.leaderRole === 'dragon' ? 'var(--warn-b)' : r.leaderRole === 'core' ? '#7dd3fc' : 'var(--line2)'}`,
               fontWeight: 700,
             }}
           >
@@ -463,9 +463,9 @@ export default function SelectionSection({
                 borderRadius: '7px',
                 fontSize: '12px',
                 lineHeight: 1.55,
-                background: env.level === 'OK' ? '#ecfdf5' : '#fff7ed',
-                border: `1px solid ${env.level === 'OK' ? '#a7f3d0' : '#fed7aa'}`,
-                color: env.level === 'OK' ? '#065f46' : '#9a3412',
+                background: env.level === 'OK' ? 'var(--down-bg)' : 'var(--warn-bg)',
+                border: `1px solid ${env.level === 'OK' ? 'var(--down-b)' : 'var(--warn-b)'}`,
+                color: env.level === 'OK' ? 'var(--down-d)' : '#9a3412',
                 display: 'flex',
                 flexWrap: 'wrap',
                 alignItems: 'center',
@@ -520,11 +520,11 @@ export default function SelectionSection({
               ) : (
                 <div style={{
                   padding: '12px 14px',
-                  background: env.level === 'BAD' ? '#fff1f0' : 'var(--surface2)',
-                  border: env.level === 'BAD' ? '1px solid #ffa39e' : '1px dashed var(--line)',
+                  background: env.level === 'BAD' ? 'var(--up-bg)' : 'var(--surface2)',
+                  border: env.level === 'BAD' ? '1px solid var(--up-b)' : '1px dashed var(--line)',
                   borderRadius: '8px',
                   fontSize: '12.5px',
-                  color: env.level === 'BAD' ? '#cf1322' : 'var(--mute)',
+                  color: env.level === 'BAD' ? 'var(--up)' : 'var(--mute)',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '10px',
@@ -601,11 +601,11 @@ export default function SelectionSection({
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 {quotesUpdatedTime && (
-                  <span className="tag" style={{ background: '#eef2ff', color: 'var(--info)', fontSize: '11px', fontWeight: 600 }}>
+                  <span className="tag" style={{ background: 'var(--info-bg)', color: 'var(--info)', fontSize: '11px', fontWeight: 600 }}>
                     定盘同步: {quotesUpdatedTime}
                   </span>
                 )}
-                <span className="tag" style={{ background: '#fff', fontSize: '11px', color: 'var(--text)' }}>{aucStatus.label}</span>
+                <span className="tag" style={{ background: 'var(--card)', fontSize: '11px', color: 'var(--text)' }}>{aucStatus.label}</span>
               </div>
             </summary>
             <div className="fold-bd" style={{ padding: '10px 14px 14px', fontSize: '12px' }}>

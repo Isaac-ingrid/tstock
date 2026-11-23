@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import Header from './components/Header.jsx';
+import SideRail from './components/SideRail.jsx';
 import TopNav from './components/TopNav.jsx';
 import AuthScreen from './components/AuthScreen.jsx';
 import AccountManageModal from './components/AccountManageModal.jsx';
@@ -97,10 +97,52 @@ export default function App() {
   const canEnterWorkbench = authState.authenticated || authState.offlineLocal;
   const currentUser = authState.user;
 
-  /* ================= 1. 响应式 URL 路由与核心状态 ================= */
+  /* ================= 1. 响应式 URL 路由与界面壳层状态 ================= */
   const { activeTab, navigate, query } = useRoute();
   const pwa = usePwaManager();
   const eodShortcutHandledRef = useRef(false);
+
+  const [uiTheme, setUiTheme] = useState(() => {
+    if (typeof window === 'undefined') return 'dark';
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.UI_THEME);
+      return saved === 'light' || saved === 'dark' ? saved : 'dark';
+    } catch (_) {
+      return 'dark';
+    }
+  });
+
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return localStorage.getItem(STORAGE_KEYS.SIDEBAR_COLLAPSED) === '1';
+    } catch (_) {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.documentElement.dataset.theme = uiTheme;
+    }
+    try {
+      localStorage.setItem(STORAGE_KEYS.UI_THEME, uiTheme);
+    } catch (_) {}
+  }, [uiTheme]);
+
+  const handleToggleTheme = useCallback(() => {
+    setUiTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  }, []);
+
+  const handleToggleSidebar = useCallback(() => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(STORAGE_KEYS.SIDEBAR_COLLAPSED, next ? '1' : '0');
+      } catch (_) {}
+      return next;
+    });
+  }, []);
 
   const [pool, setPool] = useState(() => {
     try {
@@ -2126,59 +2168,78 @@ export default function App() {
   const tailCount = tailActives.length > 0 ? tailActives.length : getTailBuyCandidates(wbLatest).length;
 
   return (
-    <div className="wrap">
-      <Header />
-
-      <PwaInstallBanner
-        visible={pwa.showMobileBanner}
-        canNativePrompt={pwa.canNativePrompt}
-        onInstall={pwa.triggerInstall}
-        onDismiss={pwa.dismissBanner}
-      />
-
-      <TopNav
+    <div className={`app-shell ${sidebarCollapsed ? 'is-collapsed' : ''}`}>
+      <SideRail
         activeTab={activeTab}
         onTabChange={handleTabChange}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={handleToggleSidebar}
+        theme={uiTheme}
+        onToggleTheme={handleToggleTheme}
         pool={pool}
-        activeStockCode={activeStockCode}
-        onSelectStock={handleSelectStock}
         tailCount={tailCount}
         ledgerCount={tradeLogs.length}
-        totalAssets={totalAssets}
-        cash={cash}
-        marketValue={marketValue}
-        posRate={posRate}
-        allowedCapPct={appAllowedCapPct}
-        onUpdateTotalAssets={handleUpdateTotalAssets}
-        onUpdateCash={handleUpdateCash}
         clockPhase={clockPhase}
         quoteStamp={quoteStamp}
-        isStale={isStale}
-        onOpenClock={() => setClockModalOpen(true)}
-        onOpenAlertModal={() => setAlertModalOpen(true)}
-        onOpenEodModal={() => setEodModalOpen(true)}
-        onOpenPwaModal={pwa.triggerInstall}
-        isStandalone={pwa.isStandalone}
-        todayArchived={todayArchived}
-        isPostMarketWindow={isPostMarketWindow}
-        onCopyPlan={handleCopyPlan}
-        onExport={handleExport}
-        onImportClick={() => importInputRef.current && importInputRef.current.click()}
-        onRefresh={() => handleRefresh(false)}
-        onToggleNotify={handleToggleNotify}
-        notifyActive={notifyActive}
-        alertEnabled={alertEnabled}
         currentUser={currentUser}
         onOpenAccountModal={() => setAccountModalOpen(true)}
+        onCopyPlan={handleCopyPlan}
       />
 
-      <input
-        ref={importInputRef}
-        type="file"
-        accept="application/json,.json"
-        style={{ display: 'none' }}
-        onChange={handleImportFile}
-      />
+      <div className="app-workspace">
+        <TopNav
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+          pool={pool}
+          activeStockCode={activeStockCode}
+          onSelectStock={handleSelectStock}
+          tailCount={tailCount}
+          ledgerCount={tradeLogs.length}
+          totalAssets={totalAssets}
+          cash={cash}
+          marketValue={marketValue}
+          posRate={posRate}
+          allowedCapPct={appAllowedCapPct}
+          onUpdateTotalAssets={handleUpdateTotalAssets}
+          onUpdateCash={handleUpdateCash}
+          clockPhase={clockPhase}
+          quoteStamp={quoteStamp}
+          isStale={isStale}
+          onOpenClock={() => setClockModalOpen(true)}
+          onOpenAlertModal={() => setAlertModalOpen(true)}
+          onOpenEodModal={() => setEodModalOpen(true)}
+          onOpenPwaModal={pwa.triggerInstall}
+          isStandalone={pwa.isStandalone}
+          todayArchived={todayArchived}
+          isPostMarketWindow={isPostMarketWindow}
+          onCopyPlan={handleCopyPlan}
+          onExport={handleExport}
+          onImportClick={() => importInputRef.current && importInputRef.current.click()}
+          onRefresh={() => handleRefresh(false)}
+          onToggleNotify={handleToggleNotify}
+          notifyActive={notifyActive}
+          alertEnabled={alertEnabled}
+          currentUser={currentUser}
+          onOpenAccountModal={() => setAccountModalOpen(true)}
+          theme={uiTheme}
+          onToggleTheme={handleToggleTheme}
+        />
+
+        <div className="app-body">
+          <PwaInstallBanner
+            visible={pwa.showMobileBanner}
+            canNativePrompt={pwa.canNativePrompt}
+            onInstall={pwa.triggerInstall}
+            onDismiss={pwa.dismissBanner}
+          />
+
+          <input
+            ref={importInputRef}
+            type="file"
+            accept="application/json,.json"
+            style={{ display: 'none' }}
+            onChange={handleImportFile}
+          />
 
       <P0EmergencyBanner
         pool={pool}
@@ -2400,9 +2461,11 @@ export default function App() {
         )}
       </main>
 
-      <footer>
-        {SITE_META.footer}
-      </footer>
+          <footer>
+            {SITE_META.footer}
+          </footer>
+        </div>
+      </div>
 
       {quickTModal.open && (
         <QuickTModal
