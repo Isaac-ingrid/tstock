@@ -973,7 +973,13 @@ async def _fetch_zt_pool_day(
                     raw = j["data"].get("pool") or []
                     if isinstance(raw, list) and raw:
                         pool = [
-                            {"c": row.get("c"), "n": row.get("n"), "hybk": row.get("hybk")}
+                            {
+                                "c": row.get("c"),
+                                "n": row.get("n"),
+                                "hybk": row.get("hybk"),
+                                "lbc": row.get("lbc"),
+                                "p": row.get("p"),
+                            }
                             for row in raw
                             if isinstance(row, dict) and row.get("c")
                         ]

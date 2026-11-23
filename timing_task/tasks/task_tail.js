@@ -39,6 +39,10 @@ async function main() {
     // 2. 将尾盘黑马名单同步到数据契约
     log(`步骤 2/2: 将尾盘结果写入数据契约与前端目录 (publish.js)...`);
     runScript('publish.js');
+    if (process.argv.includes('--skip-snapshot')) {
+      log(`✓ 已完成尾盘黑马扫描与契约同步（策略快照交由主后端异步入账）`);
+      return;
+    }
 
     // 2b. 同步通知策略战绩账本记录当日尾盘黑马样本（若后端在线）
     try {

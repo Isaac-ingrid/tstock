@@ -712,7 +712,7 @@ async def run_tail_scan_api(request: Request, force: bool = Query(default=True))
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         task_script = os.path.join(project_root, "timing_task", "tasks", "task_tail.js")
 
-        cmd = ["node", task_script]
+        cmd = ["node", task_script, "--skip-snapshot"]
         if force:
             cmd.append("--force")
 
@@ -744,6 +744,17 @@ async def run_tail_scan_api(request: Request, force: bool = Query(default=True))
                         tail_meta = lj.get("tailMeta")
                 except Exception:
                     pass
+
+            # 后台非阻塞触发策略战绩建档，避免阻塞前端尾盘扫描按钮返回
+            http_client = getattr(request.app.state, "http", None)
+
+            async def _bg_snapshot() -> None:
+                try:
+                    await snapshot_strategies(http_client=http_client)
+                except Exception:
+                    pass
+
+            asyncio.create_task(_bg_snapshot())
 
             return {
                 "ok": True,

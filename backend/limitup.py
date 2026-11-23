@@ -10,16 +10,22 @@ import httpx
 from .strong_herd import build_strong_herd_and_themes, parse_mystic_roots
 from .trade_calendar import cn_now_str, cn_today_ymd, get_market_calendar_snapshot, is_trade_day, recent_trade_dates
 
-# 内存缓存，TTL 8 秒（盘中毫秒级更新，盘后快速响应）
+# 内存缓存：盘中 8s 毫秒级更新，盘后/历史复盘 60s 极速响应，并保留最近成功快照兜底东财瞬时抖动
 _LIMITUP_CACHE: Dict[str, Tuple[float, dict]] = {}
+_LIMITUP_STALE_BACKUP: Dict[str, dict] = {}
+_LIMITUP_INFLIGHT: Dict[str, asyncio.Task] = {}
 _CACHE_LOCK = asyncio.Lock()
+_INFLIGHT_LOCK = asyncio.Lock()
 CACHE_TTL = 8.0
+HISTORY_CACHE_TTL = 60.0
+EM_REQ_TIMEOUT = 2.6
 
 
 async def invalidate_limitup_cache() -> None:
     """手动变更抱团跟踪池后立刻失效连板聚合缓存。"""
     async with _CACHE_LOCK:
         _LIMITUP_CACHE.clear()
+        _LIMITUP_STALE_BACKUP.clear()
 
 
 def format_time_str(val: Any) -> str:
@@ -59,11 +65,46 @@ async def get_limitup_pool(
                 return data
             _LIMITUP_CACHE.pop(cache_key, None)
 
+    async def _compute_once() -> dict:
+        return await _build_limitup_pool_inner(
+            date_str=date_str,
+            today_code=today_code,
+            target_date=target_date,
+            is_history_mode=is_history_mode,
+            roots_list=roots_list,
+            cache_key=cache_key,
+            http_client=http_client,
+        )
+
+    async with _INFLIGHT_LOCK:
+        task = _LIMITUP_INFLIGHT.get(cache_key)
+        if task is None or task.done():
+            task = asyncio.create_task(_compute_once())
+            _LIMITUP_INFLIGHT[cache_key] = task
+
+    try:
+        return await task
+    finally:
+        async with _INFLIGHT_LOCK:
+            if _LIMITUP_INFLIGHT.get(cache_key) is task and task.done():
+                _LIMITUP_INFLIGHT.pop(cache_key, None)
+
+
+async def _build_limitup_pool_inner(
+    date_str: Optional[str],
+    today_code: str,
+    target_date: str,
+    is_history_mode: bool,
+    roots_list: List[str],
+    cache_key: str,
+    http_client: Optional[httpx.AsyncClient] = None,
+) -> dict:
+    em_hdr = {"Referer": "https://quote.eastmoney.com/"}
     client_cm = (
         contextlib.nullcontext(http_client)
         if http_client is not None
         else httpx.AsyncClient(
-            timeout=httpx.Timeout(10.0),
+            timeout=httpx.Timeout(6.0),
             trust_env=False,
             headers={
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -75,41 +116,54 @@ async def get_limitup_pool(
         dates_to_try = (
             [target_date]
             if date_str
-            else recent_trade_dates(6, ref=today_code, include_ref=True, fmt="%Y%m%d")
+            else recent_trade_dates(4, ref=today_code, include_ref=True, fmt="%Y%m%d")
         )
 
         raw_pool: List[dict] = []
         actual_date = target_date
 
-        # 并行拉取：涨停股池 + 全市场冲板股票（已去除创业板 m:0+t:80 及北交所）
+        # 第一波：先拉目标交易日涨停池 + 全市场冲板股票（盘中 99% 场景 1 轮命中，2.6s 短超时）
         clist_url = "https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=100&po=1&np=1&fltt=2&invt=2&fid=f3&fs=m:0+t:6,m:1+t:2,m:1+t:23&fields=f12,f14,f2,f3,f4,f5,f6,f7,f8,f10,f15,f16,f17,f18,f100"
+        first_zt_url = f"https://push2ex.eastmoney.com/getTopicZTPool?ut=7eea3edcaed734bea9cbfc24409ed989&dpt=wz.ztzt&Pageindex=0&pagesize=150&sort=fbt:asc&date={dates_to_try[0]}"
 
-        res_clist = None
-        for d_try in dates_to_try:
-            zt_url = f"https://push2ex.eastmoney.com/getTopicZTPool?ut=7eea3edcaed734bea9cbfc24409ed989&dpt=wz.ztzt&Pageindex=0&pagesize=150&sort=fbt:asc&date={d_try}"
+        res_first_zt, res_clist = await asyncio.gather(
+            client.get(first_zt_url, headers=em_hdr, timeout=EM_REQ_TIMEOUT),
+            client.get(clist_url, headers=em_hdr, timeout=EM_REQ_TIMEOUT),
+            return_exceptions=True,
+        )
+        if not isinstance(res_first_zt, Exception) and res_first_zt.status_code == 200:
             try:
-                if res_clist is None or isinstance(res_clist, Exception):
-                    res_zt, res_clist = await asyncio.gather(
-                        client.get(zt_url),
-                        client.get(clist_url),
-                        return_exceptions=True,
+                j0 = res_first_zt.json()
+                if j0.get("rc") == 0 and j0.get("data") and j0["data"].get("pool"):
+                    raw_pool = j0["data"]["pool"]
+                    actual_date = dates_to_try[0] if date_str else str(j0["data"].get("qdate") or dates_to_try[0])
+            except Exception:
+                pass
+
+        # 若盘前 09:00-09:25 尚无首板，单波并发回溯前序 3 个交易日（告别旧版 6 轮串行等待）
+        if not raw_pool and len(dates_to_try) > 1:
+            fb_dates = dates_to_try[1:]
+            fb_resps = await asyncio.gather(
+                *[
+                    client.get(
+                        f"https://push2ex.eastmoney.com/getTopicZTPool?ut=7eea3edcaed734bea9cbfc24409ed989&dpt=wz.ztzt&Pageindex=0&pagesize=150&sort=fbt:asc&date={d_fb}",
+                        headers=em_hdr,
+                        timeout=EM_REQ_TIMEOUT,
                     )
-                else:
-                    res_zt = await client.get(zt_url)
-                if not isinstance(res_zt, Exception) and res_zt.status_code == 200:
-                    j = res_zt.json()
-                    if j.get("rc") == 0 and j.get("data") and j["data"].get("pool"):
-                        raw_pool = j["data"]["pool"]
-                        actual_date = d_try if date_str else str(j["data"].get("qdate") or d_try)
-                        break
-            except Exception:
-                continue
-
-        if res_clist is None or isinstance(res_clist, Exception):
-            try:
-                res_clist = await client.get(clist_url)
-            except Exception:
-                res_clist = None
+                    for d_fb in fb_dates
+                ],
+                return_exceptions=True,
+            )
+            for d_fb, r_fb in zip(fb_dates, fb_resps):
+                if not isinstance(r_fb, Exception) and r_fb.status_code == 200:
+                    try:
+                        j_fb = r_fb.json()
+                        if j_fb.get("rc") == 0 and j_fb.get("data") and j_fb["data"].get("pool"):
+                            raw_pool = j_fb["data"]["pool"]
+                            actual_date = d_fb if date_str else str(j_fb["data"].get("qdate") or d_fb)
+                            break
+                    except Exception:
+                        continue
 
         # 解析冲板中的临界标的
         raw_rushing: List[dict] = []
@@ -121,15 +175,15 @@ async def get_limitup_pool(
             except Exception:
                 pass
 
-        # 并行拉取：炸板池(ZBPool)、跌停池(DTPool)、两市涨跌家数(ulist)
+        # 并行拉取：炸板池(ZBPool)、跌停池(DTPool)、两市涨跌家数(ulist) 与强势抱团子引擎
         zb_url = f"https://push2ex.eastmoney.com/getTopicZBPool?ut=7eea3edcaed734bea9cbfc24409ed989&dpt=wz.ztzt&Pageindex=0&pagesize=150&sort=fbt:asc&date={actual_date}"
         dt_url = f"https://push2ex.eastmoney.com/getTopicDTPool?ut=7eea3edcaed734bea9cbfc24409ed989&dpt=wz.ztzt&Pageindex=0&pagesize=150&sort=fund:asc&date={actual_date}"
         breadth_url = "https://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&secids=1.000001,0.399001&fields=f104,f105,f106"
 
         res_zb, res_dt, res_breadth, herd_payload = await asyncio.gather(
-            client.get(zb_url),
-            client.get(dt_url),
-            client.get(breadth_url),
+            client.get(zb_url, headers=em_hdr, timeout=EM_REQ_TIMEOUT),
+            client.get(dt_url, headers=em_hdr, timeout=EM_REQ_TIMEOUT),
+            client.get(breadth_url, headers=em_hdr, timeout=EM_REQ_TIMEOUT),
             build_strong_herd_and_themes(
                 client,
                 actual_date,
@@ -667,7 +721,18 @@ async def get_limitup_pool(
         "updatedAt": cn_now_str(),
     }
 
+    # 若东财全链路偶发瞬时拦截导致 0 涨停且 0 涨跌家数，回退最近一次同键成功快照防空白闪断
+    if not raw_pool and (up_count + down_count) == 0:
+        async with _CACHE_LOCK:
+            stale = _LIMITUP_STALE_BACKUP.get(cache_key)
+        if stale is not None:
+            return {**stale, "fromStaleBackup": True}
+
+    ttl_val = HISTORY_CACHE_TTL if is_history_mode else CACHE_TTL
+    exp_ts = time.monotonic() + ttl_val
     async with _CACHE_LOCK:
-        _LIMITUP_CACHE[cache_key] = (now_ts + CACHE_TTL, result)
+        _LIMITUP_CACHE[cache_key] = (exp_ts, result)
+        if raw_pool or (up_count + down_count) > 0:
+            _LIMITUP_STALE_BACKUP[cache_key] = result
 
     return result

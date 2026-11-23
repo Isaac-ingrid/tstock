@@ -65,7 +65,7 @@ const EXCLUDE = (() => {
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 
-async function getJson(url, encoding = 'utf-8', retry = 3) {
+async function getJson(url, encoding = 'utf-8', retry = 2, timeoutMs = 2800) {
   let lastErr;
   for (let i = 0; i < retry; i++) {
     try {
@@ -75,7 +75,7 @@ async function getJson(url, encoding = 'utf-8', retry = 3) {
           Referer: url.includes('eastmoney') ? 'https://quote.eastmoney.com/' : 'https://gu.qq.com/',
           Accept: '*/*',
         },
-        signal: AbortSignal.timeout(8000),
+        signal: AbortSignal.timeout(timeoutMs),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const buf = Buffer.from(await res.arrayBuffer());
@@ -84,10 +84,26 @@ async function getJson(url, encoding = 'utf-8', retry = 3) {
       return JSON.parse(text);
     } catch (e) {
       lastErr = e;
-      await new Promise((r) => setTimeout(r, 250 * (i + 1)));
+      if (i + 1 < retry) await new Promise((r) => setTimeout(r, 120 * (i + 1)));
     }
   }
   throw lastErr;
+}
+
+async function mapPool(items, concurrency, iterFn) {
+  const list = Array.from(items);
+  const out = new Array(list.length);
+  let cursor = 0;
+  const workerCount = Math.max(1, Math.min(concurrency, list.length));
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (cursor < list.length) {
+        const idx = cursor++;
+        out[idx] = await iterFn(list[idx], idx);
+      }
+    })
+  );
+  return out;
 }
 
 /* ---------------- 板块与涨跌幅上限 ---------------- */
@@ -123,16 +139,18 @@ function mapRow(d) {
 async function fetchSnapshot({ force = true } = {}) {
   if (!force && fs.existsSync(CACHE)) {
     const c = JSON.parse(fs.readFileSync(CACHE, 'utf8'));
-    if (c?.rows?.length > 3000) { console.log(`（复用 ${path.basename(CACHE)}，${c.rows.length} 只）`); return c.rows; }
+    if (c?.rows?.length > 500) { console.log(`（复用 ${path.basename(CACHE)}，${c.rows.length} 只）`); return { rows: c.rows, totalMarket: c.total || c.rows.length }; }
   }
   let total = 0;
-  for (let r = 0; r < 5; r++) {
+  let firstPageDiff = null;
+  for (let r = 0; r < 4; r++) {
     try {
-      const j = await getJson(`https://${emHost()}/api/qt/clist/get?${EM_QS}&pn=1`, 'utf-8', 3);
+      const j = await getJson(`https://${emHost()}/api/qt/clist/get?${EM_QS}&pn=1`, 'utf-8', 2, 2600);
       total = j?.data?.total || 0;
+      firstPageDiff = j?.data?.diff || null;
       if (total > 0) break;
     } catch (e) {
-      await new Promise((res) => setTimeout(res, 300 * (r + 1)));
+      await new Promise((res) => setTimeout(res, 150 * (r + 1)));
     }
   }
 
@@ -144,77 +162,89 @@ async function fetchSnapshot({ force = true } = {}) {
           try {
             const p = path.join(OUT_DIR, f);
             const c = JSON.parse(fs.readFileSync(p, 'utf8'));
-            return { f, rows: c?.rows || [] };
+            return { f, total: c?.total || (c?.rows?.length || 0), rows: c?.rows || [] };
           } catch {
-            return { f, rows: [] };
+            return { f, total: 0, rows: [] };
           }
         })
-        .filter((x) => x.rows.length >= 3000)
+        .filter((x) => x.rows.length >= 300)
         .sort((a, b) => b.rows.length - a.rows.length);
 
       if (snaps.length > 0) {
-        console.log(`⚠️ 东财 clist 首包重试超时，启动今日历史最全快照兜底: ${snaps[0].f} (${snaps[0].rows.length} 只)`);
-        return snaps[0].rows;
+        console.log(`⚠️ 东财 clist 首包重试超时，启动今日历史快照兜底: ${snaps[0].f} (${snaps[0].rows.length} 只)`);
+        return { rows: snaps[0].rows, totalMarket: snaps[0].total };
       }
     }
     throw new Error('东财 clist 接口重试失败且无今日可用快照');
   }
 
   const pages = Math.ceil(total / 100);
-  console.log(`  全市场 ${total} 只，${pages} 页`);
   const pageMap = new Map();
-  let pendingPages = Array.from({ length: pages }, (_, i) => i + 1);
+  let cutoffPage = pages;
+  const minTargetChg = Math.max(1.5, CFG.chgMin - 0.5); // 2.5% 安全垫，因 clist 已按 fid=f3 严格涨幅降序排列
 
-  for (let round = 1; round <= 3 && pendingPages.length > 0; round++) {
-    const queue = [...pendingPages];
-    pendingPages = [];
-    let cur = 0;
-    const worker = async () => {
-      while (cur < queue.length) {
-        const pn = queue[cur++];
-        try {
-          const j = await getJson(`https://${emHost()}/api/qt/clist/get?${EM_QS}&pn=${pn}`, 'utf-8', 3);
-          const diff = j?.data?.diff || [];
-          if (diff.length > 0) {
-            pageMap.set(pn, diff.map(mapRow));
-          } else {
-            pendingPages.push(pn);
-          }
-        } catch {
-          pendingPages.push(pn);
-        }
-        await new Promise((r) => setTimeout(r, 60));
-      }
-    };
-    await Promise.all(Array.from({ length: 4 }, worker));
-  }
-
-  const out = [];
-  for (const list of pageMap.values()) {
-    out.push(...list);
-  }
-  let rows = out.filter((x) => Number.isFinite(x.chgPct) && x.price > 0);
-  if (rows.length < 4500 && fs.existsSync(OUT_DIR)) {
-    const snaps = fs.readdirSync(OUT_DIR)
-      .filter((f) => f.startsWith(`tail-snapshot-${TODAY}-`))
-      .sort()
-      .reverse();
-    for (const snap of snaps) {
-      try {
-        const c = JSON.parse(fs.readFileSync(path.join(OUT_DIR, snap), 'utf8'));
-        if (c?.rows?.length > rows.length && c?.rows?.length > 4500) {
-          console.log(`⚠️ 本次抓包样本偏少(${rows.length})，补充今日全量快照(${snap}, ${c.rows.length}只)`);
-          rows = c.rows;
-          break;
-        }
-      } catch {}
+  if (Array.isArray(firstPageDiff) && firstPageDiff.length > 0) {
+    const mapped1 = firstPageDiff.map(mapRow);
+    pageMap.set(1, mapped1);
+    const lastChg1 = mapped1.at(-1)?.chgPct;
+    if (Number.isFinite(lastChg1) && lastChg1 < minTargetChg) {
+      cutoffPage = 1;
     }
   }
-  if (rows.length > 2000) {
-    fs.mkdirSync(OUT_DIR, { recursive: true });
-    fs.writeFileSync(CACHE, JSON.stringify({ date: TODAY, at: HHMM, total, rows }, null, 0));
+
+  let nextPn = pageMap.has(1) ? 2 : 1;
+  const failedPages = [];
+  const workerCount = 8;
+
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextPn <= cutoffPage) {
+        const pn = nextPn++;
+        if (pn > cutoffPage) break;
+        try {
+          const j = await getJson(`https://${emHost()}/api/qt/clist/get?${EM_QS}&pn=${pn}`, 'utf-8', 2, 2600);
+          const diff = j?.data?.diff || [];
+          if (diff.length > 0) {
+            const mapped = diff.map(mapRow);
+            pageMap.set(pn, mapped);
+            const tailChg = mapped.at(-1)?.chgPct;
+            if (Number.isFinite(tailChg) && tailChg < minTargetChg && pn < cutoffPage) {
+              cutoffPage = pn;
+            }
+          } else if (pn <= cutoffPage) {
+            failedPages.push(pn);
+          }
+        } catch {
+          if (pn <= cutoffPage) failedPages.push(pn);
+        }
+      }
+    })
+  );
+
+  // 对截止页之前的偶发失败页做一轮并发补抓，确保 >=3% 区间零漏票
+  const retryList = failedPages.filter((pn) => pn <= cutoffPage && !pageMap.has(pn));
+  if (retryList.length > 0) {
+    await mapPool(retryList, 6, async (pn) => {
+      try {
+        const j = await getJson(`https://${emHost()}/api/qt/clist/get?${EM_QS}&pn=${pn}`, 'utf-8', 2, 2600);
+        const diff = j?.data?.diff || [];
+        if (diff.length > 0) pageMap.set(pn, diff.map(mapRow));
+      } catch {}
+    });
   }
-  return rows;
+
+  const sortedKeys = Array.from(pageMap.keys()).filter((pn) => pn <= cutoffPage).sort((a, b) => a - b);
+  console.log(`  全市场 ${total} 只（涨幅降序精准扫描前 ${sortedKeys.length}/${pages} 页，已完整覆盖 ≥${CFG.chgMin}% 强势区间）`);
+  const out = [];
+  for (const pn of sortedKeys) {
+    out.push(...pageMap.get(pn));
+  }
+  let rows = out.filter((x) => Number.isFinite(x.chgPct) && x.price > 0);
+  if (rows.length >= 80) {
+    fs.mkdirSync(OUT_DIR, { recursive: true });
+    fs.writeFileSync(CACHE, JSON.stringify({ date: TODAY, at: HHMM, total, cutoffPage, rows }, null, 0));
+  }
+  return { rows, totalMarket: total };
 }
 
 /* ---------------- 日K：30 日内涨停史 + 顶部见顶 K 线风控 ---------------- */
@@ -306,14 +336,17 @@ function scoreTail(c, vw, kl, medianTI) {
   /* 1. 实时全市场快照 */
   console.log('① 拉取全市场实时快照…');
   let all;
+  let totalMarketCount = 0;
   try {
-    all = await fetchSnapshot({ force: true });
+    const snap = await fetchSnapshot({ force: true });
+    all = snap.rows;
+    totalMarketCount = snap.totalMarket || all.length;
   } catch (e) {
     console.error('✗ 全市场快照失败：' + e.message);
     console.error('  东财 clist 限流时，可先跑 node snapshot_fallback.js 生成兜底快照（但那不是实时价，仅供试跑）。');
     process.exit(2);
   }
-  console.log(`  ${all.length} 只有效`);
+  console.log(`  已抓取强势区间样本 ${all.length} 只（全市场 ${totalMarketCount} 只）`);
 
   /* 2. 快照级预筛 */
   const pre = all.filter((s) => {
@@ -350,18 +383,16 @@ function scoreTail(c, vw, kl, medianTI) {
     .sort((a, b) => b._pre - a._pre)
     .slice(0, CFG.prefilterN);
 
-  const pool = [];
-  for (const s of preRank) {
+  // 12 并发 Worker 池并发核验分时 VWAP（替代原单线程逐只串行 + 80ms 休眠，顺序严格保持不变）
+  const pool = await mapPool(preRank, 12, async (s) => {
     const board = boardOf(s.code);
     const vw = await vwapCheck(s.code);
     if (vw && vw.date && vw.date !== TODAY) {
       console.log(`  ! ${s.name} 分时日期为 ${vw.date}，非今日，丢弃`);
-      pool.push({ ...s, board, vw: null, kl: null, dropped: '分时非今日' });
-      continue;
+      return { ...s, board, vw: null, kl: null, dropped: '分时非今日' };
     }
-    pool.push({ ...s, board, vw, kl: null });
-    await new Promise((r) => setTimeout(r, 80));
-  }
+    return { ...s, board, vw, kl: null };
+  });
 
   const tis = pool.map((r) => r.vw?.tailIntensity).filter((x) => Number.isFinite(x)).sort((a, b) => a - b);
   const medianTI = tis.length ? tis[Math.floor(tis.length / 2)] : 0;
@@ -376,11 +407,11 @@ function scoreTail(c, vw, kl, medianTI) {
     return true;
   });
 
-  for (const r of survivors) {
+  // 12 并发 Worker 池并发核验 90 日 K 线涨停基因与顶部形态风控
+  await mapPool(survivors, 12, async (r) => {
     r.kl = await klineCheck(r.code, r.board, r.name);
     Object.assign(r, scoreTail(r, r.vw, r.kl, medianTI));
-    await new Promise((res) => setTimeout(res, 80));
-  }
+  });
 
   const passed = survivors
     .filter((r) => r.total >= effScoreMin && r.verdict !== '放弃' && !r.kl?.klineRisk?.risky)
@@ -442,7 +473,7 @@ function scoreTail(c, vw, kl, medianTI) {
     excludeBoards: EXCLUDE,
     env,
     stats: {
-      totalMarket: all.length,
+      totalMarket: totalMarketCount || all.length,
       prefilter: pre.length,
       reviewed: pool.length,
       passed: passed.length,

@@ -67,5 +67,115 @@ class StrongHerdMysticClusterTests(unittest.TestCase):
         self.assertTrue(code_map["603166"]["isResonant"])
 
 
+class LimitUpSingleflightAndFallbackTests(unittest.TestCase):
+    def test_limitup_singleflight_parallel_fallback_and_stale_backup(self):
+        import asyncio
+        import sys
+        import types
+        from unittest.mock import patch
+
+        if "httpx" not in sys.modules:
+            _httpx_stub = types.ModuleType("httpx")
+            _httpx_stub.AsyncClient = object
+            _httpx_stub.Response = object
+            _httpx_stub.Timeout = lambda *a, **kw: None
+            sys.modules["httpx"] = _httpx_stub
+
+        import backend.limitup as lu
+
+        class _FakeResp:
+            def __init__(self, payload, status_code=200):
+                self._payload = payload
+                self.status_code = status_code
+
+            def json(self):
+                return self._payload
+
+        class _FakeClient:
+            def __init__(self):
+                self.zt_calls = []
+                self.fail_all = False
+
+            async def get(self, url, **kwargs):
+                assert kwargs.get("timeout") is not None and kwargs["timeout"] <= 3.0
+                if self.fail_all:
+                    raise RuntimeError("eastmoney temporary timeout")
+                await asyncio.sleep(0.03)
+                if "getTopicZTPool" in url:
+                    d = url.split("date=")[-1][:8]
+                    self.zt_calls.append(d)
+                    if d == "20261123":
+                        return _FakeResp({"rc": 0, "data": {"qdate": "20261123", "pool": []}})
+                    if d == "20261120":
+                        return _FakeResp({
+                            "rc": 0,
+                            "data": {
+                                "qdate": "20261120",
+                                "pool": [
+                                    {
+                                        "c": "600977",
+                                        "n": "中国电影",
+                                        "m": 1,
+                                        "p": 15890,
+                                        "zdp": 10.04,
+                                        "amount": 9.5e8,
+                                        "ltsz": 296e8,
+                                        "hs": 6.2,
+                                        "lbc": 2,
+                                        "fbt": 93215,
+                                        "lbt": 93215,
+                                        "fund": 1.2e8,
+                                        "zbc": 0,
+                                        "hybk": "影视院线",
+                                    }
+                                ],
+                            },
+                        })
+                    return _FakeResp({"rc": 0, "data": {"pool": []}})
+                if "ulist.np/get" in url:
+                    return _FakeResp({"data": {"diff": [{"f104": 1800, "f105": 1200, "f106": 90}]}})
+                return _FakeResp({"rc": 0, "data": {"pool": [], "diff": [], "tc": 0}})
+
+        async def _fake_herd(*args, **kwargs):
+            return {
+                "strongPool": [],
+                "strongCount": 0,
+                "herdPool": [],
+                "herdCount": 0,
+                "evictedPool": [],
+                "evictedCount": 0,
+                "mainThemes": {"marketOverview": {}, "themes": []},
+                "mysticClusters": [],
+                "mysticRootsUsed": [],
+                "yesterdayStats": {},
+            }
+
+        async def _run():
+            await lu.invalidate_limitup_cache()
+            client = _FakeClient()
+            with (
+                patch.object(lu, "cn_today_ymd", return_value="20261123"),
+                patch.object(lu, "is_trade_day", return_value=True),
+                patch.object(lu, "recent_trade_dates", return_value=["20261123", "20261120", "20261119", "20261118"]),
+                patch.object(lu, "build_strong_herd_and_themes", side_effect=_fake_herd),
+            ):
+                r1, r2 = await asyncio.gather(
+                    lu.get_limitup_pool(http_client=client),
+                    lu.get_limitup_pool(http_client=client),
+                )
+                self.assertEqual(r1["date"], "20261120")
+                self.assertEqual(r1["totalCount"], 1)
+                self.assertEqual(r2["totalCount"], 1)
+                self.assertEqual(client.zt_calls.count("20261123"), 1)
+
+                lu._LIMITUP_CACHE.clear()
+                client.fail_all = True
+                r3 = await lu.get_limitup_pool(http_client=client)
+                self.assertTrue(r3.get("fromStaleBackup"))
+                self.assertEqual(r3["totalCount"], 1)
+
+        asyncio.run(_run())
+
+
 if __name__ == "__main__":
     unittest.main()

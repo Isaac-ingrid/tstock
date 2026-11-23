@@ -19,13 +19,17 @@ from .trade_calendar import count_trade_days_between, latest_or_current_trade_da
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 HERD_POOL_FILE = DATA_DIR / "herd_pool.json"
+ZT_HISTORY_CACHE_FILE = DATA_DIR / "zt_pool_history_cache.json"
 _HERD_FILE_LOCK = asyncio.Lock()
 
 # 带容量上限的进程内短周期缓存，避免频繁请求上游行情与内存泄漏
 HIST_ZT_TTL = 3600.0
 KLINE_TTL = 180.0
+EM_SHORT_TIMEOUT = 2.5
 _HIST_ZT_CACHE: BoundedTTLCache[str, List[dict]] = BoundedTTLCache(maxsize=128, default_ttl=HIST_ZT_TTL)
 _RECENT_ZT_CACHE: BoundedTTLCache[str, List[Tuple[str, List[dict]]]] = BoundedTTLCache(maxsize=64, default_ttl=HIST_ZT_TTL)
+_HOT_BK_CACHE: BoundedTTLCache[str, dict] = BoundedTTLCache(maxsize=16, default_ttl=25.0)
+_POP_CACHE: BoundedTTLCache[str, Dict[str, int]] = BoundedTTLCache(maxsize=8, default_ttl=30.0)
 
 NOISE_CONCEPT_KEYWORDS = (
     "昨日",
@@ -446,10 +450,29 @@ def _save_herd_state_sync(state: dict) -> None:
     os.replace(tmp_path, HERD_POOL_FILE)
 
 
+def _load_shared_zt_hist_day(date_str: str) -> Optional[List[dict]]:
+    if not ZT_HISTORY_CACHE_FILE.exists():
+        return None
+    try:
+        with ZT_HISTORY_CACHE_FILE.open("r", encoding="utf-8") as f:
+            raw = json.load(f)
+        rows = raw.get(date_str) if isinstance(raw, dict) else None
+        if isinstance(rows, list) and rows and isinstance(rows[0], dict) and "lbc" in rows[0]:
+            return rows
+    except Exception:
+        pass
+    return None
+
+
 async def _fetch_hist_zt_pool(client: httpx.AsyncClient, date_str: str) -> List[dict]:
     cached = await _HIST_ZT_CACHE.get(date_str)
     if cached is not None:
         return cached
+
+    disk_rows = _load_shared_zt_hist_day(date_str)
+    if disk_rows:
+        await _HIST_ZT_CACHE.set(date_str, disk_rows, ttl=HIST_ZT_TTL)
+        return disk_rows
 
     url = (
         "https://push2ex.eastmoney.com/getTopicZTPool"
@@ -457,7 +480,11 @@ async def _fetch_hist_zt_pool(client: httpx.AsyncClient, date_str: str) -> List[
     )
     pool: List[dict] = []
     try:
-        r = await client.get(url)
+        r = await client.get(
+            url,
+            headers={"Referer": "https://quote.eastmoney.com/"},
+            timeout=EM_SHORT_TIMEOUT,
+        )
         if r.status_code == 200:
             j = r.json()
             if j.get("rc") == 0 and j.get("data"):
@@ -923,9 +950,12 @@ async def build_strong_herd_and_themes(
     hot_bk_url = "https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=30&po=1&np=1&fltt=2&invt=2&fid=f3&fs=m:90+t:3+f:!50&fields=f12,f14,f2,f3,f62,f128,f140,f104,f105"
     amt_top_url = "https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=50&po=1&np=1&fltt=2&invt=2&fid=f6&fs=m:0+t:6,m:1+t:2&fields=f12,f14,f2,f3,f6,f8,f10,f21,f100"
 
-    res_qs, res_pop, res_bk, res_amt, hist_zt_days = await asyncio.gather(
-        client.get(qs_url),
-        client.post(
+    cached_pop = await _POP_CACHE.get("top100")
+
+    async def _fetch_pop_req():
+        if cached_pop is not None:
+            return None
+        return await client.post(
             pop_url,
             json={
                 "appId": "appId01",
@@ -933,16 +963,21 @@ async def build_strong_herd_and_themes(
                 "pageNo": 1,
                 "pageSize": 100,
             },
-        ),
-        client.get(hot_bk_url),
-        client.get(amt_top_url),
+            timeout=EM_SHORT_TIMEOUT,
+        )
+
+    res_qs, res_pop, res_bk, res_amt, hist_zt_days = await asyncio.gather(
+        client.get(qs_url, headers={"Referer": "https://quote.eastmoney.com/"}, timeout=EM_SHORT_TIMEOUT),
+        _fetch_pop_req(),
+        client.get(hot_bk_url, headers={"Referer": "https://quote.eastmoney.com/"}, timeout=EM_SHORT_TIMEOUT),
+        client.get(amt_top_url, headers={"Referer": "https://quote.eastmoney.com/"}, timeout=EM_SHORT_TIMEOUT),
         _fetch_recent_zt_days(client, actual_date, lookback_cal_days=7, max_valid_days=3),
         return_exceptions=True,
     )
 
-    # 1. 解析东财人气榜 (Top 100, 仅保留 00/60)
-    pop_map: Dict[str, int] = {}
-    if not isinstance(res_pop, Exception) and res_pop.status_code == 200:
+    # 1. 解析东财人气榜 (Top 100, 仅保留 00/60，带 30s 短缓存)
+    pop_map: Dict[str, int] = dict(cached_pop) if cached_pop is not None else {}
+    if not pop_map and res_pop is not None and not isinstance(res_pop, Exception) and res_pop.status_code == 200:
         try:
             for item in (res_pop.json().get("data") or []):
                 sc = str(item.get("sc") or "")
@@ -950,6 +985,8 @@ async def build_strong_herd_and_themes(
                 rk = int(item.get("rk") or 0)
                 if code.startswith(("00", "60")) and rk > 0:
                     pop_map[code] = rk
+            if pop_map:
+                await _POP_CACHE.set("top100", pop_map, ttl=30.0)
         except Exception:
             pass
 
@@ -1213,7 +1250,7 @@ async def build_strong_herd_and_themes(
         herd_codes = list(active_map.keys())
         quote_need_codes = list(dict.fromkeys(herd_codes + pop_need_quote + yest_need_quote))
 
-        kline_sem = asyncio.Semaphore(10)
+        kline_sem = asyncio.Semaphore(24)
         batch_quotes, kline_results = await asyncio.gather(
             _fetch_batch_quotes(client, quote_need_codes),
             asyncio.gather(*[_fetch_daily_kline(client, c, kline_sem) for c in herd_codes], return_exceptions=True),
@@ -1570,13 +1607,23 @@ async def build_strong_herd_and_themes(
             pass
 
     top_bks = raw_bks[:8]
+    bk_sem = asyncio.Semaphore(12)
+
+    async def _get_bk_url(u: str):
+        async with bk_sem:
+            return await client.get(
+                u,
+                headers={"Referer": "https://quote.eastmoney.com/"},
+                timeout=2.2,
+            )
+
     bk_member_reqs = []
     for bk in top_bks:
         bkc = bk["bkCode"]
         u_chg = f"https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=50&po=1&np=1&fltt=2&invt=2&fid=f3&fs=b:{bkc}&fields=f12,f14,f2,f3,f6,f8,f21,f100"
         u_amt = f"https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=20&po=1&np=1&fltt=2&invt=2&fid=f6&fs=b:{bkc}&fields=f12,f14,f2,f3,f6,f8,f21,f100"
-        bk_member_reqs.append(client.get(u_chg))
-        bk_member_reqs.append(client.get(u_amt))
+        bk_member_reqs.append(_get_bk_url(u_chg))
+        bk_member_reqs.append(_get_bk_url(u_amt))
 
     bk_resps = await asyncio.gather(*bk_member_reqs, return_exceptions=True) if bk_member_reqs else []
 
