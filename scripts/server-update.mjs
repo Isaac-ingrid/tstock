@@ -58,7 +58,7 @@ function runInherit(cmd, cmdArgs, extraEnv = {}) {
     env: { ...process.env, ...extraEnv },
   });
   if (res.status !== 0) {
-    die(`命令执行失败: ${cmd} ${cmdArgs.join(' ')}`);
+    throw new Error(`命令执行失败: ${cmd} ${cmdArgs.join(' ')}`);
   }
 }
 
@@ -105,72 +105,86 @@ async function main() {
   ];
 
   try {
-    for (const rel of runtimeRelFiles) {
-      const src = path.join(ROOT, rel);
-      if (fs.existsSync(src)) {
-        const dst = path.join(bakDir, rel);
-        fs.mkdirSync(path.dirname(dst), { recursive: true });
-        fs.copyFileSync(src, dst);
-      }
-    }
-
     // 清理已失效的 worktree 引用，防止残留沙箱阻塞切分支
     spawnSync('git', ['worktree', 'prune'], { cwd: ROOT, stdio: 'ignore' });
 
-    if (IS_LINUX) {
-      // 线上生产机作为纯消费端：已备份实时池数据，清理受跟踪文件改动后强制切回并锁定 origin/main
-      spawnSync('git', ['checkout', '--', '.'], { cwd: ROOT, stdio: 'ignore' });
-      runInherit('git', ['fetch', 'origin', 'main']);
-      const curBranchRes = spawnSync('git', ['symbolic-ref', '--quiet', '--short', 'HEAD'], {
-        cwd: ROOT,
-        encoding: 'utf8',
-      });
-      const curBranch = curBranchRes.status === 0 ? String(curBranchRes.stdout || '').trim() : '';
-      if (curBranch !== 'main') {
-        warn(`检测到当前不在 main 分支 (${curBranch || 'detached HEAD'})，正在自动切回 main...`);
-      }
-      runInherit('git', ['checkout', '-B', 'main', 'origin/main']);
-      runInherit('git', ['branch', '--set-upstream-to=origin/main', 'main']);
+    // 先完成远端拉取（若 GitHub 网络偶发超时直接退出，绝不提前破坏本地工作区数据）
+    runInherit('git', ['fetch', 'origin', 'main']);
 
-      // 自动清理残留的 otto/* 沙箱分支，保持线上分支列表干净唯一
-      const brOut = runText('git', ['for-each-ref', '--format=%(refname:short)', 'refs/heads/otto/']);
-      for (const staleBr of brOut.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)) {
-        const delRes = spawnSync('git', ['branch', '-D', staleBr], { cwd: ROOT, stdio: 'ignore' });
-        if (delRes.status === 0) {
-          ok(`已自动清理残留沙箱分支: ${staleBr}`);
+    // 拉取完成后再贴身备份线上运行态文件，彻底消除 fetch 期间后台 tstock-api 并发写 herd_pool.json 的竞态窗口
+    const backupRuntimeFiles = () => {
+      for (const rel of runtimeRelFiles) {
+        const src = path.join(ROOT, rel);
+        if (fs.existsSync(src)) {
+          const dst = path.join(bakDir, rel);
+          fs.mkdirSync(path.dirname(dst), { recursive: true });
+          fs.copyFileSync(src, dst);
         }
       }
-      ok('已锁定分支 main -> origin/main');
-    } else {
-      // 本地开发机：仅还原运行期数据文件，保留未提交代码，安全快进对齐 origin/main
-      spawnSync('git', ['checkout', '--', 'data/', '选股引擎/ledger/'], {
-        cwd: ROOT,
-        stdio: 'ignore',
-      });
-      runInherit('git', ['fetch', 'origin', 'main']);
-      const curBranchRes = spawnSync('git', ['symbolic-ref', '--quiet', '--short', 'HEAD'], {
-        cwd: ROOT,
-        encoding: 'utf8',
-      });
-      const curBranch = curBranchRes.status === 0 ? String(curBranchRes.stdout || '').trim() : '';
-      if (curBranch !== 'main') {
-        warn(`检测到当前不在 main 分支 (${curBranch || 'detached HEAD'})，正在切回 main...`);
-        runInherit('git', ['checkout', 'main']);
+    };
+    const restoreProtectedPools = () => {
+      for (const keepRel of ['data/herd_pool.json', 'data/strategy_ledger.json', 'data/ignition_latest.json']) {
+        const bakFile = path.join(bakDir, keepRel);
+        if (fs.existsSync(bakFile)) {
+          fs.copyFileSync(bakFile, path.join(ROOT, keepRel));
+        }
       }
-      spawnSync('git', ['branch', '--set-upstream-to=origin/main', 'main'], {
-        cwd: ROOT,
-        stdio: 'ignore',
-      });
-      runInherit('git', ['pull', '--ff-only', 'origin', 'main']);
+    };
+
+    backupRuntimeFiles();
+
+    try {
+      if (IS_LINUX) {
+        // 线上生产机作为纯消费端：带 -f 强制原子切回 origin/main，彻底免疫后台 tstock-api 并发写盘冲突
+        const curBranchRes = spawnSync('git', ['symbolic-ref', '--quiet', '--short', 'HEAD'], {
+          cwd: ROOT,
+          encoding: 'utf8',
+        });
+        const curBranch = curBranchRes.status === 0 ? String(curBranchRes.stdout || '').trim() : '';
+        if (curBranch !== 'main') {
+          warn(`检测到当前不在 main 分支 (${curBranch || 'detached HEAD'})，正在自动切回 main...`);
+        }
+        runInherit('git', ['checkout', '-f', '-B', 'main', 'origin/main']);
+        runInherit('git', ['reset', '--hard', 'origin/main']);
+        runInherit('git', ['branch', '--set-upstream-to=origin/main', 'main']);
+
+        // 自动清理残留的 otto/* 沙箱分支，保持线上分支列表干净唯一
+        const brOut = runText('git', ['for-each-ref', '--format=%(refname:short)', 'refs/heads/otto/']);
+        for (const staleBr of brOut.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)) {
+          const delRes = spawnSync('git', ['branch', '-D', staleBr], { cwd: ROOT, stdio: 'ignore' });
+          if (delRes.status === 0) {
+            ok(`已自动清理残留沙箱分支: ${staleBr}`);
+          }
+        }
+        ok('已锁定分支 main -> origin/main');
+      } else {
+        // 本地开发机：仅还原运行期数据文件，保留未提交代码，安全快进对齐 origin/main
+        spawnSync('git', ['checkout', '--', 'data/', '选股引擎/ledger/'], {
+          cwd: ROOT,
+          stdio: 'ignore',
+        });
+        const curBranchRes = spawnSync('git', ['symbolic-ref', '--quiet', '--short', 'HEAD'], {
+          cwd: ROOT,
+          encoding: 'utf8',
+        });
+        const curBranch = curBranchRes.status === 0 ? String(curBranchRes.stdout || '').trim() : '';
+        if (curBranch !== 'main') {
+          warn(`检测到当前不在 main 分支 (${curBranch || 'detached HEAD'})，正在切回 main...`);
+          runInherit('git', ['checkout', 'main']);
+        }
+        spawnSync('git', ['branch', '--set-upstream-to=origin/main', 'main'], {
+          cwd: ROOT,
+          stdio: 'ignore',
+        });
+        runInherit('git', ['pull', '--ff-only', 'origin', 'main']);
+      }
+    } catch (gitErr) {
+      restoreProtectedPools();
+      throw gitErr;
     }
 
     // 恢复线上实时跟踪池与策略账本
-    for (const keepRel of ['data/herd_pool.json', 'data/strategy_ledger.json', 'data/ignition_latest.json']) {
-      const bakFile = path.join(bakDir, keepRel);
-      if (fs.existsSync(bakFile)) {
-        fs.copyFileSync(bakFile, path.join(ROOT, keepRel));
-      }
-    }
+    restoreProtectedPools();
 
     // 若服务器本地选股契约日期比仓库新，保留服务器版本
     const bakLatestJson = path.join(bakDir, 'data/latest.json');
