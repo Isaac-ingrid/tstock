@@ -1,7 +1,7 @@
 {
  "_app": "dot-system",
  "_v": 1,
- "generatedAt": "2026-11-23T01:26:12.618Z",
+ "generatedAt": "2026-11-24T15:48:58.009Z",
  "tradeDate": "2026-11-20",
  "baseDate": "2026-11-20",
  "env": {
@@ -31,17 +31,17 @@
   ]
  },
  "funnel": {
-  "① 全市场": 5216,
-  "② 非 ST/新股": 5026,
-  "③ 剔除创业板/科创板/北交所": 3040,
-  "④ 市值 30–200 亿": 1835,
-  "⑤ 涨幅 3–5%": 8,
-  "⑥ 量比 > 1": 6,
-  "⑦ 换手 5–10%": 2
+  "① 全市场": 5217,
+  "② 非 ST/新股": 5027,
+  "③ 剔除创业板/科创板/北交所": 3036,
+  "④ 市值 30–200 亿": 1867,
+  "⑤ 涨幅 3–5%": 18,
+  "⑥ 量比 > 1": 17,
+  "⑦ 换手 5–10%": 3
  },
  "counts": {
-  "totalMarket": 5216,
-  "strictPass": 2,
+  "totalMarket": 5217,
+  "strictPass": 3,
   "reviewed": 6,
   "canDo": 2,
   "smallDo": 4,
@@ -497,17 +497,17 @@
  ],
  "tail": [],
  "tailMeta": {
-  "date": "2026-11-20",
-  "scanTime": "14:30",
+  "date": "2026-11-24",
+  "scanTime": "23:48",
   "env": {
    "level": "BAD",
    "text": "上证与中证1000 同时跌破 MA20/MA60 → 系统性下行，禁止新开正T",
    "posFactor": 0
   },
   "stats": {
-   "totalMarket": 5216,
-   "prefilter": 5,
-   "reviewed": 5,
+   "totalMarket": 3044,
+   "prefilter": 29,
+   "reviewed": 29,
    "passed": 0
   }
  },
@@ -2806,7 +2806,7 @@
  "auction": null,
  "ledger": {
   "days": 13,
-  "records": 2683
+  "records": 2728
  },
  "perf": {
   "updatedAt": "2026-11-20T07:49:44.797Z",
@@ -5460,9 +5460,9 @@
  ],
  "sources": {
   "plan": "plan-2026-11-20.json",
-  "candidates": "2026-11-20.json",
+  "candidates": "2026-11-23.json",
   "steady": "steady.json",
   "timing": null,
-  "tail": "tail-2026-11-20.json"
+  "tail": "tail-2026-11-24.json"
  }
 }

@@ -1,9 +1,9 @@
 {
   "ok": true,
   "date": "2026-11-24",
-  "scannedAt": "2026-11-24 22:56:24",
-  "quoteUpdatedAt": "2026-11-24 22:56:24",
-  "elapsedMs": 10632,
+  "scannedAt": "2026-11-24 23:37:45",
+  "quoteUpdatedAt": "2026-11-24 23:37:45",
+  "elapsedMs": 43052,
   "isSnapshot": false,
   "needsLiveRefresh": false,
   "params": {
@@ -27,7 +27,7 @@
         "mcapYi": 296.1,
         "ztCountRecent": 1,
         "hasZt": true,
-        "ztIdx": 88,
+        "ztIdx": 87,
         "ztDate": "2026-11-13",
         "daysSinceZt": 7,
         "ztClose": 17.05,
@@ -64,13 +64,37 @@
           "hasHighGravestone": false,
           "hasBearishEngulfing": false,
           "hasImmortalGuide": false,
+          "hasTopDivergence": false,
+          "hasBottomDivergence": false,
+          "bollDivergence": {
+            "structure": "UPTREND",
+            "structureLabel": "上升结构",
+            "bollUpper": 16.8,
+            "bollMid": 15.55,
+            "bollLower": 14.29,
+            "bandwidthPct": 16.14,
+            "pctB": 62.5,
+            "midSlope5dPct": 1.81,
+            "ma60": 14.05,
+            "nearBollUpper": false,
+            "nearBollLower": false,
+            "topDivergence": false,
+            "topDivLabel": "",
+            "topDivDesc": "",
+            "bottomDivergence": false,
+            "bottomDivLabel": "",
+            "bottomDivDesc": "",
+            "dif": 0.395,
+            "dea": 0.481,
+            "macdHist": -0.173
+          },
           "summary": "无显著特殊K线形态"
         },
         "hasBearishKline": false,
         "hasWeeklyData": true,
         "hasMonthlyData": true,
         "monthVolRatio": 1.38,
-        "monthPricePosPct": 36.1,
+        "monthPricePosPct": 36.0,
         "monthHighWarn": false,
         "monthVolOk": true,
         "weeklyUp": true,
@@ -84,7 +108,48 @@
         "ignitionScore": 100,
         "riskLevel": "安全",
         "redFlags": [],
-        "yellowAlerts": []
+        "yellowAlerts": [],
+        "dragonStars": 5.0,
+        "dragonLabel": "🐉 五星游龙",
+        "dragonDims": [
+          {
+            "key": "trend",
+            "label": "趋势上行",
+            "star": 1.0,
+            "desc": "周MA5>MA10多头 · 防守线 ¥15.5"
+          },
+          {
+            "key": "value",
+            "label": "价值排雷",
+            "star": 1.0,
+            "desc": "近35日公告排雷：安全"
+          },
+          {
+            "key": "space",
+            "label": "上行空间",
+            "star": 1.0,
+            "desc": "15月分位 36% · 获利盘 81%"
+          },
+          {
+            "key": "volPrice",
+            "label": "量价试盘",
+            "star": 1.0,
+            "desc": "板后缩至 50% · 月量 1.38x"
+          },
+          {
+            "key": "chips",
+            "label": "筹码控盘",
+            "star": 1.0,
+            "desc": "90%集中度 15.6% · 主峰 ¥15.65"
+          }
+        ],
+        "conc90": 15.6,
+        "profitRatio": 81.0,
+        "cyqPeakPrice": 15.65,
+        "isMainTheme": false,
+        "mainThemeName": "",
+        "mainThemeStage": "",
+        "mainThemeStageLabel": ""
       },
       {
         "code": "002226",
@@ -99,7 +164,7 @@
         "mcapYi": 137.2,
         "ztCountRecent": 1,
         "hasZt": true,
-        "ztIdx": 90,
+        "ztIdx": 89,
         "ztDate": "2026-11-17",
         "daysSinceZt": 5,
         "ztClose": 5.45,
@@ -134,13 +199,37 @@
           "hasHighGravestone": false,
           "hasBearishEngulfing": false,
           "hasImmortalGuide": false,
+          "hasTopDivergence": false,
+          "hasBottomDivergence": false,
+          "bollDivergence": {
+            "structure": "UPTREND",
+            "structureLabel": "上升结构",
+            "bollUpper": 5.43,
+            "bollMid": 5.16,
+            "bollLower": 4.88,
+            "bandwidthPct": 10.61,
+            "pctB": 53.9,
+            "midSlope5dPct": 0.77,
+            "ma60": 5.15,
+            "nearBollUpper": false,
+            "nearBollLower": false,
+            "topDivergence": false,
+            "topDivLabel": "",
+            "topDivDesc": "",
+            "bottomDivergence": false,
+            "bottomDivLabel": "",
+            "bottomDivDesc": "",
+            "dif": 0.023,
+            "dea": 0.022,
+            "macdHist": 0.001
+          },
           "summary": "无显著特殊K线形态"
         },
         "hasBearishKline": false,
         "hasWeeklyData": true,
         "hasMonthlyData": true,
         "monthVolRatio": 1.29,
-        "monthPricePosPct": 33.4,
+        "monthPricePosPct": 30.3,
         "monthHighWarn": false,
         "monthVolOk": true,
         "weeklyUp": true,
@@ -154,7 +243,48 @@
         "ignitionScore": 100,
         "riskLevel": "安全",
         "redFlags": [],
-        "yellowAlerts": []
+        "yellowAlerts": [],
+        "dragonStars": 5.0,
+        "dragonLabel": "🐉 五星游龙",
+        "dragonDims": [
+          {
+            "key": "trend",
+            "label": "趋势上行",
+            "star": 1.0,
+            "desc": "周线MA5上拐 · 防守线 ¥4.87"
+          },
+          {
+            "key": "value",
+            "label": "价值排雷",
+            "star": 1.0,
+            "desc": "近35日公告排雷：安全"
+          },
+          {
+            "key": "space",
+            "label": "上行空间",
+            "star": 1.0,
+            "desc": "15月分位 30% · 获利盘 59%"
+          },
+          {
+            "key": "volPrice",
+            "label": "量价试盘",
+            "star": 1.0,
+            "desc": "板后缩至 47% · 月量 1.29x"
+          },
+          {
+            "key": "chips",
+            "label": "筹码控盘",
+            "star": 1.0,
+            "desc": "90%集中度 8.0% · 主峰 ¥5.11"
+          }
+        ],
+        "conc90": 8.0,
+        "profitRatio": 59.0,
+        "cyqPeakPrice": 5.11,
+        "isMainTheme": false,
+        "mainThemeName": "",
+        "mainThemeStage": "",
+        "mainThemeStageLabel": ""
       },
       {
         "code": "002124",
@@ -169,7 +299,7 @@
         "mcapYi": 48.0,
         "ztCountRecent": 2,
         "hasZt": true,
-        "ztIdx": 88,
+        "ztIdx": 87,
         "ztDate": "2026-11-13",
         "daysSinceZt": 7,
         "ztClose": 2.31,
@@ -204,6 +334,30 @@
           "hasHighGravestone": false,
           "hasBearishEngulfing": false,
           "hasImmortalGuide": false,
+          "hasTopDivergence": false,
+          "hasBottomDivergence": false,
+          "bollDivergence": {
+            "structure": "UPTREND",
+            "structureLabel": "上升结构",
+            "bollUpper": 2.35,
+            "bollMid": 2.04,
+            "bollLower": 1.73,
+            "bandwidthPct": 30.64,
+            "pctB": 69.5,
+            "midSlope5dPct": 1.7,
+            "ma60": 2.12,
+            "nearBollUpper": false,
+            "nearBollLower": false,
+            "topDivergence": false,
+            "topDivLabel": "",
+            "topDivDesc": "",
+            "bottomDivergence": false,
+            "bottomDivLabel": "",
+            "bottomDivDesc": "",
+            "dif": 0.029,
+            "dea": 0.019,
+            "macdHist": 0.019
+          },
           "summary": "无显著特殊K线形态"
         },
         "hasBearishKline": false,
@@ -224,7 +378,48 @@
         "ignitionScore": 93,
         "riskLevel": "安全",
         "redFlags": [],
-        "yellowAlerts": []
+        "yellowAlerts": [],
+        "dragonStars": 5.0,
+        "dragonLabel": "🐉 五星游龙",
+        "dragonDims": [
+          {
+            "key": "trend",
+            "label": "趋势上行",
+            "star": 1.0,
+            "desc": "周MA5>MA10多头 · 防守线 ¥2.07"
+          },
+          {
+            "key": "value",
+            "label": "价值排雷",
+            "star": 1.0,
+            "desc": "近35日公告排雷：安全"
+          },
+          {
+            "key": "space",
+            "label": "上行空间",
+            "star": 1.0,
+            "desc": "15月分位 27% · 获利盘 54%"
+          },
+          {
+            "key": "volPrice",
+            "label": "量价试盘",
+            "star": 1.0,
+            "desc": "板后缩至 48% · 月量 1.59x"
+          },
+          {
+            "key": "chips",
+            "label": "筹码控盘",
+            "star": 1.0,
+            "desc": "90%集中度 10.3% · 主峰 ¥2.14"
+          }
+        ],
+        "conc90": 10.3,
+        "profitRatio": 54.4,
+        "cyqPeakPrice": 2.14,
+        "isMainTheme": false,
+        "mainThemeName": "",
+        "mainThemeStage": "",
+        "mainThemeStageLabel": ""
       },
       {
         "code": "002520",
@@ -239,7 +434,7 @@
         "mcapYi": 49.8,
         "ztCountRecent": 2,
         "hasZt": true,
-        "ztIdx": 88,
+        "ztIdx": 87,
         "ztDate": "2026-11-13",
         "daysSinceZt": 7,
         "ztClose": 7.7,
@@ -274,6 +469,30 @@
           "hasHighGravestone": false,
           "hasBearishEngulfing": false,
           "hasImmortalGuide": false,
+          "hasTopDivergence": false,
+          "hasBottomDivergence": false,
+          "bollDivergence": {
+            "structure": "UPTREND",
+            "structureLabel": "上升结构",
+            "bollUpper": 7.55,
+            "bollMid": 6.55,
+            "bollLower": 5.56,
+            "bandwidthPct": 30.38,
+            "pctB": 54.4,
+            "midSlope5dPct": 1.13,
+            "ma60": 6.3,
+            "nearBollUpper": false,
+            "nearBollLower": false,
+            "topDivergence": false,
+            "topDivLabel": "",
+            "topDivDesc": "",
+            "bottomDivergence": false,
+            "bottomDivLabel": "",
+            "bottomDivDesc": "",
+            "dif": 0.102,
+            "dea": 0.158,
+            "macdHist": -0.113
+          },
           "summary": "无显著特殊K线形态"
         },
         "hasBearishKline": false,
@@ -294,7 +513,48 @@
         "ignitionScore": 93,
         "riskLevel": "安全",
         "redFlags": [],
-        "yellowAlerts": []
+        "yellowAlerts": [],
+        "dragonStars": 5.0,
+        "dragonLabel": "🐉 五星游龙",
+        "dragonDims": [
+          {
+            "key": "trend",
+            "label": "趋势上行",
+            "star": 1.0,
+            "desc": "周MA5>MA10多头 · 防守线 ¥6.88"
+          },
+          {
+            "key": "value",
+            "label": "价值排雷",
+            "star": 1.0,
+            "desc": "近35日公告排雷：安全"
+          },
+          {
+            "key": "space",
+            "label": "上行空间",
+            "star": 1.0,
+            "desc": "15月分位 54% · 获利盘 53%"
+          },
+          {
+            "key": "volPrice",
+            "label": "量价试盘",
+            "star": 1.0,
+            "desc": "板后缩至 55% · 月量 1.95x"
+          },
+          {
+            "key": "chips",
+            "label": "筹码控盘",
+            "star": 1.0,
+            "desc": "90%集中度 13.5% · 主峰 ¥6.20"
+          }
+        ],
+        "conc90": 13.5,
+        "profitRatio": 53.1,
+        "cyqPeakPrice": 6.2,
+        "isMainTheme": false,
+        "mainThemeName": "",
+        "mainThemeStage": "",
+        "mainThemeStageLabel": ""
       },
       {
         "code": "002889",
@@ -309,7 +569,7 @@
         "mcapYi": 49.9,
         "ztCountRecent": 3,
         "hasZt": true,
-        "ztIdx": 90,
+        "ztIdx": 89,
         "ztDate": "2026-11-17",
         "daysSinceZt": 5,
         "ztClose": 15.21,
@@ -346,6 +606,30 @@
           "hasHighGravestone": false,
           "hasBearishEngulfing": false,
           "hasImmortalGuide": false,
+          "hasTopDivergence": false,
+          "hasBottomDivergence": false,
+          "bollDivergence": {
+            "structure": "DOWNTREND",
+            "structureLabel": "下跌结构",
+            "bollUpper": 16.88,
+            "bollMid": 14.28,
+            "bollLower": 11.68,
+            "bandwidthPct": 36.4,
+            "pctB": 29.2,
+            "midSlope5dPct": -0.47,
+            "ma60": 13.11,
+            "nearBollUpper": false,
+            "nearBollLower": false,
+            "topDivergence": false,
+            "topDivLabel": "",
+            "topDivDesc": "",
+            "bottomDivergence": false,
+            "bottomDivLabel": "",
+            "bottomDivDesc": "",
+            "dif": 0.025,
+            "dea": 0.325,
+            "macdHist": -0.598
+          },
           "summary": "无显著特殊K线形态"
         },
         "hasBearishKline": false,
@@ -366,7 +650,48 @@
         "ignitionScore": 86,
         "riskLevel": "安全",
         "redFlags": [],
-        "yellowAlerts": []
+        "yellowAlerts": [],
+        "dragonStars": 4.5,
+        "dragonLabel": "🐉 五星游龙",
+        "dragonDims": [
+          {
+            "key": "trend",
+            "label": "趋势上行",
+            "star": 1.0,
+            "desc": "周MA10上方震荡 · 防守线 ¥13.66"
+          },
+          {
+            "key": "value",
+            "label": "价值排雷",
+            "star": 1.0,
+            "desc": "近35日公告排雷：安全"
+          },
+          {
+            "key": "space",
+            "label": "上行空间",
+            "star": 1.0,
+            "desc": "15月分位 40% · 获利盘 21%"
+          },
+          {
+            "key": "volPrice",
+            "label": "量价试盘",
+            "star": 0.5,
+            "desc": "板后缩至 85% · 月量 9.12x"
+          },
+          {
+            "key": "chips",
+            "label": "筹码控盘",
+            "star": 1.0,
+            "desc": "90%集中度 15.7% · 主峰 ¥13.35"
+          }
+        ],
+        "conc90": 15.7,
+        "profitRatio": 20.6,
+        "cyqPeakPrice": 13.35,
+        "isMainTheme": false,
+        "mainThemeName": "",
+        "mainThemeStage": "",
+        "mainThemeStageLabel": ""
       },
       {
         "code": "000635",
@@ -381,7 +706,7 @@
         "mcapYi": 39.0,
         "ztCountRecent": 2,
         "hasZt": true,
-        "ztIdx": 93,
+        "ztIdx": 92,
         "ztDate": "2026-11-11",
         "daysSinceZt": 2,
         "ztClose": 10.21,
@@ -416,6 +741,30 @@
           "hasHighGravestone": false,
           "hasBearishEngulfing": false,
           "hasImmortalGuide": false,
+          "hasTopDivergence": false,
+          "hasBottomDivergence": false,
+          "bollDivergence": {
+            "structure": "UPTREND",
+            "structureLabel": "上升结构",
+            "bollUpper": 10.53,
+            "bollMid": 8.32,
+            "bollLower": 6.12,
+            "bandwidthPct": 52.89,
+            "pctB": 85.8,
+            "midSlope5dPct": 4.9,
+            "ma60": 7.62,
+            "nearBollUpper": true,
+            "nearBollLower": false,
+            "topDivergence": false,
+            "topDivLabel": "",
+            "topDivDesc": "",
+            "bottomDivergence": false,
+            "bottomDivLabel": "",
+            "bottomDivDesc": "",
+            "dif": 0.655,
+            "dea": 0.387,
+            "macdHist": 0.536
+          },
           "summary": "无显著特殊K线形态"
         },
         "hasBearishKline": false,
@@ -436,7 +785,48 @@
         "ignitionScore": 85,
         "riskLevel": "安全",
         "redFlags": [],
-        "yellowAlerts": []
+        "yellowAlerts": [],
+        "dragonStars": 4.5,
+        "dragonLabel": "🐉 五星游龙",
+        "dragonDims": [
+          {
+            "key": "trend",
+            "label": "趋势上行",
+            "star": 1.0,
+            "desc": "周MA5>MA10多头 · 防守线 ¥9.34"
+          },
+          {
+            "key": "value",
+            "label": "价值排雷",
+            "star": 1.0,
+            "desc": "近35日公告排雷：安全"
+          },
+          {
+            "key": "space",
+            "label": "上行空间",
+            "star": 1.0,
+            "desc": "15月分位 76% · 获利盘 84%"
+          },
+          {
+            "key": "volPrice",
+            "label": "量价试盘",
+            "star": 1.0,
+            "desc": "板后缩至 67% · 月量 3.2x"
+          },
+          {
+            "key": "chips",
+            "label": "筹码控盘",
+            "star": 0.5,
+            "desc": "90%集中度 20.4% · 主峰 ¥7.45"
+          }
+        ],
+        "conc90": 20.4,
+        "profitRatio": 84.4,
+        "cyqPeakPrice": 7.45,
+        "isMainTheme": false,
+        "mainThemeName": "",
+        "mainThemeStage": "",
+        "mainThemeStageLabel": ""
       },
       {
         "code": "002042",
@@ -488,13 +878,37 @@
           "hasHighGravestone": false,
           "hasBearishEngulfing": false,
           "hasImmortalGuide": false,
+          "hasTopDivergence": false,
+          "hasBottomDivergence": false,
+          "bollDivergence": {
+            "structure": "UPTREND",
+            "structureLabel": "上升结构",
+            "bollUpper": 3.97,
+            "bollMid": 3.47,
+            "bollLower": 2.97,
+            "bandwidthPct": 28.74,
+            "pctB": 87.2,
+            "midSlope5dPct": 3.83,
+            "ma60": 3.65,
+            "nearBollUpper": true,
+            "nearBollLower": false,
+            "topDivergence": false,
+            "topDivLabel": "",
+            "topDivDesc": "",
+            "bottomDivergence": false,
+            "bottomDivLabel": "",
+            "bottomDivDesc": "",
+            "dif": 0.092,
+            "dea": 0.023,
+            "macdHist": 0.138
+          },
           "summary": "无显著特殊K线形态"
         },
         "hasBearishKline": false,
         "hasWeeklyData": true,
         "hasMonthlyData": true,
         "monthVolRatio": 1.79,
-        "monthPricePosPct": 25.2,
+        "monthPricePosPct": 25.1,
         "monthHighWarn": false,
         "monthVolOk": true,
         "weeklyUp": true,
@@ -508,7 +922,48 @@
         "ignitionScore": 78,
         "riskLevel": "安全",
         "redFlags": [],
-        "yellowAlerts": []
+        "yellowAlerts": [],
+        "dragonStars": 4.5,
+        "dragonLabel": "🐉 五星游龙",
+        "dragonDims": [
+          {
+            "key": "trend",
+            "label": "趋势上行",
+            "star": 1.0,
+            "desc": "周线MA5上拐 · 防守线 ¥3.48"
+          },
+          {
+            "key": "value",
+            "label": "价值排雷",
+            "star": 1.0,
+            "desc": "近35日公告排雷：安全"
+          },
+          {
+            "key": "space",
+            "label": "上行空间",
+            "star": 1.0,
+            "desc": "15月分位 25% · 获利盘 72%"
+          },
+          {
+            "key": "volPrice",
+            "label": "量价试盘",
+            "star": 0.5,
+            "desc": "板后缩至 72% · 月量 1.79x"
+          },
+          {
+            "key": "chips",
+            "label": "筹码控盘",
+            "star": 1.0,
+            "desc": "90%集中度 10.1% · 主峰 ¥3.85"
+          }
+        ],
+        "conc90": 10.1,
+        "profitRatio": 71.9,
+        "cyqPeakPrice": 3.85,
+        "isMainTheme": false,
+        "mainThemeName": "",
+        "mainThemeStage": "",
+        "mainThemeStageLabel": ""
       },
       {
         "code": "600619",
@@ -523,7 +978,7 @@
         "mcapYi": 161.8,
         "ztCountRecent": 2,
         "hasZt": true,
-        "ztIdx": 92,
+        "ztIdx": 91,
         "ztDate": "2026-11-19",
         "daysSinceZt": 3,
         "ztClose": 15.07,
@@ -558,6 +1013,30 @@
           "hasHighGravestone": false,
           "hasBearishEngulfing": false,
           "hasImmortalGuide": false,
+          "hasTopDivergence": false,
+          "hasBottomDivergence": false,
+          "bollDivergence": {
+            "structure": "UPTREND",
+            "structureLabel": "上升结构",
+            "bollUpper": 14.87,
+            "bollMid": 12.55,
+            "bollLower": 10.23,
+            "bandwidthPct": 36.96,
+            "pctB": 104.3,
+            "midSlope5dPct": 5.49,
+            "ma60": 12.93,
+            "nearBollUpper": true,
+            "nearBollLower": false,
+            "topDivergence": false,
+            "topDivLabel": "",
+            "topDivDesc": "",
+            "bottomDivergence": false,
+            "bottomDivLabel": "",
+            "bottomDivDesc": "",
+            "dif": 0.539,
+            "dea": 0.174,
+            "macdHist": 0.73
+          },
           "summary": "无显著特殊K线形态"
         },
         "hasBearishKline": false,
@@ -578,7 +1057,48 @@
         "ignitionScore": 78,
         "riskLevel": "安全",
         "redFlags": [],
-        "yellowAlerts": []
+        "yellowAlerts": [],
+        "dragonStars": 4.5,
+        "dragonLabel": "🐉 五星游龙",
+        "dragonDims": [
+          {
+            "key": "trend",
+            "label": "趋势上行",
+            "star": 1.0,
+            "desc": "周MA5>MA10多头 · 防守线 ¥13.15"
+          },
+          {
+            "key": "value",
+            "label": "价值排雷",
+            "star": 1.0,
+            "desc": "近35日公告排雷：安全"
+          },
+          {
+            "key": "space",
+            "label": "上行空间",
+            "star": 1.0,
+            "desc": "15月分位 23% · 获利盘 99%"
+          },
+          {
+            "key": "volPrice",
+            "label": "量价试盘",
+            "star": 0.5,
+            "desc": "板后缩至 76% · 月量 1.64x"
+          },
+          {
+            "key": "chips",
+            "label": "筹码控盘",
+            "star": 1.0,
+            "desc": "90%集中度 11.1% · 主峰 ¥14.25"
+          }
+        ],
+        "conc90": 11.1,
+        "profitRatio": 98.9,
+        "cyqPeakPrice": 14.25,
+        "isMainTheme": false,
+        "mainThemeName": "",
+        "mainThemeStage": "",
+        "mainThemeStageLabel": ""
       }
     ],
     "stats": {
@@ -586,6 +1106,9 @@
       "dailyPassedCount": 19,
       "counts": {
         "total": 8,
+        "fiveStarDragon": 8,
+        "fourPlusDragon": 8,
+        "mainThemeResonance": 0,
         "shakeoutReady": 1,
         "convergedWait": 1,
         "digesting": 6,
@@ -605,8 +1128,8 @@
           "光通信",
           "光纤"
         ],
-        "usMinChg": -7.04,
-        "usAvgChg": -5.76,
+        "usMinChg": -8.94,
+        "usAvgChg": -6.98,
         "worstSymbol": "LITE",
         "worstLabel": "Lumentum",
         "alertLevel": "BIG_DROP",
@@ -615,32 +1138,32 @@
             "secid": "105.NVDA",
             "symbol": "NVDA",
             "name": "英伟达",
-            "price": 155.08,
-            "chg": -6.04,
+            "price": 153.39,
+            "chg": -7.07,
             "label": "英伟达"
           },
           {
             "secid": "105.COHR",
             "symbol": "COHR",
             "name": "Coherent Corp.",
-            "price": 201.71,
-            "chg": -6.53,
+            "price": 196.54,
+            "chg": -8.93,
             "label": "Coherent"
           },
           {
             "secid": "105.LITE",
             "symbol": "LITE",
             "name": "Lumentum",
-            "price": 506.06,
-            "chg": -7.04,
+            "price": 495.71,
+            "chg": -8.94,
             "label": "Lumentum"
           },
           {
             "secid": "105.AVGO",
             "symbol": "AVGO",
             "name": "博通",
-            "price": 302.79,
-            "chg": -3.43,
+            "price": 304.14,
+            "chg": -3.0,
             "label": "博通"
           }
         ]
@@ -654,42 +1177,42 @@
           "高带宽内存",
           "存储芯片"
         ],
-        "usMinChg": -8.78,
-        "usAvgChg": -6.75,
-        "worstSymbol": "AMD",
-        "worstLabel": "AMD",
+        "usMinChg": -10.08,
+        "usAvgChg": -8.07,
+        "worstSymbol": "MU",
+        "worstLabel": "美光科技",
         "alertLevel": "BIG_DROP",
         "quotes": [
           {
             "secid": "105.AMD",
             "symbol": "AMD",
             "name": "超威半导体",
-            "price": 413.65,
-            "chg": -8.78,
+            "price": 408.31,
+            "chg": -9.96,
             "label": "AMD"
           },
           {
             "secid": "105.TSM",
             "symbol": "TSM",
             "name": "台积电",
-            "price": 349.29,
-            "chg": -3.94,
+            "price": 344.76,
+            "chg": -5.18,
             "label": "台积电"
           },
           {
             "secid": "105.MU",
             "symbol": "MU",
             "name": "美光科技",
-            "price": 649.46,
-            "chg": -8.23,
+            "price": 636.34,
+            "chg": -10.08,
             "label": "美光科技"
           },
           {
             "secid": "105.NVDA",
             "symbol": "NVDA",
             "name": "英伟达",
-            "price": 155.08,
-            "chg": -6.04,
+            "price": 153.39,
+            "chg": -7.07,
             "label": "英伟达"
           }
         ]
@@ -703,8 +1226,8 @@
           "无人驾驶",
           "汽车热管理"
         ],
-        "usMinChg": 0.54,
-        "usAvgChg": 0.54,
+        "usMinChg": -1.03,
+        "usAvgChg": -1.03,
         "worstSymbol": "TSLA",
         "worstLabel": "特斯拉",
         "alertLevel": "NORMAL",
@@ -713,8 +1236,8 @@
             "secid": "105.TSLA",
             "symbol": "TSLA",
             "name": "特斯拉",
-            "price": 387.55,
-            "chg": 0.54,
+            "price": 381.48,
+            "chg": -1.03,
             "label": "特斯拉"
           }
         ]
@@ -727,8 +1250,8 @@
           "苹果",
           "AI手机"
         ],
-        "usMinChg": 1.08,
-        "usAvgChg": 1.08,
+        "usMinChg": 0.81,
+        "usAvgChg": 0.81,
         "worstSymbol": "AAPL",
         "worstLabel": "苹果",
         "alertLevel": "NORMAL",
@@ -737,8 +1260,8 @@
             "secid": "105.AAPL",
             "symbol": "AAPL",
             "name": "苹果",
-            "price": 352.86,
-            "chg": 1.08,
+            "price": 351.92,
+            "chg": 0.81,
             "label": "苹果"
           }
         ]
@@ -752,26 +1275,26 @@
           "固态电池",
           "储能"
         ],
-        "usMinChg": -2.54,
-        "usAvgChg": -1.0,
+        "usMinChg": -3.98,
+        "usAvgChg": -2.5,
         "worstSymbol": "ENPH",
         "worstLabel": "Enphase",
-        "alertLevel": "MOD_DROP",
+        "alertLevel": "BIG_DROP",
         "quotes": [
           {
             "secid": "105.ENPH",
             "symbol": "ENPH",
             "name": "Enphase Energy, Inc.",
-            "price": 20.34,
-            "chg": -2.54,
+            "price": 20.04,
+            "chg": -3.98,
             "label": "Enphase"
           },
           {
             "secid": "105.TSLA",
             "symbol": "TSLA",
             "name": "特斯拉",
-            "price": 387.55,
-            "chg": 0.54,
+            "price": 381.48,
+            "chg": -1.03,
             "label": "特斯拉"
           }
         ]
@@ -785,8 +1308,8 @@
           "贵金属",
           "铜缆"
         ],
-        "usMinChg": -3.66,
-        "usAvgChg": -1.58,
+        "usMinChg": -5.6,
+        "usAvgChg": -3.32,
         "worstSymbol": "FCX",
         "worstLabel": "自由港铜业",
         "alertLevel": "BIG_DROP",
@@ -795,16 +1318,16 @@
             "secid": "105.NEM",
             "symbol": "NEM",
             "name": "纽曼矿业",
-            "price": 101.23,
-            "chg": 0.5,
+            "price": 99.68,
+            "chg": -1.04,
             "label": "纽蒙特矿业"
           },
           {
             "secid": "105.FCX",
             "symbol": "FCX",
             "name": "麦克莫兰铜金",
-            "price": 47.89,
-            "chg": -3.66,
+            "price": 46.93,
+            "chg": -5.6,
             "label": "自由港铜业"
           }
         ]
@@ -830,8 +1353,8 @@
             "贵金属",
             "铜缆"
           ],
-          "usMinChg": -3.66,
-          "usAvgChg": -1.58,
+          "usMinChg": -5.6,
+          "usAvgChg": -3.32,
           "worstSymbol": "FCX",
           "worstLabel": "自由港铜业",
           "alertLevel": "BIG_DROP",
@@ -840,16 +1363,16 @@
               "secid": "105.NEM",
               "symbol": "NEM",
               "name": "纽曼矿业",
-              "price": 101.23,
-              "chg": 0.5,
+              "price": 99.68,
+              "chg": -1.04,
               "label": "纽蒙特矿业"
             },
             {
               "secid": "105.FCX",
               "symbol": "FCX",
               "name": "麦克莫兰铜金",
-              "price": 47.89,
-              "chg": -3.66,
+              "price": 46.93,
+              "chg": -5.6,
               "label": "自由港铜业"
             }
           ]
@@ -874,26 +1397,26 @@
             "固态电池",
             "储能"
           ],
-          "usMinChg": -2.54,
-          "usAvgChg": -1.0,
+          "usMinChg": -3.98,
+          "usAvgChg": -2.5,
           "worstSymbol": "ENPH",
           "worstLabel": "Enphase",
-          "alertLevel": "MOD_DROP",
+          "alertLevel": "BIG_DROP",
           "quotes": [
             {
               "secid": "105.ENPH",
               "symbol": "ENPH",
               "name": "Enphase Energy, Inc.",
-              "price": 20.34,
-              "chg": -2.54,
+              "price": 20.04,
+              "chg": -3.98,
               "label": "Enphase"
             },
             {
               "secid": "105.TSLA",
               "symbol": "TSLA",
               "name": "特斯拉",
-              "price": 387.55,
-              "chg": 0.54,
+              "price": 381.48,
+              "chg": -1.03,
               "label": "特斯拉"
             }
           ]
@@ -918,26 +1441,26 @@
             "固态电池",
             "储能"
           ],
-          "usMinChg": -2.54,
-          "usAvgChg": -1.0,
+          "usMinChg": -3.98,
+          "usAvgChg": -2.5,
           "worstSymbol": "ENPH",
           "worstLabel": "Enphase",
-          "alertLevel": "MOD_DROP",
+          "alertLevel": "BIG_DROP",
           "quotes": [
             {
               "secid": "105.ENPH",
               "symbol": "ENPH",
               "name": "Enphase Energy, Inc.",
-              "price": 20.34,
-              "chg": -2.54,
+              "price": 20.04,
+              "chg": -3.98,
               "label": "Enphase"
             },
             {
               "secid": "105.TSLA",
               "symbol": "TSLA",
               "name": "特斯拉",
-              "price": 387.55,
-              "chg": 0.54,
+              "price": 381.48,
+              "chg": -1.03,
               "label": "特斯拉"
             }
           ]
@@ -962,42 +1485,42 @@
             "高带宽内存",
             "存储芯片"
           ],
-          "usMinChg": -8.78,
-          "usAvgChg": -6.75,
-          "worstSymbol": "AMD",
-          "worstLabel": "AMD",
+          "usMinChg": -10.08,
+          "usAvgChg": -8.07,
+          "worstSymbol": "MU",
+          "worstLabel": "美光科技",
           "alertLevel": "BIG_DROP",
           "quotes": [
             {
               "secid": "105.AMD",
               "symbol": "AMD",
               "name": "超威半导体",
-              "price": 413.65,
-              "chg": -8.78,
+              "price": 408.31,
+              "chg": -9.96,
               "label": "AMD"
             },
             {
               "secid": "105.TSM",
               "symbol": "TSM",
               "name": "台积电",
-              "price": 349.29,
-              "chg": -3.94,
+              "price": 344.76,
+              "chg": -5.18,
               "label": "台积电"
             },
             {
               "secid": "105.MU",
               "symbol": "MU",
               "name": "美光科技",
-              "price": 649.46,
-              "chg": -8.23,
+              "price": 636.34,
+              "chg": -10.08,
               "label": "美光科技"
             },
             {
               "secid": "105.NVDA",
               "symbol": "NVDA",
               "name": "英伟达",
-              "price": 155.08,
-              "chg": -6.04,
+              "price": 153.39,
+              "chg": -7.07,
               "label": "英伟达"
             }
           ]
@@ -1121,12 +1644,12 @@
             "boardChg": 0.08
           }
         ],
-        "stockDrawdownPct": -61.5,
-        "high180": 191.07,
+        "stockDrawdownPct": -61.6,
+        "high180": 191.71,
         "volExhaustRatio": 0.46,
         "volExhaustPct": 46.0,
         "sectorAlpha": 4.75,
-        "usAlpha": 7.37,
+        "usAlpha": 8.81,
         "usShock": {
           "themeId": "new_energy",
           "themeName": "锂电 / 光伏储能",
@@ -1136,26 +1659,26 @@
             "固态电池",
             "储能"
           ],
-          "usMinChg": -2.54,
-          "usAvgChg": -1.0,
+          "usMinChg": -3.98,
+          "usAvgChg": -2.5,
           "worstSymbol": "ENPH",
           "worstLabel": "Enphase",
-          "alertLevel": "MOD_DROP",
+          "alertLevel": "BIG_DROP",
           "quotes": [
             {
               "secid": "105.ENPH",
               "symbol": "ENPH",
               "name": "Enphase Energy, Inc.",
-              "price": 20.34,
-              "chg": -2.54,
+              "price": 20.04,
+              "chg": -3.98,
               "label": "Enphase"
             },
             {
               "secid": "105.TSLA",
               "symbol": "TSLA",
               "name": "特斯拉",
-              "price": 387.55,
-              "chg": 0.54,
+              "price": 381.48,
+              "chg": -1.03,
               "label": "特斯拉"
             }
           ]
@@ -1163,7 +1686,7 @@
         "notNewLow": true,
         "dipSignal": "ANTI_DROP_BOTTOM",
         "dipLabel": "🟢 利空抗跌·底部试探",
-        "dipTip": "外盘Enphase跌-2.54%但本股抗住(+4.83%)，卖盘枯竭、利空钝化",
+        "dipTip": "外盘Enphase跌-3.98%但本股抗住(+4.83%)，卖盘枯竭、利空钝化",
         "dipScore": 99,
         "klinePatterns": {
           "patterns": [],
@@ -1177,6 +1700,30 @@
           "hasHighGravestone": false,
           "hasBearishEngulfing": false,
           "hasImmortalGuide": false,
+          "hasTopDivergence": false,
+          "hasBottomDivergence": false,
+          "bollDivergence": {
+            "structure": "RANGE",
+            "structureLabel": "震荡结构",
+            "bollUpper": 85.3,
+            "bollMid": 74.95,
+            "bollLower": 64.6,
+            "bandwidthPct": 27.63,
+            "pctB": 43.6,
+            "midSlope5dPct": 0.42,
+            "ma60": 81.29,
+            "nearBollUpper": false,
+            "nearBollLower": false,
+            "topDivergence": false,
+            "topDivLabel": "",
+            "topDivDesc": "",
+            "bottomDivergence": false,
+            "bottomDivLabel": "",
+            "bottomDivDesc": "",
+            "dif": -1.835,
+            "dea": -1.608,
+            "macdHist": -0.454
+          },
           "summary": "无显著特殊K线形态"
         },
         "riskLevel": "安全",
@@ -1208,7 +1755,7 @@
         "volExhaustRatio": 0.27,
         "volExhaustPct": 26.5,
         "sectorAlpha": 0.19,
-        "usAlpha": 2.81,
+        "usAlpha": 4.25,
         "usShock": {
           "themeId": "new_energy",
           "themeName": "锂电 / 光伏储能",
@@ -1218,26 +1765,26 @@
             "固态电池",
             "储能"
           ],
-          "usMinChg": -2.54,
-          "usAvgChg": -1.0,
+          "usMinChg": -3.98,
+          "usAvgChg": -2.5,
           "worstSymbol": "ENPH",
           "worstLabel": "Enphase",
-          "alertLevel": "MOD_DROP",
+          "alertLevel": "BIG_DROP",
           "quotes": [
             {
               "secid": "105.ENPH",
               "symbol": "ENPH",
               "name": "Enphase Energy, Inc.",
-              "price": 20.34,
-              "chg": -2.54,
+              "price": 20.04,
+              "chg": -3.98,
               "label": "Enphase"
             },
             {
               "secid": "105.TSLA",
               "symbol": "TSLA",
               "name": "特斯拉",
-              "price": 387.55,
-              "chg": 0.54,
+              "price": 381.48,
+              "chg": -1.03,
               "label": "特斯拉"
             }
           ]
@@ -1245,12 +1792,30 @@
         "notNewLow": true,
         "dipSignal": "ANTI_DROP_BOTTOM",
         "dipLabel": "🟢 利空抗跌·底部试探",
-        "dipTip": "外盘Enphase跌-2.54%但本股抗住(+0.27%)，卖盘枯竭、利空钝化",
+        "dipTip": "外盘Enphase跌-3.98%但本股抗住(+0.27%)，卖盘枯竭、利空钝化",
         "dipScore": 99,
         "klinePatterns": {
-          "patterns": [],
+          "patterns": [
+            {
+              "code": "MACD_BOTTOM_DIVERGENCE",
+              "name": "日线底背离·止跌试错",
+              "side": "bullish",
+              "severity": "medium",
+              "date": "2026-11-24",
+              "desc": "低点 ¥10.56 回踩/跌破前谷 2026-10-15（¥10.53），但 MACD 绿柱收敛、DIF 抬升（-0.12 vs -0.27），杀跌动能衰竭，可等站稳均线右侧试错"
+            }
+          ],
           "vetoSignals": [],
-          "bullSignals": [],
+          "bullSignals": [
+            {
+              "code": "MACD_BOTTOM_DIVERGENCE",
+              "name": "日线底背离·止跌试错",
+              "side": "bullish",
+              "severity": "medium",
+              "date": "2026-11-24",
+              "desc": "低点 ¥10.56 回踩/跌破前谷 2026-10-15（¥10.53），但 MACD 绿柱收敛、DIF 抬升（-0.12 vs -0.27），杀跌动能衰竭，可等站稳均线右侧试错"
+            }
+          ],
           "activeGaps": [],
           "nearestSupportGap": null,
           "nearestResistanceGap": null,
@@ -1259,7 +1824,31 @@
           "hasHighGravestone": false,
           "hasBearishEngulfing": false,
           "hasImmortalGuide": false,
-          "summary": "无显著特殊K线形态"
+          "hasTopDivergence": false,
+          "hasBottomDivergence": true,
+          "bollDivergence": {
+            "structure": "DOWNTREND",
+            "structureLabel": "下跌结构",
+            "bollUpper": 12.52,
+            "bollMid": 11.52,
+            "bollLower": 10.52,
+            "bandwidthPct": 17.33,
+            "pctB": 24.0,
+            "midSlope5dPct": -0.72,
+            "ma60": 11.44,
+            "nearBollUpper": false,
+            "nearBollLower": false,
+            "topDivergence": false,
+            "topDivLabel": "",
+            "topDivDesc": "",
+            "bottomDivergence": true,
+            "bottomDivLabel": "日线底背离·止跌试错",
+            "bottomDivDesc": "低点 ¥10.56 回踩/跌破前谷 2026-10-15（¥10.53），但 MACD 绿柱收敛、DIF 抬升（-0.12 vs -0.27），杀跌动能衰竭，可等站稳均线右侧试错",
+            "dif": -0.121,
+            "dea": -0.014,
+            "macdHist": -0.214
+          },
+          "summary": "日线底背离·止跌试错"
         },
         "riskLevel": "安全",
         "redFlags": [],
@@ -1290,7 +1879,7 @@
         "volExhaustRatio": 0.3,
         "volExhaustPct": 29.8,
         "sectorAlpha": 0.28,
-        "usAlpha": 2.9,
+        "usAlpha": 4.34,
         "usShock": {
           "themeId": "new_energy",
           "themeName": "锂电 / 光伏储能",
@@ -1300,26 +1889,26 @@
             "固态电池",
             "储能"
           ],
-          "usMinChg": -2.54,
-          "usAvgChg": -1.0,
+          "usMinChg": -3.98,
+          "usAvgChg": -2.5,
           "worstSymbol": "ENPH",
           "worstLabel": "Enphase",
-          "alertLevel": "MOD_DROP",
+          "alertLevel": "BIG_DROP",
           "quotes": [
             {
               "secid": "105.ENPH",
               "symbol": "ENPH",
               "name": "Enphase Energy, Inc.",
-              "price": 20.34,
-              "chg": -2.54,
+              "price": 20.04,
+              "chg": -3.98,
               "label": "Enphase"
             },
             {
               "secid": "105.TSLA",
               "symbol": "TSLA",
               "name": "特斯拉",
-              "price": 387.55,
-              "chg": 0.54,
+              "price": 381.48,
+              "chg": -1.03,
               "label": "特斯拉"
             }
           ]
@@ -1327,7 +1916,7 @@
         "notNewLow": true,
         "dipSignal": "ANTI_DROP_BOTTOM",
         "dipLabel": "🟢 利空抗跌·底部试探",
-        "dipTip": "外盘Enphase跌-2.54%但本股抗住(+0.36%)，卖盘枯竭、利空钝化",
+        "dipTip": "外盘Enphase跌-3.98%但本股抗住(+0.36%)，卖盘枯竭、利空钝化",
         "dipScore": 99,
         "klinePatterns": {
           "patterns": [],
@@ -1341,7 +1930,181 @@
           "hasHighGravestone": false,
           "hasBearishEngulfing": false,
           "hasImmortalGuide": false,
+          "hasTopDivergence": false,
+          "hasBottomDivergence": false,
+          "bollDivergence": {
+            "structure": "DOWNTREND",
+            "structureLabel": "下跌结构",
+            "bollUpper": 12.28,
+            "bollMid": 11.53,
+            "bollLower": 10.77,
+            "bandwidthPct": 13.07,
+            "pctB": 34.9,
+            "midSlope5dPct": -0.26,
+            "ma60": 11.48,
+            "nearBollUpper": false,
+            "nearBollLower": false,
+            "topDivergence": false,
+            "topDivLabel": "",
+            "topDivDesc": "",
+            "bottomDivergence": false,
+            "bottomDivLabel": "",
+            "bottomDivDesc": "",
+            "dif": -0.076,
+            "dea": -0.024,
+            "macdHist": -0.104
+          },
           "summary": "无显著特殊K线形态"
+        },
+        "riskLevel": "安全",
+        "redFlags": [],
+        "yellowAlerts": []
+      },
+      {
+        "code": "002709",
+        "tcode": "sz002709",
+        "name": "天赐材料",
+        "price": 23.93,
+        "chg": -1.77,
+        "amountYi": 9.02,
+        "mcapYi": 487.8,
+        "turnover": 2.44,
+        "primaryBoardName": "电池",
+        "worstBoardDd": -30.0,
+        "worstBoardChg": -1.17,
+        "matchedBoards": [
+          {
+            "bkCode": "HY_01",
+            "bkName": "电池",
+            "boardDrawdownPct": -30.0,
+            "boardChg": -1.17
+          }
+        ],
+        "stockDrawdownPct": -63.2,
+        "high180": 64.98,
+        "volExhaustRatio": 0.2,
+        "volExhaustPct": 20.3,
+        "sectorAlpha": -0.6,
+        "usAlpha": 2.21,
+        "usShock": {
+          "themeId": "new_energy",
+          "themeName": "锂电 / 光伏储能",
+          "boardKeywords": [
+            "锂电池",
+            "光伏",
+            "固态电池",
+            "储能"
+          ],
+          "usMinChg": -3.98,
+          "usAvgChg": -2.5,
+          "worstSymbol": "ENPH",
+          "worstLabel": "Enphase",
+          "alertLevel": "BIG_DROP",
+          "quotes": [
+            {
+              "secid": "105.ENPH",
+              "symbol": "ENPH",
+              "name": "Enphase Energy, Inc.",
+              "price": 20.04,
+              "chg": -3.98,
+              "label": "Enphase"
+            },
+            {
+              "secid": "105.TSLA",
+              "symbol": "TSLA",
+              "name": "特斯拉",
+              "price": 381.48,
+              "chg": -1.03,
+              "label": "特斯拉"
+            }
+          ]
+        },
+        "notNewLow": true,
+        "dipSignal": "SHRINK_WATCH",
+        "dipLabel": "🟡 深跌缩量·磨底观察",
+        "dipTip": "距高点回撤-63.2%且量能缩至峰值20%，放入观察等“利空砸不动”确认日",
+        "dipScore": 94,
+        "klinePatterns": {
+          "patterns": [
+            {
+              "code": "MACD_BOTTOM_DIVERGENCE",
+              "name": "底背离·下轨止跌提示",
+              "side": "bullish",
+              "severity": "medium",
+              "date": "2026-11-24",
+              "desc": "低点 ¥23.35 回踩/跌破前谷 2026-10-23（¥25.20），但 MACD 绿柱收敛、DIF 抬升（-1.40 vs -2.00），叠加布林下轨 ¥23.60 支撑共振，空头衰竭可关注右侧止跌买点"
+            }
+          ],
+          "vetoSignals": [],
+          "bullSignals": [
+            {
+              "code": "MACD_BOTTOM_DIVERGENCE",
+              "name": "底背离·下轨止跌提示",
+              "side": "bullish",
+              "severity": "medium",
+              "date": "2026-11-24",
+              "desc": "低点 ¥23.35 回踩/跌破前谷 2026-10-23（¥25.20），但 MACD 绿柱收敛、DIF 抬升（-1.40 vs -2.00），叠加布林下轨 ¥23.60 支撑共振，空头衰竭可关注右侧止跌买点"
+            }
+          ],
+          "activeGaps": [
+            {
+              "index": 151,
+              "date": "2026-10-15",
+              "direction": "down",
+              "gapLow": 30.15,
+              "gapHigh": 30.86,
+              "gapPct": 2.3,
+              "filled": false,
+              "filledDate": null,
+              "filledWithin3d": false,
+              "ageDays": 28,
+              "confirmed3d": true
+            }
+          ],
+          "nearestSupportGap": null,
+          "nearestResistanceGap": {
+            "index": 151,
+            "date": "2026-10-15",
+            "direction": "down",
+            "gapLow": 30.15,
+            "gapHigh": 30.86,
+            "gapPct": 2.3,
+            "filled": false,
+            "filledDate": null,
+            "filledWithin3d": false,
+            "ageDays": 28,
+            "confirmed3d": true
+          },
+          "hasTopIsland": false,
+          "hasBottomIsland": false,
+          "hasHighGravestone": false,
+          "hasBearishEngulfing": false,
+          "hasImmortalGuide": false,
+          "hasTopDivergence": false,
+          "hasBottomDivergence": true,
+          "bollDivergence": {
+            "structure": "DOWNTREND",
+            "structureLabel": "下跌结构",
+            "bollUpper": 29.29,
+            "bollMid": 26.44,
+            "bollLower": 23.6,
+            "bandwidthPct": 21.51,
+            "pctB": 5.8,
+            "midSlope5dPct": -2.08,
+            "ma60": 30.38,
+            "nearBollUpper": false,
+            "nearBollLower": true,
+            "topDivergence": false,
+            "topDivLabel": "",
+            "topDivDesc": "",
+            "bottomDivergence": true,
+            "bottomDivLabel": "底背离·下轨止跌提示",
+            "bottomDivDesc": "低点 ¥23.35 回踩/跌破前谷 2026-10-23（¥25.20），但 MACD 绿柱收敛、DIF 抬升（-1.40 vs -2.00），叠加布林下轨 ¥23.60 支撑共振，空头衰竭可关注右侧止跌买点",
+            "dif": -1.403,
+            "dea": -1.261,
+            "macdHist": -0.284
+          },
+          "summary": "底背离·下轨止跌提示"
         },
         "riskLevel": "安全",
         "redFlags": [],
@@ -1367,8 +2130,8 @@
             "boardChg": -1.86
           }
         ],
-        "stockDrawdownPct": -65.3,
-        "high180": 76.87,
+        "stockDrawdownPct": -65.4,
+        "high180": 77.2,
         "volExhaustRatio": 0.39,
         "volExhaustPct": 39.0,
         "sectorAlpha": 1.26,
@@ -1377,7 +2140,7 @@
         "notNewLow": true,
         "dipSignal": "SHRINK_WATCH",
         "dipLabel": "🟡 深跌缩量·磨底观察",
-        "dipTip": "距高点回撤-65.3%且量能缩至峰值39%，放入观察等“利空砸不动”确认日",
+        "dipTip": "距高点回撤-65.4%且量能缩至峰值39%，放入观察等“利空砸不动”确认日",
         "dipScore": 85,
         "klinePatterns": {
           "patterns": [],
@@ -1385,12 +2148,12 @@
           "bullSignals": [],
           "activeGaps": [
             {
-              "index": 152,
+              "index": 151,
               "date": "2026-10-15",
               "direction": "down",
-              "gapLow": 34.97,
-              "gapHigh": 35.87,
-              "gapPct": 2.51,
+              "gapLow": 35.3,
+              "gapHigh": 36.2,
+              "gapPct": 2.48,
               "filled": false,
               "filledDate": null,
               "filledWithin3d": false,
@@ -1400,12 +2163,12 @@
           ],
           "nearestSupportGap": null,
           "nearestResistanceGap": {
-            "index": 152,
+            "index": 151,
             "date": "2026-10-15",
             "direction": "down",
-            "gapLow": 34.97,
-            "gapHigh": 35.87,
-            "gapPct": 2.51,
+            "gapLow": 35.3,
+            "gapHigh": 36.2,
+            "gapPct": 2.48,
             "filled": false,
             "filledDate": null,
             "filledWithin3d": false,
@@ -1417,7 +2180,31 @@
           "hasHighGravestone": false,
           "hasBearishEngulfing": false,
           "hasImmortalGuide": false,
-          "summary": "上方存在未回补压力缺口（¥34.97~¥35.87）"
+          "hasTopDivergence": false,
+          "hasBottomDivergence": false,
+          "bollDivergence": {
+            "structure": "DOWNTREND",
+            "structureLabel": "下跌结构",
+            "bollUpper": 30.65,
+            "bollMid": 27.83,
+            "bollLower": 25.02,
+            "bandwidthPct": 20.24,
+            "pctB": 30.0,
+            "midSlope5dPct": -4.8,
+            "ma60": 36.15,
+            "nearBollUpper": false,
+            "nearBollLower": false,
+            "topDivergence": false,
+            "topDivLabel": "",
+            "topDivDesc": "",
+            "bottomDivergence": false,
+            "bottomDivLabel": "",
+            "bottomDivDesc": "",
+            "dif": -2.198,
+            "dea": -2.513,
+            "macdHist": 0.631
+          },
+          "summary": "上方存在未回补压力缺口（¥35.30~¥36.20）"
         },
         "riskLevel": "安全",
         "redFlags": [],
@@ -1443,8 +2230,8 @@
             "boardChg": -2.23
           }
         ],
-        "stockDrawdownPct": -50.7,
-        "high180": 53.44,
+        "stockDrawdownPct": -51.2,
+        "high180": 53.89,
         "volExhaustRatio": 0.14,
         "volExhaustPct": 13.8,
         "sectorAlpha": 1.29,
@@ -1453,8 +2240,8 @@
         "notNewLow": true,
         "dipSignal": "SHRINK_WATCH",
         "dipLabel": "🟡 深跌缩量·磨底观察",
-        "dipTip": "距高点回撤-50.7%且量能缩至峰值14%，放入观察等“利空砸不动”确认日",
-        "dipScore": 84,
+        "dipTip": "距高点回撤-51.2%且量能缩至峰值14%，放入观察等“利空砸不动”确认日",
+        "dipScore": 85,
         "klinePatterns": {
           "patterns": [],
           "vetoSignals": [],
@@ -1467,6 +2254,30 @@
           "hasHighGravestone": false,
           "hasBearishEngulfing": false,
           "hasImmortalGuide": false,
+          "hasTopDivergence": false,
+          "hasBottomDivergence": false,
+          "bollDivergence": {
+            "structure": "DOWNTREND",
+            "structureLabel": "下跌结构",
+            "bollUpper": 29.79,
+            "bollMid": 27.86,
+            "bollLower": 25.93,
+            "bandwidthPct": 13.84,
+            "pctB": 10.0,
+            "midSlope5dPct": -1.82,
+            "ma60": 30.54,
+            "nearBollUpper": false,
+            "nearBollLower": true,
+            "topDivergence": false,
+            "topDivLabel": "",
+            "topDivDesc": "",
+            "bottomDivergence": false,
+            "bottomDivLabel": "",
+            "bottomDivDesc": "",
+            "dif": -0.947,
+            "dea": -0.879,
+            "macdHist": -0.136
+          },
           "summary": "无显著特殊K线形态"
         },
         "riskLevel": "安全",
@@ -1498,7 +2309,7 @@
         "volExhaustRatio": 0.29,
         "volExhaustPct": 29.3,
         "sectorAlpha": -0.17,
-        "usAlpha": 9.78,
+        "usAlpha": 11.08,
         "usShock": {
           "themeId": "ai_chip",
           "themeName": "AI算力 / 半导体",
@@ -1508,42 +2319,42 @@
             "高带宽内存",
             "存储芯片"
           ],
-          "usMinChg": -8.78,
-          "usAvgChg": -6.75,
-          "worstSymbol": "AMD",
-          "worstLabel": "AMD",
+          "usMinChg": -10.08,
+          "usAvgChg": -8.07,
+          "worstSymbol": "MU",
+          "worstLabel": "美光科技",
           "alertLevel": "BIG_DROP",
           "quotes": [
             {
               "secid": "105.AMD",
               "symbol": "AMD",
               "name": "超威半导体",
-              "price": 413.65,
-              "chg": -8.78,
+              "price": 408.31,
+              "chg": -9.96,
               "label": "AMD"
             },
             {
               "secid": "105.TSM",
               "symbol": "TSM",
               "name": "台积电",
-              "price": 349.29,
-              "chg": -3.94,
+              "price": 344.76,
+              "chg": -5.18,
               "label": "台积电"
             },
             {
               "secid": "105.MU",
               "symbol": "MU",
               "name": "美光科技",
-              "price": 649.46,
-              "chg": -8.23,
+              "price": 636.34,
+              "chg": -10.08,
               "label": "美光科技"
             },
             {
               "secid": "105.NVDA",
               "symbol": "NVDA",
               "name": "英伟达",
-              "price": 155.08,
-              "chg": -6.04,
+              "price": 153.39,
+              "chg": -7.07,
               "label": "英伟达"
             }
           ]
@@ -1565,6 +2376,30 @@
           "hasHighGravestone": false,
           "hasBearishEngulfing": false,
           "hasImmortalGuide": false,
+          "hasTopDivergence": false,
+          "hasBottomDivergence": false,
+          "bollDivergence": {
+            "structure": "DOWNTREND",
+            "structureLabel": "下跌结构",
+            "bollUpper": 45.3,
+            "bollMid": 39.81,
+            "bollLower": 34.33,
+            "bandwidthPct": 27.53,
+            "pctB": 17.6,
+            "midSlope5dPct": -3.33,
+            "ma60": 48.04,
+            "nearBollUpper": false,
+            "nearBollLower": true,
+            "topDivergence": false,
+            "topDivLabel": "",
+            "topDivDesc": "",
+            "bottomDivergence": false,
+            "bottomDivLabel": "",
+            "bottomDivDesc": "",
+            "dif": -2.716,
+            "dea": -2.633,
+            "macdHist": -0.166
+          },
           "summary": "无显著特殊K线形态"
         },
         "riskLevel": "安全",
@@ -1591,12 +2426,12 @@
             "boardChg": -1.17
           }
         ],
-        "stockDrawdownPct": -41.0,
-        "high180": 75.72,
+        "stockDrawdownPct": -41.3,
+        "high180": 76.18,
         "volExhaustRatio": 0.26,
         "volExhaustPct": 26.4,
         "sectorAlpha": 1.8,
-        "usAlpha": 3.17,
+        "usAlpha": 4.61,
         "usShock": {
           "themeId": "new_energy",
           "themeName": "锂电 / 光伏储能",
@@ -1606,26 +2441,26 @@
             "固态电池",
             "储能"
           ],
-          "usMinChg": -2.54,
-          "usAvgChg": -1.0,
+          "usMinChg": -3.98,
+          "usAvgChg": -2.5,
           "worstSymbol": "ENPH",
           "worstLabel": "Enphase",
-          "alertLevel": "MOD_DROP",
+          "alertLevel": "BIG_DROP",
           "quotes": [
             {
               "secid": "105.ENPH",
               "symbol": "ENPH",
               "name": "Enphase Energy, Inc.",
-              "price": 20.34,
-              "chg": -2.54,
+              "price": 20.04,
+              "chg": -3.98,
               "label": "Enphase"
             },
             {
               "secid": "105.TSLA",
               "symbol": "TSLA",
               "name": "特斯拉",
-              "price": 387.55,
-              "chg": 0.54,
+              "price": 381.48,
+              "chg": -1.03,
               "label": "特斯拉"
             }
           ]
@@ -1633,7 +2468,7 @@
         "notNewLow": true,
         "dipSignal": "SHRINK_WATCH",
         "dipLabel": "🟡 深跌缩量·磨底观察",
-        "dipTip": "距高点回撤-41.0%且量能缩至峰值26%，放入观察等“利空砸不动”确认日",
+        "dipTip": "距高点回撤-41.3%且量能缩至峰值26%，放入观察等“利空砸不动”确认日",
         "dipScore": 84,
         "klinePatterns": {
           "patterns": [],
@@ -1647,6 +2482,30 @@
           "hasHighGravestone": false,
           "hasBearishEngulfing": false,
           "hasImmortalGuide": false,
+          "hasTopDivergence": false,
+          "hasBottomDivergence": false,
+          "bollDivergence": {
+            "structure": "RANGE",
+            "structureLabel": "震荡结构",
+            "bollUpper": 51.84,
+            "bollMid": 47.34,
+            "bollLower": 42.84,
+            "bandwidthPct": 19.01,
+            "pctB": 20.6,
+            "midSlope5dPct": 0.38,
+            "ma60": 48.67,
+            "nearBollUpper": false,
+            "nearBollLower": false,
+            "topDivergence": false,
+            "topDivLabel": "",
+            "topDivDesc": "",
+            "bottomDivergence": false,
+            "bottomDivLabel": "",
+            "bottomDivDesc": "",
+            "dif": -0.895,
+            "dea": -0.559,
+            "macdHist": -0.673
+          },
           "summary": "无显著特殊K线形态"
         },
         "riskLevel": "安全",
@@ -1673,8 +2532,8 @@
             "boardChg": -2.08
           }
         ],
-        "stockDrawdownPct": -72.7,
-        "high180": 54.45,
+        "stockDrawdownPct": -72.8,
+        "high180": 54.65,
         "volExhaustRatio": 0.28,
         "volExhaustPct": 28.4,
         "sectorAlpha": 0.1,
@@ -1683,12 +2542,30 @@
         "notNewLow": true,
         "dipSignal": "SHRINK_WATCH",
         "dipLabel": "🟡 深跌缩量·磨底观察",
-        "dipTip": "距高点回撤-72.7%且量能缩至峰值28%，放入观察等“利空砸不动”确认日",
+        "dipTip": "距高点回撤-72.8%且量能缩至峰值28%，放入观察等“利空砸不动”确认日",
         "dipScore": 82,
         "klinePatterns": {
-          "patterns": [],
+          "patterns": [
+            {
+              "code": "MACD_BOTTOM_DIVERGENCE",
+              "name": "底背离·下轨止跌提示",
+              "side": "bullish",
+              "severity": "medium",
+              "date": "2026-11-24",
+              "desc": "低点 ¥14.61 回踩/跌破前谷 2026-11-02（¥16.90），但 MACD 绿柱收敛、DIF 抬升（-1.36 vs -1.70），叠加布林下轨 ¥14.74 支撑共振，空头衰竭可关注右侧止跌买点"
+            }
+          ],
           "vetoSignals": [],
-          "bullSignals": [],
+          "bullSignals": [
+            {
+              "code": "MACD_BOTTOM_DIVERGENCE",
+              "name": "底背离·下轨止跌提示",
+              "side": "bullish",
+              "severity": "medium",
+              "date": "2026-11-24",
+              "desc": "低点 ¥14.61 回踩/跌破前谷 2026-11-02（¥16.90），但 MACD 绿柱收敛、DIF 抬升（-1.36 vs -1.70），叠加布林下轨 ¥14.74 支撑共振，空头衰竭可关注右侧止跌买点"
+            }
+          ],
           "activeGaps": [],
           "nearestSupportGap": null,
           "nearestResistanceGap": null,
@@ -1697,7 +2574,31 @@
           "hasHighGravestone": false,
           "hasBearishEngulfing": false,
           "hasImmortalGuide": false,
-          "summary": "无显著特殊K线形态"
+          "hasTopDivergence": false,
+          "hasBottomDivergence": true,
+          "bollDivergence": {
+            "structure": "DOWNTREND",
+            "structureLabel": "下跌结构",
+            "bollUpper": 19.65,
+            "bollMid": 17.19,
+            "bollLower": 14.74,
+            "bandwidthPct": 28.58,
+            "pctB": 2.3,
+            "midSlope5dPct": -4.07,
+            "ma60": 21.16,
+            "nearBollUpper": false,
+            "nearBollLower": true,
+            "topDivergence": false,
+            "topDivLabel": "",
+            "topDivDesc": "",
+            "bottomDivergence": true,
+            "bottomDivLabel": "底背离·下轨止跌提示",
+            "bottomDivDesc": "低点 ¥14.61 回踩/跌破前谷 2026-11-02（¥16.90），但 MACD 绿柱收敛、DIF 抬升（-1.36 vs -1.70），叠加布林下轨 ¥14.74 支撑共振，空头衰竭可关注右侧止跌买点",
+            "dif": -1.361,
+            "dea": -1.25,
+            "macdHist": -0.223
+          },
+          "summary": "底背离·下轨止跌提示"
         },
         "riskLevel": "安全",
         "redFlags": [],
@@ -1724,11 +2625,11 @@
           }
         ],
         "stockDrawdownPct": -70.2,
-        "high180": 202.09,
+        "high180": 202.15,
         "volExhaustRatio": 0.31,
         "volExhaustPct": 30.9,
         "sectorAlpha": -1.39,
-        "usAlpha": -0.02,
+        "usAlpha": 1.42,
         "usShock": {
           "themeId": "new_energy",
           "themeName": "锂电 / 光伏储能",
@@ -1738,26 +2639,26 @@
             "固态电池",
             "储能"
           ],
-          "usMinChg": -2.54,
-          "usAvgChg": -1.0,
+          "usMinChg": -3.98,
+          "usAvgChg": -2.5,
           "worstSymbol": "ENPH",
           "worstLabel": "Enphase",
-          "alertLevel": "MOD_DROP",
+          "alertLevel": "BIG_DROP",
           "quotes": [
             {
               "secid": "105.ENPH",
               "symbol": "ENPH",
               "name": "Enphase Energy, Inc.",
-              "price": 20.34,
-              "chg": -2.54,
+              "price": 20.04,
+              "chg": -3.98,
               "label": "Enphase"
             },
             {
               "secid": "105.TSLA",
               "symbol": "TSLA",
               "name": "特斯拉",
-              "price": 387.55,
-              "chg": 0.54,
+              "price": 381.48,
+              "chg": -1.03,
               "label": "特斯拉"
             }
           ]
@@ -1779,6 +2680,30 @@
           "hasHighGravestone": false,
           "hasBearishEngulfing": false,
           "hasImmortalGuide": false,
+          "hasTopDivergence": false,
+          "hasBottomDivergence": false,
+          "bollDivergence": {
+            "structure": "DOWNTREND",
+            "structureLabel": "下跌结构",
+            "bollUpper": 77.52,
+            "bollMid": 66.98,
+            "bollLower": 56.44,
+            "bandwidthPct": 31.47,
+            "pctB": 18.0,
+            "midSlope5dPct": -6.8,
+            "ma60": 90.24,
+            "nearBollUpper": false,
+            "nearBollLower": true,
+            "topDivergence": false,
+            "topDivLabel": "",
+            "topDivDesc": "",
+            "bottomDivergence": false,
+            "bottomDivLabel": "",
+            "bottomDivDesc": "",
+            "dif": -7.031,
+            "dea": -7.378,
+            "macdHist": 0.694
+          },
           "summary": "无显著特殊K线形态"
         },
         "riskLevel": "安全",
@@ -1806,7 +2731,7 @@
           }
         ],
         "stockDrawdownPct": -68.9,
-        "high180": 54.08,
+        "high180": 54.1,
         "volExhaustRatio": 0.28,
         "volExhaustPct": 27.8,
         "sectorAlpha": -0.01,
@@ -1829,6 +2754,30 @@
           "hasHighGravestone": false,
           "hasBearishEngulfing": false,
           "hasImmortalGuide": false,
+          "hasTopDivergence": false,
+          "hasBottomDivergence": false,
+          "bollDivergence": {
+            "structure": "DOWNTREND",
+            "structureLabel": "下跌结构",
+            "bollUpper": 21.86,
+            "bollMid": 18.81,
+            "bollLower": 15.76,
+            "bandwidthPct": 32.48,
+            "pctB": 17.3,
+            "midSlope5dPct": -4.39,
+            "ma60": 24.26,
+            "nearBollUpper": false,
+            "nearBollLower": true,
+            "topDivergence": false,
+            "topDivLabel": "",
+            "topDivDesc": "",
+            "bottomDivergence": false,
+            "bottomDivLabel": "",
+            "bottomDivDesc": "",
+            "dif": -1.753,
+            "dea": -1.791,
+            "macdHist": 0.077
+          },
           "summary": "无显著特殊K线形态"
         },
         "riskLevel": "安全",
@@ -1855,30 +2804,30 @@
             "boardChg": -2.08
           }
         ],
-        "stockDrawdownPct": -44.4,
-        "high180": 7.25,
+        "stockDrawdownPct": -44.7,
+        "high180": 7.29,
         "volExhaustRatio": 0.11,
-        "volExhaustPct": 11.0,
+        "volExhaustPct": 11.3,
         "sectorAlpha": 1.34,
         "usAlpha": null,
         "usShock": null,
         "notNewLow": true,
         "dipSignal": "SHRINK_WATCH",
         "dipLabel": "🟡 深跌缩量·磨底观察",
-        "dipTip": "距高点回撤-44.4%且量能缩至峰值11%，放入观察等“利空砸不动”确认日",
-        "dipScore": 81,
+        "dipTip": "距高点回撤-44.7%且量能缩至峰值11%，放入观察等“利空砸不动”确认日",
+        "dipScore": 82,
         "klinePatterns": {
           "patterns": [],
           "vetoSignals": [],
           "bullSignals": [],
           "activeGaps": [
             {
-              "index": 152,
+              "index": 151,
               "date": "2026-10-15",
               "direction": "down",
-              "gapLow": 5.15,
-              "gapHigh": 5.2,
-              "gapPct": 0.96,
+              "gapLow": 5.18,
+              "gapHigh": 5.23,
+              "gapPct": 0.95,
               "filled": false,
               "filledDate": null,
               "filledWithin3d": false,
@@ -1886,12 +2835,12 @@
               "confirmed3d": true
             },
             {
-              "index": 163,
+              "index": 162,
               "date": "2026-10-30",
               "direction": "down",
-              "gapLow": 4.63,
-              "gapHigh": 4.89,
-              "gapPct": 5.32,
+              "gapLow": 4.66,
+              "gapHigh": 4.92,
+              "gapPct": 5.28,
               "filled": false,
               "filledDate": null,
               "filledWithin3d": false,
@@ -1901,12 +2850,12 @@
           ],
           "nearestSupportGap": null,
           "nearestResistanceGap": {
-            "index": 163,
+            "index": 162,
             "date": "2026-10-30",
             "direction": "down",
-            "gapLow": 4.63,
-            "gapHigh": 4.89,
-            "gapPct": 5.32,
+            "gapLow": 4.66,
+            "gapHigh": 4.92,
+            "gapPct": 5.28,
             "filled": false,
             "filledDate": null,
             "filledWithin3d": false,
@@ -1918,7 +2867,31 @@
           "hasHighGravestone": false,
           "hasBearishEngulfing": false,
           "hasImmortalGuide": false,
-          "summary": "上方存在未回补压力缺口（¥4.63~¥4.89）"
+          "hasTopDivergence": false,
+          "hasBottomDivergence": false,
+          "bollDivergence": {
+            "structure": "DOWNTREND",
+            "structureLabel": "下跌结构",
+            "bollUpper": 4.89,
+            "bollMid": 4.38,
+            "bollLower": 3.86,
+            "bandwidthPct": 23.55,
+            "pctB": 16.3,
+            "midSlope5dPct": -5.12,
+            "ma60": 4.95,
+            "nearBollUpper": false,
+            "nearBollLower": true,
+            "topDivergence": false,
+            "topDivLabel": "",
+            "topDivDesc": "",
+            "bottomDivergence": false,
+            "bottomDivLabel": "",
+            "bottomDivDesc": "",
+            "dif": -0.246,
+            "dea": -0.232,
+            "macdHist": -0.027
+          },
+          "summary": "上方存在未回补压力缺口（¥4.66~¥4.92）"
         },
         "riskLevel": "安全",
         "redFlags": [],
@@ -1944,8 +2917,8 @@
             "boardChg": -1.86
           }
         ],
-        "stockDrawdownPct": -42.8,
-        "high180": 22.81,
+        "stockDrawdownPct": -43.3,
+        "high180": 22.98,
         "volExhaustRatio": 0.1,
         "volExhaustPct": 10.4,
         "sectorAlpha": 2.63,
@@ -1954,7 +2927,7 @@
         "notNewLow": true,
         "dipSignal": "SHRINK_WATCH",
         "dipLabel": "🟡 深跌缩量·磨底观察",
-        "dipTip": "距高点回撤-42.8%且量能缩至峰值10%，放入观察等“利空砸不动”确认日",
+        "dipTip": "距高点回撤-43.3%且量能缩至峰值10%，放入观察等“利空砸不动”确认日",
         "dipScore": 81,
         "klinePatterns": {
           "patterns": [],
@@ -1968,115 +2941,31 @@
           "hasHighGravestone": false,
           "hasBearishEngulfing": false,
           "hasImmortalGuide": false,
-          "summary": "无显著特殊K线形态"
-        },
-        "riskLevel": "安全",
-        "redFlags": [],
-        "yellowAlerts": []
-      },
-      {
-        "code": "002709",
-        "tcode": "sz002709",
-        "name": "天赐材料",
-        "price": 23.93,
-        "chg": -1.77,
-        "amountYi": 9.02,
-        "mcapYi": 487.8,
-        "turnover": 2.44,
-        "primaryBoardName": "电池",
-        "worstBoardDd": -30.0,
-        "worstBoardChg": -1.17,
-        "matchedBoards": [
-          {
-            "bkCode": "HY_01",
-            "bkName": "电池",
-            "boardDrawdownPct": -30.0,
-            "boardChg": -1.17
-          }
-        ],
-        "stockDrawdownPct": -63.1,
-        "high180": 64.88,
-        "volExhaustRatio": 0.2,
-        "volExhaustPct": 20.3,
-        "sectorAlpha": -0.6,
-        "usAlpha": 0.77,
-        "usShock": {
-          "themeId": "new_energy",
-          "themeName": "锂电 / 光伏储能",
-          "boardKeywords": [
-            "锂电池",
-            "光伏",
-            "固态电池",
-            "储能"
-          ],
-          "usMinChg": -2.54,
-          "usAvgChg": -1.0,
-          "worstSymbol": "ENPH",
-          "worstLabel": "Enphase",
-          "alertLevel": "MOD_DROP",
-          "quotes": [
-            {
-              "secid": "105.ENPH",
-              "symbol": "ENPH",
-              "name": "Enphase Energy, Inc.",
-              "price": 20.34,
-              "chg": -2.54,
-              "label": "Enphase"
-            },
-            {
-              "secid": "105.TSLA",
-              "symbol": "TSLA",
-              "name": "特斯拉",
-              "price": 387.55,
-              "chg": 0.54,
-              "label": "特斯拉"
-            }
-          ]
-        },
-        "notNewLow": true,
-        "dipSignal": "SHRINK_WATCH",
-        "dipLabel": "🟡 深跌缩量·磨底观察",
-        "dipTip": "距高点回撤-63.1%且量能缩至峰值20%，放入观察等“利空砸不动”确认日",
-        "dipScore": 80,
-        "klinePatterns": {
-          "patterns": [],
-          "vetoSignals": [],
-          "bullSignals": [],
-          "activeGaps": [
-            {
-              "index": 152,
-              "date": "2026-10-15",
-              "direction": "down",
-              "gapLow": 30.15,
-              "gapHigh": 30.86,
-              "gapPct": 2.3,
-              "filled": false,
-              "filledDate": null,
-              "filledWithin3d": false,
-              "ageDays": 28,
-              "confirmed3d": true
-            }
-          ],
-          "nearestSupportGap": null,
-          "nearestResistanceGap": {
-            "index": 152,
-            "date": "2026-10-15",
-            "direction": "down",
-            "gapLow": 30.15,
-            "gapHigh": 30.86,
-            "gapPct": 2.3,
-            "filled": false,
-            "filledDate": null,
-            "filledWithin3d": false,
-            "ageDays": 28,
-            "confirmed3d": true
+          "hasTopDivergence": false,
+          "hasBottomDivergence": false,
+          "bollDivergence": {
+            "structure": "DOWNTREND",
+            "structureLabel": "下跌结构",
+            "bollUpper": 15.3,
+            "bollMid": 14.05,
+            "bollLower": 12.8,
+            "bandwidthPct": 17.77,
+            "pctB": 9.6,
+            "midSlope5dPct": -2.4,
+            "ma60": 15.03,
+            "nearBollUpper": false,
+            "nearBollLower": true,
+            "topDivergence": false,
+            "topDivLabel": "",
+            "topDivDesc": "",
+            "bottomDivergence": false,
+            "bottomDivLabel": "",
+            "bottomDivDesc": "",
+            "dif": -0.501,
+            "dea": -0.389,
+            "macdHist": -0.225
           },
-          "hasTopIsland": false,
-          "hasBottomIsland": false,
-          "hasHighGravestone": false,
-          "hasBearishEngulfing": false,
-          "hasImmortalGuide": false,
-          "summary": "上方存在未回补压力缺口（¥30.15~¥30.86）"
+          "summary": "无显著特殊K线形态"
         },
         "riskLevel": "安全",
         "redFlags": [],
@@ -2102,8 +2991,8 @@
             "boardChg": -1.96
           }
         ],
-        "stockDrawdownPct": -70.1,
-        "high180": 113.76,
+        "stockDrawdownPct": -70.2,
+        "high180": 113.99,
         "volExhaustRatio": 0.36,
         "volExhaustPct": 36.3,
         "sectorAlpha": -0.7,
@@ -2112,7 +3001,7 @@
         "notNewLow": true,
         "dipSignal": "SHRINK_WATCH",
         "dipLabel": "🟡 深跌缩量·磨底观察",
-        "dipTip": "距高点回撤-70.1%且量能缩至峰值36%，放入观察等“利空砸不动”确认日",
+        "dipTip": "距高点回撤-70.2%且量能缩至峰值36%，放入观察等“利空砸不动”确认日",
         "dipScore": 76,
         "klinePatterns": {
           "patterns": [],
@@ -2120,7 +3009,7 @@
           "bullSignals": [],
           "activeGaps": [
             {
-              "index": 152,
+              "index": 151,
               "date": "2026-10-15",
               "direction": "down",
               "gapLow": 45.45,
@@ -2135,7 +3024,7 @@
           ],
           "nearestSupportGap": null,
           "nearestResistanceGap": {
-            "index": 152,
+            "index": 151,
             "date": "2026-10-15",
             "direction": "down",
             "gapLow": 45.45,
@@ -2152,6 +3041,30 @@
           "hasHighGravestone": false,
           "hasBearishEngulfing": false,
           "hasImmortalGuide": false,
+          "hasTopDivergence": false,
+          "hasBottomDivergence": false,
+          "bollDivergence": {
+            "structure": "DOWNTREND",
+            "structureLabel": "下跌结构",
+            "bollUpper": 42.45,
+            "bollMid": 37.41,
+            "bollLower": 32.38,
+            "bandwidthPct": 26.91,
+            "pctB": 16.1,
+            "midSlope5dPct": -4.4,
+            "ma60": 49.06,
+            "nearBollUpper": false,
+            "nearBollLower": true,
+            "topDivergence": false,
+            "topDivLabel": "",
+            "topDivDesc": "",
+            "bottomDivergence": false,
+            "bottomDivLabel": "",
+            "bottomDivDesc": "",
+            "dif": -3.187,
+            "dea": -3.302,
+            "macdHist": 0.229
+          },
           "summary": "上方存在未回补压力缺口（¥45.45~¥46.60）"
         },
         "riskLevel": "安全",
@@ -2178,17 +3091,17 @@
             "boardChg": -1.96
           }
         ],
-        "stockDrawdownPct": -55.3,
-        "high180": 102.65,
-        "volExhaustRatio": 0.25,
-        "volExhaustPct": 24.9,
+        "stockDrawdownPct": -54.4,
+        "high180": 100.63,
+        "volExhaustRatio": 0.28,
+        "volExhaustPct": 28.0,
         "sectorAlpha": -1.72,
         "usAlpha": null,
         "usShock": null,
         "notNewLow": true,
         "dipSignal": "SHRINK_WATCH",
         "dipLabel": "🟡 深跌缩量·磨底观察",
-        "dipTip": "距高点回撤-55.3%且量能缩至峰值25%，放入观察等“利空砸不动”确认日",
+        "dipTip": "距高点回撤-54.4%且量能缩至峰值28%，放入观察等“利空砸不动”确认日",
         "dipScore": 76,
         "klinePatterns": {
           "patterns": [],
@@ -2202,6 +3115,30 @@
           "hasHighGravestone": false,
           "hasBearishEngulfing": false,
           "hasImmortalGuide": false,
+          "hasTopDivergence": false,
+          "hasBottomDivergence": false,
+          "bollDivergence": {
+            "structure": "DOWNTREND",
+            "structureLabel": "下跌结构",
+            "bollUpper": 63.76,
+            "bollMid": 54.88,
+            "bollLower": 46.0,
+            "bandwidthPct": 32.36,
+            "pctB": -0.9,
+            "midSlope5dPct": -4.0,
+            "ma60": 60.02,
+            "nearBollUpper": false,
+            "nearBollLower": true,
+            "topDivergence": false,
+            "topDivLabel": "",
+            "topDivDesc": "",
+            "bottomDivergence": false,
+            "bottomDivLabel": "",
+            "bottomDivDesc": "",
+            "dif": -3.145,
+            "dea": -2.113,
+            "macdHist": -2.063
+          },
           "summary": "无显著特殊K线形态"
         },
         "riskLevel": "安全",
@@ -2228,8 +3165,8 @@
             "boardChg": -1.96
           }
         ],
-        "stockDrawdownPct": -50.3,
-        "high180": 63.44,
+        "stockDrawdownPct": -48.7,
+        "high180": 61.5,
         "volExhaustRatio": 0.21,
         "volExhaustPct": 20.8,
         "sectorAlpha": -0.81,
@@ -2238,8 +3175,8 @@
         "notNewLow": true,
         "dipSignal": "SHRINK_WATCH",
         "dipLabel": "🟡 深跌缩量·磨底观察",
-        "dipTip": "距高点回撤-50.3%且量能缩至峰值21%，放入观察等“利空砸不动”确认日",
-        "dipScore": 74,
+        "dipTip": "距高点回撤-48.7%且量能缩至峰值21%，放入观察等“利空砸不动”确认日",
+        "dipScore": 73,
         "klinePatterns": {
           "patterns": [],
           "vetoSignals": [],
@@ -2252,6 +3189,30 @@
           "hasHighGravestone": false,
           "hasBearishEngulfing": false,
           "hasImmortalGuide": false,
+          "hasTopDivergence": false,
+          "hasBottomDivergence": false,
+          "bollDivergence": {
+            "structure": "DOWNTREND",
+            "structureLabel": "下跌结构",
+            "bollUpper": 38.54,
+            "bollMid": 34.77,
+            "bollLower": 31.0,
+            "bandwidthPct": 21.67,
+            "pctB": 7.3,
+            "midSlope5dPct": -2.72,
+            "ma60": 36.42,
+            "nearBollUpper": false,
+            "nearBollLower": true,
+            "topDivergence": false,
+            "topDivLabel": "",
+            "topDivDesc": "",
+            "bottomDivergence": false,
+            "bottomDivLabel": "",
+            "bottomDivDesc": "",
+            "dif": -1.127,
+            "dea": -0.727,
+            "macdHist": -0.8
+          },
           "summary": "无显著特殊K线形态"
         },
         "riskLevel": "安全",
@@ -2278,12 +3239,12 @@
             "boardChg": -4.23
           }
         ],
-        "stockDrawdownPct": -57.3,
-        "high180": 53.22,
+        "stockDrawdownPct": -57.5,
+        "high180": 53.5,
         "volExhaustRatio": 0.5,
         "volExhaustPct": 49.7,
         "sectorAlpha": 0.63,
-        "usAlpha": 0.06,
+        "usAlpha": 2.0,
         "usShock": {
           "themeId": "metals_oil",
           "themeName": "黄金 / 有色资源",
@@ -2293,8 +3254,8 @@
             "贵金属",
             "铜缆"
           ],
-          "usMinChg": -3.66,
-          "usAvgChg": -1.58,
+          "usMinChg": -5.6,
+          "usAvgChg": -3.32,
           "worstSymbol": "FCX",
           "worstLabel": "自由港铜业",
           "alertLevel": "BIG_DROP",
@@ -2303,16 +3264,16 @@
               "secid": "105.NEM",
               "symbol": "NEM",
               "name": "纽曼矿业",
-              "price": 101.23,
-              "chg": 0.5,
+              "price": 99.68,
+              "chg": -1.04,
               "label": "纽蒙特矿业"
             },
             {
               "secid": "105.FCX",
               "symbol": "FCX",
               "name": "麦克莫兰铜金",
-              "price": 47.89,
-              "chg": -3.66,
+              "price": 46.93,
+              "chg": -5.6,
               "label": "自由港铜业"
             }
           ]
@@ -2320,15 +3281,33 @@
         "notNewLow": true,
         "dipSignal": "SHRINK_WATCH",
         "dipLabel": "🟡 深跌缩量·磨底观察",
-        "dipTip": "距高点回撤-57.3%且量能缩至峰值50%，放入观察等“利空砸不动”确认日",
+        "dipTip": "距高点回撤-57.5%且量能缩至峰值50%，放入观察等“利空砸不动”确认日",
         "dipScore": 71,
         "klinePatterns": {
-          "patterns": [],
+          "patterns": [
+            {
+              "code": "MACD_BOTTOM_DIVERGENCE",
+              "name": "底背离·下轨止跌提示",
+              "side": "bullish",
+              "severity": "medium",
+              "date": "2026-11-24",
+              "desc": "低点 ¥21.86 回踩/跌破前谷 2026-11-02（¥22.10），但 MACD 绿柱收敛、DIF 抬升（-1.09 vs -1.88），叠加布林下轨 ¥21.68 支撑共振，空头衰竭可关注右侧止跌买点"
+            }
+          ],
           "vetoSignals": [],
-          "bullSignals": [],
+          "bullSignals": [
+            {
+              "code": "MACD_BOTTOM_DIVERGENCE",
+              "name": "底背离·下轨止跌提示",
+              "side": "bullish",
+              "severity": "medium",
+              "date": "2026-11-24",
+              "desc": "低点 ¥21.86 回踩/跌破前谷 2026-11-02（¥22.10），但 MACD 绿柱收敛、DIF 抬升（-1.09 vs -1.88），叠加布林下轨 ¥21.68 支撑共振，空头衰竭可关注右侧止跌买点"
+            }
+          ],
           "activeGaps": [
             {
-              "index": 144,
+              "index": 143,
               "date": "2026-09-28",
               "direction": "down",
               "gapLow": 27.6,
@@ -2343,7 +3322,7 @@
           ],
           "nearestSupportGap": null,
           "nearestResistanceGap": {
-            "index": 144,
+            "index": 143,
             "date": "2026-09-28",
             "direction": "down",
             "gapLow": 27.6,
@@ -2360,7 +3339,31 @@
           "hasHighGravestone": false,
           "hasBearishEngulfing": false,
           "hasImmortalGuide": false,
-          "summary": "上方存在未回补压力缺口（¥27.60~¥28.97）"
+          "hasTopDivergence": false,
+          "hasBottomDivergence": true,
+          "bollDivergence": {
+            "structure": "DOWNTREND",
+            "structureLabel": "下跌结构",
+            "bollUpper": 27.37,
+            "bollMid": 24.52,
+            "bollLower": 21.68,
+            "bandwidthPct": 23.18,
+            "pctB": 18.8,
+            "midSlope5dPct": -2.59,
+            "ma60": 28.97,
+            "nearBollUpper": false,
+            "nearBollLower": true,
+            "topDivergence": false,
+            "topDivLabel": "",
+            "topDivDesc": "",
+            "bottomDivergence": true,
+            "bottomDivLabel": "底背离·下轨止跌提示",
+            "bottomDivDesc": "低点 ¥21.86 回踩/跌破前谷 2026-11-02（¥22.10），但 MACD 绿柱收敛、DIF 抬升（-1.09 vs -1.88），叠加布林下轨 ¥21.68 支撑共振，空头衰竭可关注右侧止跌买点",
+            "dif": -1.089,
+            "dea": -1.026,
+            "macdHist": -0.126
+          },
+          "summary": "底背离·下轨止跌提示"
         },
         "riskLevel": "安全",
         "redFlags": [],
@@ -2386,8 +3389,8 @@
             "boardChg": -2.29
           }
         ],
-        "stockDrawdownPct": -40.5,
-        "high180": 6.4,
+        "stockDrawdownPct": -40.6,
+        "high180": 6.41,
         "volExhaustRatio": 0.25,
         "volExhaustPct": 25.5,
         "sectorAlpha": 0.23,
@@ -2396,7 +3399,7 @@
         "notNewLow": true,
         "dipSignal": "SHRINK_WATCH",
         "dipLabel": "🟡 深跌缩量·磨底观察",
-        "dipTip": "距高点回撤-40.5%且量能缩至峰值25%，放入观察等“利空砸不动”确认日",
+        "dipTip": "距高点回撤-40.6%且量能缩至峰值25%，放入观察等“利空砸不动”确认日",
         "dipScore": 70,
         "klinePatterns": {
           "patterns": [],
@@ -2410,7 +3413,123 @@
           "hasHighGravestone": false,
           "hasBearishEngulfing": false,
           "hasImmortalGuide": false,
+          "hasTopDivergence": false,
+          "hasBottomDivergence": false,
+          "bollDivergence": {
+            "structure": "DOWNTREND",
+            "structureLabel": "下跌结构",
+            "bollUpper": 4.15,
+            "bollMid": 3.99,
+            "bollLower": 3.83,
+            "bandwidthPct": 8.11,
+            "pctB": -4.9,
+            "midSlope5dPct": -2.24,
+            "ma60": 4.1,
+            "nearBollUpper": false,
+            "nearBollLower": true,
+            "topDivergence": false,
+            "topDivLabel": "",
+            "topDivDesc": "",
+            "bottomDivergence": false,
+            "bottomDivLabel": "",
+            "bottomDivDesc": "",
+            "dif": -0.073,
+            "dea": -0.061,
+            "macdHist": -0.023
+          },
           "summary": "无显著特殊K线形态"
+        },
+        "riskLevel": "安全",
+        "redFlags": [],
+        "yellowAlerts": []
+      },
+      {
+        "code": "600188",
+        "tcode": "sh600188",
+        "name": "兖矿能源",
+        "price": 16.64,
+        "chg": -1.6,
+        "amountYi": 5.39,
+        "mcapYi": 1670.1,
+        "turnover": 0.54,
+        "primaryBoardName": "煤炭开采",
+        "worstBoardDd": -30.0,
+        "worstBoardChg": -1.89,
+        "matchedBoards": [
+          {
+            "bkCode": "HY_10",
+            "bkName": "煤炭开采",
+            "boardDrawdownPct": -30.0,
+            "boardChg": -1.89
+          }
+        ],
+        "stockDrawdownPct": -40.1,
+        "high180": 27.8,
+        "volExhaustRatio": 0.26,
+        "volExhaustPct": 26.4,
+        "sectorAlpha": 0.29,
+        "usAlpha": null,
+        "usShock": null,
+        "notNewLow": true,
+        "dipSignal": "SHRINK_WATCH",
+        "dipLabel": "🟡 深跌缩量·磨底观察",
+        "dipTip": "距高点回撤-40.1%且量能缩至峰值26%，放入观察等“利空砸不动”确认日",
+        "dipScore": 70,
+        "klinePatterns": {
+          "patterns": [
+            {
+              "code": "MACD_BOTTOM_DIVERGENCE",
+              "name": "底背离·下轨止跌提示",
+              "side": "bullish",
+              "severity": "medium",
+              "date": "2026-11-24",
+              "desc": "低点 ¥16.55 回踩/跌破前谷 2026-11-06（¥16.66），但 MACD 绿柱收敛、DIF 抬升（-0.58 vs -0.67），叠加布林下轨 ¥16.11 支撑共振，空头衰竭可关注右侧止跌买点"
+            }
+          ],
+          "vetoSignals": [],
+          "bullSignals": [
+            {
+              "code": "MACD_BOTTOM_DIVERGENCE",
+              "name": "底背离·下轨止跌提示",
+              "side": "bullish",
+              "severity": "medium",
+              "date": "2026-11-24",
+              "desc": "低点 ¥16.55 回踩/跌破前谷 2026-11-06（¥16.66），但 MACD 绿柱收敛、DIF 抬升（-0.58 vs -0.67），叠加布林下轨 ¥16.11 支撑共振，空头衰竭可关注右侧止跌买点"
+            }
+          ],
+          "activeGaps": [],
+          "nearestSupportGap": null,
+          "nearestResistanceGap": null,
+          "hasTopIsland": false,
+          "hasBottomIsland": false,
+          "hasHighGravestone": false,
+          "hasBearishEngulfing": false,
+          "hasImmortalGuide": false,
+          "hasTopDivergence": false,
+          "hasBottomDivergence": true,
+          "bollDivergence": {
+            "structure": "DOWNTREND",
+            "structureLabel": "下跌结构",
+            "bollUpper": 19.1,
+            "bollMid": 17.6,
+            "bollLower": 16.11,
+            "bandwidthPct": 16.97,
+            "pctB": 17.8,
+            "midSlope5dPct": -1.99,
+            "ma60": 19.45,
+            "nearBollUpper": false,
+            "nearBollLower": true,
+            "topDivergence": false,
+            "topDivLabel": "",
+            "topDivDesc": "",
+            "bottomDivergence": true,
+            "bottomDivLabel": "底背离·下轨止跌提示",
+            "bottomDivDesc": "低点 ¥16.55 回踩/跌破前谷 2026-11-06（¥16.66），但 MACD 绿柱收敛、DIF 抬升（-0.58 vs -0.67），叠加布林下轨 ¥16.11 支撑共振，空头衰竭可关注右侧止跌买点",
+            "dif": -0.584,
+            "dea": -0.589,
+            "macdHist": 0.01
+          },
+          "summary": "底背离·下轨止跌提示"
         },
         "riskLevel": "安全",
         "redFlags": [],
@@ -2436,8 +3555,8 @@
             "boardChg": -2.0
           }
         ],
-        "stockDrawdownPct": -52.2,
-        "high180": 24.5,
+        "stockDrawdownPct": -52.4,
+        "high180": 24.56,
         "volExhaustRatio": 0.47,
         "volExhaustPct": 46.6,
         "sectorAlpha": -1.62,
@@ -2446,7 +3565,7 @@
         "notNewLow": true,
         "dipSignal": "SHRINK_WATCH",
         "dipLabel": "🟡 深跌缩量·磨底观察",
-        "dipTip": "距高点回撤-52.2%且量能缩至峰值47%，放入观察等“利空砸不动”确认日",
+        "dipTip": "距高点回撤-52.4%且量能缩至峰值47%，放入观察等“利空砸不动”确认日",
         "dipScore": 69,
         "klinePatterns": {
           "patterns": [],
@@ -2454,7 +3573,7 @@
           "bullSignals": [],
           "activeGaps": [
             {
-              "index": 152,
+              "index": 151,
               "date": "2026-10-15",
               "direction": "down",
               "gapLow": 16.23,
@@ -2469,7 +3588,7 @@
           ],
           "nearestSupportGap": null,
           "nearestResistanceGap": {
-            "index": 152,
+            "index": 151,
             "date": "2026-10-15",
             "direction": "down",
             "gapLow": 16.23,
@@ -2486,6 +3605,30 @@
           "hasHighGravestone": false,
           "hasBearishEngulfing": false,
           "hasImmortalGuide": false,
+          "hasTopDivergence": false,
+          "hasBottomDivergence": false,
+          "bollDivergence": {
+            "structure": "DOWNTREND",
+            "structureLabel": "下跌结构",
+            "bollUpper": 14.66,
+            "bollMid": 13.07,
+            "bollLower": 11.49,
+            "bandwidthPct": 24.29,
+            "pctB": 6.7,
+            "midSlope5dPct": -3.86,
+            "ma60": 15.85,
+            "nearBollUpper": false,
+            "nearBollLower": true,
+            "topDivergence": false,
+            "topDivLabel": "",
+            "topDivDesc": "",
+            "bottomDivergence": false,
+            "bottomDivLabel": "",
+            "bottomDivDesc": "",
+            "dif": -0.942,
+            "dea": -0.913,
+            "macdHist": -0.057
+          },
           "summary": "上方存在未回补压力缺口（¥16.23~¥16.61）"
         },
         "riskLevel": "安全",
@@ -2513,7 +3656,7 @@
           }
         ],
         "stockDrawdownPct": -51.6,
-        "high180": 132.87,
+        "high180": 132.88,
         "volExhaustRatio": 0.44,
         "volExhaustPct": 43.8,
         "sectorAlpha": -0.57,
@@ -2525,9 +3668,27 @@
         "dipTip": "距高点回撤-51.6%且量能缩至峰值44%，放入观察等“利空砸不动”确认日",
         "dipScore": 69,
         "klinePatterns": {
-          "patterns": [],
+          "patterns": [
+            {
+              "code": "MACD_BOTTOM_DIVERGENCE",
+              "name": "底背离·下轨止跌提示",
+              "side": "bullish",
+              "severity": "medium",
+              "date": "2026-11-24",
+              "desc": "低点 ¥60.96 回踩/跌破前谷 2026-10-30（¥64.00），但 MACD 绿柱收敛、DIF 抬升（-4.03 vs -4.80），叠加布林下轨 ¥62.68 支撑共振，空头衰竭可关注右侧止跌买点"
+            }
+          ],
           "vetoSignals": [],
-          "bullSignals": [],
+          "bullSignals": [
+            {
+              "code": "MACD_BOTTOM_DIVERGENCE",
+              "name": "底背离·下轨止跌提示",
+              "side": "bullish",
+              "severity": "medium",
+              "date": "2026-11-24",
+              "desc": "低点 ¥60.96 回踩/跌破前谷 2026-10-30（¥64.00），但 MACD 绿柱收敛、DIF 抬升（-4.03 vs -4.80），叠加布林下轨 ¥62.68 支撑共振，空头衰竭可关注右侧止跌买点"
+            }
+          ],
           "activeGaps": [],
           "nearestSupportGap": null,
           "nearestResistanceGap": null,
@@ -2536,7 +3697,31 @@
           "hasHighGravestone": false,
           "hasBearishEngulfing": false,
           "hasImmortalGuide": false,
-          "summary": "无显著特殊K线形态"
+          "hasTopDivergence": false,
+          "hasBottomDivergence": true,
+          "bollDivergence": {
+            "structure": "DOWNTREND",
+            "structureLabel": "下跌结构",
+            "bollUpper": 79.72,
+            "bollMid": 71.2,
+            "bollLower": 62.68,
+            "bandwidthPct": 23.93,
+            "pctB": 9.3,
+            "midSlope5dPct": -4.45,
+            "ma60": 82.75,
+            "nearBollUpper": false,
+            "nearBollLower": true,
+            "topDivergence": false,
+            "topDivLabel": "",
+            "topDivDesc": "",
+            "bottomDivergence": true,
+            "bottomDivLabel": "底背离·下轨止跌提示",
+            "bottomDivDesc": "低点 ¥60.96 回踩/跌破前谷 2026-10-30（¥64.00），但 MACD 绿柱收敛、DIF 抬升（-4.03 vs -4.80），叠加布林下轨 ¥62.68 支撑共振，空头衰竭可关注右侧止跌买点",
+            "dif": -4.029,
+            "dea": -3.611,
+            "macdHist": -0.835
+          },
+          "summary": "底背离·下轨止跌提示"
         },
         "riskLevel": "安全",
         "redFlags": [],
@@ -2562,8 +3747,8 @@
             "boardChg": -2.0
           }
         ],
-        "stockDrawdownPct": -48.5,
-        "high180": 14.78,
+        "stockDrawdownPct": -49.9,
+        "high180": 15.2,
         "volExhaustRatio": 0.37,
         "volExhaustPct": 36.6,
         "sectorAlpha": -0.31,
@@ -2572,15 +3757,15 @@
         "notNewLow": true,
         "dipSignal": "SHRINK_WATCH",
         "dipLabel": "🟡 深跌缩量·磨底观察",
-        "dipTip": "距高点回撤-48.5%且量能缩至峰值37%，放入观察等“利空砸不动”确认日",
-        "dipScore": 67,
+        "dipTip": "距高点回撤-49.9%且量能缩至峰值37%，放入观察等“利空砸不动”确认日",
+        "dipScore": 68,
         "klinePatterns": {
           "patterns": [],
           "vetoSignals": [],
           "bullSignals": [],
           "activeGaps": [
             {
-              "index": 171,
+              "index": 170,
               "date": "2026-11-11",
               "direction": "down",
               "gapLow": 8.2,
@@ -2595,7 +3780,7 @@
           ],
           "nearestSupportGap": null,
           "nearestResistanceGap": {
-            "index": 171,
+            "index": 170,
             "date": "2026-11-11",
             "direction": "down",
             "gapLow": 8.2,
@@ -2612,7 +3797,137 @@
           "hasHighGravestone": false,
           "hasBearishEngulfing": false,
           "hasImmortalGuide": false,
+          "hasTopDivergence": false,
+          "hasBottomDivergence": false,
+          "bollDivergence": {
+            "structure": "DOWNTREND",
+            "structureLabel": "下跌结构",
+            "bollUpper": 9.01,
+            "bollMid": 8.23,
+            "bollLower": 7.46,
+            "bandwidthPct": 18.85,
+            "pctB": 9.9,
+            "midSlope5dPct": -2.89,
+            "ma60": 8.89,
+            "nearBollUpper": false,
+            "nearBollLower": true,
+            "topDivergence": false,
+            "topDivLabel": "",
+            "topDivDesc": "",
+            "bottomDivergence": false,
+            "bottomDivLabel": "",
+            "bottomDivDesc": "",
+            "dif": -0.308,
+            "dea": -0.264,
+            "macdHist": -0.089
+          },
           "summary": "上方存在未回补压力缺口（¥8.20~¥8.29）"
+        },
+        "riskLevel": "安全",
+        "redFlags": [],
+        "yellowAlerts": []
+      },
+      {
+        "code": "605117",
+        "tcode": "sh605117",
+        "name": "德业股份",
+        "price": 77.25,
+        "chg": 0.78,
+        "amountYi": 12.32,
+        "mcapYi": 983.6,
+        "turnover": 1.23,
+        "primaryBoardName": "光伏设备",
+        "worstBoardDd": -30.0,
+        "worstBoardChg": 0.08,
+        "matchedBoards": [
+          {
+            "bkCode": "HY_02",
+            "bkName": "光伏设备",
+            "boardDrawdownPct": -30.0,
+            "boardChg": 0.08
+          }
+        ],
+        "stockDrawdownPct": -55.7,
+        "high180": 174.56,
+        "volExhaustRatio": 0.61,
+        "volExhaustPct": 60.7,
+        "sectorAlpha": 0.7,
+        "usAlpha": 4.76,
+        "usShock": {
+          "themeId": "new_energy",
+          "themeName": "锂电 / 光伏储能",
+          "boardKeywords": [
+            "锂电池",
+            "光伏",
+            "固态电池",
+            "储能"
+          ],
+          "usMinChg": -3.98,
+          "usAvgChg": -2.5,
+          "worstSymbol": "ENPH",
+          "worstLabel": "Enphase",
+          "alertLevel": "BIG_DROP",
+          "quotes": [
+            {
+              "secid": "105.ENPH",
+              "symbol": "ENPH",
+              "name": "Enphase Energy, Inc.",
+              "price": 20.04,
+              "chg": -3.98,
+              "label": "Enphase"
+            },
+            {
+              "secid": "105.TSLA",
+              "symbol": "TSLA",
+              "name": "特斯拉",
+              "price": 381.48,
+              "chg": -1.03,
+              "label": "特斯拉"
+            }
+          ]
+        },
+        "notNewLow": true,
+        "dipSignal": "DIGESTING_DROP",
+        "dipLabel": "⚪ 深跌观察·等待缩量",
+        "dipTip": "回撤幅度已足但成交量尚未完全枯竭，需继续等缩量止跌",
+        "dipScore": 65,
+        "klinePatterns": {
+          "patterns": [],
+          "vetoSignals": [],
+          "bullSignals": [],
+          "activeGaps": [],
+          "nearestSupportGap": null,
+          "nearestResistanceGap": null,
+          "hasTopIsland": false,
+          "hasBottomIsland": false,
+          "hasHighGravestone": false,
+          "hasBearishEngulfing": false,
+          "hasImmortalGuide": false,
+          "hasTopDivergence": false,
+          "hasBottomDivergence": false,
+          "bollDivergence": {
+            "structure": "RANGE",
+            "structureLabel": "震荡结构",
+            "bollUpper": 83.34,
+            "bollMid": 75.65,
+            "bollLower": 67.96,
+            "bandwidthPct": 20.33,
+            "pctB": 60.4,
+            "midSlope5dPct": 3.2,
+            "ma60": 78.83,
+            "nearBollUpper": false,
+            "nearBollLower": false,
+            "topDivergence": false,
+            "topDivLabel": "",
+            "topDivDesc": "",
+            "bottomDivergence": false,
+            "bottomDivLabel": "",
+            "bottomDivDesc": "",
+            "dif": 0.472,
+            "dea": 0.097,
+            "macdHist": 0.75
+          },
+          "summary": "无显著特殊K线形态"
         },
         "riskLevel": "安全",
         "redFlags": [],
@@ -2638,12 +3953,12 @@
             "boardChg": -1.17
           }
         ],
-        "stockDrawdownPct": -51.3,
-        "high180": 467.35,
+        "stockDrawdownPct": -51.5,
+        "high180": 468.75,
         "volExhaustRatio": 0.58,
         "volExhaustPct": 58.0,
         "sectorAlpha": 1.16,
-        "usAlpha": 2.53,
+        "usAlpha": 3.97,
         "usShock": {
           "themeId": "new_energy",
           "themeName": "锂电 / 光伏储能",
@@ -2653,26 +3968,26 @@
             "固态电池",
             "储能"
           ],
-          "usMinChg": -2.54,
-          "usAvgChg": -1.0,
+          "usMinChg": -3.98,
+          "usAvgChg": -2.5,
           "worstSymbol": "ENPH",
           "worstLabel": "Enphase",
-          "alertLevel": "MOD_DROP",
+          "alertLevel": "BIG_DROP",
           "quotes": [
             {
               "secid": "105.ENPH",
               "symbol": "ENPH",
               "name": "Enphase Energy, Inc.",
-              "price": 20.34,
-              "chg": -2.54,
+              "price": 20.04,
+              "chg": -3.98,
               "label": "Enphase"
             },
             {
               "secid": "105.TSLA",
               "symbol": "TSLA",
               "name": "特斯拉",
-              "price": 387.55,
-              "chg": 0.54,
+              "price": 381.48,
+              "chg": -1.03,
               "label": "特斯拉"
             }
           ]
@@ -2694,6 +4009,152 @@
           "hasHighGravestone": false,
           "hasBearishEngulfing": false,
           "hasImmortalGuide": false,
+          "hasTopDivergence": false,
+          "hasBottomDivergence": false,
+          "bollDivergence": {
+            "structure": "RANGE",
+            "structureLabel": "震荡结构",
+            "bollUpper": 260.79,
+            "bollMid": 240.59,
+            "bollLower": 220.4,
+            "bandwidthPct": 16.78,
+            "pctB": 17.3,
+            "midSlope5dPct": 0.03,
+            "ma60": 284.84,
+            "nearBollUpper": false,
+            "nearBollLower": true,
+            "topDivergence": false,
+            "topDivLabel": "",
+            "topDivDesc": "",
+            "bottomDivergence": false,
+            "bottomDivLabel": "",
+            "bottomDivDesc": "",
+            "dif": -10.979,
+            "dea": -11.567,
+            "macdHist": 1.177
+          },
+          "summary": "无显著特殊K线形态"
+        },
+        "riskLevel": "安全",
+        "redFlags": [],
+        "yellowAlerts": []
+      },
+      {
+        "code": "688256",
+        "tcode": "sh688256",
+        "name": "寒武纪",
+        "price": 970.0,
+        "chg": 6.03,
+        "amountYi": 143.21,
+        "mcapYi": 6099.9,
+        "turnover": 2.38,
+        "primaryBoardName": "半导体",
+        "worstBoardDd": -30.0,
+        "worstBoardChg": 1.17,
+        "matchedBoards": [
+          {
+            "bkCode": "HY_03",
+            "bkName": "半导体",
+            "boardDrawdownPct": -30.0,
+            "boardChg": 1.17
+          }
+        ],
+        "stockDrawdownPct": -50.7,
+        "high180": 1966.0,
+        "volExhaustRatio": 0.7,
+        "volExhaustPct": 69.5,
+        "sectorAlpha": 4.86,
+        "usAlpha": 16.11,
+        "usShock": {
+          "themeId": "ai_chip",
+          "themeName": "AI算力 / 半导体",
+          "boardKeywords": [
+            "半导体",
+            "算力",
+            "高带宽内存",
+            "存储芯片"
+          ],
+          "usMinChg": -10.08,
+          "usAvgChg": -8.07,
+          "worstSymbol": "MU",
+          "worstLabel": "美光科技",
+          "alertLevel": "BIG_DROP",
+          "quotes": [
+            {
+              "secid": "105.AMD",
+              "symbol": "AMD",
+              "name": "超威半导体",
+              "price": 408.31,
+              "chg": -9.96,
+              "label": "AMD"
+            },
+            {
+              "secid": "105.TSM",
+              "symbol": "TSM",
+              "name": "台积电",
+              "price": 344.76,
+              "chg": -5.18,
+              "label": "台积电"
+            },
+            {
+              "secid": "105.MU",
+              "symbol": "MU",
+              "name": "美光科技",
+              "price": 636.34,
+              "chg": -10.08,
+              "label": "美光科技"
+            },
+            {
+              "secid": "105.NVDA",
+              "symbol": "NVDA",
+              "name": "英伟达",
+              "price": 153.39,
+              "chg": -7.07,
+              "label": "英伟达"
+            }
+          ]
+        },
+        "notNewLow": true,
+        "dipSignal": "DIGESTING_DROP",
+        "dipLabel": "⚪ 深跌观察·等待缩量",
+        "dipTip": "回撤幅度已足但成交量尚未完全枯竭，需继续等缩量止跌",
+        "dipScore": 62,
+        "klinePatterns": {
+          "patterns": [],
+          "vetoSignals": [],
+          "bullSignals": [],
+          "activeGaps": [],
+          "nearestSupportGap": null,
+          "nearestResistanceGap": null,
+          "hasTopIsland": false,
+          "hasBottomIsland": false,
+          "hasHighGravestone": false,
+          "hasBearishEngulfing": false,
+          "hasImmortalGuide": false,
+          "hasTopDivergence": false,
+          "hasBottomDivergence": false,
+          "bollDivergence": {
+            "structure": "UPTREND",
+            "structureLabel": "上升结构",
+            "bollUpper": 1008.97,
+            "bollMid": 895.36,
+            "bollLower": 781.75,
+            "bandwidthPct": 25.38,
+            "pctB": 82.9,
+            "midSlope5dPct": 0.42,
+            "ma60": 981.96,
+            "nearBollUpper": true,
+            "nearBollLower": false,
+            "topDivergence": false,
+            "topDivLabel": "",
+            "topDivDesc": "",
+            "bottomDivergence": false,
+            "bottomDivLabel": "",
+            "bottomDivDesc": "",
+            "dif": -2.164,
+            "dea": -14.949,
+            "macdHist": 25.57
+          },
           "summary": "无显著特殊K线形态"
         },
         "riskLevel": "安全",
@@ -2725,7 +4186,7 @@
         "volExhaustRatio": 0.86,
         "volExhaustPct": 85.8,
         "sectorAlpha": 9.19,
-        "usAlpha": 19.14,
+        "usAlpha": 20.44,
         "usShock": {
           "themeId": "ai_chip",
           "themeName": "AI算力 / 半导体",
@@ -2735,42 +4196,42 @@
             "高带宽内存",
             "存储芯片"
           ],
-          "usMinChg": -8.78,
-          "usAvgChg": -6.75,
-          "worstSymbol": "AMD",
-          "worstLabel": "AMD",
+          "usMinChg": -10.08,
+          "usAvgChg": -8.07,
+          "worstSymbol": "MU",
+          "worstLabel": "美光科技",
           "alertLevel": "BIG_DROP",
           "quotes": [
             {
               "secid": "105.AMD",
               "symbol": "AMD",
               "name": "超威半导体",
-              "price": 413.65,
-              "chg": -8.78,
+              "price": 408.31,
+              "chg": -9.96,
               "label": "AMD"
             },
             {
               "secid": "105.TSM",
               "symbol": "TSM",
               "name": "台积电",
-              "price": 349.29,
-              "chg": -3.94,
+              "price": 344.76,
+              "chg": -5.18,
               "label": "台积电"
             },
             {
               "secid": "105.MU",
               "symbol": "MU",
               "name": "美光科技",
-              "price": 649.46,
-              "chg": -8.23,
+              "price": 636.34,
+              "chg": -10.08,
               "label": "美光科技"
             },
             {
               "secid": "105.NVDA",
               "symbol": "NVDA",
               "name": "英伟达",
-              "price": 155.08,
-              "chg": -6.04,
+              "price": 153.39,
+              "chg": -7.07,
               "label": "英伟达"
             }
           ]
@@ -2792,104 +4253,30 @@
           "hasHighGravestone": false,
           "hasBearishEngulfing": false,
           "hasImmortalGuide": false,
-          "summary": "无显著特殊K线形态"
-        },
-        "riskLevel": "安全",
-        "redFlags": [],
-        "yellowAlerts": []
-      },
-      {
-        "code": "688256",
-        "tcode": "sh688256",
-        "name": "寒武纪",
-        "price": 970.0,
-        "chg": 6.03,
-        "amountYi": 143.21,
-        "mcapYi": 6099.9,
-        "turnover": 2.38,
-        "primaryBoardName": "半导体",
-        "worstBoardDd": -30.0,
-        "worstBoardChg": 1.17,
-        "matchedBoards": [
-          {
-            "bkCode": "HY_03",
-            "bkName": "半导体",
-            "boardDrawdownPct": -30.0,
-            "boardChg": 1.17
-          }
-        ],
-        "stockDrawdownPct": -40.1,
-        "high180": 1620.0,
-        "volExhaustRatio": 0.7,
-        "volExhaustPct": 69.5,
-        "sectorAlpha": 4.86,
-        "usAlpha": 14.81,
-        "usShock": {
-          "themeId": "ai_chip",
-          "themeName": "AI算力 / 半导体",
-          "boardKeywords": [
-            "半导体",
-            "算力",
-            "高带宽内存",
-            "存储芯片"
-          ],
-          "usMinChg": -8.78,
-          "usAvgChg": -6.75,
-          "worstSymbol": "AMD",
-          "worstLabel": "AMD",
-          "alertLevel": "BIG_DROP",
-          "quotes": [
-            {
-              "secid": "105.AMD",
-              "symbol": "AMD",
-              "name": "超威半导体",
-              "price": 413.65,
-              "chg": -8.78,
-              "label": "AMD"
-            },
-            {
-              "secid": "105.TSM",
-              "symbol": "TSM",
-              "name": "台积电",
-              "price": 349.29,
-              "chg": -3.94,
-              "label": "台积电"
-            },
-            {
-              "secid": "105.MU",
-              "symbol": "MU",
-              "name": "美光科技",
-              "price": 649.46,
-              "chg": -8.23,
-              "label": "美光科技"
-            },
-            {
-              "secid": "105.NVDA",
-              "symbol": "NVDA",
-              "name": "英伟达",
-              "price": 155.08,
-              "chg": -6.04,
-              "label": "英伟达"
-            }
-          ]
-        },
-        "notNewLow": true,
-        "dipSignal": "DIGESTING_DROP",
-        "dipLabel": "⚪ 深跌观察·等待缩量",
-        "dipTip": "回撤幅度已足但成交量尚未完全枯竭，需继续等缩量止跌",
-        "dipScore": 58,
-        "klinePatterns": {
-          "patterns": [],
-          "vetoSignals": [],
-          "bullSignals": [],
-          "activeGaps": [],
-          "nearestSupportGap": null,
-          "nearestResistanceGap": null,
-          "hasTopIsland": false,
-          "hasBottomIsland": false,
-          "hasHighGravestone": false,
-          "hasBearishEngulfing": false,
-          "hasImmortalGuide": false,
+          "hasTopDivergence": false,
+          "hasBottomDivergence": false,
+          "bollDivergence": {
+            "structure": "UPTREND",
+            "structureLabel": "上升结构",
+            "bollUpper": 208.02,
+            "bollMid": 167.08,
+            "bollLower": 126.15,
+            "bandwidthPct": 49.0,
+            "pctB": 101.7,
+            "midSlope5dPct": 5.25,
+            "ma60": 195.75,
+            "nearBollUpper": true,
+            "nearBollLower": false,
+            "topDivergence": false,
+            "topDivLabel": "",
+            "topDivDesc": "",
+            "bottomDivergence": false,
+            "bottomDivLabel": "",
+            "bottomDivDesc": "",
+            "dif": 4.017,
+            "dea": -2.6,
+            "macdHist": 13.235
+          },
           "summary": "无显著特殊K线形态"
         },
         "riskLevel": "安全",
@@ -2934,7 +4321,7 @@
           "bullSignals": [],
           "activeGaps": [
             {
-              "index": 152,
+              "index": 151,
               "date": "2026-10-15",
               "direction": "down",
               "gapLow": 43.93,
@@ -2949,7 +4336,7 @@
           ],
           "nearestSupportGap": null,
           "nearestResistanceGap": {
-            "index": 152,
+            "index": 151,
             "date": "2026-10-15",
             "direction": "down",
             "gapLow": 43.93,
@@ -2966,6 +4353,30 @@
           "hasHighGravestone": false,
           "hasBearishEngulfing": false,
           "hasImmortalGuide": false,
+          "hasTopDivergence": false,
+          "hasBottomDivergence": false,
+          "bollDivergence": {
+            "structure": "DOWNTREND",
+            "structureLabel": "下跌结构",
+            "bollUpper": 36.87,
+            "bollMid": 32.75,
+            "bollLower": 28.63,
+            "bandwidthPct": 25.16,
+            "pctB": 27.8,
+            "midSlope5dPct": -6.05,
+            "ma60": 44.52,
+            "nearBollUpper": false,
+            "nearBollLower": false,
+            "topDivergence": false,
+            "topDivLabel": "",
+            "topDivDesc": "",
+            "bottomDivergence": false,
+            "bottomDivLabel": "",
+            "bottomDivDesc": "",
+            "dif": -3.411,
+            "dea": -3.838,
+            "macdHist": 0.853
+          },
           "summary": "上方存在未回补压力缺口（¥43.93~¥46.48）"
         },
         "riskLevel": "安全",
@@ -2992,12 +4403,12 @@
             "boardChg": -4.23
           }
         ],
-        "stockDrawdownPct": -51.9,
-        "high180": 35.04,
+        "stockDrawdownPct": -52.5,
+        "high180": 35.5,
         "volExhaustRatio": 0.82,
         "volExhaustPct": 81.8,
         "sectorAlpha": -0.3,
-        "usAlpha": -0.87,
+        "usAlpha": 1.07,
         "usShock": {
           "themeId": "metals_oil",
           "themeName": "黄金 / 有色资源",
@@ -3007,8 +4418,8 @@
             "贵金属",
             "铜缆"
           ],
-          "usMinChg": -3.66,
-          "usAvgChg": -1.58,
+          "usMinChg": -5.6,
+          "usAvgChg": -3.32,
           "worstSymbol": "FCX",
           "worstLabel": "自由港铜业",
           "alertLevel": "BIG_DROP",
@@ -3017,16 +4428,16 @@
               "secid": "105.NEM",
               "symbol": "NEM",
               "name": "纽曼矿业",
-              "price": 101.23,
-              "chg": 0.5,
+              "price": 99.68,
+              "chg": -1.04,
               "label": "纽蒙特矿业"
             },
             {
               "secid": "105.FCX",
               "symbol": "FCX",
               "name": "麦克莫兰铜金",
-              "price": 47.89,
-              "chg": -3.66,
+              "price": 46.93,
+              "chg": -5.6,
               "label": "自由港铜业"
             }
           ]
@@ -3048,6 +4459,30 @@
           "hasHighGravestone": false,
           "hasBearishEngulfing": false,
           "hasImmortalGuide": false,
+          "hasTopDivergence": false,
+          "hasBottomDivergence": false,
+          "bollDivergence": {
+            "structure": "DOWNTREND",
+            "structureLabel": "下跌结构",
+            "bollUpper": 22.16,
+            "bollMid": 19.28,
+            "bollLower": 16.4,
+            "bandwidthPct": 29.9,
+            "pctB": 7.9,
+            "midSlope5dPct": -4.33,
+            "ma60": 22.07,
+            "nearBollUpper": false,
+            "nearBollLower": true,
+            "topDivergence": false,
+            "topDivLabel": "",
+            "topDivDesc": "",
+            "bottomDivergence": false,
+            "bottomDivLabel": "",
+            "bottomDivDesc": "",
+            "dif": -1.133,
+            "dea": -0.907,
+            "macdHist": -0.452
+          },
           "summary": "无显著特殊K线形态"
         },
         "riskLevel": "安全",
@@ -3074,8 +4509,8 @@
             "boardChg": -2.0
           }
         ],
-        "stockDrawdownPct": -42.1,
-        "high180": 40.1,
+        "stockDrawdownPct": -42.5,
+        "high180": 40.35,
         "volExhaustRatio": 0.87,
         "volExhaustPct": 87.4,
         "sectorAlpha": -2.33,
@@ -3085,7 +4520,7 @@
         "dipSignal": "DIGESTING_DROP",
         "dipLabel": "⚪ 深跌观察·等待缩量",
         "dipTip": "回撤幅度已足但成交量尚未完全枯竭，需继续等缩量止跌",
-        "dipScore": 44,
+        "dipScore": 45,
         "klinePatterns": {
           "patterns": [],
           "vetoSignals": [],
@@ -3098,6 +4533,30 @@
           "hasHighGravestone": false,
           "hasBearishEngulfing": false,
           "hasImmortalGuide": false,
+          "hasTopDivergence": false,
+          "hasBottomDivergence": false,
+          "bollDivergence": {
+            "structure": "DOWNTREND",
+            "structureLabel": "下跌结构",
+            "bollUpper": 30.41,
+            "bollMid": 26.7,
+            "bollLower": 22.99,
+            "bandwidthPct": 27.77,
+            "pctB": 2.9,
+            "midSlope5dPct": -3.82,
+            "ma60": 29.78,
+            "nearBollUpper": false,
+            "nearBollLower": true,
+            "topDivergence": false,
+            "topDivLabel": "",
+            "topDivDesc": "",
+            "bottomDivergence": false,
+            "bottomDivLabel": "",
+            "bottomDivDesc": "",
+            "dif": -1.492,
+            "dea": -1.171,
+            "macdHist": -0.642
+          },
           "summary": "无显著特殊K线形态"
         },
         "riskLevel": "安全",
@@ -3124,8 +4583,8 @@
             "boardChg": -2.0
           }
         ],
-        "stockDrawdownPct": -62.9,
-        "high180": 33.19,
+        "stockDrawdownPct": -63.2,
+        "high180": 33.44,
         "volExhaustRatio": 0.29,
         "volExhaustPct": 29.4,
         "sectorAlpha": -2.72,
@@ -3137,12 +4596,30 @@
         "dipTip": "仍处于放量破位寻底中，严禁左侧硬接飞刀",
         "dipScore": 45,
         "klinePatterns": {
-          "patterns": [],
+          "patterns": [
+            {
+              "code": "MACD_BOTTOM_DIVERGENCE",
+              "name": "底背离·下轨止跌提示",
+              "side": "bullish",
+              "severity": "medium",
+              "date": "2026-11-24",
+              "desc": "低点 ¥12.24 回踩/跌破前谷 2026-10-23（¥13.29），但 MACD 绿柱收敛、DIF 抬升（-0.71 vs -1.01），叠加布林下轨 ¥12.36 支撑共振，空头衰竭可关注右侧止跌买点"
+            }
+          ],
           "vetoSignals": [],
-          "bullSignals": [],
+          "bullSignals": [
+            {
+              "code": "MACD_BOTTOM_DIVERGENCE",
+              "name": "底背离·下轨止跌提示",
+              "side": "bullish",
+              "severity": "medium",
+              "date": "2026-11-24",
+              "desc": "低点 ¥12.24 回踩/跌破前谷 2026-10-23（¥13.29），但 MACD 绿柱收敛、DIF 抬升（-0.71 vs -1.01），叠加布林下轨 ¥12.36 支撑共振，空头衰竭可关注右侧止跌买点"
+            }
+          ],
           "activeGaps": [
             {
-              "index": 152,
+              "index": 151,
               "date": "2026-10-15",
               "direction": "down",
               "gapLow": 15.5,
@@ -3157,7 +4634,7 @@
           ],
           "nearestSupportGap": null,
           "nearestResistanceGap": {
-            "index": 152,
+            "index": 151,
             "date": "2026-10-15",
             "direction": "down",
             "gapLow": 15.5,
@@ -3174,7 +4651,31 @@
           "hasHighGravestone": false,
           "hasBearishEngulfing": false,
           "hasImmortalGuide": false,
-          "summary": "上方存在未回补压力缺口（¥15.50~¥15.78）"
+          "hasTopDivergence": false,
+          "hasBottomDivergence": true,
+          "bollDivergence": {
+            "structure": "DOWNTREND",
+            "structureLabel": "下跌结构",
+            "bollUpper": 15.34,
+            "bollMid": 13.85,
+            "bollLower": 12.36,
+            "bandwidthPct": 21.58,
+            "pctB": -1.2,
+            "midSlope5dPct": -2.22,
+            "ma60": 15.82,
+            "nearBollUpper": false,
+            "nearBollLower": true,
+            "topDivergence": false,
+            "topDivLabel": "",
+            "topDivDesc": "",
+            "bottomDivergence": true,
+            "bottomDivLabel": "底背离·下轨止跌提示",
+            "bottomDivDesc": "低点 ¥12.24 回踩/跌破前谷 2026-10-23（¥13.29），但 MACD 绿柱收敛、DIF 抬升（-0.71 vs -1.01），叠加布林下轨 ¥12.36 支撑共振，空头衰竭可关注右侧止跌买点",
+            "dif": -0.713,
+            "dea": -0.637,
+            "macdHist": -0.152
+          },
+          "summary": "底背离·下轨止跌提示"
         },
         "riskLevel": "安全",
         "redFlags": [],
@@ -3186,16 +4687,16 @@
       "stockDdMin": 40.0,
       "qualifyingBoards": 0,
       "counts": {
-        "total": 28,
+        "total": 30,
         "antiDrop": 3,
-        "shrinkWatch": 18,
+        "shrinkWatch": 19,
         "fallingKnife": 1
       }
     }
   },
   "trackingPool": {
     "ok": true,
-    "updatedAt": "2026-11-24 22:56:25",
+    "updatedAt": "2026-11-24 23:37:48",
     "summary": {
       "totalCount": 16,
       "ignitedCount": 4,
