@@ -1250,7 +1250,22 @@ export default function DiagnosisPage({
 
                       {/* 关键技术 & 市场辅助标签 */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginTop: '6px', fontSize: '11.5px', color: 'var(--sub)' }}>
-                        <span>📈 趋势: <b>{tech.trendStatus || '—'}</b></span>
+                        <span>📈 趋势: <b>{tech.trendStatus || '—'}{tech.bollStructure ? ` (${tech.bollStructure})` : ''}</b></span>
+                        {tech.bollMid > 0 && (
+                          <span className="num-mono">
+                            · BOLL 支撑 <b style={{ color: 'var(--down-d)' }}>{f2(tech.bollLower)}</b> / 中轨 <b>{f2(tech.bollMid)}</b> / 压力 <b style={{ color: 'var(--up)' }}>{f2(tech.bollUpper)}</b>
+                          </span>
+                        )}
+                        {tech.topDivergence && (
+                          <span style={{ padding: '1px 6px', borderRadius: '4px', background: 'var(--warn-bg)', color: 'var(--warn-d)', border: '1px solid var(--warn-b)', fontWeight: 700 }} title={tech.topDivDesc}>
+                            ⚠️ 日线顶背离·卖出锁盈
+                          </span>
+                        )}
+                        {tech.bottomDivergence && (
+                          <span style={{ padding: '1px 6px', borderRadius: '4px', background: 'var(--down-bg)', color: 'var(--down-d)', border: '1px solid var(--down-b)', fontWeight: 700 }} title={tech.bottomDivDesc}>
+                            🎯 日线底背离·止跌观察
+                          </span>
+                        )}
                         <span>· RSI(6): <b style={{ color: (tech.rsi6 ?? 50) >= 78 ? 'var(--up)' : (tech.rsi6 ?? 50) <= 25 ? 'var(--down)' : 'var(--text)' }}>{tech.rsi6 != null ? Number(tech.rsi6).toFixed(1) : '—'}</b></span>
                         <span>· 5日: <b style={{ color: (tech.chg5d ?? 0) >= 0 ? 'var(--up)' : 'var(--down)' }}>{fmtPct(tech.chg5d, true)}</b></span>
                         {mkt.valveLabel && (

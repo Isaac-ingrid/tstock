@@ -14,6 +14,7 @@ from .market_data import (
     is_em_api_open,
     to_em_secid,
 )
+from .patterns import analyze_boll_and_divergence
 from .strong_herd import build_strong_herd_and_themes, parse_mystic_roots
 from .trade_calendar import cn_now_str, cn_today_ymd, get_market_calendar_snapshot, is_trade_day, recent_trade_dates
 
@@ -29,11 +30,149 @@ HISTORY_CACHE_TTL = 120.0
 EM_REQ_TIMEOUT = 1.6
 
 
+_MACRO_RAW_CACHE: Tuple[float, List[dict]] = (0.0, [])
+
+
+async def _compute_macro_timing(
+    client: httpx.AsyncClient,
+    risk_valve: str,
+    temperature: float,
+    is_history_mode: bool = False,
+) -> dict:
+    """
+    第一步「看长期大趋势，择天时」：
+    研判上证指数等核心指数上升/震荡/下跌三态 + BOLL(20,2) 支撑压力 + 日线顶底背离，
+    结合短线情绪阀门给出「按兵不动 / 派出先锋 / 全力出击」三档总仓位规划。
+    """
+    global _MACRO_RAW_CACHE
+    now_m = time.monotonic()
+    idx_specs = [
+        ("1.000001", "sh000001", "上证指数"),
+        ("0.399001", "sz399001", "深证成指"),
+        ("0.399006", "sz399006", "创业板指"),
+    ]
+    indices: List[dict] = []
+    if not is_history_mode and _MACRO_RAW_CACHE[1] and now_m < _MACRO_RAW_CACHE[0]:
+        indices = list(_MACRO_RAW_CACHE[1])
+    else:
+        try:
+            bars_list = await asyncio.gather(
+                *[
+                    fetch_em_klines(client, sid, 101, 90, tcode_fallback=tc, ttl=180.0)
+                    for sid, tc, _ in idx_specs
+                ],
+                return_exceptions=True,
+            )
+            for (sid, tc, nm), raw_b in zip(idx_specs, bars_list):
+                if not isinstance(raw_b, list) or len(raw_b) < 22:
+                    continue
+                bd = analyze_boll_and_divergence(raw_b)
+                cur_c = float(raw_b[-1]["close"])
+                prev_c = float(raw_b[-2]["close"]) if len(raw_b) >= 2 else cur_c
+                prev5_c = float(raw_b[-6]["close"]) if len(raw_b) >= 6 else prev_c
+                chg_1d = round(((cur_c - prev_c) / prev_c * 100.0), 2) if prev_c > 0 else 0.0
+                chg_5d = round(((cur_c - prev5_c) / prev5_c * 100.0), 2) if prev5_c > 0 else 0.0
+                indices.append({
+                    "tcode": tc,
+                    "name": nm,
+                    "price": round(cur_c, 2),
+                    "chg": chg_1d,
+                    "chg5d": chg_5d,
+                    **bd,
+                })
+            if indices and not is_history_mode:
+                _MACRO_RAW_CACHE = (now_m + 60.0, indices)
+        except Exception:
+            indices = []
+
+    sh = indices[0] if indices else {
+        "tcode": "sh000001",
+        "name": "上证指数",
+        "price": 0.0,
+        "chg": 0.0,
+        "chg5d": 0.0,
+        "structure": "RANGE",
+        "structureLabel": "震荡结构",
+        "bollUpper": 0.0,
+        "bollMid": 0.0,
+        "bollLower": 0.0,
+        "pctB": 50.0,
+        "nearBollUpper": False,
+        "nearBollLower": False,
+        "topDivergence": False,
+        "topDivLabel": "",
+        "topDivDesc": "",
+        "bottomDivergence": False,
+        "bottomDivLabel": "",
+        "bottomDivDesc": "",
+    }
+    struct = sh.get("structure", "RANGE")
+    top_div = bool(sh.get("topDivergence"))
+    bot_div = bool(sh.get("bottomDivergence"))
+    near_up = bool(sh.get("nearBollUpper"))
+    near_lo = bool(sh.get("nearBollLower"))
+
+    if risk_valve == "RED" or (struct == "DOWNTREND" and not bot_div):
+        posture = "HOLD_FIRE"
+        posture_label = "🛡️ 按兵不动 · 保持观望"
+        cap_pct = 20
+        range_txt = "0% ~ 20%"
+        reason = (
+            "大盘处于下跌结构（跌破布林中轨且均线下移），大势不对操作白费，严控总仓多看少动"
+            if struct == "DOWNTREND"
+            else "超短情绪处于退潮冰点红灯区，防守优先等待止跌信号"
+        )
+    elif struct == "UPTREND" and risk_valve == "GREEN" and not top_div and not near_up:
+        posture = "FULL_ATTACK"
+        posture_label = "🔥 条件成熟 · 全力出击"
+        cap_pct = 80
+        range_txt = "60% ~ 80%"
+        reason = "上证处于上升结构站稳布林中轨、无顶背离压制且情绪绿灯共振，围绕前排大容量主线积极出击"
+    else:
+        posture = "VANGUARD"
+        posture_label = "⚡ 派出先锋 · 小仓试错"
+        cap_pct = 50
+        range_txt = "30% ~ 50%"
+        if top_div or near_up:
+            reason = f"指数触及布林上轨压力区{'且出现日线顶背离预警' if top_div else ''}，忌满仓追高，收缩至半仓内做主线高抛低吸"
+        elif bot_div or near_lo:
+            reason = f"指数回踩布林下轨支撑{'且出现日线底背离止跌信号' if bot_div else ''}，可派 3~5 成先锋仓试错率先抗跌主线"
+        else:
+            reason = "上证处于布林上下轨箱体震荡结构，重板块轻指数，控制半仓内围绕主线回调低吸"
+
+    return {
+        "posture": posture,
+        "postureLabel": posture_label,
+        "recommendedCapPct": cap_pct,
+        "rangeText": range_txt,
+        "reason": reason,
+        "anchorName": sh.get("name", "上证指数"),
+        "anchorPrice": sh.get("price", 0.0),
+        "anchorChg": sh.get("chg", 0.0),
+        "anchorChg5d": sh.get("chg5d", 0.0),
+        "structure": struct,
+        "structureLabel": sh.get("structureLabel", "震荡结构"),
+        "bollUpper": sh.get("bollUpper", 0.0),
+        "bollMid": sh.get("bollMid", 0.0),
+        "bollLower": sh.get("bollLower", 0.0),
+        "pctB": sh.get("pctB", 50.0),
+        "topDivergence": top_div,
+        "topDivLabel": sh.get("topDivLabel", ""),
+        "topDivDesc": sh.get("topDivDesc", ""),
+        "bottomDivergence": bot_div,
+        "bottomDivLabel": sh.get("bottomDivLabel", ""),
+        "bottomDivDesc": sh.get("bottomDivDesc", ""),
+        "indices": indices,
+    }
+
+
 async def invalidate_limitup_cache() -> None:
     """手动变更抱团跟踪池后立刻失效连板聚合缓存。"""
+    global _MACRO_RAW_CACHE
     async with _CACHE_LOCK:
         _LIMITUP_CACHE.clear()
         _LIMITUP_STALE_BACKUP.clear()
+        _MACRO_RAW_CACHE = (0.0, [])
 
 
 def format_time_str(val: Any) -> str:
@@ -814,6 +953,33 @@ async def _build_limitup_pool_inner(
             key=lambda x: (-len(x.get("tags") or []), -int(x.get("relayScore") or 0), -int(x.get("identityScore") or 0), -float(x.get("amount") or 0))
         )
 
+    macro_timing = await _compute_macro_timing(client, risk_valve, temperature, is_history_mode=is_history_mode)
+    sh_chg_now = float(macro_timing.get("anchorChg") or 0.0)
+    mt_block = (herd_extra.get("mainThemes") or {})
+    for th in (mt_block.get("themes") or []):
+        rs_val = round(float(th.get("chg") or 0.0) - sh_chg_now, 2)
+        leads_idx = rs_val >= 1.2
+        cap_yi = round(sum(float(m.get("amount") or 0.0) for m in (th.get("stocks") or [])) / 1e8, 1)
+        ldr_lbc = int(((th.get("roles") or {}).get("themeLeader") or {}).get("lbc") or 0)
+        zt_c = int(th.get("ztCount") or 0)
+        avg_to = (
+            sum(float(m.get("turnover") or 0.0) for m in (th.get("stocks") or []))
+            / max(1, len(th.get("stocks") or []))
+        )
+        if (ldr_lbc >= 5 and zt_c >= 5 and avg_to >= 13.5) or (float(th.get("chg") or 0.0) >= 5.5 and ldr_lbc >= 4):
+            st_code, st_label = "HIGH_CLIMAX", "⚠️ 高位一致·禁追高"
+        elif leads_idx and 1 <= ldr_lbc <= 3 and zt_c >= 2:
+            st_code, st_label = "EARLY_START", "🌱 启动初期·优先介入"
+        elif zt_c >= 3 or (cap_yi >= 45.0 and leads_idx):
+            st_code, st_label = "MAIN_RISE", "🔥 主升抱团·顺势低吸"
+        else:
+            st_code, st_label = "DIVERGENCE_WATCH", "⚖️ 分歧蓄势·去弱留强"
+        th["rsVsIndex"] = rs_val
+        th["leadsIndex"] = leads_idx
+        th["capacityYi"] = cap_yi
+        th["cycleStage"] = st_code
+        th["cycleStageLabel"] = st_label
+
     sentiment = {
         "temperature": temperature,
         "cyclePhase": cycle_phase,
@@ -841,6 +1007,7 @@ async def _build_limitup_pool_inner(
         "promotionSample": y_stats.get("promotionSample", "0/0"),
         "consecPromotionRate": y_stats.get("consecPromotionRate"),
         "consecPromotionSample": y_stats.get("consecPromotionSample", "0/0"),
+        "macroTiming": macro_timing,
     }
 
     result = {
@@ -856,6 +1023,7 @@ async def _build_limitup_pool_inner(
         "zbCount": zb_count,
         "dtCount": dt_count,
         "sentiment": sentiment,
+        "macroTiming": macro_timing,
         "items": items,
         "rushingPool": rushing_items,
         "zbPool": zb_items,

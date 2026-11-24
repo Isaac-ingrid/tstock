@@ -447,24 +447,79 @@ export default function BoardBentoOverview({
         </div>
       </div>
 
-      {/* 第 1 排：四大核心指数等高卡片 */}
+      {/* 第 1 排：第一步「顺天时」核心指数结构 + 布林支撑压力 + 顶底背离卡片 */}
+      {s.macroTiming && (
+        <div
+          className="bb-card"
+          style={{
+            padding: '8px 12px',
+            marginBottom: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '8px',
+            fontSize: '12px',
+            borderLeft: `3px solid ${
+              s.macroTiming.posture === 'FULL_ATTACK'
+                ? 'var(--up)'
+                : s.macroTiming.posture === 'HOLD_FIRE'
+                ? 'var(--down)'
+                : 'var(--warn)'
+            }`,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <b style={{ color: 'var(--text)' }}>🧭 第一步·择天时：{s.macroTiming.postureLabel}</b>
+            <span className="num-mono" style={{ padding: '1px 7px', borderRadius: '4px', background: 'var(--surface)', border: '1px solid var(--line2)', fontWeight: 700 }}>
+              建议总仓 {s.macroTiming.rangeText}
+            </span>
+            <span style={{ color: 'var(--sub)' }}>{s.macroTiming.reason}</span>
+          </div>
+          {s.macroTiming.bollMid > 0 && (
+            <div className="num-mono" style={{ fontSize: '11.5px', color: 'var(--mute)' }}>
+              上证 {s.macroTiming.structureLabel} ｜ BOLL 下轨支撑 <b style={{ color: 'var(--down-d)' }}>{s.macroTiming.bollLower}</b> · 中轨 <b>{s.macroTiming.bollMid}</b> · 上轨压力 <b style={{ color: 'var(--up)' }}>{s.macroTiming.bollUpper}</b>
+            </div>
+          )}
+        </div>
+      )}
       <div className="bb-idx-row">
         {BENCH_INDICES.map(({ tc, name, symbol }) => {
           const q = idxQuotes[tc];
-          const px = q?.price > 0 ? q.price : null;
-          const chg = px && q?.prevClose > 0 ? ((px - q.prevClose) / q.prevClose) * 100 : null;
+          const mtIdx = (s.macroTiming?.indices || []).find((x) => x.tcode === tc);
+          const px = q?.price > 0 ? q.price : mtIdx?.price > 0 ? mtIdx.price : null;
+          const chg = px && q?.prevClose > 0 ? ((px - q.prevClose) / q.prevClose) * 100 : mtIdx?.chg ?? null;
           const dir = chg == null ? '' : chg > 0.001 ? 'is-up' : chg < -0.001 ? 'is-down' : '';
           const arrow = chg == null ? '' : chg >= 0 ? '↗ ' : '↘ ';
           return (
-            <div key={tc} className="bb-card bb-idx-card">
+            <div
+              key={tc}
+              className="bb-card bb-idx-card"
+              title={mtIdx ? `${name}：${mtIdx.structureLabel} ｜ BOLL 下轨 ${mtIdx.bollLower} / 中轨 ${mtIdx.bollMid} / 上轨 ${mtIdx.bollUpper}${mtIdx.topDivDesc ? ` ｜ ${mtIdx.topDivDesc}` : ''}${mtIdx.bottomDivDesc ? ` ｜ ${mtIdx.bottomDivDesc}` : ''}` : name}
+            >
               <div className="bb-idx-top">
-                <span className="bb-idx-name">{name}</span>
+                <span className="bb-idx-name">
+                  {name}
+                  {mtIdx?.structureLabel && (
+                    <small style={{ marginLeft: '5px', fontSize: '10px', color: mtIdx.structure === 'UPTREND' ? 'var(--up)' : mtIdx.structure === 'DOWNTREND' ? 'var(--down)' : 'var(--mute)', fontWeight: 700 }}>
+                      {mtIdx.structureLabel.replace('结构', '')}
+                    </small>
+                  )}
+                  {mtIdx?.topDivergence && (
+                    <small style={{ marginLeft: '4px', fontSize: '10px', color: 'var(--up)', fontWeight: 800 }}>⚠️顶背离</small>
+                  )}
+                  {mtIdx?.bottomDivergence && (
+                    <small style={{ marginLeft: '4px', fontSize: '10px', color: 'var(--down-d)', fontWeight: 800 }}>🎯底背离</small>
+                  )}
+                </span>
                 <b className={`bb-idx-chg num-mono ${dir}`}>
                   {chg == null ? '--' : `${chg > 0 ? '+' : ''}${chg.toFixed(2)}%`}
                 </b>
               </div>
               <div className="bb-idx-bot num-mono">
-                <span className="bb-idx-code">{symbol}</span>
+                <span className="bb-idx-code">
+                  {mtIdx?.bollMid > 0 ? `支撑${Math.round(mtIdx.bollLower)} / 压${Math.round(mtIdx.bollUpper)}` : symbol}
+                </span>
                 <span className={`bb-idx-px ${dir}`}>
                   {arrow}
                   {px ? px.toFixed(2) : '----.--'}
@@ -827,14 +882,32 @@ export default function BoardBentoOverview({
                     <span className="bb-heat-rk num-mono">{idx + 1}</span>
                     <div className="bb-heat-info">
                       <div className="bb-heat-top">
-                        <b className="bb-truncate">{th.name}</b>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', minWidth: 0 }}>
+                          <b className="bb-truncate">{th.name}</b>
+                          {th.cycleStageLabel && (
+                            <small
+                              style={{
+                                fontSize: '10px',
+                                padding: '0 5px',
+                                borderRadius: '3px',
+                                flexShrink: 0,
+                                background: th.cycleStage === 'HIGH_CLIMAX' ? 'var(--warn-bg)' : th.cycleStage === 'EARLY_START' ? 'var(--down-bg)' : 'var(--up-bg)',
+                                color: th.cycleStage === 'HIGH_CLIMAX' ? 'var(--warn-d)' : th.cycleStage === 'EARLY_START' ? 'var(--down-d)' : 'var(--up)',
+                                fontWeight: 700,
+                              }}
+                            >
+                              {th.cycleStageLabel.split('·')[0]}
+                            </small>
+                          )}
+                        </span>
                         <span className="c-up num-mono">
                           {th.ztCount ?? th.count ?? 0}涨停
                         </span>
                       </div>
                       <div className="bb-heat-sub bb-truncate">
-                        {th.stockCount ? `共振 ${th.stockCount} 只 · ` : ''}
-                        {lead ? `领涨 ${lead.name}` : '点击查看成分股'}
+                        {th.rsVsIndex != null ? `超额RS ${th.rsVsIndex >= 0 ? '+' : ''}${th.rsVsIndex}% · ` : ''}
+                        {th.capacityYi > 0 ? `容量${th.capacityYi}亿 · ` : ''}
+                        {lead ? `标杆 ${lead.name}` : '点击查看成分股'}
                       </div>
                     </div>
                   </div>

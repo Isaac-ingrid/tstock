@@ -497,6 +497,27 @@ def analyze_kline_patterns(
     nearest_support_gap = max(support_gaps, key=lambda g: g["gapHigh"]) if support_gaps else None
     nearest_resistance_gap = min(resistance_gaps, key=lambda g: g["gapLow"]) if resistance_gaps else None
 
+    # ---- 布林通道结构 + MACD 顶底背离识别 ----
+    boll_div = analyze_boll_and_divergence(bars, cur_price=cur_px)
+    if boll_div["topDivergence"]:
+        patterns.append({
+            "code": "MACD_TOP_DIVERGENCE",
+            "name": boll_div["topDivLabel"] or "MACD顶背离",
+            "side": "bearish",
+            "severity": "high" if boll_div["nearBollUpper"] else "medium",
+            "date": cur_b["date"],
+            "desc": boll_div["topDivDesc"],
+        })
+    if boll_div["bottomDivergence"]:
+        patterns.append({
+            "code": "MACD_BOTTOM_DIVERGENCE",
+            "name": boll_div["bottomDivLabel"] or "MACD底背离",
+            "side": "bullish",
+            "severity": "medium",
+            "date": cur_b["date"],
+            "desc": boll_div["bottomDivDesc"],
+        })
+
     veto_signals = [p for p in patterns if p["side"] == "bearish"]
     bull_signals = [p for p in patterns if p["side"] == "bullish"]
 
@@ -521,5 +542,191 @@ def analyze_kline_patterns(
         "hasHighGravestone": has_gravestone,
         "hasBearishEngulfing": has_bearish_engulfing,
         "hasImmortalGuide": has_immortal_guide,
+        "hasTopDivergence": boll_div["topDivergence"],
+        "hasBottomDivergence": boll_div["bottomDivergence"],
+        "bollDivergence": boll_div,
         "summary": summary,
+    }
+
+
+def _calc_ema_series(vals: List[float], span: int) -> List[float]:
+    if not vals:
+        return []
+    k = 2.0 / (span + 1.0)
+    out = [vals[0]]
+    for v in vals[1:]:
+        out.append(v * k + out[-1] * (1.0 - k))
+    return out
+
+
+def analyze_boll_and_divergence(raw_bars: List[Any], cur_price: Optional[float] = None) -> Dict[str, Any]:
+    """
+    计算日线 BOLL(20, 2) 支撑压力通道、趋势三态（上升/震荡/下跌）与 MACD 波峰波谷顶底背离：
+    - 顶背离 (topDivergence)：股价创新高/双顶，但 MACD DIF 或红柱峰值显著走低 -> 卖出/高抛锁盈提示
+    - 底背离 (bottomDivergence)：股价创新低/回踩前低，但 MACD DIF 抬升或绿柱显著收敛 -> 止跌低吸/试错买点提示
+    """
+    bars = normalize_bars(raw_bars)
+    empty = {
+        "structure": "RANGE",
+        "structureLabel": "震荡结构",
+        "bollUpper": 0.0,
+        "bollMid": 0.0,
+        "bollLower": 0.0,
+        "bandwidthPct": 0.0,
+        "pctB": 50.0,
+        "midSlope5dPct": 0.0,
+        "ma60": 0.0,
+        "nearBollUpper": False,
+        "nearBollLower": False,
+        "topDivergence": False,
+        "topDivLabel": "",
+        "topDivDesc": "",
+        "bottomDivergence": False,
+        "bottomDivLabel": "",
+        "bottomDivDesc": "",
+        "dif": 0.0,
+        "dea": 0.0,
+        "macdHist": 0.0,
+    }
+    if len(bars) < 22:
+        return empty
+
+    closes = [b["close"] for b in bars]
+    highs = [b["high"] for b in bars]
+    lows = [b["low"] for b in bars]
+    if cur_price is not None and cur_price > 0:
+        closes[-1] = float(cur_price)
+        highs[-1] = max(highs[-1], closes[-1])
+        lows[-1] = min(lows[-1], closes[-1])
+
+    cur_px = closes[-1]
+
+    # 1. BOLL(20, 2) 总体标准差（与行情软件及前端 bollArr 完全对齐）
+    win20 = closes[-20:]
+    mid = sum(win20) / 20.0
+    var20 = sum((x - mid) ** 2 for x in win20) / 20.0
+    std20 = var20 ** 0.5
+    upper = mid + 2.0 * std20
+    lower = mid - 2.0 * std20
+    bw_pct = ((upper - lower) / mid * 100.0) if mid > 0 else 0.0
+    pct_b = ((cur_px - lower) / (upper - lower) * 100.0) if upper > lower else 50.0
+
+    if len(closes) >= 25:
+        mid_prev5 = sum(closes[-25:-5]) / 20.0
+        mid_slope_5d = ((mid - mid_prev5) / mid_prev5 * 100.0) if mid_prev5 > 0 else 0.0
+    else:
+        mid_slope_5d = 0.0
+
+    ma60 = sum(closes[-60:]) / 60.0 if len(closes) >= 60 else mid
+    near_upper = pct_b >= 82.0 or (upper > 0 and cur_px >= upper * 0.992)
+    near_lower = pct_b <= 20.0 or (lower > 0 and cur_px <= lower * 1.008)
+
+    if cur_px >= mid * 0.992 and mid_slope_5d >= 0.30 and cur_px >= ma60 * 0.985:
+        structure = "UPTREND"
+        structure_label = "上升结构"
+    elif (cur_px <= mid * 0.992 and mid_slope_5d <= -0.30) or (
+        cur_px < mid * 0.985 and cur_px < ma60 * 0.985 and mid_slope_5d < 0.0
+    ):
+        structure = "DOWNTREND"
+        structure_label = "下跌结构"
+    else:
+        structure = "RANGE"
+        structure_label = "震荡结构"
+
+    # 2. MACD(12, 26, 9) 与局部波峰/波谷顶底背离判定
+    ema12 = _calc_ema_series(closes, 12)
+    ema26 = _calc_ema_series(closes, 26)
+    difs = [a - b for a, b in zip(ema12, ema26)]
+    deas = _calc_ema_series(difs, 9)
+    hists = [(d - e) * 2.0 for d, e in zip(difs, deas)]
+
+    n = len(bars)
+    top_div = False
+    top_label = ""
+    top_desc = ""
+    bot_div = False
+    bot_label = ""
+    bot_desc = ""
+
+    if n >= 32:
+        start_scan = max(15, n - 55)
+        end_prev = n - 5  # 前波峰/波谷至少距今 5 根 K 线，确保形成完整两段结构
+
+        # 寻找前序显著波峰 (i 在左右各 2 根内最高)
+        swing_highs: List[int] = []
+        swing_lows: List[int] = []
+        for i in range(start_scan, end_prev):
+            if highs[i] >= max(highs[i - 2 : i + 3]):
+                swing_highs.append(i)
+            if lows[i] <= min(lows[i - 2 : i + 3]):
+                swing_lows.append(i)
+
+        # 近 3 根窗口代表当前段极值
+        cur_hi_idx = max(range(n - 3, n), key=lambda k: highs[k])
+        cur_hi = highs[cur_hi_idx]
+        cur_dif_hi = max(difs[n - 3 : n])
+        cur_hist_hi = max(hists[n - 3 : n])
+        decelerating_top = (hists[-1] < hists[-2]) or (bars[-1]["close"] < bars[-1]["open"]) or near_upper
+
+        if swing_highs and decelerating_top:
+            prev_idx = max(swing_highs, key=lambda k: highs[k])
+            prev_hi = highs[prev_idx]
+            prev_dif_hi = max(difs[max(0, prev_idx - 1) : min(n, prev_idx + 2)])
+            prev_hist_hi = max(hists[max(0, prev_idx - 1) : min(n, prev_idx + 2)])
+            price_higher = cur_hi >= prev_hi * 0.997
+            dif_lower = prev_dif_hi > 0 and cur_dif_hi < prev_dif_hi * 0.90
+            hist_lower = prev_hist_hi > 0 and cur_hist_hi < prev_hist_hi * 0.72 and cur_dif_hi <= prev_dif_hi * 0.98
+            if price_higher and (dif_lower or hist_lower):
+                top_div = True
+                top_label = "顶背离·触上轨卖出提示" if near_upper else "日线顶背离·高抛预警"
+                top_desc = (
+                    f"高点 ¥{cur_hi:.2f} 越过/逼近前峰 {bars[prev_idx]['date']}（¥{prev_hi:.2f}），"
+                    f"但 MACD 动能显著背离走弱（DIF {cur_dif_hi:.2f} vs {prev_dif_hi:.2f}）"
+                    + (f"，且触及布林上轨压力 ¥{upper:.2f}，警惕冲高回落，宜分批锁盈卖出" if near_upper else "，多头追涨动能衰竭，宜逢高锁盈减仓")
+                )
+
+        cur_lo_idx = min(range(n - 3, n), key=lambda k: lows[k])
+        cur_lo = lows[cur_lo_idx]
+        cur_dif_lo = min(difs[n - 3 : n])
+        cur_hist_lo = min(hists[n - 3 : n])
+        stabilizing_bot = (hists[-1] > hists[-2]) or (bars[-1]["close"] >= bars[-1]["open"]) or near_lower
+
+        if swing_lows and stabilizing_bot:
+            prev_l_idx = min(swing_lows, key=lambda k: lows[k])
+            prev_lo = lows[prev_l_idx]
+            prev_dif_lo = min(difs[max(0, prev_l_idx - 1) : min(n, prev_l_idx + 2)])
+            prev_hist_lo = min(hists[max(0, prev_l_idx - 1) : min(n, prev_l_idx + 2)])
+            price_lower = cur_lo <= prev_lo * 1.005
+            dif_higher = prev_dif_lo < 0 and cur_dif_lo > prev_dif_lo * 0.88 and (cur_dif_lo - prev_dif_lo) > 0
+            hist_shrunk = prev_hist_lo < 0 and cur_hist_lo > prev_hist_lo * 0.72 and cur_dif_lo >= prev_dif_lo * 0.98
+            if price_lower and (dif_higher or hist_shrunk):
+                bot_div = True
+                bot_label = "底背离·下轨止跌提示" if near_lower else "日线底背离·止跌试错"
+                bot_desc = (
+                    f"低点 ¥{cur_lo:.2f} 回踩/跌破前谷 {bars[prev_l_idx]['date']}（¥{prev_lo:.2f}），"
+                    f"但 MACD 绿柱收敛、DIF 抬升（{cur_dif_lo:.2f} vs {prev_dif_lo:.2f}）"
+                    + (f"，叠加布林下轨 ¥{lower:.2f} 支撑共振，空头衰竭可关注右侧止跌买点" if near_lower else "，杀跌动能衰竭，可等站稳均线右侧试错")
+                )
+
+    return {
+        "structure": structure,
+        "structureLabel": structure_label,
+        "bollUpper": round(upper, 2),
+        "bollMid": round(mid, 2),
+        "bollLower": round(lower, 2),
+        "bandwidthPct": round(bw_pct, 2),
+        "pctB": round(pct_b, 1),
+        "midSlope5dPct": round(mid_slope_5d, 2),
+        "ma60": round(ma60, 2),
+        "nearBollUpper": near_upper,
+        "nearBollLower": near_lower,
+        "topDivergence": top_div,
+        "topDivLabel": top_label,
+        "topDivDesc": top_desc,
+        "bottomDivergence": bot_div,
+        "bottomDivLabel": bot_label,
+        "bottomDivDesc": bot_desc,
+        "dif": round(difs[-1], 3),
+        "dea": round(deas[-1], 3),
+        "macdHist": round(hists[-1], 3),
     }

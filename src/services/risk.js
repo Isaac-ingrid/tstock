@@ -44,9 +44,35 @@ export function savePosRules(next) {
 export function getAllowedPosCap(sentiment, rules) {
   const r = rules || DEFAULT_POS_RULES;
   const valve = sentiment?.riskValve || 'GREEN';
-  if (valve === 'RED') return { capPct: r.redMaxPct, valve: 'RED', label: '红灯退潮上限' };
-  if (valve === 'YELLOW') return { capPct: r.yellowMaxPct, valve: 'YELLOW', label: '黄灯分歧上限' };
-  return { capPct: r.greenMaxPct, valve: 'GREEN', label: '绿灯进攻上限' };
+  let emotionCap = r.greenMaxPct;
+  let label = '绿灯进攻上限';
+  if (valve === 'RED') {
+    emotionCap = r.redMaxPct;
+    label = '红灯退潮上限';
+  } else if (valve === 'YELLOW') {
+    emotionCap = r.yellowMaxPct;
+    label = '黄灯分歧上限';
+  }
+
+  const mt = sentiment?.macroTiming;
+  if (mt && Number.isFinite(Number(mt.recommendedCapPct))) {
+    const macroCap = Number(mt.recommendedCapPct);
+    if (macroCap < emotionCap) {
+      const mLabel =
+        mt.posture === 'HOLD_FIRE'
+          ? '天时观望上限'
+          : mt.posture === 'VANGUARD'
+          ? '天时先锋上限'
+          : '天时顺势上限';
+      return {
+        capPct: macroCap,
+        valve: macroCap <= r.redMaxPct ? 'RED' : macroCap <= r.yellowMaxPct ? 'YELLOW' : valve,
+        label: mLabel,
+        macroPosture: mt.posture,
+      };
+    }
+  }
+  return { capPct: emotionCap, valve, label, macroPosture: mt?.posture || null };
 }
 
 /**

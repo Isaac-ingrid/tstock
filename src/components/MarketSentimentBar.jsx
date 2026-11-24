@@ -68,9 +68,10 @@ export default function MarketSentimentBar({
     yesterdayPremiumMedian,
     promotionRate,
     promotionSample,
+    macroTiming = null,
   } = sentiment;
 
-  const isDanger = riskValve === 'RED';
+  const isDanger = riskValve === 'RED' || macroTiming?.posture === 'HOLD_FIRE';
   const isWarn = riskValve === 'YELLOW';
   const toneCls = isDanger ? 'tone-danger' : isWarn ? 'tone-warn' : 'tone-safe';
 
@@ -102,6 +103,38 @@ export default function MarketSentimentBar({
               高标 <b className="c-info">{maxLadder}板</b>
               {limitDownCount >= 10 && <em className="msb-dt-warn"> · 跌停{limitDownCount}</em>}
             </span>
+            {macroTiming && (
+              <>
+                <span className="msb-dot" aria-hidden="true" />
+                <span
+                  title={`${macroTiming.anchorName || '上证'} ${macroTiming.structureLabel || ''} ｜ BOLL 支撑 ${macroTiming.bollLower || '—'} / 中轨 ${macroTiming.bollMid || '—'} / 压力 ${macroTiming.bollUpper || '—'} ｜ ${macroTiming.reason || ''}`}
+                  style={{ fontWeight: 700 }}
+                >
+                  天时{' '}
+                  <b
+                    className={
+                      macroTiming.posture === 'FULL_ATTACK'
+                        ? 'c-up'
+                        : macroTiming.posture === 'HOLD_FIRE'
+                        ? 'c-down'
+                        : 'c-warn'
+                    }
+                  >
+                    {macroTiming.structureLabel}·{macroTiming.rangeText}
+                  </b>
+                  {macroTiming.topDivergence && (
+                    <em style={{ color: 'var(--up)', marginLeft: '4px', fontStyle: 'normal', fontWeight: 800 }}>
+                      ⚠️顶背离
+                    </em>
+                  )}
+                  {macroTiming.bottomDivergence && (
+                    <em style={{ color: 'var(--down-d)', marginLeft: '4px', fontStyle: 'normal', fontWeight: 800 }}>
+                      🎯底背离
+                    </em>
+                  )}
+                </span>
+              </>
+            )}
           </div>
         </div>
 
@@ -150,6 +183,17 @@ export default function MarketSentimentBar({
               </span>
             )}
           </div>
+          {macroTiming && (
+            <div className="msb-cmd-line" style={{ marginTop: '5px', fontSize: '11.5px' }}>
+              <b>🧭 第一步·顺天时（{macroTiming.postureLabel} · 建议仓位 {macroTiming.rangeText}）：</b>
+              <span>{macroTiming.reason}</span>
+              {macroTiming.bollMid > 0 && (
+                <span className="num-mono msb-extra-stat">
+                  {' '}｜ 上证 BOLL 下轨支撑 <b>{macroTiming.bollLower}</b> · 中轨 <b>{macroTiming.bollMid}</b> · 上轨压力 <b>{macroTiming.bollUpper}</b>
+                </span>
+              )}
+            </div>
+          )}
           {(doAction || dontAction) && (
             <div className="msb-do-dont">
               {doAction && <span className="msb-pill-do">宜：{doAction}</span>}

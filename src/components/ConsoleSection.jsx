@@ -6,10 +6,12 @@ import PositionRiskBar, {
   savePosRules,
   getAllowedPosCap,
 } from './PositionRiskBar.jsx';
-import { posCalc } from '../services/api.js';
-import { money } from '../services/utils.js';
+import { posCalc, fetchQuotes, tcodeFromCode } from '../services/api.js';
+import { f2, money, todayStr, toastOk } from '../services/utils.js';
 import { getUpcomingHolidayReminder, syncRemoteTradeCalendar } from '../services/calendar.js';
 import DirectMoneyInput from './DirectMoneyInput.jsx';
+
+const RECLAIM_POOL_KEY = 't-reclaim-watch-v1';
 
 export default function ConsoleSection({
   pool = [],
@@ -54,6 +56,75 @@ export default function ConsoleSection({
   const [expandAll, setExpandAll] = useState(false);
   const [internalPosRules, setInternalPosRules] = useState(() => loadPosRules());
   const [calTick, setCalTick] = useState(0);
+  const [reclaimList, setReclaimList] = useState(() => {
+    try {
+      const raw = localStorage.getItem(RECLAIM_POOL_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
+  const [reclaimQuotes, setReclaimQuotes] = useState({});
+
+  const persistReclaim = (nextList) => {
+    setReclaimList(nextList);
+    try {
+      localStorage.setItem(RECLAIM_POOL_KEY, JSON.stringify(nextList));
+    } catch (_) {}
+  };
+
+  const handleMoveToReclaim = (stock, calcObj) => {
+    const code6 = String(stock.code || '').padStart(6, '0');
+    const reclaimPx = Number(
+      Math.max(
+        calcObj?.slA || 0,
+        calcObj?.bollInfo?.mid || 0,
+        (+stock.price || 0) * 1.015
+      ).toFixed(2)
+    );
+    const entry = {
+      code: code6,
+      name: stock.name || code6,
+      stopPx: Number((calcObj?.slA || stock.price || 0).toFixed(2)),
+      reclaimPx,
+      exitDate: todayStr(),
+    };
+    const next = [entry, ...reclaimList.filter((x) => x.code !== code6)].slice(0, 20);
+    persistReclaim(next);
+    if (onRemoveStock) {
+      onRemoveStock(stock.code);
+    }
+    toastOk(`👁️ 已将 ${entry.name} 移入「破位收复观察池」，待重新站稳 ¥${f2(reclaimPx)} 自动亮灯提醒`);
+  };
+
+  const handleRestoreFromReclaim = (item) => {
+    if (onUpdateStock && pool.some((s) => String(s.code).padStart(6, '0') === item.code)) {
+      persistReclaim(reclaimList.filter((x) => x.code !== item.code));
+      if (onSelectStock) onSelectStock(item.code);
+      return;
+    }
+    persistReclaim(reclaimList.filter((x) => x.code !== item.code));
+    toastOk(`✅ ${item.name} (${item.code}) 已重新站稳关键位 ¥${f2(item.reclaimPx)}，请在上方输入代码纳回自选池观察`);
+  };
+
+  useEffect(() => {
+    if (!reclaimList.length) return;
+    let alive = true;
+    const syncQuotes = async () => {
+      try {
+        const tcs = reclaimList.map((x) => tcodeFromCode(x.code)).filter(Boolean);
+        const qMap = await fetchQuotes(tcs);
+        if (alive && qMap) setReclaimQuotes(qMap);
+      } catch (_) {}
+    };
+    syncQuotes();
+    const timer = setInterval(syncQuotes, 30000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [reclaimList]);
 
   useEffect(() => {
     let mounted = true;
@@ -355,6 +426,7 @@ export default function ConsoleSection({
             onOpenQuickT={onOpenQuickT}
             onJumpDiagnosis={onJumpDiagnosis}
             onJumpIgnition={onJumpIgnition}
+            onMoveToReclaim={handleMoveToReclaim}
             emptyTitle="暂无实盘持仓"
             emptyHint="在自选观察卡片中点击「＋ 建仓」录入持仓股数与成本，标的会自动归入实盘持仓区。"
           />
@@ -390,9 +462,83 @@ export default function ConsoleSection({
             onOpenQuickT={onOpenQuickT}
             onJumpDiagnosis={onJumpDiagnosis}
             onJumpIgnition={onJumpIgnition}
+            onMoveToReclaim={handleMoveToReclaim}
             emptyTitle="自选观察池为空"
             emptyHint="在上方输入 6 位代码或股票名称添加，或从起爆挖掘 / 连板天梯一键加入观察。"
           />
+        </div>
+      )}
+
+      {/* ===== 第四步闭环：破位离场 · 关键位收复观察池（不死扛亏损，重站稳再纳回） ===== */}
+      {reclaimList.length > 0 && (
+        <div
+          className="card"
+          style={{
+            marginTop: '10px',
+            padding: '10px 14px',
+            borderLeft: '3px solid var(--warn)',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
+            <div style={{ fontSize: '12.5px' }}>
+              <b>👁️ 破位离场 · 关键位收复观察池（{reclaimList.length} 只）</b>
+              <span style={{ color: 'var(--sub)', marginLeft: '8px', fontSize: '11.5px' }}>
+                跌破止损先隔离静默防情绪死扛；现价重新站稳关键位自动亮灯提醒
+              </span>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {reclaimList.map((it) => {
+              const poolMatch = pool.find((p) => String(p.code).padStart(6, '0') === it.code);
+              const qObj = reclaimQuotes[tcodeFromCode(it.code)];
+              const curPx = poolMatch?.price || qObj?.price || 0;
+              const reclaimed = curPx > 0 && curPx >= it.reclaimPx;
+              const diffPct = curPx > 0 && it.reclaimPx > 0 ? ((curPx - it.reclaimPx) / it.reclaimPx) * 100 : null;
+              return (
+                <div
+                  key={it.code}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '6px 10px',
+                    borderRadius: '7px',
+                    fontSize: '12px',
+                    background: reclaimed ? 'var(--up-bg)' : 'var(--surface)',
+                    border: `1px solid ${reclaimed ? 'var(--up-b)' : 'var(--line2)'}`,
+                  }}
+                >
+                  <b>{it.name}</b>
+                  <span className="num-mono" style={{ color: 'var(--mute)', fontSize: '11px' }}>{it.code}</span>
+                  <span className="num-mono">
+                    现价 <b>{curPx > 0 ? `¥${f2(curPx)}` : '—'}</b> / 关键收复位 <b>¥{f2(it.reclaimPx)}</b>
+                    {diffPct != null && ` (${diffPct >= 0 ? '+' : ''}${diffPct.toFixed(1)}%)`}
+                  </span>
+                  {reclaimed ? (
+                    <button
+                      type="button"
+                      className="mini primary"
+                      style={{ marginLeft: 0, padding: '2px 8px', fontSize: '11px' }}
+                      onClick={() => handleRestoreFromReclaim(it)}
+                    >
+                      🔔 已站稳·纳回观察
+                    </button>
+                  ) : (
+                    <span style={{ fontSize: '11px', color: 'var(--mute)' }}>⏳ 未收复·按兵不动</span>
+                  )}
+                  <button
+                    type="button"
+                    className="mini"
+                    style={{ marginLeft: 0, padding: '1px 6px', fontSize: '11px' }}
+                    onClick={() => persistReclaim(reclaimList.filter((x) => x.code !== it.code))}
+                    title="移出破位观察池"
+                  >
+                    ✕
+                  </button>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 

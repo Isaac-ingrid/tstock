@@ -2027,11 +2027,58 @@ export function computeTA(s){
     }
   }
 
+  // ---- 日线级别 MACD 波峰/波谷顶底背离 + 布林共振检测 ----
+  let divergence = { topDiv: false, botDiv: false, topLabel: '', topDesc: '', botLabel: '', botDesc: '' };
+  if (macd && n >= 32) {
+    const startSw = Math.max(12, n - 52);
+    const endPrev = n - 5;
+    let bestHiIdx = -1, bestLoIdx = -1;
+    for (let i = startSw; i < endPrev; i++) {
+      const hiI = ks[i].high, loI = ks[i].low;
+      if (hiI >= ks[i-1].high && hiI >= ks[i-2].high && hiI >= ks[i+1].high && hiI >= ks[i+2].high) {
+        if (bestHiIdx < 0 || hiI > ks[bestHiIdx].high) bestHiIdx = i;
+      }
+      if (loI <= ks[i-1].low && loI <= ks[i-2].low && loI <= ks[i+1].low && loI <= ks[i+2].low) {
+        if (bestLoIdx < 0 || loI < ks[bestLoIdx].low) bestLoIdx = i;
+      }
+    }
+    const curHi = Math.max(ks[n-1].high, ks[n-2].high, ks[n-3].high, price);
+    const curDifHi = Math.max(macd.dif[n-1] || 0, macd.dif[n-2] || 0, macd.dif[n-3] || 0);
+    const curBarHi = Math.max(macd.bar[n-1] || 0, macd.bar[n-2] || 0, macd.bar[n-3] || 0);
+    const nearBollUp = pctB != null && pctB >= 0.82;
+    if (bestHiIdx >= 0 && ((macd.bar[n-1] || 0) < (macd.bar[n-2] || 0) || nearBollUp || ks[n-1].close < ks[n-1].open)) {
+      const prevHi = ks[bestHiIdx].high;
+      const prevDifHi = Math.max(macd.dif[bestHiIdx] || 0, macd.dif[bestHiIdx-1] || 0, macd.dif[bestHiIdx+1] || 0);
+      const prevBarHi = Math.max(macd.bar[bestHiIdx] || 0, macd.bar[bestHiIdx-1] || 0, macd.bar[bestHiIdx+1] || 0);
+      if (curHi >= prevHi * 0.996 && prevDifHi > 0 && (curDifHi < prevDifHi * 0.90 || (prevBarHi > 0 && curBarHi < prevBarHi * 0.72))) {
+        divergence.topDiv = true;
+        divergence.topLabel = nearBollUp ? '⚠️ 日线顶背离+触布林上轨' : '⚠️ 日线MACD顶背离';
+        divergence.topDesc = `股价创/逼近阶段新高 ¥${f2(curHi)}，但 MACD 动能峰值走低${nearBollUp ? `且顶到布林上轨 ¥${f2(bl.up)}` : ''}，宜分批高抛锁盈卖出`;
+      }
+    }
+    const curLo = Math.min(ks[n-1].low, ks[n-2].low, ks[n-3].low, price > 0 ? price : ks[n-1].low);
+    const curDifLo = Math.min(macd.dif[n-1] || 0, macd.dif[n-2] || 0, macd.dif[n-3] || 0);
+    const curBarLo = Math.min(macd.bar[n-1] || 0, macd.bar[n-2] || 0, macd.bar[n-3] || 0);
+    const nearBollDn = pctB != null && pctB <= 0.20;
+    if (bestLoIdx >= 0 && ((macd.bar[n-1] || 0) > (macd.bar[n-2] || 0) || nearBollDn || ks[n-1].close >= ks[n-1].open)) {
+      const prevLo = ks[bestLoIdx].low;
+      const prevDifLo = Math.min(macd.dif[bestLoIdx] || 0, macd.dif[bestLoIdx-1] || 0, macd.dif[bestLoIdx+1] || 0);
+      const prevBarLo = Math.min(macd.bar[bestLoIdx] || 0, macd.bar[bestLoIdx-1] || 0, macd.bar[bestLoIdx+1] || 0);
+      if (curLo <= prevLo * 1.006 && prevDifLo < 0 && (curDifLo > prevDifLo * 0.88 || (prevBarLo < 0 && curBarLo > prevBarLo * 0.72))) {
+        divergence.botDiv = true;
+        divergence.botLabel = nearBollDn ? '🎯 日线底背离+布林下轨支撑' : '🎯 日线MACD底背离';
+        divergence.botDesc = `回踩前低 ¥${f2(curLo)} 但绿柱收敛、DIF 抬升${nearBollDn ? `且获布林下轨 ¥${f2(bl.dn)} 支撑` : ''}，杀跌衰竭关注右侧止跌买点`;
+      }
+    }
+  }
+
   // ---- 技术面评分（0~100，只做多空参考，不替代三闸门）----
   let sc = 50;
   if (arrange==='多头排列') sc += 15; else if (arrange==='空头排列') sc -= 18;
   if (macdSig){ if (macdSig.golden) sc += 12; if (macdSig.dead) sc -= 12;
                 sc += macdSig.above0 ? 6 : -6; }
+  if (divergence.topDiv) sc -= 8;
+  if (divergence.botDiv) sc += 6;
   if (box20){ if (box20.up) sc += 10; else if (box20.down) sc -= 15;
               else sc += Math.round((box20.pos - 50) * 0.12); }
   if (ma20Rising===true) sc += 7; else if (ma20Rising===false) sc -= 7;
@@ -2043,7 +2090,7 @@ export function computeTA(s){
   return { v5,v10,v20,v60, mA, ma20Rising, ma20Slope, arrange, macd:macdSig,
            /* 绘图用的完整序列（macdSig.dif 是"当前值"，这里是"整条线"，两者不能混用） */
            macdSeries: macd ? { dif:macd.dif, dea:macd.dea, bar:macd.bar } : null,
-           bollSeries: boll, bl, pctB, bwDelta,
+           bollSeries: boll, bl, pctB, bwDelta, divergence,
            rsiSeries:{ r6:rsi6, r12:rsi12, r24:rsi24 }, r,
            turnover:(+s.to || toCalc), toCalc, floatSh,
            levels: lv,
@@ -2350,7 +2397,9 @@ export function calc(s){
   const tp2Pct = Math.max(0.045, (effGrid * 3.5) / 100);
   const tp1  = clampPx(Math.max(inA * (1 + tp1Pct), tValidOutPx)); // 正T第一止盈（保底覆盖税费+0.8%净利）
   const tp2  = clampPx(Math.max(tp1 * 1.012, inA * (1 + tp2Pct))); // 正T第二止盈（恒高于 tp1）
-  const slA  = clampPx(inA * (1 - effStop)), slB = clampPx(inB * (1 - effStop));
+  const customStopPx = +s.stopPrice > 0 ? +s.stopPrice : 0;
+  const slA  = customStopPx > 0 ? customStopPx : clampPx(inA * (1 - effStop));
+  const slB  = clampPx(inB * (1 - effStop));
   const fly  = clampPx(outA * (1 + FLY));               // 卖飞线
   const gain1 = inA > 0 ? (tp1 - inA) / inA * 100 : 0;
   const gain2 = inA > 0 ? (tp2 - inA) / inA * 100 : 0;
@@ -2570,6 +2619,54 @@ export function calc(s){
     };
   }
 
+  // ---- 日线 + 分时顶底背离合并信号（顶背离卖出锁盈 / 底背离止跌试错） ----
+  let intradayTopDiv = false, intradayBotDiv = false;
+  if (rtPts && rtPts.length >= 16) {
+    const splitIdx = rtPts.length - 5;
+    const earlySlice = rtPts.slice(3, splitIdx);
+    const lateSlice = rtPts.slice(splitIdx);
+    const earlyMaxP = Math.max(...earlySlice.map((p) => p.price || 0));
+    const lateMaxP = Math.max(...lateSlice.map((p) => p.price || 0));
+    const earlyPeakVol = Math.max(...earlySlice.filter((p) => p.price >= earlyMaxP * 0.996).map((p) => p.vol || 0), 1);
+    const latePeakVol = Math.max(...lateSlice.map((p) => p.vol || 0), 0);
+    if (pc > 0 && ((lateMaxP - pc) / pc) >= 0.018 && lateMaxP >= earlyMaxP * 0.9985 && latePeakVol < earlyPeakVol * 0.72 && rtPts[rtPts.length - 1].price <= lateMaxP * 0.9985) {
+      intradayTopDiv = true;
+    }
+    const earlyMinP = Math.min(...earlySlice.map((p) => p.price || 999999));
+    const lateMinP = Math.min(...lateSlice.map((p) => p.price || 999999));
+    const earlyDipVol = Math.max(...earlySlice.filter((p) => p.price <= earlyMinP * 1.004).map((p) => p.vol || 0), 1);
+    const lateDipVol = Math.max(...lateSlice.map((p) => p.vol || 0), 0);
+    if (pc > 0 && ((pc - lateMinP) / pc) >= 0.015 && lateMinP <= earlyMinP * 1.0015 && lateDipVol < earlyDipVol * 0.72 && rtPts[rtPts.length - 1].price >= lateMinP * 1.0015) {
+      intradayBotDiv = true;
+    }
+  }
+  let divSignal = null;
+  if (ta?.divergence?.topDiv || intradayTopDiv || (vm && vm.state === 'diverge')) {
+    divSignal = {
+      type: 'top',
+      badge: ta?.divergence?.topDiv ? ta.divergence.topLabel : '⚠️ 分时量价顶背离·卖出提示',
+      desc: ta?.divergence?.topDiv
+        ? ta.divergence.topDesc
+        : `分时再摸高点但跟风量能萎缩背离，建议在 ¥${f2(outA)} 附近分批高抛锁盈`,
+    };
+    if (!sellGate.confirmed && pxCur >= outA * 0.988) {
+      sellGate = {
+        stage: 'CONFIRMED_SELL',
+        confirmed: true,
+        label: '🟢 顶背离确认卖点',
+        desc: divSignal.desc,
+      };
+    }
+  } else if (ta?.divergence?.botDiv || intradayBotDiv) {
+    divSignal = {
+      type: 'bottom',
+      badge: ta?.divergence?.botDiv ? ta.divergence.botLabel : '🎯 分时缩量底背离·止跌提示',
+      desc: ta?.divergence?.botDiv
+        ? ta.divergence.botDesc
+        : `分时二次回踩低点但抛压显著衰竭拐头，可关注 ¥${f2(inA)} 右侧低吸试错（严守止损 ¥${f2(slA)}）`,
+    };
+  }
+
   // ---- 仓位（七底三仓 · A股整百股/手实盘约束） ----
   const sh = Math.round(+s.shares||0);
   const base = Math.round(sh*0.7);
@@ -2581,11 +2678,12 @@ export function calc(s){
 
   // 倒T卖飞熔断保护：现价放量超过倒T卖出区 +2.0% 且逼近卖飞线
   const sellFlyTriggered = (+s.price > 0 && outA > 0 && +s.price >= outA * 1.02);
+  const bollInfo = ta?.bl ? { up: ta.bl.up, mid: ta.bl.mid, dn: ta.bl.dn, pctB: ta.pctB } : null;
 
   return { pc, amp, grid, effGrid, effStop, chg, vr, vsAvg, vm, trend, bull, bear, heavy, light,
            gate1, g1cls, gate2, gate3, gate4, g4cls, mktLevel, mode, vcls, title, detail,
-           inA, inB, tp1, tp2, slA, slB, outA, outB, bkA, bkB, fly,
-           tValidOutPx, channelShiftTag, buyGate, sellGate, isFrontLeader,
+           inA, inB, tp1, tp2, slA, slB, customStopPx, outA, outB, bkA, bkB, fly,
+           tValidOutPx, channelShiftTag, buyGate, sellGate, divSignal, bollInfo, isFrontLeader,
            gain1, gain2, sh, base, t, t1, tLots, t1Lots, cap, sellFlyTriggered,
            brokenLock, breakDesc, reversalActive, reversalTag, ignitionActive, ignitionTag };
 }

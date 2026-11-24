@@ -536,11 +536,20 @@ def build_comprehensive_decision(
         ig_p = next((p for p in kp.get("patterns", []) if p.get("code") == "IMMORTAL_GUIDE"), None)
         positive_points.append(f"✨ K线结构【仙人指路反包】：{(ig_p or {}).get('desc', '试盘长上影次日收阳反包')}")
 
+    bd_sub = kp.get("bollDivergence") or {}
+    if kp.get("hasTopDivergence") or bd_sub.get("topDivergence"):
+        trend_score -= 6
+        risk_points.append(f"⚠️ 卖出预警【{bd_sub.get('topDivLabel') or 'MACD顶背离'}】：{bd_sub.get('topDivDesc', '股价新高但动能背离，宜逢高锁盈减仓')}")
+    if kp.get("hasBottomDivergence") or bd_sub.get("bottomDivergence"):
+        trend_score += 4
+        positive_points.append(f"🎯 止跌信号【{bd_sub.get('bottomDivLabel') or 'MACD底背离'}】：{bd_sub.get('bottomDivDesc', '回踩低位但空头动能衰竭，关注右侧拐头买点')}")
+
     if rsi6 >= 78:
         trend_score -= 4
         risk_points.append(f"6日 RSI 达 {rsi6:.1f}（短线严重超买钝化），追高极易触发回吐")
     trend_score = max(0, min(25, trend_score))
-    trend_desc = f"{trend_status} · RSI6={rsi6:.1f}"
+    boll_txt = f" · BOLL {bd_sub.get('structureLabel')}" if bd_sub.get("structureLabel") else ""
+    trend_desc = f"{trend_status}{boll_txt} · RSI6={rsi6:.1f}"
 
     # ---- 维度3：筹码结构与量价配合 (满分 20，融合 210 日换手衰减 CYQ) ----
     box_pos = float(chips.get("boxPos", 50.0) or 50.0)
@@ -1393,6 +1402,7 @@ async def get_stock_diagnosis(
                 else:
                     trend_status = "均线交织整理"
 
+                bd_info = (kline_patterns or {}).get("bollDivergence") or {}
                 technicals_data = {
                     "rsi6": rsi6,
                     "dif": macd_info["dif"],
@@ -1407,6 +1417,15 @@ async def get_stock_diagnosis(
                     "isBottomDoji": is_bottom_doji,
                     "isVolIgnition": is_vol_ignition,
                     "isHighStagnation": is_high_stagnation,
+                    "bollUpper": bd_info.get("bollUpper", 0.0),
+                    "bollMid": bd_info.get("bollMid", round(ma20, 2)),
+                    "bollLower": bd_info.get("bollLower", 0.0),
+                    "bollPctB": bd_info.get("pctB", 50.0),
+                    "bollStructure": bd_info.get("structureLabel", ""),
+                    "topDivergence": bool(bd_info.get("topDivergence", False)),
+                    "topDivDesc": bd_info.get("topDivDesc", ""),
+                    "bottomDivergence": bool(bd_info.get("bottomDivergence", False)),
+                    "bottomDivDesc": bd_info.get("bottomDivDesc", ""),
                 }
 
                 chips_data = {

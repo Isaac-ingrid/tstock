@@ -378,13 +378,20 @@ export default function IgnitionPage({
 
   const filteredBreakout = useMemo(() => {
     return breakoutItems.filter((item) => {
-      if (stageFilter !== 'all' && item.stage !== stageFilter) return false;
+      if (stageFilter === 'DRAGON_4P') {
+        if ((item.dragonStars || 0) < 4.0) return false;
+      } else if (stageFilter === 'MAIN_THEME') {
+        if (!item.isMainTheme) return false;
+      } else if (stageFilter !== 'all' && item.stage !== stageFilter) {
+        return false;
+      }
       if (searchKw.trim()) {
         const q = searchKw.trim().toLowerCase();
         return (
           item.code.includes(q) ||
           String(item.name || '').toLowerCase().includes(q) ||
-          String(item.hybk || '').toLowerCase().includes(q)
+          String(item.hybk || '').toLowerCase().includes(q) ||
+          String(item.mainThemeName || '').toLowerCase().includes(q)
         );
       }
       return true;
@@ -971,6 +978,22 @@ export default function IgnitionPage({
                       >
                         {diagResult.stageLabel}
                       </span>
+                      {diagResult.dragonStars != null && (
+                        <span
+                          style={{
+                            padding: '3px 9px',
+                            borderRadius: '6px',
+                            background: diagResult.dragonStars >= 4.0 ? 'var(--warn-bg)' : 'var(--surface)',
+                            color: diagResult.dragonStars >= 4.0 ? 'var(--warn-d)' : 'var(--sub)',
+                            border: `1px solid ${diagResult.dragonStars >= 4.0 ? 'var(--warn-b)' : 'var(--line2)'}`,
+                            fontWeight: 800,
+                            fontSize: '12px',
+                          }}
+                          title={(diagResult.dragonDims || []).map((d) => `${d.label}:${d.star}★ (${d.desc})`).join(' ｜ ')}
+                        >
+                          {diagResult.dragonLabel || `${diagResult.dragonStars}★`} ({diagResult.dragonStars}★)
+                        </span>
+                      )}
                     </div>
                     <div
                       style={{
@@ -1245,10 +1268,12 @@ export default function IgnitionPage({
             </div>
           </div>
 
-          {/* 阶段分档过滤 */}
+          {/* 五星游龙与主线共振分档过滤 */}
           <div className="ignition-filter-pills">
             {[
               { k: 'all', label: `全部 (${breakoutItems.length})` },
+              { k: 'DRAGON_4P', label: `🐉 五星/准游龙 ≥4★ (${bCounts.fourPlusDragon || breakoutItems.filter((x) => (x.dragonStars || 0) >= 4).length})` },
+              { k: 'MAIN_THEME', label: `🎯 热点主线共振 (${bCounts.mainThemeResonance || breakoutItems.filter((x) => x.isMainTheme).length})` },
               { k: 'SHAKEOUT_READY', label: `🔥 震仓完成·待起爆 (${bCounts.shakeoutReady || 0})` },
               { k: 'CONVERGED_WAIT', label: `⏳ 均线粘合·缩量蓄势 (${bCounts.convergedWait || 0})` },
               { k: 'DIGESTING', label: `👀 试盘缩量消化 (${bCounts.digesting || 0})` },
@@ -1351,22 +1376,58 @@ export default function IgnitionPage({
                     </div>
 
                     <div className="igr-col-stage">
-                      <span
-                        style={{
-                          display: 'inline-block',
-                          fontSize: '11px',
-                          fontWeight: 800,
-                          padding: '2px 7px',
-                          borderRadius: '4px',
-                          background: stStyle.bg,
-                          color: stStyle.color,
-                          border: `1px solid ${stStyle.border}`,
-                        }}
-                      >
-                        {item.stageLabel}
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
+                        <span
+                          style={{
+                            display: 'inline-block',
+                            fontSize: '11px',
+                            fontWeight: 800,
+                            padding: '2px 7px',
+                            borderRadius: '4px',
+                            background: stStyle.bg,
+                            color: stStyle.color,
+                            border: `1px solid ${stStyle.border}`,
+                          }}
+                        >
+                          {item.stageLabel}
+                        </span>
+                        {item.dragonStars != null && (
+                          <span
+                            style={{
+                              fontSize: '10.5px',
+                              fontWeight: 800,
+                              padding: '1px 6px',
+                              borderRadius: '4px',
+                              background: item.dragonStars >= 4.0 ? 'var(--warn-bg)' : 'var(--surface)',
+                              color: item.dragonStars >= 4.0 ? 'var(--warn-d)' : 'var(--sub)',
+                              border: `1px solid ${item.dragonStars >= 4.0 ? 'var(--warn-b)' : 'var(--line2)'}`,
+                              fontVariantNumeric: 'tabular-nums',
+                            }}
+                            title={(item.dragonDims || []).map((d) => `${d.label}:${d.star}★ (${d.desc})`).join(' ｜ ')}
+                          >
+                            {item.dragonStars >= 4.5 ? '🐉 五星游龙' : item.dragonStars >= 4.0 ? '⭐ 四星游龙' : `${item.dragonStars}★`} {item.dragonStars}★
+                          </span>
+                        )}
+                        {item.isMainTheme && (
+                          <span
+                            style={{
+                              fontSize: '10.5px',
+                              fontWeight: 800,
+                              padding: '1px 6px',
+                              borderRadius: '4px',
+                              background: 'var(--up-bg)',
+                              color: 'var(--up)',
+                              border: '1px solid var(--up-b)',
+                            }}
+                            title={`命中热点主线：${item.mainThemeName} (${item.mainThemeStageLabel || ''})`}
+                          >
+                            🎯 主线·{item.mainThemeName}
+                          </span>
+                        )}
+                      </div>
                       <div style={{ fontSize: '11px', color: 'var(--sub)', marginTop: '4px', lineHeight: 1.4 }}>
                         {item.stageTip}
+                        {item.conc90 ? ` · 90%筹码集中度 ${item.conc90}%` : ''}
                       </div>
                     </div>
 
@@ -1446,10 +1507,13 @@ export default function IgnitionPage({
                         onJumpHerd={() => setSubTab('tracking')}
                         onAddSingle={() =>
                           handleAddInPlace(item.code, {
-                            strategyTag: '起爆',
+                            strategyTag: item.dragonStars >= 4.0 ? `游龙${item.dragonStars}★` : '起爆',
                             strategy: 'ignition',
+                            dragonStars: item.dragonStars,
+                            isMainTheme: item.isMainTheme,
+                            mainThemeName: item.mainThemeName,
                             refPrice: item.price,
-                            stopPrice: Number((item.price * 0.955).toFixed(2)),
+                            stopPrice: Number((item.supportFloor > 0 ? Math.max(item.supportFloor * 0.985, item.price * 0.945) : item.price * 0.955).toFixed(2)),
                             targetPrice: Number((item.price * 1.05).toFixed(2)),
                             targetPrice2: Number((item.price * 1.1).toFixed(2)),
                             stageLabel: item.stageLabel,

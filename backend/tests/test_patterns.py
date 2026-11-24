@@ -224,6 +224,111 @@ class TestKlinePatterns(unittest.TestCase):
         self.assertEqual(h2["healthStatus"], "warning")
         self.assertIn("高位天量避雷针", h2["healthDesc"])
 
+    def test_boll_structure_and_macd_top_bottom_divergence(self) -> None:
+        from backend.patterns import analyze_boll_and_divergence
+
+        # 1) 构造两段冲高但第二段动能衰减的日线 -> 触发 MACD 顶背离卖出提示
+        top_bars = []
+        px = 10.0
+        for i in range(18):
+            px += 0.35
+            top_bars.append(_make_bar(i, px - 0.15, px, px + 0.15, px - 0.20, vol=15000.0))
+        # 回踩 8 天消化使 DIF 回落
+        for i in range(18, 26):
+            px -= 0.22
+            top_bars.append(_make_bar(i, px + 0.1, px, px + 0.15, px - 0.1, vol=9000.0))
+        # 缓慢小步爬升勉强创微幅新高，最后1根收小阴滞涨
+        target_hi = max(b["high"] for b in top_bars) + 0.12
+        step = (target_hi - px) / 10.0
+        for i in range(26, 36):
+            px += step
+            is_last = i == 35
+            op = px + (0.08 if is_last else -0.04)
+            cl = px - (0.06 if is_last else 0.0)
+            hi = target_hi if i == 34 else px + 0.08
+            top_bars.append(_make_bar(i, op, cl, hi, px - 0.10, vol=8000.0))
+
+        bd_top = analyze_boll_and_divergence(top_bars)
+        self.assertTrue(bd_top["topDivergence"])
+        self.assertIn("顶背离", bd_top["topDivLabel"])
+        self.assertGreater(bd_top["bollUpper"], bd_top["bollMid"])
+
+        # 2) 构造两段急跌后企稳创微幅新低但绿柱收敛/DIF抬高 -> 触发 MACD 底背离止跌提示
+        bot_bars = []
+        px2 = 20.0
+        for i in range(18):
+            px2 -= 0.40
+            bot_bars.append(_make_bar(i, px2 + 0.15, px2, px2 + 0.20, px2 - 0.15, vol=16000.0))
+        for i in range(18, 26):
+            px2 += 0.24
+            bot_bars.append(_make_bar(i, px2 - 0.1, px2, px2 + 0.1, px2 - 0.15, vol=9000.0))
+        target_lo = min(b["low"] for b in bot_bars) - 0.08
+        step_dn = (px2 - target_lo) / 10.0
+        for i in range(26, 36):
+            px2 -= step_dn
+            is_last = i == 35
+            op = px2 - (0.06 if is_last else -0.03)
+            cl = px2 + (0.08 if is_last else 0.0)
+            lo = target_lo if i == 34 else px2 - 0.05
+            bot_bars.append(_make_bar(i, op, cl, px2 + 0.12, lo, vol=6000.0))
+
+        bd_bot = analyze_boll_and_divergence(bot_bars)
+        self.assertTrue(bd_bot["bottomDivergence"])
+        self.assertIn("底背离", bd_bot["bottomDivLabel"])
+
+    def test_five_star_dragon_and_main_theme_resonance(self) -> None:
+        import sys
+        import types
+        if "httpx" not in sys.modules:
+            _h = types.ModuleType("httpx")
+            _h.AsyncClient = object
+            _h.Response = object
+            _h.Timeout = lambda *a, **kw: None
+            sys.modules["httpx"] = _h
+        from backend.ignition import evaluate_ignition_six_dims
+
+        # 构造标准「横盘蓄势 -> 放量涨停试盘 -> 缩量回踩不破起点」的五星游龙日/周/月K
+        dbars = []
+        for i in range(50):
+            dbars.append(_make_bar(i, 10.0, 10.1, 10.25, 9.95, vol=8000.0))
+        # 第 50 根涨停试盘 (+10%)
+        dbars.append(_make_bar(50, 10.2, 11.11, 11.11, 10.15, vol=26000.0))
+        # 随后 5 天极致缩量回踩粘合，带长下影震仓且站稳起涨防守位
+        for i in range(51, 56):
+            lo = 10.35 if i == 54 else 10.60
+            dbars.append(_make_bar(i, 10.75, 10.82, 10.90, lo, vol=9500.0))
+
+        wbars = [_make_bar(i * 5, 9.8 + i * 0.08, 9.9 + i * 0.08, 10.1 + i * 0.08, 9.7 + i * 0.08, vol=40000.0) for i in range(16)]
+        mbars = [
+            _make_bar(
+                i * 20,
+                12.5 if i == 0 else 9.6,
+                12.8 if i == 0 else 10.2,
+                14.0 if i == 0 else 10.8,
+                9.2,
+                vol=(110000.0 if i < 10 else 210000.0),
+            )
+            for i in range(12)
+        ]
+
+        res = evaluate_ignition_six_dims(
+            "600977",
+            dbars,
+            wbars,
+            mbars,
+            cur_price=10.82,
+            day_chg=1.2,
+            notice={"riskLevel": "安全"},
+            name="中国电影",
+            float_cap_yi=180.0,
+            turnover_pct=3.5,
+            main_theme_info={"name": "文化传媒", "cycleStage": "EARLY_START", "cycleStageLabel": "🌱 启动初期·优先介入"},
+        )
+        self.assertGreaterEqual(res["dragonStars"], 4.5)
+        self.assertTrue(res["isMainTheme"])
+        self.assertEqual(res["mainThemeName"], "文化传媒")
+        self.assertEqual(len(res["dragonDims"]), 5)
+
 
 if __name__ == "__main__":
     unittest.main()

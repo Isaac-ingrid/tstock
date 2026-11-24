@@ -133,14 +133,16 @@ export function buildActionSignal(stock, { sentiment = null, noticeRisk = null, 
       triggerText = `关注低吸位 ¥${f2(c.inA)} · 止损 ¥${f2(c.slA)}`;
     }
   } else {
-    const hitStop = c.slA > 0 && px <= c.slA && pos.floatPct != null && pos.floatPct <= -3.5;
+    const hitStop = c.slA > 0 && px > 0 && px <= c.slA && (c.customStopPx > 0 || (pos.floatPct != null && pos.floatPct <= -3.5));
     if (hitStop || (c.brokenLock && pos.floatPct != null && pos.floatPct < 0)) {
       kind = 'stop';
-      badge = '🚨 卖点 · 破位减仓/止损';
-      headline = c.brokenLock
+      badge = c.customStopPx > 0 && px <= c.slA ? '🚨 跌破硬止损线 · 果断离场' : '🚨 卖点 · 破位减仓/止损';
+      headline = c.customStopPx > 0 && px <= c.slA
+        ? `现价已跌破预设止损线 ¥${f2(c.slA)}，严格执行第四步纪律果断离场，等重站关键位再纳回观察`
+        : c.brokenLock
         ? `形态已破位（${c.breakDesc || '失守生命线'}），反抽即减仓`
         : `触及止损参考线 ¥${f2(c.slA)}，严防深套`;
-      triggerText = `反抽 ¥${f2(c.outA)} 优先减仓 · 严禁向下补仓`;
+      triggerText = `跌破 ¥${f2(c.slA)} 不死扛离场 · 可点下方「👁️ 破位观察」移入收复观察池`;
     } else if (activeAnomaly?.type === 'limit_broken') {
       kind = 'sell';
       badge = '💥 卖点 · 炸板回落锁盈';
@@ -529,11 +531,14 @@ export default function BattleCardGrid({
   onOpenQuickT,
   onJumpDiagnosis,
   onJumpIgnition,
+  onMoveToReclaim,
   emptyTitle = '当前分组暂无标的',
   emptyHint = '可在上方输入框添加 6 位代码或股票名称，或从起爆挖掘 / 连板天梯一键加入。',
 }) {
   const [editingMemoCode, setEditingMemoCode] = useState('');
   const [memoDraft, setMemoDraft] = useState('');
+  const [editingStopCode, setEditingStopCode] = useState('');
+  const [stopDraft, setStopDraft] = useState('');
   const [calcOpenCode, setCalcOpenCode] = useState('');
   const effHolidayReminder = useMemo(
     () => (holidayReminder !== undefined ? holidayReminder : getUpcomingHolidayReminder(new Date())),
@@ -554,6 +559,17 @@ export default function BattleCardGrid({
       onUpdateStock({ ...stock, memo: memoDraft.trim() });
     }
     setEditingMemoCode('');
+  };
+
+  const saveCustomStop = (stock) => {
+    if (onUpdateStock) {
+      const num = parseFloat(stopDraft);
+      onUpdateStock({
+        ...stock,
+        stopPrice: Number.isFinite(num) && num > 0 ? Number(num.toFixed(2)) : 0,
+      });
+    }
+    setEditingStopCode('');
   };
 
   const activeCode6 = activeStockCode ? String(activeStockCode).padStart(6, '0') : '';
@@ -670,6 +686,25 @@ export default function BattleCardGrid({
               </div>
             )}
 
+            {/* 日线/分时 MACD 顶底背离 + 布林通道共振实时买卖提示条 */}
+            {c.divSignal && (
+              <div
+                style={{
+                  margin: '5px 0',
+                  padding: '5px 8px',
+                  borderRadius: '6px',
+                  fontSize: '11.5px',
+                  lineHeight: 1.45,
+                  background: c.divSignal.type === 'top' ? 'var(--warn-bg)' : 'var(--down-bg)',
+                  border: `1px solid ${c.divSignal.type === 'top' ? 'var(--warn-b)' : 'var(--down-b)'}`,
+                  color: c.divSignal.type === 'top' ? 'var(--warn-d)' : 'var(--down-d)',
+                }}
+              >
+                <b>{c.divSignal.badge}：</b>
+                <span>{c.divSignal.desc}</span>
+              </div>
+            )}
+
             {/* 盘中分时放量急拉 / 跳水 / 冲板回落实时异动雷达条 */}
             {activeAnomaly && (
               <div className={`bc-anomaly-bar ${activeAnomaly.level === 'surge' ? 'surge' : 'danger'}`}>
@@ -779,10 +814,40 @@ export default function BattleCardGrid({
                   <span className="v up">¥{f2(c.outA)}</span>
                   <span className="d">二卖 ¥{f2(c.outB)}</span>
                 </div>
-                <div className="bc-m">
-                  <span className="k">低吸/接回</span>
-                  <span className="v down">¥{f2(c.inA)}</span>
-                  <span className="d">止损 ¥{f2(c.slA)}</span>
+                <div
+                  className="bc-m"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (editingStopCode !== code6) {
+                      setEditingStopCode(code6);
+                      setStopDraft(c.slA > 0 ? String(f2(c.slA)) : '');
+                    }
+                  }}
+                  title="第四步：点击设定或修改硬止损线（填 0 恢复系统自动止损）"
+                  style={{ cursor: 'pointer' }}
+                >
+                  <span className="k">{c.customStopPx > 0 ? '🛡️ 硬止损 ✎' : '低吸 / 划止损 ✎'}</span>
+                  {editingStopCode === code6 ? (
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={stopDraft}
+                      autoFocus
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => setStopDraft(e.target.value)}
+                      onBlur={() => saveCustomStop(s)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') saveCustomStop(s);
+                        if (e.key === 'Escape') setEditingStopCode('');
+                      }}
+                      style={{ width: '100%', padding: '2px 4px', fontSize: '12px', borderRadius: '4px', border: '1px solid var(--accent)', background: 'var(--bg)', color: 'var(--text)' }}
+                    />
+                  ) : (
+                    <span className="v down">¥{f2(c.inA)}</span>
+                  )}
+                  <span className="d" style={c.customStopPx > 0 ? { color: 'var(--up)', fontWeight: 700 } : undefined}>
+                    {c.customStopPx > 0 ? `硬止损 ¥${f2(c.slA)}` : `止损 ¥${f2(c.slA)}`}
+                  </span>
                 </div>
               </div>
             ) : (
@@ -795,12 +860,40 @@ export default function BattleCardGrid({
                 <div className="bc-m">
                   <span className="k">压力/止盈</span>
                   <span className="v up">¥{f2(c.tp1)}</span>
-                  <span className="d">上沿 ¥{f2(c.outA)}</span>
+                  <span className="d">{c.bollInfo?.up ? `BOLL压 ¥${f2(c.bollInfo.up)}` : `上沿 ¥${f2(c.outA)}`}</span>
                 </div>
-                <div className="bc-m">
-                  <span className="k">止损底线</span>
-                  <span className="v warn">¥{f2(c.slA)}</span>
-                  <span className="d">量比 {f2(c.vr)}</span>
+                <div
+                  className="bc-m"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (editingStopCode !== code6) {
+                      setEditingStopCode(code6);
+                      setStopDraft(c.slA > 0 ? String(f2(c.slA)) : '');
+                    }
+                  }}
+                  title="第四步：入场前第一件事先划止损线（点击输入自定义止损价，填 0 恢复默认）"
+                  style={{ cursor: 'pointer' }}
+                >
+                  <span className="k">{c.customStopPx > 0 ? '🛡️ 已划止损 ✎' : '✏️ 先划止损'}</span>
+                  {editingStopCode === code6 ? (
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={stopDraft}
+                      autoFocus
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => setStopDraft(e.target.value)}
+                      onBlur={() => saveCustomStop(s)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') saveCustomStop(s);
+                        if (e.key === 'Escape') setEditingStopCode('');
+                      }}
+                      style={{ width: '100%', padding: '2px 4px', fontSize: '12px', borderRadius: '4px', border: '1px solid var(--accent)', background: 'var(--bg)', color: 'var(--text)' }}
+                    />
+                  ) : (
+                    <span className="v warn">¥{f2(c.slA)}</span>
+                  )}
+                  <span className="d">{c.bollInfo?.dn ? `BOLL撑 ¥${f2(c.bollInfo.dn)}` : `量比 ${f2(c.vr)}`}</span>
                 </div>
               </div>
             )}
@@ -846,6 +939,17 @@ export default function BattleCardGrid({
                 >
                   🧮 算手数
                 </button>
+                {onMoveToReclaim && ((px > 0 && c.slA > 0 && px <= c.slA) || c.brokenLock) && (
+                  <button
+                    type="button"
+                    className="bc-act-btn"
+                    onClick={() => onMoveToReclaim(s, c)}
+                    title="第四步纪律：跌破止损果断离场并移入「关键位收复观察池」，不情绪化死扛，等重新站稳关键位再自动提醒"
+                    style={{ color: 'var(--warn-d)', borderColor: 'var(--warn-b)' }}
+                  >
+                    👁️ 破位观察
+                  </button>
+                )}
                 {(() => {
                   const minLotHoliday = !hasPos
                     ? evaluatePreTradeHolidayGuard({

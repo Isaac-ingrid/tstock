@@ -23,6 +23,174 @@ export const MISTAKE_DICTIONARY = [
 ];
 
 const LOCAL_AI_KEY = 'tstock_ai_coach_config';
+const FIVE_STEP_CHECK_KEY = 't-five-step-daily-check-v1';
+
+const FIVE_STEP_PILLS = [
+  { id: 'timing', label: '① 顺天时定仓', tip: '先看上证趋势、布林支撑压力与顶底背离定总仓位' },
+  { id: 'theme', label: '② 抓大容量主线', tip: '聚焦先于指数启动、有涨停梯队的抱团热点初期' },
+  { id: 'dragon', label: '③ 五星涨停回调突破', tip: '只做趋势+价值排雷+空间+量价+筹码控盘的涨停回调再突破' },
+  { id: 'stop', label: '④ 入场先划止损线', tip: '买入第一件事划定止损价，站稳拿住，跌破果断离场' },
+  { id: 'reclaim', label: '⑤ 破位不扛·收复再看', tip: '离场后不情绪化死补，等重站稳关键位再纳回观察' },
+];
+
+const VIOLATION_TAG_SET = new Set([
+  'averaging_down',
+  'no_stoploss',
+  'against_trend',
+  'fomo_chase',
+  'late_chase',
+  'lone_wolf',
+  'backrow_laggard',
+  'revenge_trade',
+]);
+
+function FiveStepPracticePanel({ logs = [] }) {
+  const today = todayStr();
+  const [checkedMap, setCheckedMap] = useState(() => {
+    try {
+      const raw = localStorage.getItem(FIVE_STEP_CHECK_KEY);
+      const parsed = raw ? JSON.parse(raw) : {};
+      return parsed[today] || {};
+    } catch {
+      return {};
+    }
+  });
+
+  const toggleStep = (id) => {
+    const nextDay = { ...checkedMap, [id]: !checkedMap[id] };
+    setCheckedMap(nextDay);
+    try {
+      const raw = localStorage.getItem(FIVE_STEP_CHECK_KEY);
+      const all = raw ? JSON.parse(raw) : {};
+      all[today] = nextDay;
+      localStorage.setItem(FIVE_STEP_CHECK_KEY, JSON.stringify(all));
+    } catch (_) {}
+  };
+
+  const stats = useMemo(() => {
+    const valid = (logs || []).filter((lg) => lg && Number.isFinite(+lg.net));
+    const cleanLogs = [];
+    const brokenLogs = [];
+    valid.forEach((lg) => {
+      const tags = Array.isArray(lg.mistakes) ? lg.mistakes : [];
+      const violated = tags.some((t) => VIOLATION_TAG_SET.has(t));
+      if (violated) brokenLogs.push(lg);
+      else cleanLogs.push(lg);
+    });
+    const calcGroup = (arr) => {
+      const cnt = arr.length;
+      const wins = arr.filter((x) => (+x.net || 0) > 0).length;
+      const net = arr.reduce((s, x) => s + (+x.net || 0), 0);
+      return {
+        cnt,
+        winRate: cnt > 0 ? Math.round((wins / cnt) * 100) : null,
+        net,
+      };
+    };
+    return {
+      totalReps: valid.length,
+      cleanReps: cleanLogs.length,
+      pct100: Math.min(100, Math.round((cleanLogs.length / 100) * 100)),
+      pct1000: Math.min(100, Number(((cleanLogs.length / 1000) * 100).toFixed(1))),
+      clean: calcGroup(cleanLogs),
+      broken: calcGroup(brokenLogs),
+    };
+  }, [logs]);
+
+  const checkedCount = FIVE_STEP_PILLS.filter((p) => checkedMap[p.id]).length;
+
+  return (
+    <section className="card" style={{ padding: '14px 16px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
+        <div>
+          <div style={{ fontSize: '14px', fontWeight: 800, color: 'var(--text)' }}>
+            🔁 第五步·再重复：「顺天时 · 抓主线 · 择良标 · 严执行」千次刻意练习仪
+          </div>
+          <div style={{ fontSize: '12px', color: 'var(--sub)', marginTop: '2px' }}>
+            只做「主线五星 · 涨停回调再突破」一种模式，一个动作标准重复 100 次小成、1000 次形成本能
+          </div>
+        </div>
+        <span
+          className="num-mono"
+          style={{
+            fontSize: '11.5px',
+            padding: '3px 10px',
+            borderRadius: '999px',
+            fontWeight: 700,
+            background: checkedCount === 5 ? 'var(--up-bg)' : 'var(--surface)',
+            color: checkedCount === 5 ? 'var(--up)' : 'var(--sub)',
+            border: `1px solid ${checkedCount === 5 ? 'var(--up-b)' : 'var(--line2)'}`,
+          }}
+        >
+          今日五步核验 {checkedCount}/5
+        </span>
+      </div>
+
+      {/* 今日五步开仓/复盘自检胶囊 */}
+      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '12px' }}>
+        {FIVE_STEP_PILLS.map((p) => {
+          const on = Boolean(checkedMap[p.id]);
+          return (
+            <button
+              key={p.id}
+              type="button"
+              className="mini"
+              onClick={() => toggleStep(p.id)}
+              title={p.tip}
+              style={{
+                marginLeft: 0,
+                padding: '4px 10px',
+                fontSize: '12px',
+                fontWeight: 700,
+                background: on ? 'var(--up-bg)' : 'var(--surface)',
+                color: on ? 'var(--up)' : 'var(--sub)',
+                borderColor: on ? 'var(--up-b)' : 'var(--line2)',
+              }}
+            >
+              {on ? '✓ ' : '○ '}{p.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* 100次 / 1000次进度条 + 模式内规范单 vs 破戒单实盘对照 */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '10px' }}>
+        <div style={{ padding: '9px 12px', borderRadius: '8px', background: 'var(--surface)', border: '1px solid var(--line)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', color: 'var(--sub)' }}>
+            <span>百次定型里程碑</span>
+            <b className="num-mono" style={{ color: 'var(--text)' }}>{stats.cleanReps} / 100 次</b>
+          </div>
+          <div style={{ height: '6px', borderRadius: '99px', background: 'var(--line)', marginTop: '6px', overflow: 'hidden' }}>
+            <div style={{ width: `${stats.pct100}%`, height: '100%', background: 'var(--up)' }} />
+          </div>
+          <div className="num-mono" style={{ fontSize: '11px', color: 'var(--mute)', marginTop: '5px' }}>
+            千次大成进度：{stats.cleanReps} / 1000 ({stats.pct1000}%)
+          </div>
+        </div>
+
+        <div style={{ padding: '9px 12px', borderRadius: '8px', background: 'var(--surface)', border: '1px solid var(--line)' }}>
+          <div style={{ fontSize: '11.5px', color: 'var(--sub)' }}>✅ 五步规范单（模式内守纪律）</div>
+          <div className="num-mono" style={{ fontSize: '15px', fontWeight: 800, marginTop: '4px', color: stats.clean.net >= 0 ? 'var(--up)' : 'var(--down)' }}>
+            胜率 {stats.clean.winRate != null ? `${stats.clean.winRate}%` : '—'} · {stats.clean.net >= 0 ? '+' : ''}¥{money(stats.clean.net)}
+          </div>
+          <div className="num-mono" style={{ fontSize: '11px', color: 'var(--mute)', marginTop: '2px' }}>
+            样本 {stats.clean.cnt} 笔（无逆势/追高/死扛标签）
+          </div>
+        </div>
+
+        <div style={{ padding: '9px 12px', borderRadius: '8px', background: 'var(--surface)', border: '1px solid var(--line)' }}>
+          <div style={{ fontSize: '11.5px', color: 'var(--sub)' }}>⚠️ 模式外/破戒单（违背天时或死扛）</div>
+          <div className="num-mono" style={{ fontSize: '15px', fontWeight: 800, marginTop: '4px', color: stats.broken.net >= 0 ? 'var(--up)' : 'var(--down)' }}>
+            胜率 {stats.broken.winRate != null ? `${stats.broken.winRate}%` : '—'} · {stats.broken.net >= 0 ? '+' : ''}¥{money(stats.broken.net)}
+          </div>
+          <div className="num-mono" style={{ fontSize: '11px', color: 'var(--mute)', marginTop: '2px' }}>
+            样本 {stats.broken.cnt} 笔（消灭破戒单即是最大复利）
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 function extractLogCode6(lg) {
   if (lg?.code && /^\d{6}$/.test(String(lg.code).trim())) {
@@ -713,6 +881,8 @@ export default function LedgerSection({
           </div>
         </div>
       )}
+
+      <FiveStepPracticePanel logs={logs} />
 
       <section className="card ledger-main-card">
         {/* 顶部标题栏 + 本地磁盘双写状态 + 单手操作按钮区 */}

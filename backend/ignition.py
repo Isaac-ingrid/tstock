@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 
-from .diagnosis import classify_announcement
+from .diagnosis import calc_cyq_chips, classify_announcement
 from .market_data import (
     BoundedTTLCache,
     em_safe_get,
@@ -673,6 +673,9 @@ def evaluate_ignition_six_dims(
     lookback_days: int = 60,
     notice: Optional[dict] = None,
     name: str = "",
+    float_cap_yi: float = 0.0,
+    turnover_pct: float = 0.0,
+    main_theme_info: Optional[dict] = None,
 ) -> dict:
     """
     统一六维起爆成色评估函数（纯函数，供单股全息体检与单元测试直接调用）：
@@ -931,8 +934,59 @@ def evaluate_ignition_six_dims(
         {"id": "floor", "title": "底座防守", "passed": d6_pass, "badge": d6_label, "val": d6_val, "detail": d6_detail},
     ]
 
+    # ===== 五星游龙模型（趋势上行 · 价值凸显 · 上行空间足 · 量价齐升 · 筹码集中主力控盘） =====
+    cyq = calc_cyq_chips(
+        daily_bars,
+        cur_price=px,
+        float_cap_yi=float_cap_yi,
+        latest_turnover_pct=turnover_pct,
+        period=210,
+    )
+    conc90 = float(cyq.get("concentration90") or 20.0)
+    profit_ratio = float(cyq.get("profitRatio") or 50.0)
+    peak_px = float(cyq.get("peakPrice") or px)
+
+    star_trend = 1.0 if (d6_pass is True and weekly_up and not has_bearish_kline) else (0.5 if (d6_pass is True and (weekly_up or ma_spread_pct <= 8.0) and not has_bearish_kline) else 0.0)
+    risk_lv = str(notice.get("riskLevel") or "安全")
+    star_value = 0.0 if (risk_lv == "高风险" or "ST" in str(name).upper()) else (0.5 if risk_lv == "留意" else 1.0)
+    star_space = 1.0 if (not wm["monthHighWarn"] and month_pos_pct < 78.0 and (profit_ratio >= 40.0 or px >= peak_px * 0.95)) else (0.5 if not wm["monthHighWarn"] else 0.0)
+    star_vol_price = 1.0 if (has_zt and d1_pass is True and vol_shrink_ratio <= IGNITION_RULES["vol_shrink_ready"] and wm["monthVolOk"]) else (0.5 if (has_zt and vol_shrink_ratio <= IGNITION_RULES["vol_shrink_max"]) else 0.0)
+    star_chips = 1.0 if (conc90 <= 16.0 or (conc90 <= 22.0 and ma_spread_pct <= IGNITION_RULES["ma_spread_tight"])) else (0.5 if conc90 <= 27.0 else 0.0)
+
+    dragon_stars = round(star_trend + star_value + star_space + star_vol_price + star_chips, 1)
+    if has_bearish_kline or not d6_pass:
+        dragon_stars = min(dragon_stars, 2.5)
+    if dragon_stars >= 4.5:
+        dragon_label = "🐉 五星游龙"
+    elif dragon_stars >= 4.0:
+        dragon_label = "⭐ 四星准游龙"
+    else:
+        dragon_label = f"{dragon_stars:.1f}星观察"
+
+    dragon_dims = [
+        {"key": "trend", "label": "趋势上行", "star": star_trend, "desc": f"{weekly_desc} · 防守线 ¥{support_floor}"},
+        {"key": "value", "label": "价值排雷", "star": star_value, "desc": f"近35日公告排雷：{risk_lv}"},
+        {"key": "space", "label": "上行空间", "star": star_space, "desc": f"15月分位 {month_pos_pct:.0f}% · 获利盘 {profit_ratio:.0f}%"},
+        {"key": "volPrice", "label": "量价试盘", "star": star_vol_price, "desc": f"板后缩至 {vol_shrink_pct:.0f}% · 月量 {month_vol_ratio}x"},
+        {"key": "chips", "label": "筹码控盘", "star": star_chips, "desc": f"90%集中度 {conc90:.1f}% · 主峰 ¥{peak_px:.2f}"},
+    ]
+
+    is_main_theme = bool(main_theme_info and main_theme_info.get("name"))
+    if is_main_theme and stage in ("SHAKEOUT_READY", "CONVERGED_WAIT", "DIGESTING"):
+        ignition_score = min(100, ignition_score + (6 if main_theme_info.get("cycleStage") in ("EARLY_START", "MAIN_RISE") else 3))
+
     return {
         "ignitionScore": ignition_score,
+        "dragonStars": dragon_stars,
+        "dragonLabel": dragon_label,
+        "dragonDims": dragon_dims,
+        "conc90": round(conc90, 1),
+        "profitRatio": round(profit_ratio, 1),
+        "cyqPeakPrice": round(peak_px, 2),
+        "isMainTheme": is_main_theme,
+        "mainThemeName": (main_theme_info or {}).get("name", ""),
+        "mainThemeStage": (main_theme_info or {}).get("cycleStage", ""),
+        "mainThemeStageLabel": (main_theme_info or {}).get("cycleStageLabel", ""),
         "stage": stage,
         "stageLabel": stage_label,
         "stageTip": stage_tip,
@@ -1210,7 +1264,28 @@ async def scan_breakout_ignition(
         })
         qual_bars.append((dbars, w_bars, m_bars))
 
-    # 补充公告排雷（带全局熔断 + 1.2s 硬预算）并统一调用 evaluate_ignition_six_dims 对齐总分
+    # 同步读取第二步「热点主线」板块与成员映射，给符合主线+涨停回调再突破的五星游龙标的赋予共振标识
+    theme_by_code: Dict[str, dict] = {}
+    theme_by_name: Dict[str, dict] = {}
+    try:
+        from .limitup import get_limitup_pool
+        lu_res = await asyncio.wait_for(get_limitup_pool(http_client=http_client), timeout=2.0)
+        for th in ((lu_res.get("mainThemes") or {}).get("themes") or []):
+            t_info = {
+                "name": th.get("name", ""),
+                "cycleStage": th.get("cycleStage", "MAIN_RISE"),
+                "cycleStageLabel": th.get("cycleStageLabel", "🔥 主线共振"),
+            }
+            if t_info["name"]:
+                theme_by_name[t_info["name"]] = t_info
+            for m in (th.get("stocks") or []):
+                mc = str(m.get("code") or "").zfill(6)
+                if mc and mc not in theme_by_code:
+                    theme_by_code[mc] = t_info
+    except Exception:
+        pass
+
+    # 补充公告排雷（带全局熔断 + 1.2s 硬预算）并统一调用 evaluate_ignition_six_dims 输出五星游龙评分
     target_qual = qualified[:45]
     notice_list = await _batch_notice_fast(
         http_client,
@@ -1222,9 +1297,17 @@ async def scan_breakout_ignition(
         notice_obj = nres if isinstance(nres, dict) else {}
         if notice_obj:
             qualified[idx].update(notice_obj)
+        c_i = qualified[idx]["code"]
+        hy_i = str(qualified[idx].get("hybk") or "")
+        matched_th = theme_by_code.get(c_i)
+        if not matched_th and hy_i:
+            for tn, t_obj in theme_by_name.items():
+                if hy_i in tn or tn in hy_i:
+                    matched_th = t_obj
+                    break
         dbars_i, wbars_i, mbars_i = qual_bars[idx]
         unified = evaluate_ignition_six_dims(
-            qualified[idx]["code"],
+            c_i,
             dbars_i,
             wbars_i,
             mbars_i,
@@ -1233,14 +1316,40 @@ async def scan_breakout_ignition(
             lookback_days=lookback_days,
             notice=notice_obj,
             name=qualified[idx]["name"],
+            float_cap_yi=float(qualified[idx].get("mcapYi") or 0.0),
+            turnover_pct=float(qualified[idx].get("turnover") or 0.0),
+            main_theme_info=matched_th,
         )
-        qualified[idx]["ignitionScore"] = unified["ignitionScore"]
+        for k_copy in (
+            "ignitionScore",
+            "dragonStars",
+            "dragonLabel",
+            "dragonDims",
+            "conc90",
+            "profitRatio",
+            "cyqPeakPrice",
+            "isMainTheme",
+            "mainThemeName",
+            "mainThemeStage",
+            "mainThemeStageLabel",
+        ):
+            qualified[idx][k_copy] = unified[k_copy]
+
+    # 对超出 45 只之外的尾部项补齐默认五星字段防前端空值
+    for tail_item in qualified[len(notice_list):]:
+        tail_item.setdefault("dragonStars", 3.5)
+        tail_item.setdefault("dragonLabel", "3.5星观察")
+        tail_item.setdefault("dragonDims", [])
+        tail_item.setdefault("isMainTheme", False)
+        tail_item.setdefault("mainThemeName", "")
 
     stage_order = {"SHAKEOUT_READY": 0, "CONVERGED_WAIT": 1, "DIGESTING": 2, "PULLBACK_RISK": 3}
     qualified.sort(
         key=lambda x: (
             1 if x.get("riskLevel") == "高风险" else 0,
             stage_order.get(x["stage"], 9),
+            0 if (x.get("isMainTheme") and x.get("mainThemeStage") != "HIGH_CLIMAX") else 1,
+            -(x.get("dragonStars") or 0.0),
             -x["ignitionScore"],
             x["volShrinkRatio"],
         )
@@ -1248,6 +1357,9 @@ async def scan_breakout_ignition(
 
     counts = {
         "total": len(qualified),
+        "fiveStarDragon": sum(1 for x in qualified if (x.get("dragonStars") or 0) >= 4.5),
+        "fourPlusDragon": sum(1 for x in qualified if (x.get("dragonStars") or 0) >= 4.0),
+        "mainThemeResonance": sum(1 for x in qualified if x.get("isMainTheme")),
         "shakeoutReady": sum(1 for x in qualified if x["stage"] == "SHAKEOUT_READY"),
         "convergedWait": sum(1 for x in qualified if x["stage"] == "CONVERGED_WAIT"),
         "digesting": sum(1 for x in qualified if x["stage"] == "DIGESTING"),
