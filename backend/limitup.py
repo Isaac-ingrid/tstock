@@ -15,7 +15,7 @@ from .market_data import (
     to_em_secid,
 )
 from .patterns import analyze_boll_and_divergence
-from .strong_herd import build_strong_herd_and_themes, parse_mystic_roots
+from .strong_herd import build_strong_herd_and_themes, format_zt_stat_tag, parse_mystic_roots
 from .trade_calendar import cn_now_str, cn_today_ymd, get_market_calendar_snapshot, is_trade_day, recent_trade_dates
 
 # 内存缓存：SWR 双层架构（15s 内秒回新鲜值；15s~180s 秒回旧值并后台静默刷新，彻底消除前端周期性卡顿）
@@ -254,34 +254,75 @@ async def _synthesize_qq_zt_pool(client: httpx.AsyncClient, qq_snap: dict, fallb
     zt_candidates = [r for r in rows if r.get("isZt") and not r["code"].startswith("30")]
     sem_k = asyncio.Semaphore(25)
 
+    actual_iso = f"{actual_d[:4]}-{actual_d[4:6]}-{actual_d[6:8]}" if len(str(actual_d)) == 8 else str(actual_d)[:10]
+
     async def _calc_streak(r: dict) -> Tuple[int, int, int]:
         c = r["code"]
         tc = r["tcode"]
         is_20 = c.startswith(("30", "68"))
         thresh = 19.2 if is_20 else 9.4
         try:
-            bars = await fetch_em_klines(client, to_em_secid(tc), klt=101, lmt=14, sem=sem_k, tcode_fallback=tc, ttl=300.0)
+            raw_bars = await fetch_em_klines(client, to_em_secid(tc), klt=101, lmt=15, sem=sem_k, tcode_fallback=tc, ttl=300.0)
         except Exception:
-            bars = []
-        if not bars or len(bars) < 2:
+            raw_bars = []
+        bars = list(raw_bars) if isinstance(raw_bars, list) else []
+        if (
+            bars
+            and actual_iso
+            and str(bars[-1].get("date") or "")[:10] < actual_iso
+            and r.get("price", 0.0) > float(bars[-1].get("close") or 0.0) * 1.05
+        ):
+            bars.append({
+                "date": actual_iso,
+                "open": float(r.get("open") or r["price"]),
+                "close": float(r["price"]),
+                "high": max(float(r.get("high") or 0.0), float(r["price"])),
+                "low": float(r.get("low") or r["price"]),
+                "vol": 0.0,
+            })
+        if len(bars) < 2:
             return 1, 1, 1
-        # 从最近一根向前统计连续涨停数 lbc 与近 12 日涨停次数 ct
+
+        # 从最近一根涨停向前回溯：计算当前真实连板数 lbc，以及本轮波段从首个涨停日起算的真实天数 actual_span
+        # 若中间连续 >= 3 个交易日未涨停，则更早的孤立涨停归属上一轮旧波段，不再混入本轮 N天M板
+        n_b = len(bars)
+        max_back = min(12, n_b - 1)
         streak = 0
+        in_streak = True
         ct = 0
-        span_days = min(12, len(bars) - 1)
-        for idx in range(len(bars) - 1, max(0, len(bars) - 1 - span_days), -1):
-            prev_c = bars[idx - 1]["close"]
+        first_zt_idx = n_b - 1
+        non_zt_gap = 0
+
+        for idx in range(n_b - 1, n_b - 1 - max_back, -1):
+            prev_c = float(bars[idx - 1]["close"])
             cur_b = bars[idx]
             if prev_c <= 0:
-                continue
-            pct = ((cur_b["close"] - prev_c) / prev_c) * 100.0
-            hit_zt = pct >= thresh and cur_b["close"] >= cur_b["high"] * 0.993
+                break
+            pct = ((float(cur_b["close"]) - prev_c) / prev_c) * 100.0
+            hit_zt = pct >= thresh and float(cur_b["close"]) >= float(cur_b["high"]) * 0.993
             if hit_zt:
                 ct += 1
-                if streak == (len(bars) - 1 - idx):
+                first_zt_idx = idx
+                non_zt_gap = 0
+                if in_streak:
                     streak += 1
+            else:
+                if idx == n_b - 1:
+                    # 今日快照已确认为涨停，兜底计入今日 1 板
+                    ct += 1
+                    first_zt_idx = idx
+                    streak = 1
+                    in_streak = False
+                else:
+                    in_streak = False
+                    non_zt_gap += 1
+                    if non_zt_gap >= 3:
+                        break
+
         lbc = max(1, streak)
-        return lbc, max(lbc, ct), span_days
+        ct_final = max(lbc, ct)
+        actual_span = max(ct_final, (n_b - 1) - first_zt_idx + 1)
+        return lbc, ct_final, actual_span
 
     streak_res = await asyncio.gather(*[_calc_streak(r) for r in zt_candidates], return_exceptions=True) if zt_candidates else []
     synth_zt: List[dict] = []
@@ -546,10 +587,10 @@ async def _build_limitup_pool_inner(
         hybk = row.get("hybk", "其他板块") or "其他板块"
 
         zttj = row.get("zttj") or {}
-        days_cnt = zttj.get("days", lbc)
-        board_cnt = zttj.get("ct", lbc)
+        days_cnt = int(zttj.get("days") or lbc)
+        board_cnt = int(zttj.get("ct") or lbc)
         tag_streak = f"{lbc}连板" if lbc > 1 else "首板"
-        tag_stat = f"{days_cnt}天{board_cnt}板" if (days_cnt and board_cnt and days_cnt > lbc) else tag_streak
+        tag_stat = format_zt_stat_tag(lbc, days_cnt, board_cnt, fallback=tag_streak)
 
         seal_ratio = round((fund / amount), 2) if amount > 0 else 0.0
 

@@ -234,7 +234,69 @@ class LimitUpSingleflightAndFallbackTests(unittest.TestCase):
                         self.assertEqual(r4["totalCount"], 1)
                         self.assertEqual(r4["items"][0]["code"], "600977")
                         self.assertEqual(r4["items"][0]["lbc"], 2)
+                        self.assertEqual(r4["items"][0]["statTag"], "2天2板 · 2连板")
                         self.assertEqual(r4["sentiment"]["upCount"], 3100)
+
+                    # 验证 5天4板·3连板 与 孤立旧板不误标为12天2板
+                    from backend.strong_herd import format_zt_stat_tag
+                    self.assertEqual(format_zt_stat_tag(4, 4, 4), "4天4板 · 4连板")
+                    self.assertEqual(format_zt_stat_tag(3, 5, 4), "5天4板 · 3连板")
+                    self.assertEqual(format_zt_stat_tag(1, 4, 3), "4天3板 · 反包首板")
+                    self.assertEqual(format_zt_stat_tag(1, 1, 1), "首板")
+
+                    # 验证 _synthesize_qq_zt_pool 遇到 5天4板（首板 + 断板整理1天 + 3连板）不会再误算成 12天4板
+                    bars_5d4b = [
+                        {"date": f"2026-11-{i:02d}", "open": 10.0, "close": 10.0, "high": 10.1, "low": 9.9, "vol": 1000}
+                        for i in range(5, 14)
+                    ]
+                    # 第1天涨停 (10.0 -> 11.0)
+                    bars_5d4b.append({"date": "2026-11-16", "open": 10.2, "close": 11.00, "high": 11.00, "low": 10.1, "vol": 2000})
+                    # 第2天断板休整 (11.0 -> 10.90)
+                    bars_5d4b.append({"date": "2026-11-17", "open": 11.0, "close": 10.90, "high": 11.20, "low": 10.8, "vol": 1800})
+                    # 第3~5天连续3个涨停
+                    bars_5d4b.append({"date": "2026-11-18", "open": 11.1, "close": 11.99, "high": 11.99, "low": 11.0, "vol": 2200})
+                    bars_5d4b.append({"date": "2026-11-19", "open": 12.1, "close": 13.19, "high": 13.19, "low": 12.0, "vol": 2500})
+                    bars_5d4b.append({"date": "2026-11-20", "open": 13.5, "close": 14.51, "high": 14.51, "low": 13.4, "vol": 2800})
+
+                    async def _fake_klines_5d4b(*args, **kwargs):
+                        return bars_5d4b
+
+                    async def _live_qq_5d4b(*args, **kwargs):
+                        return {
+                            "date": "20261120",
+                            "rows": [{
+                                "code": "002579",
+                                "tcode": "sz002579",
+                                "name": "中京电子",
+                                "hybk": "消费电子",
+                                "price": 14.51,
+                                "prevClose": 13.19,
+                                "high": 14.51,
+                                "low": 13.40,
+                                "chg": 10.01,
+                                "turnover": 12.5,
+                                "amount": 8.33e8,
+                                "mcap": 98e8,
+                                "fund": 9.5e7,
+                                "isZt": True,
+                                "touchedZt": True,
+                                "isDt": False,
+                                "isOneWord": False,
+                            }],
+                            "upCount": 2800,
+                            "downCount": 1900,
+                            "flatCount": 100,
+                        }
+
+                    lu._LIMITUP_CACHE.clear()
+                    lu._LIMITUP_STALE_BACKUP.clear()
+                    with (
+                        patch.object(lu, "fetch_tencent_market_snapshot", side_effect=_live_qq_5d4b),
+                        patch.object(lu, "fetch_em_klines", side_effect=_fake_klines_5d4b),
+                    ):
+                        r5 = await lu.get_limitup_pool(http_client=client)
+                        self.assertEqual(r5["items"][0]["lbc"], 3)
+                        self.assertEqual(r5["items"][0]["statTag"], "5天4板 · 3连板")
             finally:
                 md._EM_API_FAIL_COUNT = 0
                 md._EM_API_COOLDOWN_UNTIL = 0.0

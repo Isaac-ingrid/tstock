@@ -124,6 +124,27 @@ def parse_mystic_roots(raw_roots: Optional[str]) -> List[str]:
     return out or list(DEFAULT_MYSTIC_ROOTS)
 
 
+def format_zt_stat_tag(lbc: int, days_cnt: int = 0, board_cnt: int = 0, fallback: str = "") -> str:
+    """
+    统一格式化涨停/多板统计标签，同时写明「N天M板」真实跨度与当前「连板情况」：
+    - 纯首板: '首板'
+    - 纯连板 (如连续4板): '4天4板 · 4连板'
+    - 断板反包接力 (如5天内4板、当前3连板): '5天4板 · 3连板'
+    - 断板反包首板 (如4天内3板、今日首板): '4天3板 · 反包首板'
+    """
+    lbc_i = max(0, int(lbc or 0))
+    ct_i = max(lbc_i, int(board_cnt or 0))
+    days_i = max(ct_i, int(days_cnt or 0))
+    if ct_i <= 1 and lbc_i <= 1:
+        return "首板" if lbc_i == 1 else fallback
+    if lbc_i >= 2 and ct_i == lbc_i:
+        days_i = lbc_i
+    elif days_i > ct_i * 3 + 2 and lbc_i >= 1:
+        return f"{lbc_i}天{lbc_i}板 · {lbc_i}连板" if lbc_i >= 2 else "首板"
+    streak_txt = f"{lbc_i}连板" if lbc_i >= 2 else ("反包首板" if lbc_i == 1 else "断板")
+    return f"{days_i}天{ct_i}板 · {streak_txt}"
+
+
 def _cluster_label_for_root(root: str) -> str:
     return MYSTIC_HOMOPHONE_FAMILY.get(root, f"{root}字辈" if len(root) == 1 else f"{root}系")
 
@@ -1439,7 +1460,7 @@ async def build_strong_herd_and_themes(
                 "lbc": lbc_now,
                 "zttjDays": days_now,
                 "zttjCt": ct_now,
-                "statTag": f"{days_now}天{ct_now}板" if ct_now >= 3 else (f"{lbc_now}连板" if lbc_now >= 2 else ("首板" if lbc_now == 1 else "抱团追踪")),
+                "statTag": format_zt_stat_tag(lbc_now, days_now, ct_now, fallback="抱团追踪"),
                 "popRank": pop_rk,
                 "entryDate": meta.get("entryDate", actual_date),
                 "entryPrice": round(entry_px, 2),
@@ -1600,11 +1621,7 @@ async def build_strong_herd_and_themes(
             mystic_info=m_info,
         )
 
-        stat_tag = (
-            f"{days_v}天{ct_v}板"
-            if ct_v >= 3 and days_v > lbc_v
-            else (f"{lbc_v}连板" if lbc_v >= 2 else ("首板" if lbc_v == 1 else ("60日新高" if is_nh else "强势活跃")))
-        )
+        stat_tag = format_zt_stat_tag(lbc_v, days_v, ct_v, fallback=("60日新高" if is_nh else "强势活跃"))
         strong_pool.append({
             "code": code,
             "tcode": _to_tcode(code),
@@ -1714,7 +1731,7 @@ async def build_strong_herd_and_themes(
             "fbtSec": (zt_m or {}).get("fbtSec", 999999),
             "zttjCt": ct_m,
             "zttjDays": days_m,
-            "statTag": f"{days_m}天{ct_m}板" if ct_m >= 3 else (f"{lbc_m}连板" if lbc_m >= 2 else ("首板" if lbc_m == 1 else ("60日新高" if (qs_m or {}).get("isNewHigh") else "趋势核心"))),
+            "statTag": format_zt_stat_tag(lbc_m, days_m, ct_m, fallback=("60日新高" if (qs_m or {}).get("isNewHigh") else "趋势核心")),
             "isLimitUp": is_zt_m,
             "popRank": pop_rk,
             "inHerdPool": code in herd_by_code,
