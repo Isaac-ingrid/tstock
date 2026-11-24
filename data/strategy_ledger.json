@@ -1,6 +1,6 @@
 {
   "baselineDate": "2026-11-10",
-  "updatedAt": "2026-11-23 18:51:14",
+  "updatedAt": "2026-11-24 22:23:34",
   "signals": {
     "short:2026-11-10:603767": {
       "id": "short:2026-11-10:603767",
@@ -14419,6 +14419,42 @@
       "env": "OK",
       "refPrice": 5.13,
       "buy": 5.13
+    },
+    "ignition:2026-11-24:600977": {
+      "id": "ignition:2026-11-24:600977",
+      "strategy": "ignition",
+      "subType": "SHAKEOUT_READY",
+      "signalDate": "2026-11-24",
+      "code": "600977",
+      "tcode": "sh600977",
+      "name": "中国电影",
+      "hybk": "影视院线",
+      "score": 100.0,
+      "verdict": "🔥 震仓完成·待起爆",
+      "ztDate": "2026-11-13",
+      "volShrinkPct": 49.9,
+      "monthVolRatio": 1.38,
+      "env": "OK",
+      "refPrice": 15.86,
+      "buy": 15.86
+    },
+    "ignition:2026-11-24:002226": {
+      "id": "ignition:2026-11-24:002226",
+      "strategy": "ignition",
+      "subType": "CONVERGED_WAIT",
+      "signalDate": "2026-11-24",
+      "code": "002226",
+      "tcode": "sz002226",
+      "name": "江南化工",
+      "hybk": "化学制品",
+      "score": 100.0,
+      "verdict": "⏳ 均线粘合·缩量蓄势",
+      "ztDate": "2026-11-17",
+      "volShrinkPct": 46.9,
+      "monthVolRatio": 1.29,
+      "env": "OK",
+      "refPrice": 5.18,
+      "buy": 5.18
     }
   },
   "lastBoardExclude": {

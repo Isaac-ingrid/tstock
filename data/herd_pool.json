@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastRunDate": "20261123",
+  "lastRunDate": "20261124",
   "active": {
     "601398": {
       "code": "601398",
@@ -31,7 +31,7 @@
       "entryDate": "20261117",
       "entryPrice": 15.52,
       "entryReason": "人气Top26资金抱团核心",
-      "peakPriceSinceEntry": 17.07,
+      "peakPriceSinceEntry": 17.69,
       "pinned": false,
       "autoAdded": true
     },
@@ -60,7 +60,7 @@
     "603078": {
       "code": "603078",
       "name": "江化微",
-      "hybk": "电子化学",
+      "hybk": "电子化学品Ⅱ",
       "entryDate": "20261117",
       "entryPrice": 24.54,
       "entryReason": "人气Top26资金抱团核心",
@@ -75,7 +75,7 @@
       "entryDate": "20261119",
       "entryPrice": 14.38,
       "entryReason": "3连板高标自动跟踪",
-      "peakPriceSinceEntry": 17.4,
+      "peakPriceSinceEntry": 18.6,
       "pinned": false,
       "autoAdded": true
     },
@@ -86,7 +86,7 @@
       "entryDate": "20261119",
       "entryPrice": 25.19,
       "entryReason": "3连板高标自动跟踪",
-      "peakPriceSinceEntry": 30.48,
+      "peakPriceSinceEntry": 33.0,
       "pinned": false,
       "autoAdded": true
     },
@@ -97,7 +97,7 @@
       "entryDate": "20261119",
       "entryPrice": 3.83,
       "entryReason": "2连板高标自动跟踪",
-      "peakPriceSinceEntry": 4.25,
+      "peakPriceSinceEntry": 4.68,
       "pinned": false,
       "autoAdded": true
     },
@@ -108,14 +108,14 @@
       "entryDate": "20261119",
       "entryPrice": 12.17,
       "entryReason": "人气Top13资金抱团核心",
-      "peakPriceSinceEntry": 14.73,
+      "peakPriceSinceEntry": 16.2,
       "pinned": false,
       "autoAdded": true
     },
     "603931": {
       "code": "603931",
       "name": "格林达",
-      "hybk": "电子化学",
+      "hybk": "电子化学品Ⅱ",
       "entryDate": "20261119",
       "entryPrice": 29.15,
       "entryReason": "人气Top24资金抱团核心",
@@ -130,7 +130,7 @@
       "entryDate": "20261119",
       "entryPrice": 6.3,
       "entryReason": "人气Top30资金抱团核心",
-      "peakPriceSinceEntry": 6.93,
+      "peakPriceSinceEntry": 7.09,
       "pinned": false,
       "autoAdded": true
     },
@@ -152,7 +152,7 @@
       "entryDate": "20261119",
       "entryPrice": 12.38,
       "entryReason": "人气Top30资金抱团核心",
-      "peakPriceSinceEntry": 13.58,
+      "peakPriceSinceEntry": 13.8,
       "pinned": false,
       "autoAdded": true
     },
@@ -185,7 +185,7 @@
       "entryDate": "20261120",
       "entryPrice": 16.82,
       "entryReason": "2连板高标自动跟踪",
-      "peakPriceSinceEntry": 18.23,
+      "peakPriceSinceEntry": 18.32,
       "pinned": false,
       "autoAdded": true
     },
@@ -196,7 +196,7 @@
       "entryDate": "20261120",
       "entryPrice": 12.43,
       "entryReason": "人气Top21资金抱团核心",
-      "peakPriceSinceEntry": 14.25,
+      "peakPriceSinceEntry": 14.41,
       "pinned": false,
       "autoAdded": true
     },
@@ -207,7 +207,7 @@
       "entryDate": "20261120",
       "entryPrice": 3.75,
       "entryReason": "人气Top30资金抱团核心",
-      "peakPriceSinceEntry": 4.13,
+      "peakPriceSinceEntry": 4.54,
       "pinned": false,
       "autoAdded": true
     },
@@ -218,7 +218,7 @@
       "entryDate": "20261120",
       "entryPrice": 18.51,
       "entryReason": "人气Top30资金抱团核心",
-      "peakPriceSinceEntry": 20.35,
+      "peakPriceSinceEntry": 20.86,
       "pinned": false,
       "autoAdded": true
     },
@@ -229,7 +229,7 @@
       "entryDate": "20261120",
       "entryPrice": 9.01,
       "entryReason": "人气Top30资金抱团核心",
-      "peakPriceSinceEntry": 9.08,
+      "peakPriceSinceEntry": 9.4,
       "pinned": false,
       "autoAdded": true
     },
@@ -240,7 +240,7 @@
       "entryDate": "20261120",
       "entryPrice": 18.76,
       "entryReason": "人气Top30资金抱团核心",
-      "peakPriceSinceEntry": 19.98,
+      "peakPriceSinceEntry": 20.3,
       "pinned": false,
       "autoAdded": true
     },
@@ -251,7 +251,7 @@
       "entryDate": "20261120",
       "entryPrice": 16.19,
       "entryReason": "人气Top30资金抱团核心",
-      "peakPriceSinceEntry": 17.81,
+      "peakPriceSinceEntry": 19.37,
       "pinned": false,
       "autoAdded": true
     },
@@ -262,7 +262,7 @@
       "entryDate": "20261120",
       "entryPrice": 3.76,
       "entryReason": "6天3板核心抱团",
-      "peakPriceSinceEntry": 4.14,
+      "peakPriceSinceEntry": 4.55,
       "pinned": false,
       "autoAdded": true
     },
@@ -273,7 +273,7 @@
       "entryDate": "20261120",
       "entryPrice": 10.69,
       "entryReason": "人气Top30资金抱团核心",
-      "peakPriceSinceEntry": 11.66,
+      "peakPriceSinceEntry": 12.12,
       "pinned": false,
       "autoAdded": true
     },
@@ -284,7 +284,7 @@
       "entryDate": "20261120",
       "entryPrice": 14.3,
       "entryReason": "人气Top27资金抱团核心",
-      "peakPriceSinceEntry": 15.72,
+      "peakPriceSinceEntry": 15.99,
       "pinned": false,
       "autoAdded": true
     },
@@ -295,7 +295,7 @@
       "entryDate": "20261120",
       "entryPrice": 12.29,
       "entryReason": "人气Top6资金抱团核心",
-      "peakPriceSinceEntry": 13.52,
+      "peakPriceSinceEntry": 14.61,
       "pinned": false,
       "autoAdded": true
     },
@@ -339,7 +339,7 @@
       "entryDate": "20261120",
       "entryPrice": 7.26,
       "entryReason": "人气Top20资金抱团核心",
-      "peakPriceSinceEntry": 7.99,
+      "peakPriceSinceEntry": 8.79,
       "pinned": false,
       "autoAdded": true
     },
@@ -350,7 +350,7 @@
       "entryDate": "20261120",
       "entryPrice": 14.59,
       "entryReason": "人气Top24资金抱团核心",
-      "peakPriceSinceEntry": 15.05,
+      "peakPriceSinceEntry": 15.34,
       "pinned": false,
       "autoAdded": true
     },
@@ -361,7 +361,7 @@
       "entryDate": "20261120",
       "entryPrice": 8.69,
       "entryReason": "人气Top27资金抱团核心",
-      "peakPriceSinceEntry": 9.56,
+      "peakPriceSinceEntry": 10.18,
       "pinned": false,
       "autoAdded": true
     },
@@ -372,7 +372,7 @@
       "entryDate": "20261120",
       "entryPrice": 18.22,
       "entryReason": "人气Top24资金抱团核心",
-      "peakPriceSinceEntry": 20.04,
+      "peakPriceSinceEntry": 21.5,
       "pinned": false,
       "autoAdded": true
     },
@@ -383,7 +383,7 @@
       "entryDate": "20261120",
       "entryPrice": 13.97,
       "entryReason": "人气Top30资金抱团核心",
-      "peakPriceSinceEntry": 15.37,
+      "peakPriceSinceEntry": 16.91,
       "pinned": false,
       "autoAdded": true
     },
@@ -394,7 +394,7 @@
       "entryDate": "20261123",
       "entryPrice": 19.26,
       "entryReason": "2连板高标自动跟踪",
-      "peakPriceSinceEntry": 19.26,
+      "peakPriceSinceEntry": 21.19,
       "pinned": false,
       "autoAdded": true
     },
@@ -405,7 +405,7 @@
       "entryDate": "20261123",
       "entryPrice": 10.4,
       "entryReason": "2连板高标自动跟踪",
-      "peakPriceSinceEntry": 10.4,
+      "peakPriceSinceEntry": 11.44,
       "pinned": false,
       "autoAdded": true
     },
@@ -416,7 +416,7 @@
       "entryDate": "20261123",
       "entryPrice": 11.29,
       "entryReason": "2连板高标自动跟踪",
-      "peakPriceSinceEntry": 11.29,
+      "peakPriceSinceEntry": 12.42,
       "pinned": false,
       "autoAdded": true
     },
@@ -427,18 +427,7 @@
       "entryDate": "20261123",
       "entryPrice": 3.15,
       "entryReason": "2连板高标自动跟踪",
-      "peakPriceSinceEntry": 3.15,
-      "pinned": false,
-      "autoAdded": true
-    },
-    "600327": {
-      "code": "600327",
-      "name": "大东方",
-      "hybk": "一般零售",
-      "entryDate": "20261123",
-      "entryPrice": 5.31,
-      "entryReason": "2连板高标自动跟踪",
-      "peakPriceSinceEntry": 5.31,
+      "peakPriceSinceEntry": 3.47,
       "pinned": false,
       "autoAdded": true
     },
@@ -449,7 +438,7 @@
       "entryDate": "20261123",
       "entryPrice": 4.61,
       "entryReason": "12天6板核心抱团",
-      "peakPriceSinceEntry": 4.61,
+      "peakPriceSinceEntry": 4.88,
       "pinned": false,
       "autoAdded": true
     },
@@ -460,18 +449,7 @@
       "entryDate": "20261123",
       "entryPrice": 3.53,
       "entryReason": "人气Top18资金抱团核心",
-      "peakPriceSinceEntry": 3.53,
-      "pinned": false,
-      "autoAdded": true
-    },
-    "000636": {
-      "code": "000636",
-      "name": "风华高科",
-      "hybk": "元件",
-      "entryDate": "20261123",
-      "entryPrice": 28.99,
-      "entryReason": "人气Top23资金抱团核心",
-      "peakPriceSinceEntry": 28.99,
+      "peakPriceSinceEntry": 3.88,
       "pinned": false,
       "autoAdded": true
     },
@@ -482,7 +460,7 @@
       "entryDate": "20261123",
       "entryPrice": 26.68,
       "entryReason": "人气Top26资金抱团核心",
-      "peakPriceSinceEntry": 26.68,
+      "peakPriceSinceEntry": 28.22,
       "pinned": false,
       "autoAdded": true
     },
@@ -493,34 +471,123 @@
       "entryDate": "20261123",
       "entryPrice": 46.77,
       "entryReason": "人气Top28资金抱团核心",
-      "peakPriceSinceEntry": 46.77,
+      "peakPriceSinceEntry": 51.45,
       "pinned": false,
       "autoAdded": true
     },
-    "002343": {
-      "code": "002343",
-      "name": "慈文传媒",
-      "hybk": "影视院线",
+    "601689": {
+      "code": "601689",
+      "name": "拓普集团",
+      "hybk": "汽车零部",
       "entryDate": "20261123",
-      "entryPrice": 7.37,
-      "entryReason": "人气Top30资金抱团核心",
-      "peakPriceSinceEntry": 7.37,
+      "entryPrice": 52.92,
+      "entryReason": "人气Top26资金抱团核心",
+      "peakPriceSinceEntry": 56.3,
       "pinned": false,
       "autoAdded": true
     },
-    "002384": {
-      "code": "002384",
-      "name": "东山精密",
-      "hybk": "元件",
-      "entryDate": "20261123",
-      "entryPrice": 71.47,
-      "entryReason": "人气Top21资金抱团核心",
-      "peakPriceSinceEntry": 72.11,
+    "001229": {
+      "code": "001229",
+      "name": "魅视科技",
+      "hybk": "计算机设",
+      "entryDate": "20261124",
+      "entryPrice": 30.48,
+      "entryReason": "2连板高标自动跟踪",
+      "peakPriceSinceEntry": 30.48,
+      "pinned": false,
+      "autoAdded": true
+    },
+    "001278": {
+      "code": "001278",
+      "name": "一彬科技",
+      "hybk": "汽车零部",
+      "entryDate": "20261124",
+      "entryPrice": 14.77,
+      "entryReason": "2连板高标自动跟踪",
+      "peakPriceSinceEntry": 14.77,
+      "pinned": false,
+      "autoAdded": true
+    },
+    "002036": {
+      "code": "002036",
+      "name": "联创电子",
+      "hybk": "光学光电",
+      "entryDate": "20261124",
+      "entryPrice": 5.36,
+      "entryReason": "2连板高标自动跟踪",
+      "peakPriceSinceEntry": 5.36,
+      "pinned": false,
+      "autoAdded": true
+    },
+    "002122": {
+      "code": "002122",
+      "name": "汇洲智能",
+      "hybk": "通用设备",
+      "entryDate": "20261124",
+      "entryPrice": 3.26,
+      "entryReason": "2连板高标自动跟踪",
+      "peakPriceSinceEntry": 3.26,
       "pinned": false,
       "autoAdded": true
     }
   },
   "evicted": [
+    {
+      "code": "002384",
+      "name": "东山精密",
+      "hybk": "元件",
+      "entryDate": "20261123",
+      "evictedDate": "20261124",
+      "entryPrice": 71.47,
+      "evictPrice": 72.7,
+      "returnPct": 1.72,
+      "chg": 1.72,
+      "reason": "连续6日失守10日线(偏离-6.0%)",
+      "manualExcluded": false,
+      "cooldownUntil": "20261127"
+    },
+    {
+      "code": "002343",
+      "name": "慈文传媒",
+      "hybk": "影视院线",
+      "entryDate": "20261123",
+      "evictedDate": "20261124",
+      "entryPrice": 7.37,
+      "evictPrice": 7.65,
+      "returnPct": 3.8,
+      "chg": 3.8,
+      "reason": "连续5日失守10日线(偏离-10.9%)；连续5日弱势阴跌于MA10下方且跌出人气榜",
+      "manualExcluded": false,
+      "cooldownUntil": "20261127"
+    },
+    {
+      "code": "000636",
+      "name": "风华高科",
+      "hybk": "元件",
+      "entryDate": "20261123",
+      "evictedDate": "20261124",
+      "entryPrice": 28.99,
+      "evictPrice": 28.25,
+      "returnPct": -2.55,
+      "chg": -2.55,
+      "reason": "连续6日失守10日线(偏离-3.1%)；连续5日弱势阴跌于MA10下方且跌出人气榜",
+      "manualExcluded": false,
+      "cooldownUntil": "20261127"
+    },
+    {
+      "code": "600327",
+      "name": "大东方",
+      "hybk": "一般零售",
+      "entryDate": "20261123",
+      "evictedDate": "20261124",
+      "entryPrice": 5.31,
+      "evictPrice": 5.3,
+      "returnPct": -0.19,
+      "chg": -0.19,
+      "reason": "高位顶部岛形反转（向下跳空形成悬空套牢孤岛），提前触发破位移出；连续6日失守10日线(偏离-4.9%)",
+      "manualExcluded": false,
+      "cooldownUntil": "20261127"
+    },
     {
       "code": "601857",
       "name": "中国石油",
@@ -884,62 +951,6 @@
       "reason": "连续2日失守10日线(偏离-3.7%)",
       "manualExcluded": false,
       "cooldownUntil": "20261124"
-    },
-    {
-      "code": "603366",
-      "name": "日出东方",
-      "hybk": "厨卫电器",
-      "entryDate": "20261119",
-      "evictedDate": "20261119",
-      "entryPrice": 9.12,
-      "evictPrice": 9.12,
-      "returnPct": 0.0,
-      "chg": -9.97,
-      "reason": "跌停核按钮(-10.0%)，主力踩踏出局；有效跌破20日生命线(偏离-3.6%)",
-      "manualExcluded": false,
-      "cooldownUntil": "20261123"
-    },
-    {
-      "code": "002205",
-      "name": "国统股份",
-      "hybk": "水泥",
-      "entryDate": "20261119",
-      "evictedDate": "20261119",
-      "entryPrice": 10.37,
-      "evictPrice": 10.37,
-      "returnPct": 0.0,
-      "chg": -9.98,
-      "reason": "跌停核按钮(-10.0%)，主力踩踏出局；有效跌破20日生命线(偏离-5.2%)",
-      "manualExcluded": false,
-      "cooldownUntil": "20261123"
-    },
-    {
-      "code": "600715",
-      "name": "文投控股",
-      "hybk": "游戏Ⅱ",
-      "entryDate": "20261119",
-      "evictedDate": "20261119",
-      "entryPrice": 2.73,
-      "evictPrice": 2.73,
-      "returnPct": 0.0,
-      "chg": -9.9,
-      "reason": "跌停核按钮(-9.9%)，主力踩踏出局；连续3日连阴派发(3日累跌-27.0%)",
-      "manualExcluded": false,
-      "cooldownUntil": "20261123"
-    },
-    {
-      "code": "600327",
-      "name": "大东方",
-      "hybk": "一般零售",
-      "entryDate": "20261119",
-      "evictedDate": "20261119",
-      "entryPrice": 4.39,
-      "evictPrice": 4.39,
-      "returnPct": 0.0,
-      "chg": -6.79,
-      "reason": "高位顶部岛形反转（向下跳空形成悬空套牢孤岛），提前触发破位移出；有效跌破20日生命线(偏离-8.8%)",
-      "manualExcluded": false,
-      "cooldownUntil": "20261123"
     }
   ]
 }
