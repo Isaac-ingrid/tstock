@@ -7,18 +7,26 @@ import time
 from typing import Any, Dict, List, Optional, Tuple
 import httpx
 
+from .market_data import (
+    em_safe_get,
+    fetch_em_klines,
+    fetch_tencent_market_snapshot,
+    is_em_api_open,
+    to_em_secid,
+)
 from .strong_herd import build_strong_herd_and_themes, parse_mystic_roots
 from .trade_calendar import cn_now_str, cn_today_ymd, get_market_calendar_snapshot, is_trade_day, recent_trade_dates
 
-# 内存缓存：盘中 8s 毫秒级更新，盘后/历史复盘 60s 极速响应，并保留最近成功快照兜底东财瞬时抖动
-_LIMITUP_CACHE: Dict[str, Tuple[float, dict]] = {}
+# 内存缓存：SWR 双层架构（15s 内秒回新鲜值；15s~180s 秒回旧值并后台静默刷新，彻底消除前端周期性卡顿）
+_LIMITUP_CACHE: Dict[str, Tuple[float, float, dict]] = {}
 _LIMITUP_STALE_BACKUP: Dict[str, dict] = {}
 _LIMITUP_INFLIGHT: Dict[str, asyncio.Task] = {}
 _CACHE_LOCK = asyncio.Lock()
 _INFLIGHT_LOCK = asyncio.Lock()
-CACHE_TTL = 8.0
-HISTORY_CACHE_TTL = 60.0
-EM_REQ_TIMEOUT = 2.6
+CACHE_TTL = 15.0
+SWR_WINDOW_TTL = 180.0
+HISTORY_CACHE_TTL = 120.0
+EM_REQ_TIMEOUT = 1.6
 
 
 async def invalidate_limitup_cache() -> None:
@@ -58,12 +66,6 @@ async def get_limitup_pool(
     roots_key = ",".join(roots_list)
 
     cache_key = f"limitup_{target_date}_{roots_key}_{1 if is_history_mode else 0}"
-    async with _CACHE_LOCK:
-        if cache_key in _LIMITUP_CACHE:
-            exp, data = _LIMITUP_CACHE[cache_key]
-            if exp > now_ts:
-                return data
-            _LIMITUP_CACHE.pop(cache_key, None)
 
     async def _compute_once() -> dict:
         return await _build_limitup_pool_inner(
@@ -76,18 +78,127 @@ async def get_limitup_pool(
             http_client=http_client,
         )
 
-    async with _INFLIGHT_LOCK:
-        task = _LIMITUP_INFLIGHT.get(cache_key)
-        if task is None or task.done():
-            task = asyncio.create_task(_compute_once())
-            _LIMITUP_INFLIGHT[cache_key] = task
-
-    try:
-        return await task
-    finally:
+    async def _ensure_inflight_task() -> asyncio.Task:
         async with _INFLIGHT_LOCK:
-            if _LIMITUP_INFLIGHT.get(cache_key) is task and task.done():
-                _LIMITUP_INFLIGHT.pop(cache_key, None)
+            task = _LIMITUP_INFLIGHT.get(cache_key)
+            if task is None or task.done():
+                task = asyncio.create_task(_compute_once())
+                _LIMITUP_INFLIGHT[cache_key] = task
+
+                def _cleanup(t: asyncio.Task) -> None:
+                    if _LIMITUP_INFLIGHT.get(cache_key) is t:
+                        _LIMITUP_INFLIGHT.pop(cache_key, None)
+
+                task.add_done_callback(_cleanup)
+            return task
+
+    async with _CACHE_LOCK:
+        entry = _LIMITUP_CACHE.get(cache_key)
+        if entry is not None:
+            fresh_exp, stale_exp, data = entry
+            if fresh_exp > now_ts:
+                return data
+            if stale_exp > now_ts:
+                # SWR 命中：1ms 立即返回热缓存，后台非阻塞静默刷新
+                asyncio.create_task(_ensure_inflight_task())
+                return data
+            _LIMITUP_CACHE.pop(cache_key, None)
+
+    task = await _ensure_inflight_task()
+    return await task
+
+
+async def _synthesize_qq_zt_pool(client: httpx.AsyncClient, qq_snap: dict, fallback_date: str) -> Tuple[str, List[dict], List[dict], List[dict], int]:
+    """当东财在云服务器限流熔断时，由腾讯全市场实时快照 + 近 12 日前复权 K 线精确合成涨停天梯、冲板池、炸板池与跌停数。"""
+    rows = qq_snap.get("rows") or []
+    actual_d = qq_snap.get("date") or fallback_date
+    zt_candidates = [r for r in rows if r.get("isZt") and not r["code"].startswith("30")]
+    sem_k = asyncio.Semaphore(25)
+
+    async def _calc_streak(r: dict) -> Tuple[int, int, int]:
+        c = r["code"]
+        tc = r["tcode"]
+        is_20 = c.startswith(("30", "68"))
+        thresh = 19.2 if is_20 else 9.4
+        try:
+            bars = await fetch_em_klines(client, to_em_secid(tc), klt=101, lmt=14, sem=sem_k, tcode_fallback=tc, ttl=300.0)
+        except Exception:
+            bars = []
+        if not bars or len(bars) < 2:
+            return 1, 1, 1
+        # 从最近一根向前统计连续涨停数 lbc 与近 12 日涨停次数 ct
+        streak = 0
+        ct = 0
+        span_days = min(12, len(bars) - 1)
+        for idx in range(len(bars) - 1, max(0, len(bars) - 1 - span_days), -1):
+            prev_c = bars[idx - 1]["close"]
+            cur_b = bars[idx]
+            if prev_c <= 0:
+                continue
+            pct = ((cur_b["close"] - prev_c) / prev_c) * 100.0
+            hit_zt = pct >= thresh and cur_b["close"] >= cur_b["high"] * 0.993
+            if hit_zt:
+                ct += 1
+                if streak == (len(bars) - 1 - idx):
+                    streak += 1
+        lbc = max(1, streak)
+        return lbc, max(lbc, ct), span_days
+
+    streak_res = await asyncio.gather(*[_calc_streak(r) for r in zt_candidates], return_exceptions=True) if zt_candidates else []
+    synth_zt: List[dict] = []
+    for r, st_info in zip(zt_candidates, streak_res):
+        lbc_v, ct_v, days_v = st_info if isinstance(st_info, tuple) else (1, 1, 1)
+        fbt_est = 92500 if r.get("isOneWord") else (93500 if r.get("turnover", 0) < 6.0 else 101500)
+        synth_zt.append({
+            "c": r["code"],
+            "n": r["name"],
+            "m": 1 if r["code"].startswith(("6", "9")) else 0,
+            "p": round(r.get("price", 0.0) * 1000.0),
+            "zdp": r.get("chg", 0.0),
+            "amount": r.get("amount", 0.0),
+            "ltsz": r.get("ltsz") or r.get("cmcap") or r.get("mcap") or 0.0,
+            "hs": r.get("turnover", 0.0),
+            "lbc": lbc_v,
+            "fbt": fbt_est,
+            "lbt": fbt_est,
+            "fund": r.get("fund", 0.0),
+            "zbc": 0,
+            "hybk": r.get("hybk", "其他板块"),
+            "zttj": {"days": days_v, "ct": ct_v},
+        })
+
+    synth_rushing = [
+        {
+            "f12": r["code"],
+            "f14": r["name"],
+            "f2": r.get("price", 0.0),
+            "f3": r.get("chg", 0.0),
+            "f18": r.get("prevClose", 0.0),
+            "f8": r.get("turnover", 0.0),
+            "f6": r.get("amount", 0.0),
+            "f10": r.get("vr") or r.get("volRatio") or 0.0,
+            "f100": r.get("hybk", "其他板块"),
+        }
+        for r in rows
+        if not r.get("isZt") and r.get("chg", 0.0) >= 7.0 and not r["code"].startswith("30")
+    ]
+    synth_zb = [
+        {
+            "c": r["code"],
+            "n": r["name"],
+            "p": round(r.get("price", 0.0) * 1000.0),
+            "ztp": round((r.get("ceiling") or r.get("high") or r.get("price", 0.0)) * 1000.0),
+            "zdp": r.get("chg", 0.0),
+            "hs": r.get("turnover", 0.0),
+            "zbc": 1,
+            "hybk": r.get("hybk", "其他板块"),
+            "fbt": 100000,
+        }
+        for r in rows
+        if r.get("touchedZt") and not r["code"].startswith("30")
+    ]
+    dt_cnt = sum(1 for r in rows if r.get("isDt"))
+    return actual_d, synth_zt, synth_rushing, synth_zb, dt_cnt
 
 
 async def _build_limitup_pool_inner(
@@ -120,84 +231,111 @@ async def _build_limitup_pool_inner(
         )
 
         raw_pool: List[dict] = []
+        raw_rushing: List[dict] = []
+        zb_raw_pool: List[dict] = []
+        zb_tc = 0
+        dt_tc = 0
+        up_count = 0
+        down_count = 0
+        flat_count = 0
         actual_date = target_date
+        used_qq_fallback = False
 
-        # 第一波：先拉目标交易日涨停池 + 全市场冲板股票（盘中 99% 场景 1 轮命中，2.6s 短超时）
-        clist_url = "https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=100&po=1&np=1&fltt=2&invt=2&fid=f3&fs=m:0+t:6,m:1+t:2,m:1+t:23&fields=f12,f14,f2,f3,f4,f5,f6,f7,f8,f10,f15,f16,f17,f18,f100"
-        first_zt_url = f"https://push2ex.eastmoney.com/getTopicZTPool?ut=7eea3edcaed734bea9cbfc24409ed989&dpt=wz.ztzt&Pageindex=0&pagesize=150&sort=fbt:asc&date={dates_to_try[0]}"
+        if not is_em_api_open():
+            clist_url = "https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=100&po=1&np=1&fltt=2&invt=2&fid=f3&fs=m:0+t:6,m:1+t:2,m:1+t:23&fields=f12,f14,f2,f3,f4,f5,f6,f7,f8,f10,f15,f16,f17,f18,f100"
+            first_zt_url = f"https://push2ex.eastmoney.com/getTopicZTPool?ut=7eea3edcaed734bea9cbfc24409ed989&dpt=wz.ztzt&Pageindex=0&pagesize=150&sort=fbt:asc&date={dates_to_try[0]}"
 
-        res_first_zt, res_clist = await asyncio.gather(
-            client.get(first_zt_url, headers=em_hdr, timeout=EM_REQ_TIMEOUT),
-            client.get(clist_url, headers=em_hdr, timeout=EM_REQ_TIMEOUT),
-            return_exceptions=True,
-        )
-        if not isinstance(res_first_zt, Exception) and res_first_zt.status_code == 200:
-            try:
-                j0 = res_first_zt.json()
-                if j0.get("rc") == 0 and j0.get("data") and j0["data"].get("pool"):
-                    raw_pool = j0["data"]["pool"]
-                    actual_date = dates_to_try[0] if date_str else str(j0["data"].get("qdate") or dates_to_try[0])
-            except Exception:
-                pass
-
-        # 若盘前 09:00-09:25 尚无首板，单波并发回溯前序 3 个交易日（告别旧版 6 轮串行等待）
-        if not raw_pool and len(dates_to_try) > 1:
-            fb_dates = dates_to_try[1:]
-            fb_resps = await asyncio.gather(
-                *[
-                    client.get(
-                        f"https://push2ex.eastmoney.com/getTopicZTPool?ut=7eea3edcaed734bea9cbfc24409ed989&dpt=wz.ztzt&Pageindex=0&pagesize=150&sort=fbt:asc&date={d_fb}",
-                        headers=em_hdr,
-                        timeout=EM_REQ_TIMEOUT,
-                    )
-                    for d_fb in fb_dates
-                ],
+            res_first_zt, res_clist = await asyncio.gather(
+                em_safe_get(client, first_zt_url, headers=em_hdr, timeout=EM_REQ_TIMEOUT),
+                em_safe_get(client, clist_url, headers=em_hdr, timeout=EM_REQ_TIMEOUT),
                 return_exceptions=True,
             )
-            for d_fb, r_fb in zip(fb_dates, fb_resps):
-                if not isinstance(r_fb, Exception) and r_fb.status_code == 200:
-                    try:
-                        j_fb = r_fb.json()
-                        if j_fb.get("rc") == 0 and j_fb.get("data") and j_fb["data"].get("pool"):
-                            raw_pool = j_fb["data"]["pool"]
-                            actual_date = d_fb if date_str else str(j_fb["data"].get("qdate") or d_fb)
-                            break
-                    except Exception:
-                        continue
+            if res_first_zt is not None and not isinstance(res_first_zt, Exception):
+                try:
+                    j0 = res_first_zt.json()
+                    if j0.get("rc") == 0 and j0.get("data") and j0["data"].get("pool"):
+                        raw_pool = j0["data"]["pool"]
+                        actual_date = dates_to_try[0] if date_str else str(j0["data"].get("qdate") or dates_to_try[0])
+                except Exception:
+                    pass
 
-        # 解析冲板中的临界标的
-        raw_rushing: List[dict] = []
-        if res_clist is not None and not isinstance(res_clist, Exception) and res_clist.status_code == 200:
-            try:
-                cj = res_clist.json()
-                diff = (cj.get("data") or {}).get("diff", [])
-                raw_rushing = diff
-            except Exception:
-                pass
+            if not raw_pool and len(dates_to_try) > 1 and not is_em_api_open():
+                fb_dates = dates_to_try[1:]
+                fb_resps = await asyncio.gather(
+                    *[
+                        em_safe_get(
+                            client,
+                            f"https://push2ex.eastmoney.com/getTopicZTPool?ut=7eea3edcaed734bea9cbfc24409ed989&dpt=wz.ztzt&Pageindex=0&pagesize=150&sort=fbt:asc&date={d_fb}",
+                            headers=em_hdr,
+                            timeout=EM_REQ_TIMEOUT,
+                        )
+                        for d_fb in fb_dates
+                    ],
+                    return_exceptions=True,
+                )
+                for d_fb, r_fb in zip(fb_dates, fb_resps):
+                    if r_fb is not None and not isinstance(r_fb, Exception):
+                        try:
+                            j_fb = r_fb.json()
+                            if j_fb.get("rc") == 0 and j_fb.get("data") and j_fb["data"].get("pool"):
+                                raw_pool = j_fb["data"]["pool"]
+                                actual_date = d_fb if date_str else str(j_fb["data"].get("qdate") or d_fb)
+                                break
+                        except Exception:
+                            continue
 
-        # 并行拉取：炸板池(ZBPool)、跌停池(DTPool)、两市涨跌家数(ulist) 与强势抱团子引擎
-        zb_url = f"https://push2ex.eastmoney.com/getTopicZBPool?ut=7eea3edcaed734bea9cbfc24409ed989&dpt=wz.ztzt&Pageindex=0&pagesize=150&sort=fbt:asc&date={actual_date}"
-        dt_url = f"https://push2ex.eastmoney.com/getTopicDTPool?ut=7eea3edcaed734bea9cbfc24409ed989&dpt=wz.ztzt&Pageindex=0&pagesize=150&sort=fund:asc&date={actual_date}"
-        breadth_url = "https://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&secids=1.000001,0.399001&fields=f104,f105,f106"
+            if res_clist is not None and not isinstance(res_clist, Exception):
+                try:
+                    cj = res_clist.json()
+                    raw_rushing = (cj.get("data") or {}).get("diff", [])
+                except Exception:
+                    pass
 
-        res_zb, res_dt, res_breadth, herd_payload = await asyncio.gather(
-            client.get(zb_url, headers=em_hdr, timeout=EM_REQ_TIMEOUT),
-            client.get(dt_url, headers=em_hdr, timeout=EM_REQ_TIMEOUT),
-            client.get(breadth_url, headers=em_hdr, timeout=EM_REQ_TIMEOUT),
-            build_strong_herd_and_themes(
+        # 若东财在云服务器上超时熔断且非指定历史复盘日，秒切腾讯全市场极速实时快照（~0.5s）
+        qq_snap: Optional[dict] = None
+        if not raw_pool and not date_str:
+            qq_snap = await fetch_tencent_market_snapshot(client, mainboard_only=False, ttl=12.0)
+            if qq_snap.get("rows"):
+                used_qq_fallback = True
+                actual_date, raw_pool, raw_rushing, zb_raw_pool, dt_tc = await _synthesize_qq_zt_pool(
+                    client, qq_snap, target_date
+                )
+                zb_tc = len(zb_raw_pool)
+                up_count = int(qq_snap.get("upCount") or 0)
+                down_count = int(qq_snap.get("downCount") or 0)
+                flat_count = int(qq_snap.get("flatCount") or 0)
+
+        if used_qq_fallback:
+            herd_payload = await build_strong_herd_and_themes(
                 client,
                 actual_date,
                 raw_pool,
                 mystic_roots=roots_list,
                 compute_yesterday_stats=(not is_history_mode),
                 read_only_herd=is_history_mode,
-            ),
-            return_exceptions=True,
-        )
+            )
+            res_zb = res_dt = res_breadth = None
+        else:
+            zb_url = f"https://push2ex.eastmoney.com/getTopicZBPool?ut=7eea3edcaed734bea9cbfc24409ed989&dpt=wz.ztzt&Pageindex=0&pagesize=150&sort=fbt:asc&date={actual_date}"
+            dt_url = f"https://push2ex.eastmoney.com/getTopicDTPool?ut=7eea3edcaed734bea9cbfc24409ed989&dpt=wz.ztzt&Pageindex=0&pagesize=150&sort=fund:asc&date={actual_date}"
+            breadth_url = "https://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&secids=1.000001,0.399001&fields=f104,f105,f106"
 
-        zb_raw_pool: List[dict] = []
-        zb_tc = 0
-        if not isinstance(res_zb, Exception) and res_zb.status_code == 200:
+            res_zb, res_dt, res_breadth, herd_payload = await asyncio.gather(
+                em_safe_get(client, zb_url, headers=em_hdr, timeout=EM_REQ_TIMEOUT),
+                em_safe_get(client, dt_url, headers=em_hdr, timeout=EM_REQ_TIMEOUT),
+                em_safe_get(client, breadth_url, headers=em_hdr, timeout=EM_REQ_TIMEOUT),
+                build_strong_herd_and_themes(
+                    client,
+                    actual_date,
+                    raw_pool,
+                    mystic_roots=roots_list,
+                    compute_yesterday_stats=(not is_history_mode),
+                    read_only_herd=is_history_mode,
+                ),
+                return_exceptions=True,
+            )
+
+        if res_zb is not None and not isinstance(res_zb, Exception) and res_zb.status_code == 200:
             try:
                 zb_j = res_zb.json()
                 if zb_j.get("rc") == 0 and zb_j.get("data"):
@@ -206,8 +344,7 @@ async def _build_limitup_pool_inner(
             except Exception:
                 pass
 
-        dt_tc = 0
-        if not isinstance(res_dt, Exception) and res_dt.status_code == 200:
+        if res_dt is not None and not isinstance(res_dt, Exception) and res_dt.status_code == 200:
             try:
                 dt_j = res_dt.json()
                 if dt_j.get("rc") == 0 and dt_j.get("data"):
@@ -215,10 +352,7 @@ async def _build_limitup_pool_inner(
             except Exception:
                 pass
 
-        up_count = 0
-        down_count = 0
-        flat_count = 0
-        if not isinstance(res_breadth, Exception) and res_breadth.status_code == 200:
+        if res_breadth is not None and not isinstance(res_breadth, Exception) and res_breadth.status_code == 200:
             try:
                 bj = res_breadth.json()
                 b_diff = (bj.get("data") or {}).get("diff", [])
@@ -226,6 +360,16 @@ async def _build_limitup_pool_inner(
                     up_count += int(row.get("f104") or 0)
                     down_count += int(row.get("f105") or 0)
                     flat_count += int(row.get("f106") or 0)
+            except Exception:
+                pass
+
+        # 若广度接口单独被限流导致 0/0，从腾讯全市场实时快照补齐真实涨跌家数
+        if (up_count + down_count) == 0 and not is_history_mode:
+            try:
+                qq_b = qq_snap or await fetch_tencent_market_snapshot(client, mainboard_only=False, ttl=12.0)
+                up_count = int(qq_b.get("upCount") or 0)
+                down_count = int(qq_b.get("downCount") or 0)
+                flat_count = int(qq_b.get("flatCount") or 0)
             except Exception:
                 pass
 
@@ -703,6 +847,7 @@ async def _build_limitup_pool_inner(
         "ok": True,
         "date": actual_date,
         "isHistory": is_history_mode,
+        "dataSource": "tencent_realtime_fallback" if used_qq_fallback else "eastmoney",
         "tradeCalendar": get_market_calendar_snapshot(date_str if date_str else None),
         "totalCount": len(items),
         "rushingCount": len(rushing_items),
@@ -721,7 +866,7 @@ async def _build_limitup_pool_inner(
         "updatedAt": cn_now_str(),
     }
 
-    # 若东财全链路偶发瞬时拦截导致 0 涨停且 0 涨跌家数，回退最近一次同键成功快照防空白闪断
+    # 若全链路偶发瞬时拦截导致 0 涨停且 0 涨跌家数，回退最近一次同键成功快照防空白闪断
     if not raw_pool and (up_count + down_count) == 0:
         async with _CACHE_LOCK:
             stale = _LIMITUP_STALE_BACKUP.get(cache_key)
@@ -729,9 +874,11 @@ async def _build_limitup_pool_inner(
             return {**stale, "fromStaleBackup": True}
 
     ttl_val = HISTORY_CACHE_TTL if is_history_mode else CACHE_TTL
-    exp_ts = time.monotonic() + ttl_val
+    now_done = time.monotonic()
+    fresh_exp = now_done + ttl_val
+    stale_exp = now_done + max(ttl_val, SWR_WINDOW_TTL)
     async with _CACHE_LOCK:
-        _LIMITUP_CACHE[cache_key] = (exp_ts, result)
+        _LIMITUP_CACHE[cache_key] = (fresh_exp, stale_exp, result)
         if raw_pool or (up_count + down_count) > 0:
             _LIMITUP_STALE_BACKUP[cache_key] = result
 

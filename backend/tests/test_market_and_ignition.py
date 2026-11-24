@@ -326,6 +326,59 @@ class TestIgnitionFreshnessAndSpeedPipeline(unittest.TestCase):
 
         asyncio.run(_run())
 
+    def test_dip_leaders_falls_back_to_tencent_snapshot_when_eastmoney_blocked(self):
+        import time as _time
+        from unittest.mock import patch
+        import backend.ignition as ign
+        import backend.market_data as md
+
+        # 构造一条从高点 40.0 回撤超过 45% 到 20.0 且量能枯竭的 60 日K线
+        dip_bars = []
+        for i in range(60):
+            hi = 40.0 if i < 15 else 21.0
+            cl = 38.0 if i < 15 else 20.0
+            lo = 36.0 if i < 15 else 19.8
+            vol = 10000.0 if i < 15 else 2200.0
+            dip_bars.append(_make_bar(f"2026-06-{(i % 28) + 1:02d}", cl, cl, hi, lo, vol))
+
+        fake_qq_snap = {
+            "rows": [
+                {"code": "603259", "tcode": "sh603259", "name": "药明康德", "hybk": "医疗服务", "price": 20.0, "chg": -1.2, "turnover": 2.4, "amount": 18e8, "mcap": 1500e8},
+                {"code": "300759", "tcode": "sz300759", "name": "康龙化成", "hybk": "医疗服务", "price": 20.0, "chg": -1.8, "turnover": 2.1, "amount": 8e8, "mcap": 420e8},
+                {"code": "603127", "tcode": "sh603127", "name": "昭衍新药", "hybk": "医疗服务", "price": 20.0, "chg": -2.0, "turnover": 1.9, "amount": 5e8, "mcap": 160e8},
+            ],
+            "upCount": 1200,
+            "downCount": 3500,
+            "flatCount": 100,
+        }
+
+        async def _fake_us(client, mappings):
+            return [], {}
+
+        async def _fake_boards(client):
+            return []
+
+        async def _fake_klines(*args, **kwargs):
+            return dip_bars
+
+        async def _run():
+            md._EM_API_COOLDOWN_UNTIL = _time.monotonic() + 120.0
+            try:
+                with (
+                    patch.object(ign, "_fetch_us_benchmarks", side_effect=_fake_us),
+                    patch.object(ign, "_fetch_all_boards", side_effect=_fake_boards),
+                    patch.object(ign, "fetch_tencent_market_snapshot", return_value=fake_qq_snap),
+                    patch.object(ign, "_fetch_em_klines", side_effect=_fake_klines),
+                ):
+                    res = await ign.scan_dip_leaders(object(), sector_dd_min=30.0, stock_dd_min=40.0)
+                    self.assertGreaterEqual(len(res["items"]), 1)
+                    codes = [x["code"] for x in res["items"]]
+                    self.assertIn("603259", codes)
+            finally:
+                md._EM_API_COOLDOWN_UNTIL = 0.0
+
+        asyncio.run(_run())
+
 
 if __name__ == "__main__":
     unittest.main()

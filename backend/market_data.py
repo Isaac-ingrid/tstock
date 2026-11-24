@@ -15,6 +15,7 @@ import datetime
 import json
 import time
 from collections import OrderedDict
+from pathlib import Path
 from typing import Any, Dict, Generic, List, Optional, Tuple, TypeVar
 
 import httpx
@@ -107,11 +108,77 @@ class BoundedTTLCache(Generic[K, V]):
 
 _KLINE_CACHE: BoundedTTLCache[Tuple[str, int, int], List[dict]] = BoundedTTLCache(maxsize=2048, default_ttl=300.0)
 _KLINE_SUPERSLICE_CACHE: BoundedTTLCache[Tuple[str, int], Tuple[int, List[dict]]] = BoundedTTLCache(maxsize=2048, default_ttl=300.0)
-_QUOTE_CACHE: BoundedTTLCache[str, dict] = BoundedTTLCache(maxsize=2048, default_ttl=4.0)
+_QUOTE_CACHE: BoundedTTLCache[str, dict] = BoundedTTLCache(maxsize=4096, default_ttl=5.0)
+_QQ_MARKET_SNAP_CACHE: BoundedTTLCache[str, dict] = BoundedTTLCache(maxsize=4, default_ttl=12.0)
+_QQ_SNAP_INFLIGHT: Dict[str, asyncio.Task] = {}
+_QQ_SNAP_LOCK = asyncio.Lock()
 
-# 东财 push2his 连续超时自动熔断状态（含个股与 90.BK* 板块，避免批量扫盘逐只卡在超时）
+_DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+_UNIVERSE_FILE = _DATA_DIR / "ashare_universe.json"
+_UNIVERSE_MEM: Optional[List[Tuple[str, str, str]]] = None
+
+# 东财全域名秒级熔断器（云服务器机房 IP 被东财限流/丢包时 1.5s 探测即熔断 180s，全站零等待秒切腾讯）
 _EM_HIS_FAIL_COUNT = 0
 _EM_HIS_COOLDOWN_UNTIL = 0.0
+_EM_API_FAIL_COUNT = 0
+_EM_API_COOLDOWN_UNTIL = 0.0
+
+
+def is_em_api_open() -> bool:
+    return time.monotonic() < _EM_API_COOLDOWN_UNTIL
+
+
+def record_em_api_success() -> None:
+    global _EM_API_FAIL_COUNT
+    _EM_API_FAIL_COUNT = 0
+
+
+def record_em_api_failure(threshold: int = 2, cooldown_sec: float = 180.0) -> None:
+    global _EM_API_FAIL_COUNT, _EM_API_COOLDOWN_UNTIL
+    _EM_API_FAIL_COUNT += 1
+    if _EM_API_FAIL_COUNT >= threshold:
+        _EM_API_COOLDOWN_UNTIL = time.monotonic() + cooldown_sec
+
+
+async def em_safe_get(
+    client: httpx.AsyncClient,
+    url: str,
+    headers: Optional[Dict[str, str]] = None,
+    timeout: float = 1.5,
+) -> Optional[httpx.Response]:
+    """带全局秒级熔断保护的东财 GET 请求封装（熔断期 0ms 直接返回 None）。"""
+    if is_em_api_open():
+        return None
+    hdrs = headers if headers is not None else {"Referer": "https://quote.eastmoney.com/"}
+    try:
+        r = await client.get(url, headers=hdrs, timeout=timeout)
+        if r.status_code == 200:
+            record_em_api_success()
+            return r
+        record_em_api_failure()
+    except Exception:
+        record_em_api_failure()
+    return None
+
+
+async def em_safe_post(
+    client: httpx.AsyncClient,
+    url: str,
+    json_body: Any,
+    timeout: float = 1.5,
+) -> Optional[httpx.Response]:
+    """带全局秒级熔断保护的东财 POST 请求封装。"""
+    if is_em_api_open():
+        return None
+    try:
+        r = await client.post(url, json=json_body, timeout=timeout)
+        if r.status_code == 200:
+            record_em_api_success()
+            return r
+        record_em_api_failure()
+    except Exception:
+        record_em_api_failure()
+    return None
 
 
 def parse_em_klines(klines: List[Any]) -> List[dict]:
@@ -457,42 +524,262 @@ async def fetch_batch_quotes(
         else:
             missing.append(c)
 
-    for i in range(0, len(missing), 60):
-        chunk = missing[i : i + 60]
+    sem_q = asyncio.Semaphore(16)
+    chunks = [missing[i : i + 80] for i in range(0, len(missing), 80)]
+
+    async def _fetch_chunk(chunk: List[str]) -> List[Tuple[str, dict]]:
         q_str = ",".join(to_tcode(c) for c in chunk)
-        try:
-            r = await client.get(f"https://qt.gtimg.cn/q={q_str}")
-            if r.status_code != 200:
+        parsed_items: List[Tuple[str, dict]] = []
+        async with sem_q:
+            try:
+                r = await client.get(
+                    f"https://qt.gtimg.cn/q={q_str}",
+                    headers={"Referer": "https://gu.qq.com/"},
+                    timeout=3.0,
+                )
+                if r.status_code != 200:
+                    return parsed_items
+                for line in r.text.split(";"):
+                    if "~" not in line:
+                        continue
+                    parts = line.split("~")
+                    if len(parts) <= 45:
+                        continue
+                    code = str(parts[2]).strip().zfill(6)
+                    name = str(parts[1]).strip()
+                    px = safe_float(parts[3])
+                    prev_close = safe_float(parts[4])
+                    if px <= 0:
+                        continue
+                    item = {
+                        "code": code,
+                        "tcode": to_tcode(code),
+                        "name": name,
+                        "price": round(px, 2),
+                        "prevClose": round(prev_close, 2),
+                        "open": round(safe_float(parts[5], px), 2),
+                        "high": round(safe_float(parts[33], px), 2),
+                        "low": round(safe_float(parts[34], px), 2),
+                        "chg": round(safe_float(parts[32]), 2),
+                        "amount": safe_float(parts[37]) * 10000.0,
+                        "turnover": round(safe_float(parts[38]), 2),
+                        "mcap": safe_float(parts[45]) * 1.0e8,
+                        "floatMcap": safe_float(parts[44]) * 1.0e8,
+                        "ceiling": round(safe_float(parts[47]), 2) if len(parts) > 47 else 0.0,
+                        "floor": round(safe_float(parts[48]), 2) if len(parts) > 48 else 0.0,
+                        "vr": round(safe_float(parts[49], 1.0), 2) if len(parts) > 49 else 1.0,
+                    }
+                    parsed_items.append((code, item))
+            except Exception:
+                pass
+        return parsed_items
+
+    if chunks:
+        batch_res = await asyncio.gather(*[_fetch_chunk(ch) for ch in chunks], return_exceptions=True)
+        for grp in batch_res:
+            if not isinstance(grp, list):
                 continue
-            for line in r.text.split(";"):
-                if "~" not in line:
-                    continue
-                parts = line.split("~")
-                if len(parts) <= 45:
-                    continue
-                code = str(parts[2]).strip().zfill(6)
-                name = str(parts[1]).strip()
-                px = safe_float(parts[3])
-                prev_close = safe_float(parts[4])
-                if px <= 0:
-                    continue
-                item = {
-                    "code": code,
-                    "tcode": to_tcode(code),
-                    "name": name,
-                    "price": round(px, 2),
-                    "prevClose": round(prev_close, 2),
-                    "open": round(safe_float(parts[5], px), 2),
-                    "high": round(safe_float(parts[33], px), 2),
-                    "low": round(safe_float(parts[34], px), 2),
-                    "chg": round(safe_float(parts[32]), 2),
-                    "amount": safe_float(parts[37]) * 10000.0,
-                    "turnover": round(safe_float(parts[38]), 2),
-                    "mcap": safe_float(parts[45]) * 1.0e8,
-                    "vr": round(safe_float(parts[49], 1.0), 2) if len(parts) > 49 else 1.0,
-                }
+            for code, item in grp:
                 out[code] = item
                 await _QUOTE_CACHE.set(code, item, ttl=ttl)
-        except Exception:
-            continue
     return out
+
+
+def load_ashare_universe() -> List[Tuple[str, str, str]]:
+    """加载本地全市场沪深 A 股底表 [(tcode, name, sector), ...]（进程内常驻免重复磁盘 IO）。"""
+    global _UNIVERSE_MEM
+    if _UNIVERSE_MEM is not None:
+        return _UNIVERSE_MEM
+    entries: List[Tuple[str, str, str]] = []
+    if _UNIVERSE_FILE.exists():
+        try:
+            raw = json.loads(_UNIVERSE_FILE.read_text(encoding="utf-8"))
+            if isinstance(raw, list):
+                for row in raw:
+                    if isinstance(row, list) and len(row) >= 2:
+                        tc = str(row[0] or "").strip().lower()
+                        if len(tc) == 8 and tc.startswith(("sh", "sz")):
+                            nm = str(row[1] or "").strip()
+                            sec = str(row[2] if len(row) > 2 else "其他板块").strip() or "其他板块"
+                            entries.append((tc, nm, sec))
+        except Exception:
+            pass
+    _UNIVERSE_MEM = entries
+    return entries
+
+
+async def fetch_tencent_market_snapshot(
+    client: httpx.AsyncClient,
+    mainboard_only: bool = False,
+    ttl: float = 12.0,
+) -> dict:
+    """
+    全市场沪深 A 股腾讯极速实时快照聚合引擎（云服务器东财限流时的零等待主备源）：
+    80 只/批 × 18 并发拉取 qt.gtimg.cn，约 0.35~0.75s 一次性产出全市场涨跌家数、实时涨跌停池、
+    炸板池、冲板池、买一封单额与行业板块归属。
+    """
+    cache_key = "mb" if mainboard_only else "all"
+    cached = await _QQ_MARKET_SNAP_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
+    async def _build_snap() -> dict:
+        universe = load_ashare_universe()
+        if mainboard_only:
+            universe = [
+                (tc, nm, sec)
+                for tc, nm, sec in universe
+                if tc[2:].startswith(("00", "60")) and "ST" not in nm.upper() and "退" not in nm
+            ]
+        sec_map = {tc[2:]: sec for tc, _, sec in universe}
+        tcodes = [tc for tc, _, _ in universe]
+        chunks = [tcodes[i : i + 80] for i in range(0, len(tcodes), 80)]
+        sem = asyncio.Semaphore(18)
+
+        async def _pull(batch: List[str]) -> List[dict]:
+            out_rows: List[dict] = []
+            async with sem:
+                try:
+                    r = await client.get(
+                        f"https://qt.gtimg.cn/q={','.join(batch)}",
+                        headers={"Referer": "https://gu.qq.com/"},
+                        timeout=3.2,
+                    )
+                    if r.status_code != 200:
+                        return out_rows
+                    for line in r.text.split(";"):
+                        if "~" not in line:
+                            continue
+                        f = line.split("~")
+                        if len(f) < 50:
+                            continue
+                        code = str(f[2] or "").strip().zfill(6)
+                        if not code.isdigit() or len(code) != 6:
+                            continue
+                        px = safe_float(f[3])
+                        prev_c = safe_float(f[4])
+                        if px <= 0 or prev_c <= 0:
+                            continue
+                        name = str(f[1] or "").strip()
+                        open_px = safe_float(f[5], px)
+                        chg = round(safe_float(f[32]), 2)
+                        high = safe_float(f[33], px)
+                        low = safe_float(f[34], px)
+                        amt = safe_float(f[37]) * 10000.0
+                        turnover = round(safe_float(f[38]), 2)
+                        ltsz = safe_float(f[44]) * 1.0e8
+                        tcap = safe_float(f[45], safe_float(f[44])) * 1.0e8
+                        is_20 = code.startswith(("30", "68"))
+                        is_st = "ST" in name.upper()
+                        lim_ratio = 1.05 if is_st else (1.20 if is_20 else 1.10)
+                        dn_ratio = 0.95 if is_st else (0.80 if is_20 else 0.90)
+                        ceiling = safe_float(f[47]) or round(prev_c * lim_ratio, 2)
+                        floor_px = safe_float(f[48]) or round(prev_c * dn_ratio, 2)
+                        vr = round(safe_float(f[49], 1.0), 2)
+                        b1_p = safe_float(f[9])
+                        b1_v = safe_float(f[10])
+                        ts_raw = str(f[30] or "").strip()
+                        qdate = ts_raw[:8] if len(ts_raw) >= 8 and ts_raw[:8].isdigit() else ""
+                        qtime = ts_raw[8:14] if len(ts_raw) >= 14 and ts_raw[8:14].isdigit() else "100000"
+
+                        zt_thresh = 4.7 if is_st else (19.3 if is_20 else 9.5)
+                        is_zt = bool(ceiling > 0 and px >= ceiling - 0.01 and chg >= zt_thresh)
+                        touched_zt = bool(not is_zt and ceiling > 0 and high >= ceiling - 0.01 and not is_st)
+                        is_dt = bool(floor_px > 0 and px <= floor_px + 0.01 and chg <= -zt_thresh)
+                        seal_fund = (b1_p * b1_v * 100.0) if is_zt else 0.0
+
+                        out_rows.append({
+                            "code": code,
+                            "tcode": to_tcode(code),
+                            "name": name,
+                            "hybk": sec_map.get(code, "其他板块"),
+                            "price": round(px, 2),
+                            "prevClose": round(prev_c, 2),
+                            "open": round(open_px, 2),
+                            "high": round(high, 2),
+                            "low": round(low, 2),
+                            "chg": chg,
+                            "amount": amt,
+                            "turnover": turnover,
+                            "ltsz": ltsz or tcap,
+                            "mcap": tcap or ltsz,
+                            "ceiling": round(ceiling, 2),
+                            "floor": round(floor_px, 2),
+                            "vr": vr,
+                            "fund": seal_fund,
+                            "isZt": is_zt,
+                            "touchedZt": touched_zt,
+                            "isDt": is_dt,
+                            "isOneWord": bool(is_zt and abs(high - low) < 0.005),
+                            "qdate": qdate,
+                            "qtime": qtime,
+                        })
+                except Exception:
+                    pass
+            return out_rows
+
+        groups = await asyncio.gather(*[_pull(ch) for ch in chunks], return_exceptions=True)
+        all_rows: List[dict] = []
+        date_counts: Dict[str, int] = {}
+        up_c = 0
+        dn_c = 0
+        fl_c = 0
+        for g in groups:
+            if not isinstance(g, list):
+                continue
+            for item in g:
+                all_rows.append(item)
+                if item["chg"] > 0:
+                    up_c += 1
+                elif item["chg"] < 0:
+                    dn_c += 1
+                else:
+                    fl_c += 1
+                qd = item.get("qdate")
+                if qd:
+                    date_counts[qd] = date_counts.get(qd, 0) + 1
+                await _QUOTE_CACHE.set(
+                    item["code"],
+                    {
+                        "code": item["code"],
+                        "tcode": item["tcode"],
+                        "name": item["name"],
+                        "price": item["price"],
+                        "prevClose": item["prevClose"],
+                        "open": item["open"],
+                        "high": item["high"],
+                        "low": item["low"],
+                        "chg": item["chg"],
+                        "amount": item["amount"],
+                        "turnover": item["turnover"],
+                        "mcap": item["mcap"],
+                        "vr": item["vr"],
+                    },
+                    ttl=max(4.0, ttl * 0.6),
+                )
+
+        dominant_date = max(date_counts.items(), key=lambda kv: kv[1])[0] if date_counts else ""
+        snap_obj = {
+            "date": dominant_date,
+            "rows": all_rows,
+            "byCode": {r["code"]: r for r in all_rows},
+            "upCount": up_c,
+            "downCount": dn_c,
+            "flatCount": fl_c,
+        }
+        if all_rows:
+            await _QQ_MARKET_SNAP_CACHE.set(cache_key, snap_obj, ttl=ttl)
+        return snap_obj
+
+    async with _QQ_SNAP_LOCK:
+        task = _QQ_SNAP_INFLIGHT.get(cache_key)
+        if task is None or task.done():
+            task = asyncio.create_task(_build_snap())
+            _QQ_SNAP_INFLIGHT[cache_key] = task
+
+    try:
+        return await task
+    finally:
+        async with _QQ_SNAP_LOCK:
+            if _QQ_SNAP_INFLIGHT.get(cache_key) is task and task.done():
+                _QQ_SNAP_INFLIGHT.pop(cache_key, None)

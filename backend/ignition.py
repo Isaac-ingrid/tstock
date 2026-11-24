@@ -16,8 +16,11 @@ import httpx
 from .diagnosis import classify_announcement
 from .market_data import (
     BoundedTTLCache,
+    em_safe_get,
     fetch_batch_quotes as _fetch_batch_quotes,
     fetch_em_klines as _gateway_fetch_em_klines,
+    fetch_tencent_market_snapshot,
+    is_em_api_open,
     parse_em_klines as _parse_em_klines,
     safe_float as _sf,
     to_em_secid,
@@ -42,7 +45,7 @@ _ZT_HISTORY_LOCK = asyncio.Lock()
 _INFLIGHT_SCANS_LOCK = asyncio.Lock()
 _INFLIGHT_SCANS: Dict[str, asyncio.Task] = {}
 
-RESULT_TTL = 45.0
+RESULT_TTL = 240.0
 ZT_DAY_TTL = 3600.0
 ZT_HIST_TTL = 43200.0
 NOTICE_TTL = 1800.0
@@ -205,32 +208,38 @@ async def _fetch_em_klines(
     )
 
 
+_SAFE_NOTICE_DEFAULT = {"riskLevel": "安全", "redFlags": [], "yellowAlerts": []}
+
+
 async def _fetch_stock_notice_risk(
     client: httpx.AsyncClient,
     code: str,
     sem: asyncio.Semaphore,
 ) -> dict:
-    """拉取个股近35天公告排雷状态，带 2.0s 短超时与连续失败熔断保护。"""
+    """拉取个股近35天公告排雷状态，共享全局东财熔断 + 1.3s 短超时保护。"""
     global _NOTICE_FAIL_COUNT, _NOTICE_COOLDOWN_UNTIL
     cached = await _NOTICE_CACHE.get(code)
     if cached is not None:
         return cached
 
-    if time.monotonic() < _NOTICE_COOLDOWN_UNTIL:
-        return {"riskLevel": "安全", "redFlags": [], "yellowAlerts": []}
+    if is_em_api_open() or time.monotonic() < _NOTICE_COOLDOWN_UNTIL:
+        return dict(_SAFE_NOTICE_DEFAULT)
 
     url = f"https://np-anotice-stock.eastmoney.com/api/security/ann?sr=-1&page_size=25&page_index=1&ann_type=A&stock_list={code}"
     red_flags: List[dict] = []
     yellow_alerts: List[dict] = []
     ok_resp = False
     async with sem:
-        try:
-            r = await client.get(
-                url,
-                headers={"Referer": "https://data.eastmoney.com/"},
-                timeout=2.0,
-            )
-            if r.status_code == 200 and r.text.lstrip().startswith("{"):
+        if is_em_api_open() or time.monotonic() < _NOTICE_COOLDOWN_UNTIL:
+            return dict(_SAFE_NOTICE_DEFAULT)
+        r = await em_safe_get(
+            client,
+            url,
+            headers={"Referer": "https://data.eastmoney.com/"},
+            timeout=1.3,
+        )
+        if r is not None and r.text.lstrip().startswith("{"):
+            try:
                 ok_resp = True
                 _NOTICE_FAIL_COUNT = 0
                 items = ((r.json().get("data") or {}).get("list")) or []
@@ -251,12 +260,13 @@ async def _fetch_stock_notice_risk(
                         red_flags.append(entry)
                     elif level == "yellow":
                         yellow_alerts.append(entry)
-            else:
+            except Exception:
+                ok_resp = False
                 _NOTICE_FAIL_COUNT += 1
-        except Exception:
+        else:
             _NOTICE_FAIL_COUNT += 1
-        if _NOTICE_FAIL_COUNT >= 5:
-            _NOTICE_COOLDOWN_UNTIL = time.monotonic() + 90.0
+        if _NOTICE_FAIL_COUNT >= 2:
+            _NOTICE_COOLDOWN_UNTIL = time.monotonic() + 180.0
 
     risk_level = "高风险" if red_flags else ("留意" if yellow_alerts else "安全")
     res = {
@@ -267,6 +277,42 @@ async def _fetch_stock_notice_risk(
     if ok_resp:
         await _NOTICE_CACHE.set(code, res, ttl=NOTICE_TTL)
     return res
+
+
+async def _batch_notice_fast(
+    client: httpx.AsyncClient,
+    codes: List[str],
+    max_live: int = 16,
+    budget_sec: float = 1.2,
+) -> List[dict]:
+    """批量公告排雷：缓存优先 + 全局熔断秒返 + 总耗时硬预算封顶，杜绝云服务器拖慢起爆主链路。"""
+    out: List[Optional[dict]] = [None] * len(codes)
+    miss_indices: List[int] = []
+    for idx, c in enumerate(codes):
+        hit = await _NOTICE_CACHE.get(c)
+        if hit is not None:
+            out[idx] = hit
+        else:
+            miss_indices.append(idx)
+
+    if not miss_indices or is_em_api_open() or time.monotonic() < _NOTICE_COOLDOWN_UNTIL:
+        return [x if x is not None else dict(_SAFE_NOTICE_DEFAULT) for x in out]
+
+    live_targets = miss_indices[:max_live]
+    sem_n = asyncio.Semaphore(12)
+    tasks = [asyncio.create_task(_fetch_stock_notice_risk(client, codes[i], sem_n)) for i in live_targets]
+    done, pending = await asyncio.wait(tasks, timeout=budget_sec)
+    for p in pending:
+        p.cancel()
+    for i, t in zip(live_targets, tasks):
+        if t in done and not t.cancelled():
+            try:
+                val = t.result()
+                if isinstance(val, dict):
+                    out[i] = val
+            except Exception:
+                pass
+    return [x if x is not None else dict(_SAFE_NOTICE_DEFAULT) for x in out]
 
 
 def _sma(vals: List[float], period: int) -> Optional[float]:
@@ -955,19 +1001,25 @@ async def _fetch_zt_pool_day(
     if cached is not None:
         return date_str, cached
 
+    if is_em_api_open():
+        return date_str, []
+
     url = (
         "https://push2ex.eastmoney.com/getTopicZTPool"
         f"?ut=7eea3edcaed734bea9cbfc24409ed989&dpt=wz.ztzt&Pageindex=0&pagesize=180&sort=lbc:desc&date={date_str}"
     )
     pool: List[dict] = []
     async with sem:
+        if is_em_api_open():
+            return date_str, []
         try:
-            r = await client.get(
+            r = await em_safe_get(
+                client,
                 url,
                 headers={"Referer": "https://quote.eastmoney.com/"},
-                timeout=2.8,
+                timeout=1.6,
             )
-            if r.status_code == 200 and r.text.lstrip().startswith("{"):
+            if r is not None and r.text.lstrip().startswith("{"):
                 j = r.json()
                 if j.get("rc") == 0 and isinstance(j.get("data"), dict):
                     raw = j["data"].get("pool") or []
@@ -1045,21 +1097,49 @@ async def scan_breakout_ignition(
             else:
                 seed_meta[code]["ztCountRecent"] += 1
 
-    # 优先取“最近涨停发生在 2~20 个交易日前”的历史试盘股，再按流动性过滤最多 220 只做日K精算
+    # 云端东财 getTopicZTPool 限流且本地尚无历史池缓存时，自动从腾讯全市场实时快照选取活跃主板候选做日K涨停试盘回溯
+    if len(seed_meta) < 25:
+        try:
+            qq_snap = await fetch_tencent_market_snapshot(http_client, mainboard_only=(not include_cyb), ttl=12.0)
+            qq_cands = [
+                r for r in (qq_snap.get("rows") or [])
+                if r.get("amount", 0.0) >= 5e7
+                and -4.5 <= r.get("chg", 0.0) <= 7.8
+                and 1.2 <= r.get("turnover", 0.0) <= 24.0
+                and "ST" not in str(r.get("name") or "").upper()
+                and "退" not in str(r.get("name") or "")
+                and (include_cyb or is_mainboard_10cm(r["code"], r["name"]))
+            ]
+            qq_cands.sort(key=lambda x: -x.get("amount", 0.0))
+            for r in qq_cands[:145]:
+                c = r["code"]
+                if c not in seed_meta:
+                    seed_meta[c] = {
+                        "code": c,
+                        "name": r["name"],
+                        "hybk": r.get("hybk") or "其他",
+                        "lastZtDateHint": "",
+                        "ztCountRecent": 1,
+                        "dayIdxHint": 5,
+                    }
+        except Exception:
+            pass
+
+    # 优先取“最近涨停发生在 2~20 个交易日前”的历史试盘股，再按流动性过滤最多 140 只做日K精算
     sorted_seeds = sorted(
         seed_meta.values(),
         key=lambda x: (0 if 2 <= x["dayIdxHint"] <= 20 else 1, x["dayIdxHint"], -x["ztCountRecent"]),
-    )[:240]
+    )[:190]
     seed_codes = [s["code"] for s in sorted_seeds]
     quotes = await _fetch_batch_quotes(http_client, seed_codes)
 
     active_codes = [
         c for c in seed_codes
         if c in quotes and quotes[c]["price"] > 0 and quotes[c]["amount"] >= 4e7
-    ][:200]
+    ][:140]
 
     # Step 3A: 高并发拉取日K初筛（走免 WAF 腾讯代理节点 + 超集切片缓存）
-    sem_k = asyncio.Semaphore(28)
+    sem_k = asyncio.Semaphore(36)
     daily_tasks = [
         _fetch_em_klines(
             http_client,
@@ -1130,11 +1210,13 @@ async def scan_breakout_ignition(
         })
         qual_bars.append((dbars, w_bars, m_bars))
 
-    # 补充公告排雷（带熔断高并发）并统一调用 evaluate_ignition_six_dims 对齐总分
-    sem_notice = asyncio.Semaphore(16)
-    notice_list = await asyncio.gather(
-        *[_fetch_stock_notice_risk(http_client, item["code"], sem_notice) for item in qualified[:45]],
-        return_exceptions=True,
+    # 补充公告排雷（带全局熔断 + 1.2s 硬预算）并统一调用 evaluate_ignition_six_dims 对齐总分
+    target_qual = qualified[:45]
+    notice_list = await _batch_notice_fast(
+        http_client,
+        [item["code"] for item in target_qual],
+        max_live=16,
+        budget_sec=1.2,
     )
     for idx, nres in enumerate(notice_list):
         notice_obj = nres if isinstance(nres, dict) else {}
@@ -1213,18 +1295,19 @@ async def _fetch_us_benchmarks(
         quotes_by_secid = {q["secid"]: q for q in cached_us}
 
     if not quotes_by_secid and unique_secids:
-        if time.monotonic() >= _EM_CLIST_COOLDOWN_UNTIL:
+        if not is_em_api_open() and time.monotonic() >= _EM_CLIST_COOLDOWN_UNTIL:
             url = (
                 "https://push2.eastmoney.com/api/qt/ulist.np/get"
                 f"?fltt=2&invt=2&fields=f12,f13,f14,f2,f3,f4,f15,f16,f17,f18&secids={','.join(unique_secids)}"
             )
             try:
-                r = await client.get(
+                r = await em_safe_get(
+                    client,
                     url,
                     headers={"Referer": "https://quote.eastmoney.com/"},
-                    timeout=2.4,
+                    timeout=1.4,
                 )
-                if r.status_code == 200 and r.text.lstrip().startswith("{"):
+                if r is not None and r.text.lstrip().startswith("{"):
                     for row in ((r.json().get("data") or {}).get("diff")) or []:
                         mkt = row.get("f13")
                         sym = str(row.get("f12") or "").strip().upper()
@@ -1330,14 +1413,14 @@ async def _fetch_all_boards(client: httpx.AsyncClient) -> List[dict]:
         return cached_boards
 
     out: List[dict] = []
-    if time.monotonic() >= _EM_CLIST_COOLDOWN_UNTIL:
+    if not is_em_api_open() and time.monotonic() >= _EM_CLIST_COOLDOWN_UNTIL:
         queries: List[Tuple[str, str]] = [
             ("concept", "https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=100&po=0&np=1&fltt=2&invt=2&fid=f24&fs=m:90+t:3+f:!50&fields=f12,f14,f2,f3,f20,f24,f25"),
             ("concept", "https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=100&po=0&np=1&fltt=2&invt=2&fid=f25&fs=m:90+t:3+f:!50&fields=f12,f14,f2,f3,f20,f24,f25"),
             ("industry", "https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=100&po=0&np=1&fltt=2&invt=2&fid=f24&fs=m:90+t:2+f:!50&fields=f12,f14,f2,f3,f20,f24,f25"),
             ("industry", "https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=100&po=0&np=1&fltt=2&invt=2&fid=f25&fs=m:90+t:2+f:!50&fields=f12,f14,f2,f3,f20,f24,f25"),
         ]
-        for pn in range(1, 4):
+        for pn in range(1, 3):
             queries.append((
                 "concept",
                 f"https://push2.eastmoney.com/api/qt/clist/get?pn={pn}&pz=200&po=1&np=1&fltt=2&invt=2&fid=f3&fs=m:90+t:3+f:!50&fields=f12,f14,f2,f3,f20,f24,f25",
@@ -1347,15 +1430,15 @@ async def _fetch_all_boards(client: httpx.AsyncClient) -> List[dict]:
 
         async def _get_page(btype: str, url: str) -> Tuple[str, Optional[httpx.Response]]:
             async with sem_b:
-                try:
-                    r = await client.get(
-                        url,
-                        headers={"Referer": "https://quote.eastmoney.com/"},
-                        timeout=2.4,
-                    )
-                    return btype, r
-                except Exception:
+                if is_em_api_open():
                     return btype, None
+                r = await em_safe_get(
+                    client,
+                    url,
+                    headers={"Referer": "https://quote.eastmoney.com/"},
+                    timeout=1.5,
+                )
+                return btype, r
 
         resps = await asyncio.gather(*[_get_page(bt, u) for bt, u in queries], return_exceptions=True)
 
@@ -1465,16 +1548,35 @@ async def scan_dip_leaders(
     cand_board_map: Dict[str, dict] = {}
     for b in [*by_60d, *by_ytd, *by_today, *mapped_boards]:
         cand_board_map[b["bkCode"]] = b
-    cand_boards = list(cand_board_map.values())[:20]
+    cand_boards = list(cand_board_map.values())[:18]
 
-    sem_bk = asyncio.Semaphore(10)
-    bk_klines = await asyncio.gather(
-        *[_fetch_em_klines(http_client, f"90.{b['bkCode']}", 101, 180, sem_bk, ttl=900.0) for b in cand_boards],
-        return_exceptions=True,
-    )
+    bk_bars_map: Dict[str, List[dict]] = {}
+    if not is_em_api_open():
+        need_kline_bks = [
+            b for b in cand_boards
+            if -min(b.get("chg60d") or 0.0, b.get("chgYtd") or 0.0) < sector_dd_min
+        ][:8]
+        if need_kline_bks:
+            sem_bk = asyncio.Semaphore(8)
+            bk_tasks = [
+                asyncio.create_task(_fetch_em_klines(http_client, f"90.{b['bkCode']}", 101, 180, sem_bk, ttl=900.0))
+                for b in need_kline_bks
+            ]
+            done_bk, pend_bk = await asyncio.wait(bk_tasks, timeout=1.3)
+            for p in pend_bk:
+                p.cancel()
+            for b, t in zip(need_kline_bks, bk_tasks):
+                if t in done_bk and not t.cancelled():
+                    try:
+                        res_b = t.result()
+                        if isinstance(res_b, list) and res_b:
+                            bk_bars_map[b["bkCode"]] = res_b
+                    except Exception:
+                        pass
 
     qualifying_boards: List[dict] = []
-    for b, bars in zip(cand_boards, bk_klines):
+    for b in cand_boards:
+        bars = bk_bars_map.get(b["bkCode"])
         shock = board_shock_map.get(b["bkCode"])
         has_us_shock = bool(shock and shock["usMinChg"] <= -2.0)
 
@@ -1501,11 +1603,11 @@ async def scan_dip_leaders(
     )
     top_boards = qualifying_boards[:12]
 
-    # 拉取每个深跌板块的成交额 Top 5 龙头股（短超时 + 8 并发）
+    # 拉取每个深跌板块的成交额 Top 4 龙头股（共享全局东财熔断 + 1.5s 短超时）
     sem_leaders = asyncio.Semaphore(8)
 
     async def _fetch_board_leaders(bk: dict) -> List[dict]:
-        if time.monotonic() < _EM_CLIST_COOLDOWN_UNTIL:
+        if is_em_api_open() or time.monotonic() < _EM_CLIST_COOLDOWN_UNTIL:
             return []
         bk_code = bk["bkCode"]
         url = (
@@ -1515,12 +1617,15 @@ async def scan_dip_leaders(
         )
         try:
             async with sem_leaders:
-                r = await http_client.get(
+                if is_em_api_open():
+                    return []
+                r = await em_safe_get(
+                    http_client,
                     url,
                     headers={"Referer": "https://quote.eastmoney.com/"},
-                    timeout=2.4,
+                    timeout=1.5,
                 )
-            if r.status_code != 200 or not r.text.lstrip().startswith("{"):
+            if r is None or not r.text.lstrip().startswith("{"):
                 return []
             diff = ((r.json().get("data") or {}).get("diff")) or []
             leaders: List[dict] = []
@@ -1548,7 +1653,7 @@ async def scan_dip_leaders(
         except Exception:
             return []
 
-    leader_groups = await asyncio.gather(*[_fetch_board_leaders(b) for b in top_boards], return_exceptions=True)
+    leader_groups = await asyncio.gather(*[_fetch_board_leaders(b) for b in top_boards], return_exceptions=True) if top_boards else []
 
     merged_leaders: Dict[str, dict] = {}
     for grp in leader_groups:
@@ -1583,11 +1688,101 @@ async def scan_dip_leaders(
                 if not entry["usShock"] or bk["usShock"]["usMinChg"] < entry["usShock"]["usMinChg"]:
                     entry["usShock"] = bk["usShock"]
 
-    leader_list = sorted(merged_leaders.values(), key=lambda x: -x["mcapYi"])[:42]
+    # 云端东财 clist 板块成分股被封锁时，直接用腾讯全市场实时快照按申万/行业分组提取深跌与美股映射板块核心龙头
+    if not merged_leaders:
+        try:
+            qq_snap = await fetch_tencent_market_snapshot(http_client, mainboard_only=False, ttl=12.0)
+            by_sec: Dict[str, List[dict]] = defaultdict(list)
+            for r in (qq_snap.get("rows") or []):
+                c = r["code"]
+                nm = r["name"]
+                sec = str(r.get("hybk") or "").strip()
+                if not sec or sec == "其他" or c.startswith(("4", "8", "92")):
+                    continue
+                if "ST" in nm.upper() or "退" in nm or r.get("price", 0.0) <= 0:
+                    continue
+                by_sec[sec].append(r)
 
-    # 高并发拉取龙头股 180日日K与公告排雷
-    sem_k = asyncio.Semaphore(20)
-    sem_notice = asyncio.Semaphore(16)
+            disk_dd_by_name = {b["bkName"]: b.get("boardDrawdownPct", min(b.get("chg60d") or 0.0, b.get("chgYtd") or 0.0)) for b in top_boards}
+            sec_cards: List[dict] = []
+            for sec_name, members in by_sec.items():
+                if len(members) < 3:
+                    continue
+                avg_chg = sum(m.get("chg", 0.0) for m in members) / len(members)
+                matched_shock = None
+                for th in theme_shocks.values():
+                    if any(kw.lower() in sec_name.lower() or sec_name.lower() in kw.lower() for kw in th["boardKeywords"]):
+                        if matched_shock is None or th["usMinChg"] < matched_shock["usMinChg"]:
+                            matched_shock = th
+                est_dd = float(disk_dd_by_name.get(sec_name, -max(sector_dd_min, 30.0)))
+                sec_cards.append({
+                    "secName": sec_name,
+                    "avgChg": round(avg_chg, 2),
+                    "usShock": matched_shock,
+                    "estDd": round(est_dd, 1),
+                    "members": members,
+                })
+
+            sec_cards.sort(
+                key=lambda s: (
+                    0 if (s["usShock"] and s["usShock"]["usMinChg"] <= -2.0) else (1 if s["secName"] in disk_dd_by_name else 2),
+                    s["estDd"],
+                    s["avgChg"],
+                )
+            )
+            picked_secs = sec_cards[:12]
+            if not top_boards:
+                top_boards = [
+                    {
+                        "bkCode": f"HY_{idx:02d}",
+                        "bkName": sc["secName"],
+                        "boardType": "industry",
+                        "price": 0.0,
+                        "chg": sc["avgChg"],
+                        "chg60d": sc["estDd"],
+                        "chgYtd": sc["estDd"],
+                        "mcap": sum(m.get("mcap", 0.0) for m in sc["members"]),
+                        "boardDrawdownPct": sc["estDd"],
+                        "usShock": sc["usShock"],
+                    }
+                    for idx, sc in enumerate(picked_secs)
+                ]
+            for idx, sc in enumerate(picked_secs):
+                ranked_m = sorted(
+                    [m for m in sc["members"] if m.get("amount", 0.0) >= 3e7],
+                    key=lambda m: -(m.get("mcap", 0.0) * 0.65 + m.get("amount", 0.0) * 8.0),
+                )[:4]
+                for m in ranked_m:
+                    c = m["code"]
+                    if c in merged_leaders:
+                        continue
+                    merged_leaders[c] = {
+                        "code": c,
+                        "tcode": m["tcode"],
+                        "name": m["name"],
+                        "price": round(m["price"], 2),
+                        "chg": round(m["chg"], 2),
+                        "amountYi": round(m.get("amount", 0.0) / 1e8, 2),
+                        "turnover": round(m.get("turnover", 0.0), 2),
+                        "mcapYi": round(m.get("mcap", 0.0) / 1e8, 1),
+                        "matchedBoards": [{
+                            "bkCode": f"HY_{idx:02d}",
+                            "bkName": sc["secName"],
+                            "boardDrawdownPct": sc["estDd"],
+                            "boardChg": sc["avgChg"],
+                        }],
+                        "worstBoardDd": sc["estDd"],
+                        "worstBoardChg": sc["avgChg"],
+                        "primaryBoardName": sc["secName"],
+                        "usShock": sc["usShock"],
+                    }
+        except Exception:
+            pass
+
+    leader_list = sorted(merged_leaders.values(), key=lambda x: -x["mcapYi"])[:40]
+
+    # 高并发拉取龙头股 180日日K（走腾讯免WAF接口）+ 硬预算公告排雷
+    sem_k = asyncio.Semaphore(28)
     k_tasks = [
         _fetch_em_klines(
             http_client,
@@ -1599,10 +1794,9 @@ async def scan_dip_leaders(
         )
         for x in leader_list
     ]
-    n_tasks = [_fetch_stock_notice_risk(http_client, x["code"], sem_notice) for x in leader_list]
     k_res, n_res = await asyncio.gather(
         asyncio.gather(*k_tasks, return_exceptions=True),
-        asyncio.gather(*n_tasks, return_exceptions=True),
+        _batch_notice_fast(http_client, [x["code"] for x in leader_list], max_live=16, budget_sec=1.2),
     )
 
     picks: List[dict] = []

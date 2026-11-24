@@ -13,7 +13,15 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import httpx
 
-from .market_data import BoundedTTLCache, fetch_batch_quotes, fetch_kline_rows
+from .market_data import (
+    BoundedTTLCache,
+    em_safe_get,
+    em_safe_post,
+    fetch_batch_quotes,
+    fetch_kline_rows,
+    fetch_tencent_market_snapshot,
+    is_em_api_open,
+)
 from .patterns import analyze_kline_patterns
 from .trade_calendar import count_trade_days_between, latest_or_current_trade_day, recent_trade_dates, shift_trade_days
 
@@ -479,21 +487,17 @@ async def _fetch_hist_zt_pool(client: httpx.AsyncClient, date_str: str) -> List[
         f"?ut=7eea3edcaed734bea9cbfc24409ed989&dpt=wz.ztzt&Pageindex=0&pagesize=180&sort=lbc:desc&date={date_str}"
     )
     pool: List[dict] = []
-    try:
-        r = await client.get(
-            url,
-            headers={"Referer": "https://quote.eastmoney.com/"},
-            timeout=EM_SHORT_TIMEOUT,
-        )
-        if r.status_code == 200:
+    r = await em_safe_get(client, url, timeout=1.5)
+    if r is not None:
+        try:
             j = r.json()
             if j.get("rc") == 0 and j.get("data"):
                 raw = j["data"].get("pool") or []
                 qdate = str(j["data"].get("qdate") or "")
                 if qdate == date_str:
                     pool = raw
-    except Exception:
-        pool = []
+        except Exception:
+            pool = []
 
     if pool:
         await _HIST_ZT_CACHE.set(date_str, pool, ttl=HIST_ZT_TTL)
@@ -953,24 +957,25 @@ async def build_strong_herd_and_themes(
     cached_pop = await _POP_CACHE.get("top100")
 
     async def _fetch_pop_req():
-        if cached_pop is not None:
+        if cached_pop is not None or is_em_api_open():
             return None
-        return await client.post(
+        return await em_safe_post(
+            client,
             pop_url,
-            json={
+            json_body={
                 "appId": "appId01",
                 "globalId": "786e4c21-70dc-435a-93bb-38",
                 "pageNo": 1,
                 "pageSize": 100,
             },
-            timeout=EM_SHORT_TIMEOUT,
+            timeout=1.5,
         )
 
     res_qs, res_pop, res_bk, res_amt, hist_zt_days = await asyncio.gather(
-        client.get(qs_url, headers={"Referer": "https://quote.eastmoney.com/"}, timeout=EM_SHORT_TIMEOUT),
+        em_safe_get(client, qs_url, timeout=1.5),
         _fetch_pop_req(),
-        client.get(hot_bk_url, headers={"Referer": "https://quote.eastmoney.com/"}, timeout=EM_SHORT_TIMEOUT),
-        client.get(amt_top_url, headers={"Referer": "https://quote.eastmoney.com/"}, timeout=EM_SHORT_TIMEOUT),
+        em_safe_get(client, hot_bk_url, timeout=1.5),
+        em_safe_get(client, amt_top_url, timeout=1.5),
         _fetch_recent_zt_days(client, actual_date, lookback_cal_days=7, max_valid_days=3),
         return_exceptions=True,
     )
@@ -1037,7 +1042,7 @@ async def build_strong_herd_and_themes(
 
     # 3. 解析今日强势股池 QSPool (严格 00/60 非ST，含未涨停强势股)
     qs_by_code: Dict[str, dict] = {}
-    if not isinstance(res_qs, Exception) and res_qs.status_code == 200:
+    if res_qs is not None and not isinstance(res_qs, Exception) and res_qs.status_code == 200:
         try:
             qj = res_qs.json()
             qs_raw = (qj.get("data") or {}).get("pool") or []
@@ -1084,7 +1089,7 @@ async def build_strong_herd_and_themes(
 
     # 4. 解析全市场主板成交额前50 (容量核心候选)
     amt_top_by_code: Dict[str, dict] = {}
-    if not isinstance(res_amt, Exception) and res_amt.status_code == 200:
+    if res_amt is not None and not isinstance(res_amt, Exception) and res_amt.status_code == 200:
         try:
             for row in ((res_amt.json().get("data") or {}).get("diff") or []):
                 code = str(row.get("f12", "")).zfill(6)
@@ -1117,6 +1122,69 @@ async def build_strong_herd_and_themes(
                     "isLimitUp": code in zt_by_code,
                     "vr": round(_sf(row.get("f10"), 1.0), 2),
                 }
+        except Exception:
+            pass
+
+    # 东财熔断兜底：直接从已缓存的腾讯全市场实时快照派生强势股池与主板成交额 Top50（0ms 内存复用）
+    if (not qs_by_code or not amt_top_by_code) and not read_only_herd:
+        try:
+            qq_snap = await fetch_tencent_market_snapshot(client, mainboard_only=False, ttl=12.0)
+            mb_rows = [
+                r for r in (qq_snap.get("rows") or [])
+                if is_mainboard_10cm(r["code"], r["name"])
+            ]
+            if not qs_by_code:
+                for r in mb_rows:
+                    c = r["code"]
+                    if c in zt_by_code or r["chg"] >= 5.0 or (r["amount"] >= 8.0e8 and r["chg"] >= 3.2):
+                        zt_ref = zt_by_code.get(c)
+                        qs_by_code[c] = {
+                            "code": c,
+                            "tcode": r["tcode"],
+                            "name": r["name"],
+                            "price": r["price"],
+                            "chg": r["chg"],
+                            "amount": r["amount"],
+                            "mcap": r["ltsz"],
+                            "turnover": r["turnover"],
+                            "lbc": zt_ref["lbc"] if zt_ref else 0,
+                            "fbt": zt_ref["fbt"] if zt_ref else "—",
+                            "fbtSec": zt_ref["fbtSec"] if zt_ref else 999999,
+                            "fund": zt_ref["fund"] if zt_ref else 0.0,
+                            "sealRatio": zt_ref["sealRatio"] if zt_ref else 0.0,
+                            "hybk": r.get("hybk") or "其他板块",
+                            "zttjDays": zt_ref["zttjDays"] if zt_ref else 0,
+                            "zttjCt": zt_ref["zttjCt"] if zt_ref else 0,
+                            "isNewHigh": False,
+                            "isLimitUp": bool(zt_ref or r.get("isZt")),
+                            "vr": r.get("vr", 1.0),
+                        }
+            if not amt_top_by_code:
+                for r in sorted(mb_rows, key=lambda x: -x["amount"])[:50]:
+                    c = r["code"]
+                    zt_ref = zt_by_code.get(c)
+                    qs_ref = qs_by_code.get(c)
+                    amt_top_by_code[c] = {
+                        "code": c,
+                        "tcode": r["tcode"],
+                        "name": r["name"],
+                        "price": r["price"],
+                        "chg": r["chg"],
+                        "amount": r["amount"],
+                        "mcap": r["ltsz"],
+                        "turnover": r["turnover"],
+                        "lbc": zt_ref["lbc"] if zt_ref else 0,
+                        "fbt": zt_ref["fbt"] if zt_ref else "—",
+                        "fbtSec": zt_ref["fbtSec"] if zt_ref else 999999,
+                        "fund": zt_ref["fund"] if zt_ref else 0.0,
+                        "sealRatio": zt_ref["sealRatio"] if zt_ref else 0.0,
+                        "hybk": r.get("hybk") or "其他板块",
+                        "zttjDays": qs_ref["zttjDays"] if qs_ref else 0,
+                        "zttjCt": qs_ref["zttjCt"] if qs_ref else 0,
+                        "isNewHigh": False,
+                        "isLimitUp": bool(zt_ref or r.get("isZt")),
+                        "vr": r.get("vr", 1.0),
+                    }
         except Exception:
             pass
 
@@ -1583,7 +1651,7 @@ async def build_strong_herd_and_themes(
 
     # 7. 动态判断【当前主题材 + 题材龙头 + 阶段核心 + 容量核心】
     raw_bks: List[dict] = []
-    if not isinstance(res_bk, Exception) and res_bk.status_code == 200:
+    if res_bk is not None and not isinstance(res_bk, Exception) and res_bk.status_code == 200:
         try:
             for row in ((res_bk.json().get("data") or {}).get("diff") or []):
                 bk_name = str(row.get("f14") or "")
@@ -1606,16 +1674,12 @@ async def build_strong_herd_and_themes(
         except Exception:
             pass
 
-    top_bks = raw_bks[:8]
+    top_bks = raw_bks[:8] if not is_em_api_open() else []
     bk_sem = asyncio.Semaphore(12)
 
     async def _get_bk_url(u: str):
         async with bk_sem:
-            return await client.get(
-                u,
-                headers={"Referer": "https://quote.eastmoney.com/"},
-                timeout=2.2,
-            )
+            return await em_safe_get(client, u, timeout=1.5)
 
     bk_member_reqs = []
     for bk in top_bks:

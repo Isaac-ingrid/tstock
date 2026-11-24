@@ -113,8 +113,23 @@ async def lifespan(app: FastAPI):
         },
         **http_kwargs,
     )
-    yield
-    await app.state.http.aclose()
+
+    async def _warmup_market_caches() -> None:
+        await asyncio.sleep(0.8)
+        try:
+            await get_limitup_pool(http_client=app.state.http)
+        except Exception:
+            pass
+
+    warmup_task: Optional[asyncio.Task] = None
+    if os.getenv("TSTOCK_DISABLE_WARMUP") != "1":
+        warmup_task = asyncio.create_task(_warmup_market_caches())
+    try:
+        yield
+    finally:
+        if warmup_task and not warmup_task.done():
+            warmup_task.cancel()
+        await app.state.http.aclose()
 
 
 app = FastAPI(title="TStock Data API", version="1.1.0", lifespan=lifespan)

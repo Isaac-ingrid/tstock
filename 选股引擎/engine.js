@@ -304,17 +304,28 @@ async function fetchAll({ force = false } = {}) {
   }
 
   let total = 0;
-  for (let r = 0; r < 5; r++) {
-    try {
-      const j = await getJson(`https://${emHost()}/api/qt/clist/get?${EM_QS}&pn=1`, 'utf-8', 3);
-      total = j?.data?.total || 0;
-      if (total > 0) break;
-    } catch (e) {
-      await new Promise((res) => setTimeout(res, 300 * (r + 1)));
-    }
+  try {
+    const j = await getJson(`https://${emHost()}/api/qt/clist/get?${EM_QS}&pn=1`, 'utf-8', 1);
+    total = j?.data?.total || 0;
+  } catch {
+    total = 0;
   }
 
   if (!total) {
+    console.log('  ⚡ 东财 clist 响应受阻，秒切腾讯全市场极速实时快照引擎…');
+    try {
+      const { fetchTencentUniverseSnapshot } = require('../scripts/tencent_market_snapshot.cjs');
+      const qqSnap = await fetchTencentUniverseSnapshot({ mainboardOnly: false, batchSize: 80, concurrency: 14 });
+      if (qqSnap?.rows?.length >= 3000) {
+        fs.mkdirSync(OUT_DIR, { recursive: true });
+        fs.writeFileSync(CACHE, JSON.stringify({ date: TODAY, total: qqSnap.rows.length, source: 'tencent', rows: qqSnap.rows }));
+        console.log(`  ✓ 腾讯全市场实时快照已落盘 (${qqSnap.rows.length} 只，含行业板块)`);
+        return { rows: qqSnap.rows, isFallback: false, fallbackFile: null };
+      }
+    } catch (qqErr) {
+      console.warn(`  ⚠ 腾讯实时快照异常: ${qqErr.message}`);
+    }
+
     if (fs.existsSync(OUT_DIR)) {
       const snaps = fs.readdirSync(OUT_DIR)
         .filter((f) => f.startsWith('snapshot-') || f.startsWith(`tail-snapshot-${TODAY}-`))

@@ -15,7 +15,7 @@ import KlinePatternBadges from '../components/KlinePatternBadges.jsx';
 import { BoardStockActions } from '../components/board/boardShared.jsx';
 
 const CUSTOM_US_KEY = 't-ignition-custom-us';
-const FRESH_SCAN_MAX_AGE_SEC = 45;
+const FRESH_SCAN_MAX_AGE_SEC = 240;
 
 function getScanAgeSeconds(scannedAtStr) {
   const s = String(scannedAtStr || '').trim();
@@ -245,7 +245,7 @@ export default function IgnitionPage({
     const maybeAutoRefresh = () => {
       if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
       const ageSec = getScanAgeSeconds(dataRef.current?.scannedAt);
-      if (ageSec > 75) {
+      if (ageSec > FRESH_SCAN_MAX_AGE_SEC) {
         loadScan(true, { silent: true });
       }
     };

@@ -136,52 +136,85 @@ function mapRow(d) {
   };
 }
 
+const { fetchTencentUniverseSnapshot } = require('../scripts/tencent_market_snapshot.cjs');
+
+async function fetchViaTencentRealtime() {
+  const onlyMainboard = EXCLUDE.includes('创业板') && EXCLUDE.includes('科创板');
+  const t0 = Date.now();
+  const qqSnap = await fetchTencentUniverseSnapshot({
+    mainboardOnly: onlyMainboard,
+    batchSize: 80,
+    concurrency: 14,
+  });
+  const rows = (qqSnap.rows || []).filter((x) => Number.isFinite(x.chgPct) && x.price > 0);
+  if (rows.length >= 200) {
+    fs.mkdirSync(OUT_DIR, { recursive: true });
+    fs.writeFileSync(
+      CACHE,
+      JSON.stringify({ date: TODAY, at: HHMM, total: qqSnap.totalMarket, source: 'tencent', rows }, null, 0)
+    );
+    console.log(
+      `  ✓ 腾讯极速实时行情主备源命中：${rows.length} 只（耗时 ${((Date.now() - t0) / 1000).toFixed(2)}s）`
+    );
+    return { rows, totalMarket: qqSnap.totalMarket || rows.length };
+  }
+  throw new Error('腾讯实时行情返回样本不足');
+}
+
 async function fetchSnapshot({ force = true } = {}) {
   if (!force && fs.existsSync(CACHE)) {
     const c = JSON.parse(fs.readFileSync(CACHE, 'utf8'));
-    if (c?.rows?.length > 500) { console.log(`（复用 ${path.basename(CACHE)}，${c.rows.length} 只）`); return { rows: c.rows, totalMarket: c.total || c.rows.length }; }
+    if (c?.rows?.length > 500) {
+      console.log(`（复用 ${path.basename(CACHE)}，${c.rows.length} 只）`);
+      return { rows: c.rows, totalMarket: c.total || c.rows.length };
+    }
   }
+
+  // 1) 快速单次探测东财 clist（1.4s 超时，云服务器机房 IP 被东财拦截时秒级熔断切腾讯实时源）
   let total = 0;
   let firstPageDiff = null;
-  for (let r = 0; r < 4; r++) {
-    try {
-      const j = await getJson(`https://${emHost()}/api/qt/clist/get?${EM_QS}&pn=1`, 'utf-8', 2, 2600);
-      total = j?.data?.total || 0;
-      firstPageDiff = j?.data?.diff || null;
-      if (total > 0) break;
-    } catch (e) {
-      await new Promise((res) => setTimeout(res, 150 * (r + 1)));
-    }
+  try {
+    const j = await getJson(`https://${emHost()}/api/qt/clist/get?${EM_QS}&pn=1`, 'utf-8', 1, 1400);
+    total = j?.data?.total || 0;
+    firstPageDiff = j?.data?.diff || null;
+  } catch {
+    total = 0;
   }
 
   if (!total) {
-    if (fs.existsSync(OUT_DIR)) {
-      const snaps = fs.readdirSync(OUT_DIR)
-        .filter((f) => f.startsWith(`tail-snapshot-${TODAY}-`))
-        .map((f) => {
-          try {
-            const p = path.join(OUT_DIR, f);
-            const c = JSON.parse(fs.readFileSync(p, 'utf8'));
-            return { f, total: c?.total || (c?.rows?.length || 0), rows: c?.rows || [] };
-          } catch {
-            return { f, total: 0, rows: [] };
-          }
-        })
-        .filter((x) => x.rows.length >= 300)
-        .sort((a, b) => b.rows.length - a.rows.length);
+    console.log('  ⚡ 东财 clist 响应受阻，秒切腾讯全市场极速实时快照引擎…');
+    try {
+      return await fetchViaTencentRealtime();
+    } catch (qqErr) {
+      if (fs.existsSync(OUT_DIR)) {
+        const snaps = fs
+          .readdirSync(OUT_DIR)
+          .filter((f) => f.startsWith(`tail-snapshot-${TODAY}-`))
+          .map((f) => {
+            try {
+              const p = path.join(OUT_DIR, f);
+              const c = JSON.parse(fs.readFileSync(p, 'utf8'));
+              return { f, total: c?.total || (c?.rows?.length || 0), rows: c?.rows || [] };
+            } catch {
+              return { f, total: 0, rows: [] };
+            }
+          })
+          .filter((x) => x.rows.length >= 300)
+          .sort((a, b) => b.rows.length - a.rows.length);
 
-      if (snaps.length > 0) {
-        console.log(`⚠️ 东财 clist 首包重试超时，启动今日历史快照兜底: ${snaps[0].f} (${snaps[0].rows.length} 只)`);
-        return { rows: snaps[0].rows, totalMarket: snaps[0].total };
+        if (snaps.length > 0) {
+          console.log(`⚠️ 启用今日历史快照兜底: ${snaps[0].f} (${snaps[0].rows.length} 只)`);
+          return { rows: snaps[0].rows, totalMarket: snaps[0].total };
+        }
       }
+      throw new Error(`全市场实时快照拉取失败: ${qqErr.message}`);
     }
-    throw new Error('东财 clist 接口重试失败且无今日可用快照');
   }
 
   const pages = Math.ceil(total / 100);
   const pageMap = new Map();
   let cutoffPage = pages;
-  const minTargetChg = Math.max(1.5, CFG.chgMin - 0.5); // 2.5% 安全垫，因 clist 已按 fid=f3 严格涨幅降序排列
+  const minTargetChg = Math.max(1.5, CFG.chgMin - 0.5);
 
   if (Array.isArray(firstPageDiff) && firstPageDiff.length > 0) {
     const mapped1 = firstPageDiff.map(mapRow);
@@ -202,7 +235,7 @@ async function fetchSnapshot({ force = true } = {}) {
         const pn = nextPn++;
         if (pn > cutoffPage) break;
         try {
-          const j = await getJson(`https://${emHost()}/api/qt/clist/get?${EM_QS}&pn=${pn}`, 'utf-8', 2, 2600);
+          const j = await getJson(`https://${emHost()}/api/qt/clist/get?${EM_QS}&pn=${pn}`, 'utf-8', 1, 1800);
           const diff = j?.data?.diff || [];
           if (diff.length > 0) {
             const mapped = diff.map(mapRow);
@@ -221,12 +254,16 @@ async function fetchSnapshot({ force = true } = {}) {
     })
   );
 
-  // 对截止页之前的偶发失败页做一轮并发补抓，确保 >=3% 区间零漏票
-  const retryList = failedPages.filter((pn) => pn <= cutoffPage && !pageMap.has(pn));
-  if (retryList.length > 0) {
-    await mapPool(retryList, 6, async (pn) => {
+  // 若东财分页中途触发限流导致漏页，直接切腾讯全市场实时源，确保零漏票
+  const missingCritical = failedPages.filter((pn) => pn <= cutoffPage && !pageMap.has(pn));
+  if (missingCritical.length > 2) {
+    console.log(`  ⚡ 东财分页中途限流(漏 ${missingCritical.length} 页)，自动切换腾讯全市场实时源补全…`);
+    return await fetchViaTencentRealtime();
+  }
+  if (missingCritical.length > 0) {
+    await mapPool(missingCritical, 6, async (pn) => {
       try {
-        const j = await getJson(`https://${emHost()}/api/qt/clist/get?${EM_QS}&pn=${pn}`, 'utf-8', 2, 2600);
+        const j = await getJson(`https://${emHost()}/api/qt/clist/get?${EM_QS}&pn=${pn}`, 'utf-8', 1, 2000);
         const diff = j?.data?.diff || [];
         if (diff.length > 0) pageMap.set(pn, diff.map(mapRow));
       } catch {}
@@ -239,11 +276,12 @@ async function fetchSnapshot({ force = true } = {}) {
   for (const pn of sortedKeys) {
     out.push(...pageMap.get(pn));
   }
-  let rows = out.filter((x) => Number.isFinite(x.chgPct) && x.price > 0);
-  if (rows.length >= 80) {
-    fs.mkdirSync(OUT_DIR, { recursive: true });
-    fs.writeFileSync(CACHE, JSON.stringify({ date: TODAY, at: HHMM, total, cutoffPage, rows }, null, 0));
+  const rows = out.filter((x) => Number.isFinite(x.chgPct) && x.price > 0);
+  if (rows.length < 80) {
+    return await fetchViaTencentRealtime();
   }
+  fs.mkdirSync(OUT_DIR, { recursive: true });
+  fs.writeFileSync(CACHE, JSON.stringify({ date: TODAY, at: HHMM, total, cutoffPage, rows }, null, 0));
   return { rows, totalMarket: total };
 }
 

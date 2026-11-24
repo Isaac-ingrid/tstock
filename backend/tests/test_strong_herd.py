@@ -82,11 +82,13 @@ class LimitUpSingleflightAndFallbackTests(unittest.TestCase):
             sys.modules["httpx"] = _httpx_stub
 
         import backend.limitup as lu
+        import backend.market_data as md
 
         class _FakeResp:
             def __init__(self, payload, status_code=200):
                 self._payload = payload
                 self.status_code = status_code
+                self.text = "{}"
 
             def json(self):
                 return self._payload
@@ -150,29 +152,92 @@ class LimitUpSingleflightAndFallbackTests(unittest.TestCase):
                 "yesterdayStats": {},
             }
 
+        async def _empty_qq_snap(*args, **kwargs):
+            return {"rows": [], "upCount": 0, "downCount": 0, "flatCount": 0}
+
+        async def _live_qq_snap(*args, **kwargs):
+            return {
+                "rows": [
+                    {
+                        "code": "600977",
+                        "tcode": "sh600977",
+                        "name": "中国电影",
+                        "hybk": "影视院线",
+                        "price": 15.89,
+                        "prevClose": 14.45,
+                        "open": 15.20,
+                        "high": 15.89,
+                        "low": 15.10,
+                        "chg": 9.97,
+                        "turnover": 6.2,
+                        "amount": 9.5e8,
+                        "mcap": 296e8,
+                        "cmcap": 296e8,
+                        "volRatio": 1.8,
+                        "fund": 1.2e8,
+                        "isZt": True,
+                        "touchedZt": True,
+                        "isDt": False,
+                        "isOneWord": False,
+                    }
+                ],
+                "upCount": 3100,
+                "downCount": 1600,
+                "flatCount": 120,
+            }
+
+        async def _fake_klines(*args, **kwargs):
+            return [
+                {"date": "2026-11-18", "open": 13.0, "close": 13.14, "high": 13.2, "low": 12.9, "vol": 1000},
+                {"date": "2026-11-19", "open": 13.2, "close": 14.45, "high": 14.45, "low": 13.1, "vol": 1500},
+                {"date": "2026-11-20", "open": 15.2, "close": 15.89, "high": 15.89, "low": 15.1, "vol": 1800},
+            ]
+
         async def _run():
             await lu.invalidate_limitup_cache()
+            md._EM_API_FAIL_COUNT = 0
+            md._EM_API_COOLDOWN_UNTIL = 0.0
             client = _FakeClient()
-            with (
-                patch.object(lu, "cn_today_ymd", return_value="20261123"),
-                patch.object(lu, "is_trade_day", return_value=True),
-                patch.object(lu, "recent_trade_dates", return_value=["20261123", "20261120", "20261119", "20261118"]),
-                patch.object(lu, "build_strong_herd_and_themes", side_effect=_fake_herd),
-            ):
-                r1, r2 = await asyncio.gather(
-                    lu.get_limitup_pool(http_client=client),
-                    lu.get_limitup_pool(http_client=client),
-                )
-                self.assertEqual(r1["date"], "20261120")
-                self.assertEqual(r1["totalCount"], 1)
-                self.assertEqual(r2["totalCount"], 1)
-                self.assertEqual(client.zt_calls.count("20261123"), 1)
+            try:
+                with (
+                    patch.object(lu, "cn_today_ymd", return_value="20261123"),
+                    patch.object(lu, "is_trade_day", return_value=True),
+                    patch.object(lu, "recent_trade_dates", return_value=["20261123", "20261120", "20261119", "20261118"]),
+                    patch.object(lu, "build_strong_herd_and_themes", side_effect=_fake_herd),
+                ):
+                    r1, r2 = await asyncio.gather(
+                        lu.get_limitup_pool(http_client=client),
+                        lu.get_limitup_pool(http_client=client),
+                    )
+                    self.assertEqual(r1["date"], "20261120")
+                    self.assertEqual(r1["totalCount"], 1)
+                    self.assertEqual(r2["totalCount"], 1)
+                    self.assertEqual(client.zt_calls.count("20261123"), 1)
 
-                lu._LIMITUP_CACHE.clear()
-                client.fail_all = True
-                r3 = await lu.get_limitup_pool(http_client=client)
-                self.assertTrue(r3.get("fromStaleBackup"))
-                self.assertEqual(r3["totalCount"], 1)
+                    # 东财与腾讯均无数据时回退内存最近一次成功快照
+                    lu._LIMITUP_CACHE.clear()
+                    client.fail_all = True
+                    with patch.object(lu, "fetch_tencent_market_snapshot", side_effect=_empty_qq_snap):
+                        r3 = await lu.get_limitup_pool(http_client=client)
+                        self.assertTrue(r3.get("fromStaleBackup"))
+                        self.assertEqual(r3["totalCount"], 1)
+
+                    # 东财全线被墙时，自动从腾讯全市场快照 + 14日K合成涨停连板天梯与涨跌家数
+                    lu._LIMITUP_CACHE.clear()
+                    lu._LIMITUP_STALE_BACKUP.clear()
+                    with (
+                        patch.object(lu, "fetch_tencent_market_snapshot", side_effect=_live_qq_snap),
+                        patch.object(lu, "fetch_em_klines", side_effect=_fake_klines),
+                    ):
+                        r4 = await lu.get_limitup_pool(http_client=client)
+                        self.assertEqual(r4.get("dataSource"), "tencent_realtime_fallback")
+                        self.assertEqual(r4["totalCount"], 1)
+                        self.assertEqual(r4["items"][0]["code"], "600977")
+                        self.assertEqual(r4["items"][0]["lbc"], 2)
+                        self.assertEqual(r4["sentiment"]["upCount"], 3100)
+            finally:
+                md._EM_API_FAIL_COUNT = 0
+                md._EM_API_COOLDOWN_UNTIL = 0.0
 
         asyncio.run(_run())
 
