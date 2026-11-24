@@ -36,21 +36,41 @@ export default function TailSection({
 }) {
   const assetsNum = Math.max(1, Number(totalAssets) || 100000);
   const tenPctBudget = assetsNum * 0.10;
-  const allCandidates = useMemo(
-    () => getTailBuyCandidates(wbLatest, { limit: 24, totalAssetsOverride: totalAssets }),
-    [wbLatest, totalAssets]
-  );
-  const candidates = useMemo(() => allCandidates.slice(0, 2), [allCandidates]);
-  const extraCandidates = useMemo(() => allCandidates.slice(2), [allCandidates]);
-  const isTiltLocked = Boolean(tiltState?.isLocked);
-
   const [inputPrices, setInputPrices] = useState({});
   const [inputQtys, setInputQtys] = useState({});
   const [exitPrices, setExitPrices] = useState({});
   const [expandedExtraCode, setExpandedExtraCode] = useState('');
   const [scanning, setScanning] = useState(false);
   const [scanStatus, setScanStatus] = useState(null);
+  const [liveTailOverride, setLiveTailOverride] = useState(null);
   const [calTick, setCalTick] = useState(0);
+
+  // 当父层 wbLatest 已追平最新扫描时间戳时，释放本地瞬时覆盖态
+  useEffect(() => {
+    if (
+      liveTailOverride &&
+      wbLatest?.tailMeta?.date === liveTailOverride.tailMeta?.date &&
+      wbLatest?.tailMeta?.scanTime === liveTailOverride.tailMeta?.scanTime
+    ) {
+      setLiveTailOverride(null);
+    }
+  }, [wbLatest, liveTailOverride]);
+
+  const effectiveWb = useMemo(
+    () =>
+      liveTailOverride
+        ? { ...(wbLatest || {}), tail: liveTailOverride.tail, tailMeta: liveTailOverride.tailMeta }
+        : wbLatest,
+    [wbLatest, liveTailOverride]
+  );
+
+  const allCandidates = useMemo(
+    () => getTailBuyCandidates(effectiveWb, { limit: 24, totalAssetsOverride: totalAssets }),
+    [effectiveWb, totalAssets]
+  );
+  const candidates = useMemo(() => allCandidates.slice(0, 2), [allCandidates]);
+  const extraCandidates = useMemo(() => allCandidates.slice(2), [allCandidates]);
+  const isTiltLocked = Boolean(tiltState?.isLocked);
 
   const [trackedCodes, setTrackedCodes] = useState(() => new Set(loadLocalTrackedCodes()));
   const [trackBusyCode, setTrackBusyCode] = useState('');
@@ -227,9 +247,15 @@ export default function TailSection({
     try {
       const res = await runTailScan(true);
       if (res && res.ok) {
+        const nextTail = Array.isArray(res.tail) ? res.tail : [];
+        const nextMeta = res.tailMeta || null;
+        setLiveTailOverride({ tail: nextTail, tailMeta: nextMeta });
+        if (typeof window !== 'undefined' && window.WB_LATEST) {
+          window.WB_LATEST = { ...window.WB_LATEST, tail: nextTail, tailMeta: nextMeta };
+        }
         setScanStatus({
           type: 'ok',
-          text: `✅ 尾盘扫描完成！共精选出 ${res.count || 0} 只标的，契约已全量更新。`,
+          text: `✅ 尾盘扫描完成！共精选出 ${nextTail.length} 只标的，契约已全量更新。`,
         });
         if (onRefreshContract) {
           await onRefreshContract();
@@ -291,7 +317,7 @@ export default function TailSection({
             <span className="tb-status-pill idle">💡 盘中雷达监控中（每日 14:30 自动筛选黑马）</span>
           )}
 
-          {wbLatest?.tailMeta && (
+          {effectiveWb?.tailMeta && (
             <span
               style={{
                 fontSize: '11.5px',
@@ -303,7 +329,7 @@ export default function TailSection({
             >
               <span>🕒</span>
               <span>
-                已更新: {wbLatest.tailMeta.date} {wbLatest.tailMeta.scanTime}
+                已更新: {effectiveWb.tailMeta.date} {effectiveWb.tailMeta.scanTime}
               </span>
             </span>
           )}
@@ -605,11 +631,12 @@ export default function TailSection({
           >
             <div style={{ fontSize: '28px', marginBottom: '8px' }}>🛡️</div>
             <div style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text)', marginBottom: '8px' }}>
-              今日尾盘无符合硬闸门的黑马标的（宁缺毋滥）
+              {effectiveWb?.tailMeta
+                ? `今日尾盘无符合硬闸门的黑马标的（${effectiveWb.tailMeta.scanTime} 扫描共 0 只 · 宁缺毋滥）`
+                : '今日尚未生成尾盘黑马名单（每日 14:30 自动筛选）'}
             </div>
             <div style={{ fontSize: '12.5px', maxWidth: '560px', margin: '0 auto', lineHeight: 1.6, color: 'var(--mute)' }}>
-              尾盘黑马战法遵循严格量化门槛（涨幅 3%~7%、量比 ≥ 1.2、分时均线上方占比 ≥ 80%、尾盘无高位跳水回落、排除 ST）。
-              市场缩量或弱势震荡时，不符合标准则坚决不推送，空仓防守胜过盲目追高。
+              尾盘黑马战法遵循严格量化门槛（涨幅 3%~7%、量比 ≥ 1.2、分时均线上方占比 ≥ 80%、尾盘无高位跳水回落、排除 ST），绝不拿盘前短线候选凑数。不符合标准则坚决空仓观望。
             </div>
             <button
               type="button"

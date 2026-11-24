@@ -19,27 +19,18 @@ export function getTailBuyCandidates(customWb, options = {}) {
   const tenPctBudget = totalAssets * 0.10;
   
   let cands = [];
-  let src = 'none';
+  let src = 'tail';
   const WB = customWb || ((typeof window !== 'undefined' && window.WB_LATEST) ? window.WB_LATEST : null);
 
-  if (WB && Array.isArray(WB.tail) && WB.tail.length) {
+  // 严格只读取专属尾盘黑马池 WB.tail，绝不拿收盘短线候选池 WB.candidates 冒充尾盘黑马！
+  // 当今日尾盘扫描结果为 0 只（WB.tail = []）或尚未到 14:30 扫描时，必须如实返回空数组清空卡片。
+  if (WB && Array.isArray(WB.tail)) {
     cands = WB.tail;
-    src = 'tail';
-  } else if (WB && Array.isArray(WB.candidates) && WB.candidates.length) {
-    cands = WB.candidates;
-    src = 'candidates';
   }
 
-  // 严格筛选黑马标的：
-  // 1. 若来源于专属尾盘选股池 WB.tail（发布时 verdict 为 '可挂'/'可做'/'观察'），过滤掉 '放弃' 且评分 >= 70；
-  // 2. 若降级兜底来源于全量短线候选 WB.candidates，筛选评分 >= 80 且状态为 可做/小做/可挂。
   let list = (cands || []).filter(c => {
     const sc = +c.score || 0;
-    if (src === 'tail') {
-      return sc >= 70 && c.verdict !== '放弃';
-    }
-    const isGoodVerdict = !c.verdict || c.verdict === '可做' || c.verdict === '小做' || c.verdict === '可挂';
-    return sc >= 80 && isGoodVerdict;
+    return sc >= 70 && c.verdict !== '放弃';
   });
 
   // 按得分由高到低降序
