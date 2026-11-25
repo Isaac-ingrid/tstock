@@ -211,20 +211,18 @@ export default function ConsoleSection({
   const allFiltered = useMemo(() => [...holdingList, ...watchList], [holdingList, watchList]);
 
   const handleToggleExpand = (code6) => {
+    const next = expandedCode === code6 ? '' : code6;
     setExpandAll(false);
-    setExpandedCode((prev) => {
-      const next = prev === code6 ? '' : code6;
-      if (next && onSelectStock) {
-        onSelectStock(next);
-      }
-      if (next) {
-        setTimeout(() => {
-          const el = document.getElementById(`detailDrawer_${next}`);
-          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }, 80);
-      }
-      return next;
-    });
+    setExpandedCode(next);
+    if (next && onSelectStock) {
+      onSelectStock(next);
+    }
+    if (next) {
+      setTimeout(() => {
+        const el = document.getElementById(`detailDrawer_${next}`);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 80);
+    }
   };
 
   const expandedStock = useMemo(() => {
