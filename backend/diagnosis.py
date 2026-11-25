@@ -2,19 +2,317 @@ from __future__ import annotations
 
 import asyncio
 import datetime
+import json
+from pathlib import Path
 import re
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 from .limitup import get_limitup_pool
-from .market_data import BoundedTTLCache, fetch_em_klines, fetch_kline_rows
+from .market_data import BoundedTTLCache, _aggregate_daily_bars, fetch_em_klines, fetch_kline_rows
 from .patterns import analyze_kline_patterns
 from .trade_calendar import cn_today, cn_today_iso, get_market_calendar_snapshot
 
 # 带容量上限的内存缓存，避免频繁请求上游与内存泄漏 (TTL 15 秒，上限 256 支)
 CACHE_TTL_SECONDS = 15.0
 _DIAGNOSIS_CACHE = BoundedTTLCache(maxsize=256, default_ttl=CACHE_TTL_SECONDS)
+_DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+
+
+def _normalize_bars_for_ignition(days: List[Any], default_turnover: float = 2.5) -> List[dict]:
+    """将 dict 或 list 格式日K统一归一化为 evaluate_ignition_six_dims 所需标准结构。"""
+    norm: List[dict] = []
+    for idx, b in enumerate(days or []):
+        try:
+            if isinstance(b, dict):
+                d_str = str(b.get("date") or "")[:10]
+                o = float(b.get("open") or 0.0)
+                c = float(b.get("close") or 0.0)
+                h = float(b.get("high") or max(o, c))
+                lo = float(b.get("low") or min(o, c))
+                v = float(b.get("vol") or 0.0)
+                amt = float(b.get("amount") or (v * c * 100.0))
+                to_v = float(b.get("turnover") if b.get("turnover") is not None else default_turnover)
+                pct = float(b["pctChg"]) if b.get("pctChg") is not None else None
+            else:
+                d_str = str(b[0])[:10]
+                o, c, h, lo = float(b[1]), float(b[2]), float(b[3]), float(b[4])
+                v = float(b[5]) if len(b) > 5 else 0.0
+                amt = v * c * 100.0
+                to_v = float(b[6]) if len(b) > 6 and b[6] is not None else default_turnover
+                pct = None
+            if c <= 0 or not d_str:
+                continue
+            if pct is None and norm and norm[-1]["close"] > 0:
+                pct = ((c - norm[-1]["close"]) / norm[-1]["close"]) * 100.0
+            amp = ((h - lo) / max(1e-6, norm[-1]["close"] if norm else o)) * 100.0
+            norm.append({
+                "date": d_str,
+                "open": o,
+                "close": c,
+                "high": h,
+                "low": lo,
+                "vol": v,
+                "amount": amt,
+                "amp": round(amp, 2),
+                "pctChg": round(pct, 2) if pct is not None else None,
+                "turnover": to_v,
+            })
+        except Exception:
+            continue
+    return norm
+
+
+def _lookup_pool_provenance(code: str) -> dict:
+    """毫秒级读取本地起爆池、尾盘黑马池与在轨跟踪台账，识别该股在全站选股漏斗中的在榜状态。"""
+    c6 = str(code or "").strip().zfill(6)
+    prov: Dict[str, Any] = {
+        "inBreakoutPool": False,
+        "breakoutItem": None,
+        "inDipPool": False,
+        "dipItem": None,
+        "inTailPool": False,
+        "tailItem": None,
+        "inPreMarketPool": False,
+        "inTrackingPool": False,
+        "trackingItem": None,
+        "badges": [],
+    }
+    try:
+        ign_file = _DATA_DIR / "ignition_latest.json"
+        if ign_file.exists():
+            ign_data = json.loads(ign_file.read_text(encoding="utf-8"))
+            for it in ((ign_data.get("breakout") or {}).get("items") or []):
+                if str(it.get("code") or "").zfill(6) == c6:
+                    prov["inBreakoutPool"] = True
+                    prov["breakoutItem"] = {
+                        "stageLabel": it.get("stageLabel", ""),
+                        "ignitionScore": it.get("ignitionScore"),
+                        "dragonStars": it.get("dragonStars"),
+                        "rs5d": it.get("rs5d"),
+                        "entryModeLabel": it.get("entryModeLabel", ""),
+                        "supportFloor": it.get("supportFloor"),
+                    }
+                    prov["badges"].append(f"🔥 起爆池·{it.get('stageLabel') or '在榜'}")
+                    break
+            for it in ((ign_data.get("dipLeaders") or {}).get("items") or []):
+                if str(it.get("code") or "").zfill(6) == c6:
+                    prov["inDipPool"] = True
+                    prov["dipItem"] = {
+                        "dipLabel": it.get("dipLabel", ""),
+                        "dipScore": it.get("dipScore"),
+                        "stockDrawdownPct": it.get("stockDrawdownPct"),
+                    }
+                    prov["badges"].append(f"🛟 深跌抄底池·{it.get('dipLabel') or '在榜'}")
+                    break
+    except Exception:
+        pass
+
+    try:
+        wb_file = _DATA_DIR / "latest.json"
+        if wb_file.exists():
+            wb_data = json.loads(wb_file.read_text(encoding="utf-8"))
+            for it in (wb_data.get("tail") or []):
+                if str(it.get("code") or "").zfill(6) == c6:
+                    prov["inTailPool"] = True
+                    prov["tailItem"] = {
+                        "score": it.get("score"),
+                        "stop": it.get("stop"),
+                        "tp1": it.get("tp1"),
+                        "date": wb_data.get("tailScannedAt") or wb_data.get("date", ""),
+                    }
+                    prov["badges"].append("🌙 尾盘黑马在选")
+                    break
+            for it in (wb_data.get("candidates") or []):
+                if str(it.get("code") or "").zfill(6) == c6:
+                    prov["inPreMarketPool"] = True
+                    prov["badges"].append("📋 盘前优选契约")
+                    break
+    except Exception:
+        pass
+
+    try:
+        ledger_file = _DATA_DIR / "strategy_ledger.json"
+        if ledger_file.exists():
+            lg_data = json.loads(ledger_file.read_text(encoding="utf-8"))
+            sigs = (lg_data.get("signals") or {}).values()
+            matched_sigs = [
+                v for v in sigs
+                if isinstance(v, dict)
+                and str(v.get("code") or "").zfill(6) == c6
+                and v.get("strategy") in ("ignition", "bottom", "meme", "tail_watch")
+                and not v.get("manualRemoved")
+            ]
+            if matched_sigs:
+                matched_sigs.sort(key=lambda s: (1 if s.get("manualPinned") else 0, str(s.get("signalDate") or "")), reverse=True)
+                top_s = matched_sigs[0]
+                prov["inTrackingPool"] = True
+                prov["trackingItem"] = {
+                    "strategy": top_s.get("strategy", "ignition"),
+                    "signalDate": top_s.get("signalDate", ""),
+                    "refPrice": top_s.get("refPrice") or top_s.get("buy") or 0.0,
+                    "verdict": top_s.get("verdict", "在轨跟踪"),
+                }
+                prov["badges"].append(f"🎯 在轨跟踪({top_s.get('signalDate') or '活跃'})")
+    except Exception:
+        pass
+
+    return prov
+
+
+def _build_five_step_review(
+    code: str,
+    quote_data: dict,
+    days: List[Any],
+    chips_data: dict,
+    technicals_data: dict,
+    kline_patterns: dict,
+    limitup_data: dict,
+    market_sentiment: dict,
+    company_info: dict,
+    all_concepts: List[str],
+    matched_hot_themes: List[dict],
+    risk_level: str,
+    red_flags: List[dict],
+    yellow_alerts: List[dict],
+) -> dict:
+    """
+    将五步交易系统（「1.顺天时 → 2.抓主线 → 3.五星游龙/起爆六维 → 4.严执行硬止损」）
+    与起爆挖掘/尾盘黑马/在轨跟踪池来源完整汇聚到全景诊股报告，彻底消除双端口径割裂。
+    """
+    cur_px = float(quote_data.get("price") or 0.0)
+    day_chg = float(quote_data.get("chg") or 0.0)
+    chg_5d = float(technicals_data.get("chg5d") or 0.0)
+    ma5 = float(chips_data.get("ma5") or cur_px)
+    ma20 = float(chips_data.get("ma20") or cur_px)
+
+    # Step 1: 顺天时（上证结构 + 相对大盘超额抗跌度 RS）
+    macro_timing = (limitup_data or {}).get("macroTiming") or (market_sentiment or {}).get("macroTiming") or {}
+    risk_valve = str((market_sentiment or {}).get("riskValve") or "GREEN")
+    sh_struct = str(macro_timing.get("structure") or "RANGE")
+    sh_struct_label = str(macro_timing.get("structureLabel") or "震荡结构")
+    sh_chg_1d = float(macro_timing.get("anchorChg") or 0.0)
+    sh_chg_5d = float(macro_timing.get("anchorChg5d") or 0.0)
+    sh_bot_div = bool(macro_timing.get("bottomDivergence"))
+    sh_top_div = bool(macro_timing.get("topDivergence"))
+
+    rs_5d = round(chg_5d - sh_chg_5d, 2)
+    rs_1d = round(day_chg - sh_chg_1d, 2)
+    above_ma20 = bool(cur_px >= ma20 * 0.995) if (cur_px > 0 and ma20 > 0) else True
+    right_side_confirm = bool(
+        cur_px > 0
+        and cur_px >= ma5 * 0.998
+        and day_chg >= 0.8
+        and cur_px >= float(quote_data.get("open") or cur_px) * 0.999
+    )
+    is_resilient = bool((rs_5d >= 2.5 and above_ma20) or (rs_5d >= 4.0 and above_ma20))
+
+    if sh_struct == "DOWNTREND" or risk_valve == "RED":
+        regime_mode = "BEAR_STRICT"
+        regime_label = "🎯 指数底背离·逆势严选" if sh_bot_div else "🛡️ 大盘下行·逆势严选"
+    elif sh_struct == "RANGE" or risk_valve == "YELLOW" or sh_top_div:
+        regime_mode = "RANGE_SELECTIVE"
+        regime_label = "⚖️ 大盘震荡·去弱留强"
+    else:
+        regime_mode = "BULL_NORMAL"
+        regime_label = "🔥 大盘顺势·常态出击"
+
+    # Step 2: 抓主线（匹配看板 Top 主线板块与周期阶段）
+    main_themes = ((limitup_data or {}).get("mainThemes") or {}).get("themes") or []
+    matched_main_theme: Optional[dict] = None
+    ind_name = str((company_info or {}).get("industry") or "").strip()
+    cand_names = [ind_name, *(all_concepts or []), *[t.get("name", "") for t in (matched_hot_themes or [])]]
+    for th in main_themes:
+        th_stocks = th.get("stocks") or []
+        if any(str(s.get("code") or "").zfill(6) == code for s in th_stocks):
+            matched_main_theme = th
+            break
+    if not matched_main_theme:
+        for th in main_themes:
+            tname = str(th.get("name") or "").strip()
+            if tname and any(cn and (tname in cn or cn in tname) for cn in cand_names):
+                matched_main_theme = th
+                break
+
+    # Step 3: 择良标（复用 ignition.evaluate_ignition_six_dims 计算五星游龙与涨停回调六维）
+    ignition_eval: Optional[dict] = None
+    norm_daily = _normalize_bars_for_ignition(days, default_turnover=float(quote_data.get("turnover") or 2.5))
+    if len(norm_daily) >= 25:
+        try:
+            from .ignition import evaluate_ignition_six_dims
+            w_bars = _aggregate_daily_bars(norm_daily, "week")
+            m_bars = _aggregate_daily_bars(norm_daily, "month")
+            ignition_eval = evaluate_ignition_six_dims(
+                code,
+                norm_daily,
+                w_bars,
+                m_bars,
+                cur_price=cur_px,
+                day_chg=day_chg,
+                lookback_days=60,
+                notice={"riskLevel": risk_level, "redFlags": red_flags, "yellowAlerts": yellow_alerts},
+                name=str(quote_data.get("name") or code),
+                float_cap_yi=float(quote_data.get("cap") or 0.0),
+                turnover_pct=float(quote_data.get("turnover") or 0.0),
+                main_theme_info=matched_main_theme,
+            )
+        except Exception:
+            ignition_eval = None
+
+    if regime_mode == "BEAR_STRICT":
+        entry_mode_label = "✅ 右侧阳线确认" if right_side_confirm else "⏳ 禁早潜伏·等右侧阳线"
+    elif regime_mode == "RANGE_SELECTIVE":
+        entry_mode_label = "✅ 右侧转强" if right_side_confirm else "👀 回踩均线等拐头"
+    else:
+        entry_mode_label = "✅ 右侧点火" if right_side_confirm else "🎯 缩量回踩低吸窗口"
+
+    provenance = _lookup_pool_provenance(code)
+
+    return {
+        "step1Timing": {
+            "regimeMode": regime_mode,
+            "regimeLabel": regime_label,
+            "indexStructure": sh_struct,
+            "indexStructureLabel": sh_struct_label,
+            "positionPlan": macro_timing.get("positionPlan") or "",
+            "shChg1d": sh_chg_1d,
+            "shChg5d": sh_chg_5d,
+            "rs1d": rs_1d,
+            "rs5d": rs_5d,
+            "aboveMa20": above_ma20,
+            "isResilient": is_resilient,
+            "rightSideConfirm": right_side_confirm,
+            "entryModeLabel": entry_mode_label,
+            "indexBottomDivergence": sh_bot_div,
+            "indexTopDivergence": sh_top_div,
+        },
+        "step2MainTheme": {
+            "isMainTheme": matched_main_theme is not None,
+            "themeName": (matched_main_theme or {}).get("name") or (matched_hot_themes[0]["name"] if matched_hot_themes else ""),
+            "cycleStage": (matched_main_theme or {}).get("cycleStage") or "",
+            "cycleStageLabel": (matched_main_theme or {}).get("cycleStageLabel") or ("🔥 热门题材" if matched_hot_themes else "⚪ 非当前主线"),
+            "rsVsIndex": (matched_main_theme or {}).get("rsVsIndex"),
+            "ztCount": (matched_main_theme or {}).get("ztCount"),
+        },
+        "step3Dragon": {
+            "available": ignition_eval is not None,
+            "dragonStars": (ignition_eval or {}).get("dragonStars"),
+            "dragonLabel": (ignition_eval or {}).get("dragonLabel") or "—",
+            "dragonDims": (ignition_eval or {}).get("dragonDims") or [],
+            "ignitionScore": (ignition_eval or {}).get("ignitionScore"),
+            "stage": (ignition_eval or {}).get("stage") or "",
+            "stageLabel": (ignition_eval or {}).get("stageLabel") or "—",
+            "stageTip": (ignition_eval or {}).get("stageTip") or "",
+            "checklist": (ignition_eval or {}).get("checklist") or [],
+            "supportFloor": (ignition_eval or {}).get("supportFloor") or 0.0,
+            "volShrinkPct": (ignition_eval or {}).get("volShrinkPct"),
+            "monthVolRatio": (ignition_eval or {}).get("monthVolRatio"),
+            "maSpreadPct": (ignition_eval or {}).get("maSpreadPct"),
+            "shakeoutSignals": (ignition_eval or {}).get("shakeoutSignals") or [],
+        },
+        "provenance": provenance,
+    }
 
 
 def calc_ema(values: List[float], period: int) -> List[float]:
@@ -439,6 +737,7 @@ def build_comprehensive_decision(
     experimental_dna: Optional[dict] = None,
     kline_patterns: Optional[dict] = None,
     trade_calendar: Optional[dict] = None,
+    five_step_review: Optional[dict] = None,
 ) -> dict:
     """
     结合公告排雷、技术均线趋势、筹码位置、日内分时VWAP与板块/大盘情绪，
@@ -589,6 +888,17 @@ def build_comprehensive_decision(
         chip_score -= 4
         risk_points.append(f"当前获利筹码不足 {profit_ratio:.1f}%，上方 80% 筹码处于套牢状态，反弹阻力大")
 
+    s3_drg = (five_step_review or {}).get("step3Dragon") or {}
+    drg_stars = float(s3_drg.get("dragonStars") or 0.0)
+    drg_stage = str(s3_drg.get("stage") or "")
+    if drg_stars >= 4.0 and drg_stage in ("SHAKEOUT_READY", "CONVERGED_WAIT", "IGNITING"):
+        chip_score += 3
+        trend_score = min(25, trend_score + 2)
+        positive_points.insert(
+            0,
+            f"🐉 命中【{s3_drg.get('dragonLabel') or '五星游龙'} ({drg_stars:.1f}★)】· {s3_drg.get('stageLabel')}（板后缩量至 {s3_drg.get('volShrinkPct') or '—'}%）",
+        )
+
     chip_score = max(0, min(20, chip_score))
     chip_desc = (
         f"获利盘 {profit_ratio:.0f}% · 90%集中 {conc90:.1f}%"
@@ -665,8 +975,21 @@ def build_comprehensive_decision(
     elif risk_valve == "GREEN":
         env_score += 1
 
+    s1_tm = (five_step_review or {}).get("step1Timing") or {}
+    s2_th = (five_step_review or {}).get("step2MainTheme") or {}
+    if s2_th.get("isMainTheme"):
+        if s2_th.get("cycleStage") == "HIGH_CLIMAX":
+            env_score -= 1
+            risk_points.append(f"所属主线【{s2_th.get('themeName')}】已处高位一致区，谨防后排追高接最后一棒")
+        else:
+            env_score += 2
+            positive_points.append(f"🎯 命中市场核心主线【{s2_th.get('themeName')}】（{s2_th.get('cycleStageLabel')}）")
+    if s1_tm.get("isResilient"):
+        env_score += 2
+        positive_points.append(f"🛡️ 具备逆势抗跌韧性：近5日跑赢上证指数 {float(s1_tm.get('rs5d') or 0.0):+.1f}% 且站稳20日线")
+
     env_score = max(0, min(15, env_score))
-    env_desc = f"{'热点主线' if matched_hot_themes else '非主线'} · 大盘{market_sentiment.get('valveLabel', '正常') if market_sentiment else '平稳'}"
+    env_desc = f"{'核心主线' if (s2_th.get('isMainTheme') or matched_hot_themes) else '非主线'} · 大盘{market_sentiment.get('valveLabel', '正常') if market_sentiment else '平稳'}"
 
     # 总分汇总
     total_score = fund_score + trend_score + chip_score + intraday_score + env_score
@@ -827,6 +1150,39 @@ def build_comprehensive_decision(
         risk_color = "yellow" if total_score >= 45 else "red"
         suggested_position = "0% (观望为主)"
 
+    # 第一步「顺天时」硬门禁联锁：与起爆挖掘口径 100% 同步，大盘下行期严禁左侧早潜伏
+    if s1_tm.get("regimeMode") == "BEAR_STRICT" and can_buy_level in ("STRONG_BUY", "BUY_DIP"):
+        rs5_v = float(s1_tm.get("rs5d") or 0.0)
+        if not s1_tm.get("isResilient"):
+            can_buy_level = "WAIT"
+            can_buy_verdict = "🛡️ 大盘下行跟跌 · 禁左侧早潜伏"
+            is_buy_point_now = False
+            timing_headline = "⏳ 上证处于下跌结构，本股未形成逆势抗跌，暂缓介入"
+            timing_analysis = (
+                f"当前大盘处于下跌结构/退潮期，本股近5日相对上证超额 {rs5_v:+.1f}%，缺乏独立逆势护盘资金。"
+                "顺天时第一条：大势不对操作白费，建议按兵不动等待指数止跌或右侧放量站回20日线。"
+            )
+            risk_rating = "偏高风险"
+            risk_color = "yellow"
+            suggested_position = "0% (大盘下行空仓观望)"
+        elif not s1_tm.get("rightSideConfirm"):
+            can_buy_level = "WAIT"
+            can_buy_verdict = "⏳ 逆势活口观察 · 等右侧阳线确认"
+            is_buy_point_now = False
+            timing_headline = "⏳ 虽具逆势抗跌韧性，但弱势市须等放量阳线站上5日线再出手"
+            timing_analysis = (
+                f"本股近5日跑赢上证 {rs5_v:+.1f}% 且站稳20日线（可先加入在轨跟踪池），"
+                "但大盘下行期禁左侧阴线早潜伏，必须等日内放量收阳站上5日线右侧确认后再轻仓试错。"
+            )
+            risk_rating = "中等风险"
+            risk_color = "yellow"
+            suggested_position = "0% ~ 10% (仅观察等右侧信号)"
+        else:
+            can_buy_level = "BUY_DIP"
+            can_buy_verdict = "✅ 逆势抗跌+右侧确认 · 仅限先锋轻仓试错"
+            timing_headline = f"✅ 弱势市稀缺右侧买点（5日跑赢指数 {rs5_v:+.1f}% + 阳线站稳5日线）"
+            suggested_position = "10% ~ 20% (弱势先锋仓，破止损立斩)"
+
     # 软性纪律附加提醒（绝不推翻一票否决结论）
     if gap_up_tot >= 6 and gap_up_smash >= 62 and can_buy_level in ("STRONG_BUY", "BUY_DIP", "WAIT"):
         timing_analysis += f" 【基因提醒】近半年高开后有{gap_up_smash}%概率冲高回落，切忌早盘高开追买，仅限分时回踩承接位挂单。"
@@ -834,14 +1190,18 @@ def build_comprehensive_decision(
         pct_hint = f"{t3_pct}%" if t3_pct is not None else "偏少数"
         timing_analysis += f" 【股性提醒】近半年仅{pct_hint}交易日振幅≥3%，更适合中线波段持有，不适合高频做T。"
 
-    # ---- 实战参考价位带 (Trade Plan，优先结合 14日ATR 动态校准) ----
+    # ---- 实战参考价位带 (Trade Plan，统一融合试盘涨停起点、筹码下沿、MA20 与 14日ATR 硬止损锚点) ----
     vwap = float(intraday.get("vwap", 0.0) or cur_px)
     ma5 = float(chips.get("ma5", 0.0) or cur_px)
     ma20 = float(chips.get("ma20", 0.0) or cur_px)
     box_bot = float(chips.get("boxBot", 0.0) or cur_px * 0.94)
     box_top = float(chips.get("boxTop", 0.0) or cur_px * 1.08)
     avg_cost = float(chips.get("avgCost", 0.0) or cur_px)
+    c90_low = float(chips.get("cost90Low", 0.0) or 0.0)
+    zt_floor = float(s3_drg.get("supportFloor") or 0.0)
 
+    stop_anchors: List[dict] = []
+    stop_anchor_label = "ATR动态止损"
     if cur_px > 0:
         vwap_ref = vwap if vwap > 0 else cur_px
         ideal_high = round(min(cur_px, vwap_ref) * 1.002, 2)
@@ -877,6 +1237,20 @@ def build_comprehensive_decision(
                 stop_loss = round(ideal_low * 0.96, 2)
             target_1 = round(max(box_top, cur_px * 1.05, avg_cost * 1.02), 2)
             calibration_note = "按默认均线与箱体百分比区间测算（K线样本不足暂未启用 ATR 动态校准）"
+
+        # 构建可选硬止损锚点（与起爆挖掘 supportFloor 防守口径对齐）
+        if zt_floor > 0 and cur_px * 0.86 <= zt_floor <= cur_px * 0.995:
+            zt_def = round(max(zt_floor * 0.985, cur_px * 0.945), 2)
+            stop_anchors.append({"key": "zt_floor", "label": "试盘涨停起点", "price": zt_def})
+            if drg_stage in ("SHAKEOUT_READY", "CONVERGED_WAIT", "DIGESTING"):
+                stop_loss = zt_def
+                stop_anchor_label = "试盘起点防守线"
+                calibration_note = f"已对齐【起爆试盘起点 ¥{zt_floor:.2f}】划定硬止损 ¥{zt_def:.2f} · " + calibration_note
+        if ma20 > 0 and cur_px * 0.85 <= ma20 <= cur_px * 0.998:
+            stop_anchors.append({"key": "ma20", "label": "20日生命线", "price": round(ma20 * 0.99, 2)})
+        if c90_low > 0 and cur_px * 0.82 <= c90_low <= cur_px * 0.995:
+            stop_anchors.append({"key": "cyq90", "label": "90%筹码下沿", "price": round(c90_low * 0.99, 2)})
+        stop_anchors.append({"key": "atr", "label": "ATR/固定风控(-4.5%)", "price": round(stop_loss if stop_anchor_label == "ATR动态止损" else cur_px * 0.955, 2)})
     else:
         ideal_low = ideal_high = stop_loss = target_1 = 0.0
         calibration_note = ""
@@ -908,7 +1282,10 @@ def build_comprehensive_decision(
             "idealBuyLow": ideal_low,
             "idealBuyHigh": ideal_high,
             "stopLossPrice": stop_loss,
+            "stopAnchorLabel": stop_anchor_label,
+            "stopAnchors": stop_anchors,
             "targetPrice1": target_1,
+            "targetPrice2": round(max(target_1 * 1.04, cur_px * 1.10), 2) if cur_px > 0 else 0.0,
             "suggestedPosition": suggested_position,
             "calibrationNote": calibration_note,
         },
@@ -948,14 +1325,18 @@ def build_wechat_summary(diag: dict) -> str:
 
     if dec:
         tp = dec.get("tradePlan", {})
+        fs = diag.get("fiveStepSystem") or {}
+        s1 = fs.get("step1Timing") or {}
+        s3 = fs.get("step3Dragon") or {}
         lines.extend([
             "",
             f"🏆 综合评分: {dec.get('totalScore', 0)}/100分 ｜ 风险: {dec.get('riskRating', '—')}",
+            *([f"🐉 五步终审: {s3.get('dragonLabel')} ({s3.get('dragonStars')}★) · {s3.get('stageLabel')} ｜ 5日RS {s1.get('rs5d', 0):+.1f}% ({s1.get('entryModeLabel', '')})"] if s3.get("available") else []),
             f"🎯 买入建议: {dec.get('canBuyVerdict', '—')}",
             *( [f"🎭 股性适配: {dec['styleFit']}"] if dec.get("styleFit") else [] ),
             f"⏱️ 时点判断: {dec.get('timingHeadline', '—')}",
             f"  └ {dec.get('timingAnalysis', '')}",
-            f"📌 参考计划: 低吸参考 ¥{tp.get('idealBuyLow', 0):.2f}~¥{tp.get('idealBuyHigh', 0):.2f} ｜ 止损 ¥{tp.get('stopLossPrice', 0):.2f} ｜ 压力 ¥{tp.get('targetPrice1', 0):.2f}",
+            f"📌 参考计划: 低吸参考 ¥{tp.get('idealBuyLow', 0):.2f}~¥{tp.get('idealBuyHigh', 0):.2f} ｜ 硬止损 ¥{tp.get('stopLossPrice', 0):.2f} ｜ 压力 ¥{tp.get('targetPrice1', 0):.2f}",
             *( [f"📏 ATR参考: 14日ATR ¥{ap.get('atr14', 0):.2f} ({ap.get('atrPct', 0):.2f}%) ｜ 适配格距 {ap.get('adaptiveGrid', 1.33):.2f}%"] if ap else [] ),
         ])
 
@@ -1819,6 +2200,23 @@ async def get_stock_diagnosis(
             "isMysticResonant": bool((sp_item or herd_item or {}).get("isMysticResonant")),
         }
 
+    five_step_system = _build_five_step_review(
+        code=code,
+        quote_data=quote_data,
+        days=days,
+        chips_data=chips_data,
+        technicals_data=technicals_data,
+        kline_patterns=kline_patterns,
+        limitup_data=limitup_data,
+        market_sentiment=market_sentiment,
+        company_info=company_info,
+        all_concepts=all_concepts,
+        matched_hot_themes=matched_hot_themes,
+        risk_level=risk_level,
+        red_flags=red_flags,
+        yellow_alerts=yellow_alerts,
+    )
+
     decision_data = build_comprehensive_decision(
         quote=quote_data,
         chips=chips_data,
@@ -1835,7 +2233,19 @@ async def get_stock_diagnosis(
         experimental_dna=experimental_dna,
         kline_patterns=kline_patterns,
         trade_calendar=cal_snapshot,
+        five_step_review=five_step_system,
     )
+
+    tp_final = decision_data.get("tradePlan") or {}
+    five_step_system["step4Execution"] = {
+        "recommendedStopPrice": tp_final.get("stopLossPrice") or 0.0,
+        "stopAnchorLabel": tp_final.get("stopAnchorLabel") or "ATR动态止损",
+        "stopAnchors": tp_final.get("stopAnchors") or [],
+        "targetPrice1": tp_final.get("targetPrice1") or 0.0,
+        "targetPrice2": tp_final.get("targetPrice2") or 0.0,
+        "hasTopDivergence": bool(technicals_data.get("topDivergence")),
+        "hasBottomDivergence": bool(technicals_data.get("bottomDivergence")),
+    }
 
     diag_result = {
         "ok": True,
@@ -1861,6 +2271,7 @@ async def get_stock_diagnosis(
         "marketContext": market_sentiment,
         "shortTermStatus": short_term_status,
         "mysticClusters": (limitup_data.get("mysticClusters") or [])[:5],
+        "fiveStepSystem": five_step_system,
         "decision": decision_data,
         "riskLevel": risk_level,
         "riskColor": risk_color,

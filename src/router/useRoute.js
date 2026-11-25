@@ -139,6 +139,7 @@ export function useRoute() {
         window.location.hash = nextHash;
       }
     }
+    setRoute(parseCurrentLocation(nextHash));
 
     if (!options.preventScroll) {
       window.scrollTo({ top: 0, behavior: 'smooth' });

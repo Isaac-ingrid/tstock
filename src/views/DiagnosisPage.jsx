@@ -1,6 +1,16 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { f2, pct, money, money$, toastOk, toastErr, toastWarn, copyPlain, calcTBreakeven } from '../services/utils.js';
-import { fetchStockDiagnosis, searchTencent, postHerdAction, loadChart, loadStock, refreshSingleFastRt, isAShareTradingNow } from '../services/api.js';
+import {
+  fetchStockDiagnosis,
+  fetchIgnitionPool,
+  postIgnitionTrackingAction,
+  loadLocalTrackedCodes,
+  searchTencent,
+  loadChart,
+  loadStock,
+  refreshSingleFastRt,
+  isAShareTradingNow,
+} from '../services/api.js';
 import ChartCanvas from '../components/ChartCanvas.jsx';
 import KlinePatternBadges from '../components/KlinePatternBadges.jsx';
 
@@ -484,6 +494,8 @@ function CyqFlameChart({ chips, curPrice, holdCost = 0, holdBePrice = 0 }) {
 
 export default function DiagnosisPage({
   pool = [],
+  tailActives = [],
+  wbLatest = null,
   tradeLogs = [],
   initialCode = '',
   onAddStockToPool,
@@ -502,23 +514,103 @@ export default function DiagnosisPage({
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggest, setShowSuggest] = useState(false);
   const [searching, setSearching] = useState(false);
-  const [addingHerd, setAddingHerd] = useState(false);
-  const [addedHerdCode, setAddedHerdCode] = useState('');
+  const [funnelSnap, setFunnelSnap] = useState(null);
+  const [candSourceFilter, setCandSourceFilter] = useState('all'); // all | ignition | tail | tracking | pool
+  const [trackedCodes, setTrackedCodes] = useState(() => new Set(loadLocalTrackedCodes()));
+  const [trackingBusy, setTrackingBusy] = useState(false);
+  const [customStopInput, setCustomStopInput] = useState('');
   const [highlightIdx, setHighlightIdx] = useState(-1);
   const [diagChartStock, setDiagChartStock] = useState(null);
   const searchBoxRef = useRef(null);
   const suppressSuggestRef = useRef(false);
 
+  // 入页毫秒级同步起爆挖掘、深跌龙头与在轨跟踪池快照，供顶部「待审候选条」连点过筛
+  useEffect(() => {
+    let cancelled = false;
+    fetchIgnitionPool({ fastSnapshot: true, timeoutMs: 4500 })
+      .then((res) => {
+        if (cancelled || !res || !res.ok) return;
+        setFunnelSnap(res);
+        const tItems = res?.trackingPool?.items || [];
+        if (tItems.length > 0) {
+          setTrackedCodes((prev) => {
+            const next = new Set(prev);
+            tItems.forEach((it) => {
+              if (it?.code) next.add(String(it.code).padStart(6, '0'));
+            });
+            return next;
+          });
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // 汇总全站选股漏斗候选：起爆活口 · 尾盘黑马 · 在轨跟踪 · 自选作战 · 深跌抗跌
+  const funnelCandidates = useMemo(() => {
+    const list = [];
+    const pushCand = (raw, source, tagPrefix, badgeText = '') => {
+      const c = String(raw?.code || '').trim().padStart(6, '0');
+      if (!/^\d{6}$/.test(c)) return;
+      list.push({
+        code: c,
+        name: String(raw?.name || c).replace(/\s+/g, ''),
+        source,
+        tagPrefix,
+        badgeText,
+      });
+    };
+    (funnelSnap?.breakout?.items || []).slice(0, 12).forEach((it) => {
+      const starTxt = it.dragonStars >= 4.0 ? ` ${it.dragonStars}★` : '';
+      pushCand(it, 'ignition', '🔥起爆', starTxt);
+    });
+    const tailList = Array.isArray(wbLatest?.tail) ? wbLatest.tail : [];
+    tailList.slice(0, 8).forEach((it) => pushCand(it, 'tail', '🌙尾盘', it.score ? ` ${it.score}分` : ''));
+    (tailActives || []).forEach((it) => {
+      if (it?.status !== 'closed') pushCand(it, 'tail', '🌙隔夜', '');
+    });
+    (funnelSnap?.trackingPool?.items || []).slice(0, 12).forEach((it) => {
+      pushCand(it, 'tracking', '🎯跟踪', '');
+    });
+    (pool || []).slice(0, 10).forEach((it) => {
+      pushCand(it, 'pool', '💼自选', it.stopPrice > 0 ? ` 止¥${f2(it.stopPrice)}` : '');
+    });
+    (funnelSnap?.dipLeaders?.items || []).slice(0, 6).forEach((it) => {
+      pushCand(it, 'ignition', '🛟深跌', '');
+    });
+
+    // 按当前过滤分类去重
+    const seen = new Set();
+    const filtered = [];
+    list.forEach((item) => {
+      if (candSourceFilter !== 'all' && item.source !== candSourceFilter) return;
+      if (seen.has(item.code)) return;
+      seen.add(item.code);
+      filtered.push(item);
+    });
+    return filtered;
+  }, [funnelSnap, wbLatest, tailActives, pool, candSourceFilter]);
+
+  const sourceCounts = useMemo(() => {
+    const ignCnt = (funnelSnap?.breakout?.items?.length || 0) + (funnelSnap?.dipLeaders?.items?.length || 0);
+    const tailCnt = (Array.isArray(wbLatest?.tail) ? wbLatest.tail.length : 0) + (tailActives || []).filter((t) => t?.status !== 'closed').length;
+    const trkCnt = funnelSnap?.trackingPool?.items?.length || 0;
+    const poolCnt = (pool || []).length;
+    return { ignCnt, tailCnt, trkCnt, poolCnt, total: ignCnt + tailCnt + trkCnt + poolCnt };
+  }, [funnelSnap, wbLatest, tailActives, pool]);
+
   const localLookup = useMemo(() => {
     const map = new Map();
-    [...(pool || []), ...QUICK_PRESETS].forEach((s) => {
+    [...funnelCandidates, ...(pool || []), ...QUICK_PRESETS].forEach((s) => {
       const c = String(s.code || '').padStart(6, '0');
       if (/^\d{6}$/.test(c) && !map.has(c)) {
         map.set(c, { code: c, name: s.name || c, market: s.market || '' });
       }
     });
     return Array.from(map.values());
-  }, [pool]);
+  }, [funnelCandidates, pool]);
 
   const matchLocal = useCallback((q) => {
     const k = String(q || '').trim().toLowerCase();
@@ -818,11 +910,36 @@ export default function DiagnosisPage({
   const tech = report?.technicals || {};
   const mkt = report?.marketContext || {};
   const sts = report?.shortTermStatus || null;
+  const fiveStep = report?.fiveStepSystem || null;
+  const s1Timing = fiveStep?.step1Timing || {};
+  const s2Theme = fiveStep?.step2MainTheme || {};
+  const s3Dragon = fiveStep?.step3Dragon || {};
+  const s4Exec = fiveStep?.step4Execution || {};
+  const provenance = fiveStep?.provenance || {};
   const isUp = q.chg >= 0;
 
   const matchedPoolStock = report?.code
     ? (pool || []).find((s) => String(s.code || '').padStart(6, '0') === String(report.code).padStart(6, '0'))
     : null;
+
+  // 切换诊断股票时，自动填入该股已有止损价或系统测算的唯一硬止损线
+  useEffect(() => {
+    if (!report?.code) {
+      setCustomStopInput('');
+      return;
+    }
+    const existingStop = +(matchedPoolStock?.stopPrice || 0);
+    const recStop = +(dec?.tradePlan?.stopLossPrice || s4Exec?.recommendedStopPrice || 0);
+    const initStop = existingStop > 0 ? existingStop : recStop;
+    setCustomStopInput(initStop > 0 ? initStop.toFixed(2) : '');
+  }, [report?.code, dec?.tradePlan?.stopLossPrice, s4Exec?.recommendedStopPrice, matchedPoolStock?.stopPrice]);
+
+  const isTracked = useMemo(() => {
+    if (!report?.code) return false;
+    const c6 = String(report.code).padStart(6, '0');
+    return Boolean(trackedCodes.has(c6) || provenance.inTrackingPool);
+  }, [report?.code, trackedCodes, provenance.inTrackingPool]);
+
   const holdShares = +(diagChartStock?.shares ?? matchedPoolStock?.shares ?? 0);
   const holdCost = holdShares > 0 ? +(diagChartStock?.cost || matchedPoolStock?.cost || 0) : 0;
   const holdBePrice = (() => {
@@ -844,31 +961,78 @@ export default function DiagnosisPage({
     }
   })();
 
-  const handleQuickAddHerd = async () => {
+  const handleToggleTracking = async () => {
     if (!report?.code) return;
     const c6 = String(report.code).padStart(6, '0');
-    if (!(c6.startsWith('00') || c6.startsWith('60'))) {
-      toastWarn('抱团跟踪池仅支持 00/60 主板股票');
-      return;
-    }
+    const nextAct = isTracked ? 'remove' : 'add';
     try {
-      setAddingHerd(true);
-      await postHerdAction({
-        action: 'add',
+      setTrackingBusy(true);
+      await postIgnitionTrackingAction({
+        action: nextAct,
         code: c6,
-        name: q.name || '',
-        hybk: comp.industry || '',
+        name: q.name || c6,
+        hybk: s2Theme.themeName || comp.industry || '诊股跟踪',
         price: q.price || 0,
-        reason: '全景诊断一键加入抱团跟踪',
+        strategy: provenance.inDipPool ? 'bottom' : provenance.inTailPool ? 'tail_watch' : 'ignition',
+        subType: s3Dragon.stage || 'DIAG_REVIEW',
+        verdict: s3Dragon.stageLabel && s3Dragon.stageLabel !== '—' ? s3Dragon.stageLabel : (dec?.canBuyVerdict || '全景终审加入跟踪'),
       });
-      setAddedHerdCode(c6);
-      toastOk(`已将 ${q.name || c6} 加入抱团跟踪池`);
+      setTrackedCodes((prev) => {
+        const next = new Set(prev);
+        if (nextAct === 'add') next.add(c6);
+        else next.delete(c6);
+        return next;
+      });
+      toastOk(nextAct === 'add' ? `📌 已将 ${q.name || c6} 加入全站在轨跟踪池` : `已将 ${q.name || c6} 移出在轨跟踪池`);
     } catch (err) {
-      toastErr(err?.message || '加入抱团跟踪池失败');
+      toastErr(err?.message || '在轨跟踪池操作失败');
     } finally {
-      setAddingHerd(false);
+      setTrackingBusy(false);
     }
   };
+
+  const handleCommitToBattlePool = (jumpToTrade = true) => {
+    if (!report?.code || !onAddStockToPool) return;
+    const parsedStop = parseFloat(customStopInput);
+    const stopVal =
+      Number.isFinite(parsedStop) && parsedStop > 0
+        ? Number(parsedStop.toFixed(2))
+        : Number((dec?.tradePlan?.stopLossPrice || q.price * 0.955 || 0).toFixed(2));
+    if (stopVal <= 0) {
+      toastWarn('请先确认有效的硬止损线价格（第四步纪律：无止损不开仓）');
+      return;
+    }
+    const drgStars = +(s3Dragon.dragonStars || 0);
+    const tag =
+      drgStars >= 4.0
+        ? `游龙${drgStars}★`
+        : provenance.inTailPool
+        ? '尾盘'
+        : provenance.inBreakoutPool
+        ? '起爆'
+        : '五步严选';
+    onAddStockToPool(
+      report.code,
+      {
+        name: q.name || report.code,
+        strategyTag: tag,
+        strategy: 'ignition',
+        dragonStars: drgStars || undefined,
+        isMainTheme: Boolean(s2Theme.isMainTheme),
+        mainThemeName: s2Theme.themeName || '',
+        refPrice: q.price || 0,
+        stopPrice: stopVal,
+        targetPrice: dec?.tradePlan?.targetPrice1 || Number(((q.price || 0) * 1.05).toFixed(2)),
+        targetPrice2: dec?.tradePlan?.targetPrice2 || Number(((q.price || 0) * 1.10).toFixed(2)),
+        stageLabel: s3Dragon.stageLabel || dec?.canBuyVerdict || '',
+        advice: dec?.timingAnalysis || s3Dragon.stageTip || '',
+      },
+      { jumpToTrade }
+    );
+  };
+
+  // 保留旧函数别名兼容下方面板调用
+  const handleQuickAddHerd = handleToggleTracking;
 
   // 公告筛选
   const filteredAnnouncements = (report?.announcements || []).filter(a => {
@@ -1003,29 +1167,86 @@ export default function DiagnosisPage({
           </div>
         </div>
 
-        {/* 快速选择候选池（手机端单行丝滑横滑，不堆叠多行占首屏） */}
-        <div className="diag-preset-strip">
-          <span className="diag-preset-lbl">⚡ 快捷诊断:</span>
-          {pool.length > 0 && pool.slice(0, 6).map(s => (
-            <button
-              key={s.code}
-              type="button"
-              onClick={() => handlePresetClick(s.code, s.name)}
-              className={`diag-preset-pill ${activeCode === s.code ? 'active' : ''}`}
-            >
-              自选·{s.name}
-            </button>
-          ))}
-          {QUICK_PRESETS.filter(p => !pool.slice(0, 6).some(s => s.code === p.code)).map(p => (
-            <button
-              key={p.code}
-              type="button"
-              onClick={() => handlePresetClick(p.code, p.name)}
-              className={`diag-preset-pill preset ${activeCode === p.code ? 'active' : ''}`}
-            >
-              {p.name}
-            </button>
-          ))}
+        {/* 全站选股漏斗待审候选条：直接把起爆活口、尾盘黑马、在轨跟踪、自选池串联起来逐只连点过筛 */}
+        <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px dashed var(--line)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', fontSize: '11.5px' }}>
+              <span style={{ fontWeight: 800, color: 'var(--text)' }}>⚡ 待审候选连点过筛:</span>
+              {[
+                { k: 'all', label: `全部候选 (${sourceCounts.total})` },
+                { k: 'ignition', label: `🔥 起爆/深跌 (${sourceCounts.ignCnt})` },
+                { k: 'tail', label: `🌙 尾盘黑马 (${sourceCounts.tailCnt})` },
+                { k: 'tracking', label: `🎯 在轨跟踪 (${sourceCounts.trkCnt})` },
+                { k: 'pool', label: `💼 自选作战 (${sourceCounts.poolCnt})` },
+              ].map((tb) => (
+                <button
+                  key={tb.k}
+                  type="button"
+                  className={`mini ${candSourceFilter === tb.k ? 'primary' : ''}`}
+                  onClick={() => setCandSourceFilter(tb.k)}
+                  style={{ marginLeft: 0, padding: '2px 8px', fontSize: '11px' }}
+                >
+                  {tb.label}
+                </button>
+              ))}
+            </div>
+
+            {funnelCandidates.length > 1 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <button
+                  type="button"
+                  className="mini"
+                  style={{ marginLeft: 0, padding: '2px 8px', fontSize: '11px' }}
+                  onClick={() => {
+                    const curIdx = funnelCandidates.findIndex((x) => x.code === activeCode);
+                    const prevIdx = curIdx > 0 ? curIdx - 1 : funnelCandidates.length - 1;
+                    const pick = funnelCandidates[prevIdx];
+                    if (pick) handlePresetClick(pick.code, pick.name);
+                  }}
+                >
+                  ◀ 上一只
+                </button>
+                <button
+                  type="button"
+                  className="mini"
+                  style={{ marginLeft: 0, padding: '2px 8px', fontSize: '11px' }}
+                  onClick={() => {
+                    const curIdx = funnelCandidates.findIndex((x) => x.code === activeCode);
+                    const nextIdx = curIdx >= 0 && curIdx < funnelCandidates.length - 1 ? curIdx + 1 : 0;
+                    const pick = funnelCandidates[nextIdx];
+                    if (pick) handlePresetClick(pick.code, pick.name);
+                  }}
+                >
+                  下一只 ▶
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="diag-preset-strip" style={{ marginTop: 0 }}>
+            {funnelCandidates.length > 0
+              ? funnelCandidates.map((c) => (
+                  <button
+                    key={`${c.source}_${c.code}`}
+                    type="button"
+                    onClick={() => handlePresetClick(c.code, c.name)}
+                    className={`diag-preset-pill ${activeCode === c.code ? 'active' : ''}`}
+                  >
+                    {c.tagPrefix}·{c.name}
+                    {c.badgeText ? <span style={{ opacity: 0.85, fontFamily: 'monospace' }}>{c.badgeText}</span> : null}
+                  </button>
+                ))
+              : QUICK_PRESETS.map((p) => (
+                  <button
+                    key={p.code}
+                    type="button"
+                    onClick={() => handlePresetClick(p.code, p.name)}
+                    className={`diag-preset-pill preset ${activeCode === p.code ? 'active' : ''}`}
+                  >
+                    {p.name}
+                  </button>
+                ))}
+          </div>
         </div>
       </section>
 
@@ -1033,8 +1254,8 @@ export default function DiagnosisPage({
       {loading ? (
         <section style={{ textAlign: 'center', padding: '56px 16px', color: 'var(--sub)' }}>
           <div style={{ fontSize: '32px', marginBottom: '12px' }}>⏳</div>
-          <div style={{ fontSize: '15px', fontWeight: 600 }}>正在并发扫描公告、板块二波预期、分时VWAP与做T自救处方…</div>
-          <div style={{ fontSize: '12px', color: 'var(--mute)', marginTop: '6px' }}>连接东方财富公告与板块热点 + 腾讯日K与分钟级别VWAP</div>
+          <div style={{ fontSize: '15px', fontWeight: 600 }}>正在并发扫描五步游龙六维、210日筹码峰、分时VWAP与公告排雷…</div>
+          <div style={{ fontSize: '12px', color: 'var(--mute)', marginTop: '6px' }}>自动对齐上证天时结构、热点主线身位与试盘起点硬止损线</div>
         </section>
       ) : errorMsg ? (
         <section style={{ textAlign: 'center', padding: '40px 16px', color: 'var(--up)' }}>
@@ -1051,11 +1272,16 @@ export default function DiagnosisPage({
         </section>
       ) : report ? (
         <div>
-          {/* 🧭 单手章节速达锚点导航条（长报告在手机端拇指一点直达核心模块） */}
+          {/* 🧭 单手章节速达锚点导航条 */}
           <div className="diag-anchor-bar" role="navigation" aria-label="体检报告章节速达">
             {dec && (
               <button type="button" className="diag-anchor-chip" onClick={() => scrollToDiagSection('diagSecDecision')}>
                 🎯 买点结论
+              </button>
+            )}
+            {fiveStep && (
+              <button type="button" className="diag-anchor-chip" onClick={() => scrollToDiagSection('diagSecFiveStep')}>
+                🐉 五步终审与止损
               </button>
             )}
             {diagChartStock && (
@@ -1089,32 +1315,73 @@ export default function DiagnosisPage({
                   <span style={{ fontSize: '11px', padding: '2px 7px', borderRadius: '4px', background: 'var(--surface2)', color: 'var(--mute)' }}>
                     {comp.industry && !['-', '--', '—'].includes(comp.industry) ? comp.industry : '行业未归类'}
                   </span>
+                  {s3Dragon.dragonStars != null && (
+                    <span
+                      style={{
+                        fontSize: '11px',
+                        fontWeight: 800,
+                        padding: '2px 8px',
+                        borderRadius: '4px',
+                        background: s3Dragon.dragonStars >= 4.0 ? 'var(--warn-bg)' : 'var(--surface2)',
+                        color: s3Dragon.dragonStars >= 4.0 ? 'var(--warn-d)' : 'var(--sub)',
+                        border: `1px solid ${s3Dragon.dragonStars >= 4.0 ? 'var(--warn-b)' : 'var(--line2)'}`,
+                      }}
+                    >
+                      {s3Dragon.dragonLabel} ({s3Dragon.dragonStars}★)
+                    </span>
+                  )}
+                  {(provenance.badges || []).map((bg, bi) => (
+                    <span
+                      key={bi}
+                      style={{
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        padding: '2px 7px',
+                        borderRadius: '4px',
+                        background: 'var(--info-bg)',
+                        color: 'var(--info-d)',
+                        border: '1px solid var(--info-b)',
+                      }}
+                    >
+                      {bg}
+                    </span>
+                  ))}
                   {isInPool ? (
                     <button
                       type="button"
-                      onClick={() => onSelectStockInPool && onSelectStockInPool(report.code)}
+                      onClick={() => handleCommitToBattlePool(true)}
                       className="diag-quick-act in-pool"
-                      title="点击直达今日作战台查看该股买卖点"
+                      title="同步最新划定硬止损线并直达今日作战台"
                     >
-                      ✓ 进作战台 →
+                      ✓ 同步止损进作战台 →
                     </button>
                   ) : onAddStockToPool ? (
                     <button
                       type="button"
-                      onClick={() => onAddStockToPool(report.code)}
+                      onClick={() => handleCommitToBattlePool(false)}
                       className="diag-quick-act"
+                      title="带当前划定的硬止损线原位加入作战池，不跳走可继续审下一只"
                     >
-                      + 加入自选
+                      🛡️ 带止损入作战池
                     </button>
                   ) : null}
+                  <button
+                    type="button"
+                    disabled={trackingBusy}
+                    onClick={handleToggleTracking}
+                    className={`diag-quick-act ${isTracked ? 'in-pool' : ''}`}
+                    title="同步至起爆/尾盘共享的全站在轨跟踪池（含主板与300/688）"
+                  >
+                    {trackingBusy ? '⏳…' : isTracked ? '✓ 已在轨跟踪' : '📌 加在轨跟踪'}
+                  </button>
                   {onJumpIgnition && (
                     <button
                       type="button"
                       onClick={() => onJumpIgnition(report.code)}
                       className="diag-quick-act ignition"
-                      title="跳转到起爆挖掘做六维成色体检"
+                      title="返回起爆挖掘池查看全市场候选"
                     >
-                      🚀 起爆体检
+                      🚀 起爆池
                     </button>
                   )}
                 </div>
@@ -1410,6 +1677,227 @@ export default function DiagnosisPage({
                   )}
                 </div>
               </div>
+
+              {/* 🐉 五步交易系统终审与涨停回调六维核验 + 第四步先划止损入池操作台 */}
+              {fiveStep && (
+                <div
+                  id="diagSecFiveStep"
+                  style={{
+                    marginTop: '14px',
+                    padding: '14px 16px',
+                    borderRadius: '10px',
+                    background: 'var(--card)',
+                    border: '1.5px solid var(--line2)',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '14.5px', fontWeight: 800, color: 'var(--text)' }}>
+                        🐉 五步交易系统终审 · 涨停回调再突破六维与硬止损划定
+                      </span>
+                      {s3Dragon.stageLabel && s3Dragon.stageLabel !== '—' && (
+                        <span
+                          style={{
+                            fontSize: '11.5px',
+                            fontWeight: 800,
+                            padding: '2px 8px',
+                            borderRadius: '5px',
+                            background: s3Dragon.stage === 'SHAKEOUT_READY' ? 'var(--up-bg)' : 'var(--warn-bg)',
+                            color: s3Dragon.stage === 'SHAKEOUT_READY' ? 'var(--up)' : 'var(--warn-d)',
+                            border: `1px solid ${s3Dragon.stage === 'SHAKEOUT_READY' ? 'var(--up-b)' : 'var(--warn-b)'}`,
+                          }}
+                        >
+                          {s3Dragon.stageLabel}
+                        </span>
+                      )}
+                    </div>
+                    <span style={{ fontSize: '11.5px', color: 'var(--mute)', fontFamily: 'monospace' }}>
+                      与「起爆挖掘」共用同一套六维引擎 · 零口径漂移
+                    </span>
+                  </div>
+
+                  {/* 前四步全链路状态卡片 */}
+                  <div className="diag-grid-4" style={{ marginBottom: '12px' }}>
+                    <div style={{ padding: '9px 11px', borderRadius: '7px', background: 'var(--surface)', border: '1px solid var(--line)' }}>
+                      <div style={{ fontSize: '11px', color: 'var(--mute)' }}>① 顺天时 · 相对大盘抗跌</div>
+                      <div style={{ fontSize: '12.5px', fontWeight: 800, color: s1Timing.isResilient ? 'var(--down-d)' : 'var(--text)', marginTop: '3px' }}>
+                        {s1Timing.regimeLabel || '常态环境'}
+                      </div>
+                      <div style={{ fontSize: '11px', color: 'var(--sub)', marginTop: '2px', fontFamily: 'monospace' }}>
+                        5日RS <b style={{ color: (s1Timing.rs5d || 0) >= 0 ? 'var(--up)' : 'var(--down)' }}>{fmtPct(s1Timing.rs5d, true, 1)}</b> · {s1Timing.entryModeLabel}
+                      </div>
+                    </div>
+
+                    <div style={{ padding: '9px 11px', borderRadius: '7px', background: 'var(--surface)', border: '1px solid var(--line)' }}>
+                      <div style={{ fontSize: '11px', color: 'var(--mute)' }}>② 抓主线 · 板块共振</div>
+                      <div style={{ fontSize: '12.5px', fontWeight: 800, color: s2Theme.isMainTheme ? 'var(--up)' : 'var(--sub)', marginTop: '3px' }}>
+                        {s2Theme.isMainTheme ? `🎯 ${s2Theme.themeName}` : (s2Theme.themeName || '非今日Top主线')}
+                      </div>
+                      <div style={{ fontSize: '11px', color: 'var(--sub)', marginTop: '2px' }}>
+                        {s2Theme.cycleStageLabel || '普通题材轮动'}
+                      </div>
+                    </div>
+
+                    <div style={{ padding: '9px 11px', borderRadius: '7px', background: 'var(--surface)', border: '1px solid var(--line)' }}>
+                      <div style={{ fontSize: '11px', color: 'var(--mute)' }}>③ 择良标 · 五星游龙</div>
+                      <div style={{ fontSize: '12.5px', fontWeight: 800, color: (s3Dragon.dragonStars || 0) >= 4.0 ? 'var(--warn-d)' : 'var(--text)', marginTop: '3px' }}>
+                        {s3Dragon.dragonLabel} ({s3Dragon.dragonStars ?? '—'}★ / 起爆 {s3Dragon.ignitionScore ?? '—'}分)
+                      </div>
+                      <div style={{ fontSize: '11px', color: 'var(--sub)', marginTop: '2px' }}>
+                        {(s3Dragon.dragonDims || []).map((d) => `${d.label.slice(0, 2)}${d.star}★`).join(' · ') || '等待试盘信号'}
+                      </div>
+                    </div>
+
+                    <div style={{ padding: '9px 11px', borderRadius: '7px', background: 'var(--surface)', border: '1px solid var(--line)' }}>
+                      <div style={{ fontSize: '11px', color: 'var(--mute)' }}>④ 严执行 · 止损与背离</div>
+                      <div style={{ fontSize: '12.5px', fontWeight: 800, fontFamily: 'monospace', color: '#dc2626', marginTop: '3px' }}>
+                        硬止损 ¥{customStopInput || f2(dec.tradePlan?.stopLossPrice)}
+                      </div>
+                      <div style={{ fontSize: '11px', color: 'var(--sub)', marginTop: '2px' }}>
+                        {s4Exec.hasTopDivergence
+                          ? '⚠️ 日线顶背离·冲高锁盈'
+                          : s4Exec.hasBottomDivergence
+                          ? '🎯 日线底背离·止跌试错'
+                          : `依据：${dec.tradePlan?.stopAnchorLabel || '动态防守'}`}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 涨停试盘回调六维核验清单（与起爆页同源） */}
+                  {Array.isArray(s3Dragon.checklist) && s3Dragon.checklist.length > 0 && (
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+                        gap: '8px',
+                        marginBottom: '12px',
+                      }}
+                    >
+                      {s3Dragon.checklist.map((item) => {
+                        const isPass = item.passed === true;
+                        const isWarn = item.passed === 'warn';
+                        const icon = isPass ? '✅' : isWarn ? '⚠️' : '❌';
+                        const bdCol = isPass ? 'var(--down-b)' : isWarn ? 'var(--warn-b)' : 'var(--up-b)';
+                        const bgCol = isPass ? 'var(--down-bg)' : isWarn ? 'var(--warn-bg)' : 'var(--up-bg)';
+                        return (
+                          <div
+                            key={item.id}
+                            style={{
+                              padding: '8px 10px',
+                              borderRadius: '7px',
+                              background: bgCol,
+                              border: `1px solid ${bdCol}`,
+                              fontSize: '11px',
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px' }}>
+                              <b style={{ color: 'var(--text)' }}>{icon} {item.title}</b>
+                              <span style={{ fontWeight: 800, color: isPass ? 'var(--down-d)' : isWarn ? 'var(--warn-d)' : '#dc2626' }}>
+                                {item.badge}
+                              </span>
+                            </div>
+                            <div style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--text)' }}>{item.val}</div>
+                            <div style={{ color: 'var(--sub)', marginTop: '2px', lineHeight: 1.35 }}>{item.detail}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* 第四步动作闭环：先选/微调硬止损线，一键写入实盘作战池或在轨跟踪池 */}
+                  <div
+                    style={{
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      background: 'var(--surface2)',
+                      border: '1px solid var(--line2)',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: '10px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', fontSize: '12px' }}>
+                      <b style={{ color: 'var(--text)' }}>🛡️ 先划止损线：</b>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        <span style={{ fontFamily: 'monospace', color: '#dc2626', fontWeight: 800 }}>¥</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={customStopInput}
+                          onChange={(e) => setCustomStopInput(e.target.value)}
+                          style={{
+                            width: '86px',
+                            padding: '4px 7px',
+                            borderRadius: '6px',
+                            border: '1px solid var(--up-b)',
+                            background: 'var(--card)',
+                            color: 'var(--text)',
+                            fontFamily: 'monospace',
+                            fontWeight: 800,
+                            fontSize: '13px',
+                          }}
+                        />
+                        {q.price > 0 && parseFloat(customStopInput) > 0 && (
+                          <span style={{ fontFamily: 'monospace', fontSize: '11.5px', color: 'var(--sub)' }}>
+                            ({(((parseFloat(customStopInput) - q.price) / q.price) * 100).toFixed(1)}%)
+                          </span>
+                        )}
+                      </div>
+                      {(dec.tradePlan?.stopAnchors || []).map((anc) => (
+                        <button
+                          key={anc.key}
+                          type="button"
+                          className="mini"
+                          onClick={() => setCustomStopInput(Number(anc.price).toFixed(2))}
+                          style={{
+                            marginLeft: 0,
+                            padding: '2px 7px',
+                            fontSize: '11px',
+                            borderColor: Number(customStopInput) === Number(anc.price) ? 'var(--accent)' : undefined,
+                          }}
+                        >
+                          {anc.label} ¥{f2(anc.price)}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      {onAddStockToPool && (
+                        <>
+                          <button
+                            type="button"
+                            className="mini"
+                            onClick={() => handleCommitToBattlePool(false)}
+                            style={{ marginLeft: 0, fontWeight: 700, padding: '5px 10px' }}
+                            title="写入止损线与游龙标签原位留在诊股页，方便直接点上方「下一只 ▶」继续审图"
+                          >
+                            {isInPool ? '💾 保存止损线(留本页)' : '➕ 带止损原位入池(留本页)'}
+                          </button>
+                          <button
+                            type="button"
+                            className="mini primary"
+                            onClick={() => handleCommitToBattlePool(true)}
+                            style={{ marginLeft: 0, fontWeight: 800, padding: '5px 12px' }}
+                          >
+                            {isInPool ? '🛡️ 同步止损并进作战台 →' : '🚀 带硬止损入池并进作战台 →'}
+                          </button>
+                        </>
+                      )}
+                      <button
+                        type="button"
+                        className="mini"
+                        disabled={trackingBusy}
+                        onClick={handleToggleTracking}
+                        style={{ marginLeft: 0, padding: '5px 10px', fontWeight: 700 }}
+                      >
+                        {isTracked ? '✓ 已在轨跟踪' : '📌 加入在轨跟踪'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </section>
           )}
 

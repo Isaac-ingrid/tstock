@@ -1075,14 +1075,26 @@ export default function IgnitionPage({
                       trackTitle="加入在轨跟踪池"
                       trackedTitle="已在在轨跟踪池，点击查看SOP详情"
                       extraActions={
-                        <button
-                          type="button"
-                          className="board-act-btn score"
-                          onClick={() => handleCopyDiagReport(diagResult)}
-                          title="复制六维体检报告"
-                        >
-                          📋 复制报告
-                        </button>
+                        <>
+                          {onJumpDiagnosis && (
+                            <button
+                              type="button"
+                              className="board-act-btn diag"
+                              onClick={() => onJumpDiagnosis(diagResult.code)}
+                              title="跳转到全景诊股查看210日筹码峰并划定硬止损入池"
+                            >
+                              🩺 全景终审
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="board-act-btn score"
+                            onClick={() => handleCopyDiagReport(diagResult)}
+                            title="复制六维体检报告"
+                          >
+                            📋 复制报告
+                          </button>
+                        </>
                       }
                     />
                   </div>

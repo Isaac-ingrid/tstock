@@ -187,6 +187,15 @@ class TestCyqChipDistribution(unittest.TestCase):
                 self.assertEqual(prof_prices, sorted(prof_prices))
                 self.assertLess(chips["concentration90"], 5.0)
                 self.assertIn("90%成本区间", diag["wechatSummary"])
+                # 验证全景诊股已完整输出五步交易系统与涨停试盘六维核验
+                fs = diag.get("fiveStepSystem") or {}
+                self.assertIn("step1Timing", fs)
+                self.assertIn("step2MainTheme", fs)
+                self.assertIn("step3Dragon", fs)
+                self.assertIn("step4Execution", fs)
+                self.assertTrue(fs["step3Dragon"]["available"])
+                self.assertEqual(len(fs["step3Dragon"]["checklist"]), 6)
+                self.assertGreater(fs["step4Execution"]["recommendedStopPrice"], 0.0)
                 dec = build_comprehensive_decision(
                     quote=diag["quote"],
                     chips=chips,
@@ -199,10 +208,42 @@ class TestCyqChipDistribution(unittest.TestCase):
                     yellow_alerts=[],
                     green_catalysts=[],
                     market_sentiment={"riskValve": "GREEN", "brokenRate": 15.0},
+                    five_step_review=fs,
                 )
                 self.assertTrue(any("CYQ 筹码高度集中" in pt for pt in dec["positivePoints"]))
                 summary_txt = build_wechat_summary(diag)
                 self.assertIn("CYQ筹码均价", summary_txt)
+                self.assertIn("五步终审", summary_txt)
+
+                # 验证大盘下跌结构 (BEAR_STRICT) 下，未右侧确认的个股在诊股端同步触发「禁左侧早潜伏」联锁拦截
+                bear_fs = {
+                    **fs,
+                    "step1Timing": {
+                        **fs["step1Timing"],
+                        "regimeMode": "BEAR_STRICT",
+                        "regimeLabel": "🛡️ 大盘下行·逆势严选",
+                        "rs5d": -1.5,
+                        "isResilient": False,
+                        "rightSideConfirm": False,
+                    },
+                }
+                dec_bear = build_comprehensive_decision(
+                    quote=diag["quote"],
+                    chips=chips,
+                    technicals=diag["technicals"],
+                    intraday=diag["intraday"],
+                    second_wave=diag["secondWave"],
+                    sector_ecology=diag["sectorEcology"],
+                    matched_hot_themes=[],
+                    red_flags=[],
+                    yellow_alerts=[],
+                    green_catalysts=[],
+                    market_sentiment={"riskValve": "GREEN", "brokenRate": 18.0},
+                    five_step_review=bear_fs,
+                )
+                self.assertEqual(dec_bear["canBuyLevel"], "WAIT")
+                self.assertFalse(dec_bear["isBuyPointNow"])
+                self.assertIn("大盘下行", dec_bear["canBuyVerdict"])
 
         asyncio.run(_run())
 

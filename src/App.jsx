@@ -769,6 +769,7 @@ export default function App() {
       name: s.name,
       shares: s.shares || 0,
       cost: s.cost || 0,
+      stopPrice: s.stopPrice || 0,
       tier: s.tier || 'short',
       memo: s.memo || '',
       strategyTag: s.strategyTag || '',
@@ -1497,11 +1498,31 @@ export default function App() {
       const cand = resolved.candidate;
       const code6 = String(cand.code || '').padStart(6, '0');
       const curList = poolRef.current || [];
+      const nextStopPx = meta?.stopPrice > 0 ? Number((+meta.stopPrice).toFixed(2)) : 0;
       if (curList.some(s => String(s.code).padStart(6, '0') === code6)) {
+        if (nextStopPx > 0 || meta?.strategyTag) {
+          setPool(prev => {
+            const updated = prev.map(st => {
+              if (String(st.code).padStart(6, '0') !== code6) return st;
+              return {
+                ...st,
+                ...(nextStopPx > 0 ? { stopPrice: nextStopPx } : {}),
+                ...(meta?.strategyTag ? { strategyTag: meta.strategyTag } : {}),
+                ...(meta?.strategy ? { planStrategy: meta.strategy } : {}),
+                ignitionMeta: { ...(st.ignitionMeta || {}), ...(meta || {}) },
+              };
+            });
+            poolRef.current = updated;
+            return updated;
+          });
+          if (!silentToast && nextStopPx > 0) {
+            toastOk(`🛡️ 已同步【${cand.name || code6}】硬止损线 ¥${nextStopPx.toFixed(2)}！`);
+          }
+        } else if (!jumpToTrade && !silentToast) {
+          toastWarn(`${cand.name || code6} 已在自选池中`);
+        }
         if (jumpToTrade) {
           handleSelectStock(code6);
-        } else if (!silentToast) {
-          toastWarn(`${cand.name || code6} 已在自选池中`);
         }
         return { status: 'exists', code: code6 };
       }
@@ -1524,6 +1545,7 @@ export default function App() {
         shares: 0,
         cost: 0,
         cap: 0,
+        ...(nextStopPx > 0 ? { stopPrice: nextStopPx } : {}),
         tier: meta?.tier || 'short',
         p: 'day',
         ...(meta?.strategyTag ? { strategyTag: meta.strategyTag } : {}),
@@ -1542,7 +1564,11 @@ export default function App() {
       }
 
       if (!silentToast) {
-        toastOk(`✓ 已将 ${newStock.name} (${code6}) 加入自选池！`);
+        toastOk(
+          nextStopPx > 0
+            ? `🛡️ 已将 ${newStock.name} (${code6}) 带硬止损线 ¥${nextStopPx.toFixed(2)} 加入作战池！`
+            : `✓ 已将 ${newStock.name} (${code6}) 加入自选池！`
+        );
       }
 
       // 后台异步拉取实时行情、前复权均线与板块估值，绝不阻塞按钮点击响应且零竞态覆盖
@@ -1560,6 +1586,7 @@ export default function App() {
                 shares: st.shares ?? working.shares,
                 cost: st.cost ?? working.cost,
                 cap: st.cap ?? working.cap,
+                stopPrice: st.stopPrice || working.stopPrice || 0,
                 tier: st.tier || working.tier,
                 poolTag: st.poolTag || working.poolTag,
                 strategyTag: st.strategyTag || working.strategyTag,
@@ -2368,6 +2395,8 @@ export default function App() {
         {(activeTab === 'tabDiagnosis' || activeTab === 'tabAll') && (
           <DiagnosisPage
             pool={pool}
+            tailActives={tailActives}
+            wbLatest={wbLatest}
             tradeLogs={tradeLogs}
             initialCode={query?.code || ''}
             onAddStockToPool={handleAddStockByQuery}
