@@ -165,8 +165,9 @@ def _is_noise_board(name: str) -> bool:
 def _save_latest_sync(payload: dict) -> None:
     b_count = len((payload.get("breakout") or {}).get("items") or [])
     d_count = len((payload.get("dipLeaders") or {}).get("items") or [])
-    if b_count == 0 and d_count == 0:
-        # 绝不将 0 结果的空数据或限流响应覆盖已有优质本地快照
+    seed_cnt = int(((payload.get("breakout") or {}).get("stats") or {}).get("seedCount") or 0)
+    if b_count == 0 and d_count == 0 and seed_cnt == 0:
+        # 仅当三方接口全部受阻（连种子池都未扫出）时保护旧快照；若天时严选正常筛至 0 只则如实落盘
         return
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     tmp_path = IGNITION_CACHE_FILE.with_suffix(".json.tmp")
@@ -450,17 +451,33 @@ def _extract_daily_ignition_features(
     if vol_shrink_ratio <= 0.48 and 0.3 <= cur_pct <= 6.2 and px >= ma5 * 0.995:
         shakeout_signals.append("地量小阳抬头")
 
+    chg_5d = ((px - closes[-6]) / closes[-6] * 100.0) if len(closes) >= 6 and closes[-6] > 0 else cur_pct
+    higher_low_3d = (
+        min(b["low"] for b in daily_bars[-3:]) >= min(b["low"] for b in daily_bars[-6:-3]) * 0.995
+        if n >= 6
+        else True
+    )
+    above_ma20 = px >= ma20 * 0.995
+    right_side_confirm = bool(
+        px >= ma5 * 0.998
+        and cur_pct >= 0.8
+        and daily_bars[-1]["close"] >= daily_bars[-1]["open"]
+    )
+
     kline_patterns = analyze_kline_patterns(daily_bars, code=code, name=name)
     has_bearish_kline = bool(
         kline_patterns.get("hasTopIsland")
         or kline_patterns.get("hasHighGravestone")
         or kline_patterns.get("hasBearishEngulfing")
+        or kline_patterns.get("hasTopDivergence")
     )
     if not has_bearish_kline:
         if kline_patterns.get("hasImmortalGuide") and "仙人指路反包" not in shakeout_signals:
             shakeout_signals.append("仙人指路反包")
         if kline_patterns.get("hasBottomIsland") and "底部岛形反转" not in shakeout_signals:
             shakeout_signals.append("底部岛形反转")
+        if kline_patterns.get("hasBottomDivergence") and "日线底背离" not in shakeout_signals:
+            shakeout_signals.append("日线底背离")
 
     return {
         "hasZt": has_zt,
@@ -484,6 +501,10 @@ def _extract_daily_ignition_features(
         "maSpreadPct": round(ma_spread_pct, 2),
         "biasMa5": round(bias_ma5, 2),
         "boxPosPct": round(box_pos_pct, 1),
+        "chg5d": round(chg_5d, 2),
+        "higherLow3d": higher_low_3d,
+        "aboveMa20": above_ma20,
+        "rightSideConfirm": right_side_confirm,
         "shakeoutSignals": shakeout_signals,
         "curDayChg": round(cur_pct, 2),
         "curPrice": round(px, 2),
@@ -1264,12 +1285,17 @@ async def scan_breakout_ignition(
         })
         qual_bars.append((dbars, w_bars, m_bars))
 
-    # 同步读取第二步「热点主线」板块与成员映射，给符合主线+涨停回调再突破的五星游龙标的赋予共振标识
+    # 同步读取第一步「天时（上证指数趋势/布林/背离）」与第二步「热点主线」
     theme_by_code: Dict[str, dict] = {}
     theme_by_name: Dict[str, dict] = {}
+    macro_timing: Dict[str, Any] = {}
+    risk_valve = "GREEN"
     try:
         from .limitup import get_limitup_pool
         lu_res = await asyncio.wait_for(get_limitup_pool(http_client=http_client), timeout=2.0)
+        sent_obj = lu_res.get("sentiment") or {}
+        risk_valve = str(sent_obj.get("riskValve") or "GREEN")
+        macro_timing = lu_res.get("macroTiming") or sent_obj.get("macroTiming") or {}
         for th in ((lu_res.get("mainThemes") or {}).get("themes") or []):
             t_info = {
                 "name": th.get("name", ""),
@@ -1284,6 +1310,30 @@ async def scan_breakout_ignition(
                     theme_by_code[mc] = t_info
     except Exception:
         pass
+
+    macro_struct = str(macro_timing.get("structure") or "RANGE")
+    macro_struct_lbl = str(macro_timing.get("structureLabel") or "震荡结构")
+    sh_chg_1d = float(macro_timing.get("anchorChg") or 0.0)
+    sh_chg_5d = float(macro_timing.get("anchorChg5d") or 0.0)
+    sh_bot_div = bool(macro_timing.get("bottomDivergence"))
+    sh_top_div = bool(macro_timing.get("topDivergence"))
+
+    if macro_struct == "DOWNTREND" or risk_valve == "RED":
+        regime_mode = "BEAR_STRICT"
+        regime_label = "🎯 指数底背离·逆势严选窗口" if sh_bot_div else "🛡️ 大盘下行·逆势严选模式"
+        regime_advice = (
+            "上证处于下跌结构但已现底背离止跌信号：已开启逆势严选过滤跟跌杂毛，仅保留跑赢指数且站稳MA20的活口，等放量阳线右侧试错"
+            if sh_bot_div
+            else "上证处于下跌结构/退潮期：大势不对操作白费！系统已自动开启硬过滤剔除普通缩量跟跌股，禁左侧早潜伏，仅留逆势抗跌活口等右侧放量确认（或切看方向二深跌龙头）"
+        )
+    elif macro_struct == "RANGE" or risk_valve == "YELLOW" or sh_top_div:
+        regime_mode = "RANGE_SELECTIVE"
+        regime_label = "⚖️ 大盘震荡·去弱留强模式"
+        regime_advice = "指数处于箱体震荡或分歧期：已自动剔除破位弱势股，优先聚焦热点主线内超额抗跌且站稳MA20的四星以上标的"
+    else:
+        regime_mode = "BULL_NORMAL"
+        regime_label = "🔥 大盘顺势·常态起爆模式"
+        regime_advice = "上证上升结构与情绪共振：可围绕前排主线震仓/粘合标的回踩均线积极布局"
 
     # 补充公告排雷（带全局熔断 + 1.2s 硬预算）并统一调用 evaluate_ignition_six_dims 输出五星游龙评分
     target_qual = qualified[:45]
@@ -1335,7 +1385,6 @@ async def scan_breakout_ignition(
         ):
             qualified[idx][k_copy] = unified[k_copy]
 
-    # 对超出 45 只之外的尾部项补齐默认五星字段防前端空值
     for tail_item in qualified[len(notice_list):]:
         tail_item.setdefault("dragonStars", 3.5)
         tail_item.setdefault("dragonLabel", "3.5星观察")
@@ -1343,10 +1392,78 @@ async def scan_breakout_ignition(
         tail_item.setdefault("isMainTheme", False)
         tail_item.setdefault("mainThemeName", "")
 
+    # ===== 天时自适应逆势抗跌过滤与右侧确认标注 =====
+    raw_qual_count = len(qualified)
+    filtered_qual: List[dict] = []
+    for item in qualified:
+        rs_5d = round(float(item.get("chg5d") or 0.0) - sh_chg_5d, 2)
+        rs_1d = round(float(item.get("chg") or 0.0) - sh_chg_1d, 2)
+        hl_3d = bool(item.get("higherLow3d", True))
+        ma20_val = float(item.get("ma20") or 0.0)
+        px_val = float(item.get("price") or 0.0)
+        abv_20 = (px_val >= ma20_val * 0.995) if ma20_val > 0 else bool(item.get("aboveMa20", True))
+        rt_conf = bool(
+            item.get("rightSideConfirm")
+            or (float(item.get("chg") or 0.0) >= 1.2 and px_val >= float(item.get("ma5") or 0.0) * 0.998)
+        )
+        is_resilient = bool((rs_5d >= 2.5 and hl_3d and abv_20) or (rs_5d >= 4.0 and abv_20))
+
+        item["rs5d"] = rs_5d
+        item["rs1d"] = rs_1d
+        item["isResilient"] = is_resilient
+        item["rightSideConfirm"] = rt_conf
+
+        if regime_mode == "BEAR_STRICT":
+            # 大盘下跌/红灯退潮期硬门槛：宁缺毋滥，砍掉跟跌假缩量与破20日线杂毛
+            if item.get("riskLevel") == "高风险":
+                continue
+            if item["stage"] in ("PULLBACK_RISK", "DIGESTING") and not (is_resilient and rt_conf):
+                continue
+            if float(item.get("volShrinkRatio") or 1.0) > 0.65:
+                continue
+            if not abv_20 or float(item.get("price") or 0.0) < float(item.get("supportFloor") or 0.0) * 1.00:
+                continue
+            if rs_5d < 2.0 or (not hl_3d and rs_1d < 1.5):
+                continue
+            if rt_conf:
+                item["entryMode"] = "RIGHT_CONFIRMED"
+                item["entryModeLabel"] = "✅ 右侧阳线确认"
+                item["stageTip"] = (
+                    f"【逆势抗跌·5日跑赢指数 {rs_5d:+.1f}%】已站稳MA20且今日放量收阳站上5日线右侧确认，"
+                    f"弱势市仅宜轻仓试错，跌破 ¥{item['supportFloor']} 无条件离场"
+                )
+                item["ignitionScore"] = min(100, int(item["ignitionScore"]) + 5)
+            else:
+                item["entryMode"] = "WAIT_RIGHT_SIGNAL"
+                item["entryModeLabel"] = "⏳ 禁早潜伏·等右侧阳线"
+                item["stageTip"] = (
+                    f"【大盘下行禁左侧早潜伏·5日超额 {rs_5d:+.1f}%】虽逆势护盘未破位，"
+                    f"但须等日内放量站上5日线(¥{item['ma5']})拐头再右侧介入"
+                )
+        elif regime_mode == "RANGE_SELECTIVE":
+            if item["stage"] == "PULLBACK_RISK":
+                continue
+            if not abv_20 and rs_5d < 0.0:
+                continue
+            item["entryMode"] = "RIGHT_CONFIRMED" if rt_conf else "PULLBACK_OR_RIGHT"
+            item["entryModeLabel"] = "✅ 右侧转强" if rt_conf else "👀 回踩均线等拐头"
+            if is_resilient:
+                item["ignitionScore"] = min(100, int(item["ignitionScore"]) + 4)
+        else:
+            item["entryMode"] = "RIGHT_CONFIRMED" if rt_conf else "NORMAL_AMBUSH"
+            item["entryModeLabel"] = "✅ 右侧点火" if rt_conf else "🎯 缩量潜伏窗口"
+
+        filtered_qual.append(item)
+
+    filtered_out_cnt = max(0, raw_qual_count - len(filtered_qual))
+    qualified = filtered_qual
+
     stage_order = {"SHAKEOUT_READY": 0, "CONVERGED_WAIT": 1, "DIGESTING": 2, "PULLBACK_RISK": 3}
     qualified.sort(
         key=lambda x: (
             1 if x.get("riskLevel") == "高风险" else 0,
+            0 if (regime_mode == "BEAR_STRICT" and x.get("rightSideConfirm")) else 1,
+            0 if x.get("isResilient") else 1,
             stage_order.get(x["stage"], 9),
             0 if (x.get("isMainTheme") and x.get("mainThemeStage") != "HIGH_CLIMAX") else 1,
             -(x.get("dragonStars") or 0.0),
@@ -1354,9 +1471,13 @@ async def scan_breakout_ignition(
             x["volShrinkRatio"],
         )
     )
+    if regime_mode == "BEAR_STRICT":
+        qualified = qualified[:12]
 
     counts = {
         "total": len(qualified),
+        "resilientCount": sum(1 for x in qualified if x.get("isResilient")),
+        "rightConfirmedCount": sum(1 for x in qualified if x.get("rightSideConfirm")),
         "fiveStarDragon": sum(1 for x in qualified if (x.get("dragonStars") or 0) >= 4.5),
         "fourPlusDragon": sum(1 for x in qualified if (x.get("dragonStars") or 0) >= 4.0),
         "mainThemeResonance": sum(1 for x in qualified if x.get("isMainTheme")),
@@ -1365,11 +1486,27 @@ async def scan_breakout_ignition(
         "digesting": sum(1 for x in qualified if x["stage"] == "DIGESTING"),
         "pullbackRisk": sum(1 for x in qualified if x["stage"] == "PULLBACK_RISK"),
     }
+    market_regime_info = {
+        "mode": regime_mode,
+        "label": regime_label,
+        "advice": regime_advice,
+        "indexStructure": macro_struct,
+        "indexStructureLabel": macro_struct_lbl,
+        "riskValve": risk_valve,
+        "shChg1d": sh_chg_1d,
+        "shChg5d": sh_chg_5d,
+        "bottomDivergence": sh_bot_div,
+        "rawQualifiedCount": raw_qual_count,
+        "filteredOutCount": filtered_out_cnt,
+    }
     return {
         "items": qualified[:50],
         "stats": {
             "seedCount": len(seed_meta),
             "dailyPassedCount": len(daily_passed),
+            "rawQualifiedCount": raw_qual_count,
+            "filteredOutCount": filtered_out_cnt,
+            "marketRegime": market_regime_info,
             "counts": counts,
             "includeCyb": include_cyb,
             "lookbackDays": lookback_days,
@@ -2573,11 +2710,12 @@ async def get_ignition_pool(
             ) as client:
                 breakout_res, dip_res = await _run_both(client)
 
-        # 若实时扫描因三方网络全部受阻出现 0 结果，保底回退本地同口径快照并标记为快照
+        # 仅当三方网络受阻（连种子池都为 0 且双池均空）时回退本地快照；大盘下跌「宁缺毋滥」筛为 0 只时严禁拿旧票充数
         b_len = len((breakout_res or {}).get("items") or [])
         d_len = len((dip_res or {}).get("items") or [])
+        b_seeds = int(((breakout_res or {}).get("stats") or {}).get("seedCount") or 0)
         used_fallback = False
-        if b_len == 0 and d_len == 0:
+        if b_len == 0 and d_len == 0 and b_seeds == 0:
             fallback = load_saved_ignition()
             if fallback and (len((fallback.get("breakout") or {}).get("items") or []) > 0 or len((fallback.get("dipLeaders") or {}).get("items") or []) > 0):
                 breakout_res = fallback.get("breakout") or breakout_res
@@ -2727,6 +2865,23 @@ async def diagnose_ignition_stock(query: str, http_client: Optional[httpx.AsyncC
             name=name,
         )
 
+        stage_tip_out = eval_res["stageTip"]
+        sop_out = dict(eval_res["sop"])
+        try:
+            from .limitup import get_limitup_pool
+            lu_res = await asyncio.wait_for(get_limitup_pool(http_client=http_client), timeout=1.5)
+            mt_obj = lu_res.get("macroTiming") or (lu_res.get("sentiment") or {}).get("macroTiming") or {}
+            rv_str = str((lu_res.get("sentiment") or {}).get("riskValve") or "GREEN")
+            if str(mt_obj.get("structure")) == "DOWNTREND" or rv_str == "RED":
+                chg5_stock = ((cur_price - dbars[-6]["close"]) / dbars[-6]["close"] * 100.0) if len(dbars) >= 6 and dbars[-6]["close"] > 0 else day_chg
+                rs5_stock = round(chg5_stock - float(mt_obj.get("anchorChg5d") or 0.0), 2)
+                stage_tip_out = (
+                    f"【天时预警：上证处于下跌结构/退潮期 · 本股5日相对大盘超额 {rs5_stock:+.1f}%】"
+                    f"{stage_tip_out}；弱势市禁左侧早潜伏，须等放量阳线站上5日线右侧确认。"
+                )
+        except Exception:
+            pass
+
         return {
             "ok": True,
             "code": c6,
@@ -2737,15 +2892,18 @@ async def diagnose_ignition_stock(query: str, http_client: Optional[httpx.AsyncC
             "amountYi": amount_yi,
             "mcapYi": mcap_yi,
             "ignitionScore": eval_res["ignitionScore"],
+            "dragonStars": eval_res.get("dragonStars"),
+            "dragonLabel": eval_res.get("dragonLabel"),
+            "dragonDims": eval_res.get("dragonDims"),
             "stage": eval_res["stage"],
             "stageLabel": eval_res["stageLabel"],
-            "stageTip": eval_res["stageTip"],
+            "stageTip": stage_tip_out,
             "badgeBg": eval_res["badgeBg"],
             "badgeColor": eval_res["badgeColor"],
             "badgeBorder": eval_res["badgeBorder"],
             "summaryText": eval_res["summaryText"],
             "checklist": eval_res["checklist"],
-            "sop": eval_res["sop"],
+            "sop": sop_out,
             "klinePatterns": eval_res["klinePatterns"],
             "notice": notice,
         }

@@ -379,6 +379,105 @@ class TestIgnitionFreshnessAndSpeedPipeline(unittest.TestCase):
 
         asyncio.run(_run())
 
+    def test_bear_strict_regime_filters_weak_followers_and_honors_zero_survivors(self):
+        from unittest.mock import patch
+        import backend.ignition as ign
+        import backend.limitup as lu
+
+        strong_daily, strong_weekly, strong_monthly = _build_ignition_fixture()
+        # 构造一只普通跟跌缩量股：涨停后量能仅缩至 ~78% (>65%) 且近5日跟随大盘回落
+        weak_daily = [dict(b) for b in strong_daily[:-4]]
+        zt_c = weak_daily[-1]["close"]
+        weak_daily.append(_make_bar("2025-12-09", zt_c, round(zt_c * 0.985, 2), zt_c, round(zt_c * 0.98, 2), 28000.0))
+        weak_daily.append(_make_bar("2025-12-10", round(zt_c * 0.985, 2), round(zt_c * 0.975, 2), round(zt_c * 0.99, 2), round(zt_c * 0.968, 2), 27500.0))
+        weak_daily.append(_make_bar("2025-12-11", round(zt_c * 0.975, 2), round(zt_c * 0.965, 2), round(zt_c * 0.98, 2), round(zt_c * 0.958, 2), 27000.0))
+        weak_daily.append(_make_bar("2025-12-12", round(zt_c * 0.965, 2), round(zt_c * 0.958, 2), round(zt_c * 0.97, 2), round(zt_c * 0.952, 2), 26800.0))
+
+        async def _fake_zt_day(client, d_str, sem, today_compact=""):
+            if d_str.endswith("08") or True:
+                return d_str, [
+                    {"c": "600519", "n": "强势活口", "hybk": "半导体", "lbc": 1, "p": 11.2},
+                    {"c": "600001", "n": "跟跌杂毛", "hybk": "一般行业", "lbc": 1, "p": 10.8},
+                ]
+
+        async def _fake_quotes(client, codes):
+            return {
+                "600519": {"name": "强势活口", "price": strong_daily[-1]["close"], "chg": 1.45, "turnover": 4.2, "amount": 6e8, "mcap": 180e8},
+                "600001": {"name": "跟跌杂毛", "price": weak_daily[-1]["close"], "chg": -1.80, "turnover": 3.1, "amount": 5e8, "mcap": 90e8},
+            }
+
+        async def _fake_klines(client, secid, klt, lmt, sem=None, tcode_fallback=None, ttl=300.0):
+            is_strong = "600519" in secid
+            if klt == 101:
+                return strong_daily if is_strong else weak_daily
+            if klt == 102:
+                return strong_weekly
+            return strong_monthly
+
+        async def _fake_notices(client, codes, max_live=16, budget_sec=1.2):
+            return [{"riskLevel": "安全", "redFlags": [], "yellowAlerts": []} for _ in codes]
+
+        async def _fake_limitup_bear(http_client=None, **kwargs):
+            return {
+                "sentiment": {"riskValve": "RED"},
+                "macroTiming": {
+                    "structure": "DOWNTREND",
+                    "structureLabel": "下跌结构",
+                    "anchorChg": -1.35,
+                    "anchorChg5d": -3.80,
+                    "bottomDivergence": False,
+                    "topDivergence": False,
+                },
+                "mainThemes": {
+                    "themes": [{"name": "半导体", "cycleStage": "EARLY_START", "cycleStageLabel": "🌱 启动初期", "stocks": [{"code": "600519"}]}]
+                },
+            }
+
+        async def _run():
+            with (
+                patch.object(ign, "_fetch_zt_pool_day", side_effect=_fake_zt_day),
+                patch.object(ign, "_fetch_batch_quotes", side_effect=_fake_quotes),
+                patch.object(ign, "_fetch_em_klines", side_effect=_fake_klines),
+                patch.object(ign, "_batch_notice_fast", side_effect=_fake_notices),
+                patch.object(lu, "get_limitup_pool", side_effect=_fake_limitup_bear),
+            ):
+                res = await ign.scan_breakout_ignition(object(), include_cyb=False, lookback_days=20)
+                regime = res["stats"]["marketRegime"]
+                self.assertEqual(regime["mode"], "BEAR_STRICT")
+                # 初筛2只都过了常规月放量+周向上+日缩量(<88%)，但天时严选硬过滤剔除了跟跌杂毛 600001
+                self.assertEqual(res["stats"]["rawQualifiedCount"], 2)
+                self.assertEqual(res["stats"]["filteredOutCount"], 1)
+                self.assertEqual(len(res["items"]), 1)
+                survivor = res["items"][0]
+                self.assertEqual(survivor["code"], "600519")
+                self.assertTrue(survivor["isResilient"])
+                self.assertTrue(survivor["rightSideConfirm"])
+                self.assertEqual(survivor["entryMode"], "RIGHT_CONFIRMED")
+                self.assertGreater(survivor["rs5d"], 2.5)
+
+            # 验证若天时严选把候选全部淘汰为 0 只（但 seedCount > 0 代表非网络断联），绝不误回退旧落盘快照充数
+            await ign._RESULT_CACHE.clear()
+            with (
+                patch.object(
+                    ign,
+                    "scan_breakout_ignition",
+                    return_value={"items": [], "stats": {"seedCount": 42, "rawQualifiedCount": 5, "filteredOutCount": 5}},
+                ),
+                patch.object(ign, "scan_dip_leaders", return_value={"items": [], "usRadar": [], "deepBoards": [], "stats": {}}),
+                patch.object(
+                    ign,
+                    "load_saved_ignition",
+                    return_value={"breakout": {"items": [{"code": "000410", "name": "旧残留标的"}]}, "dipLeaders": {"items": []}},
+                ),
+                patch.object(ign, "get_ignition_tracking_pool", return_value={"ok": True, "summary": {}, "items": []}),
+                patch.object(ign, "_save_latest_sync", side_effect=lambda p: None),
+            ):
+                pool_res = await ign.get_ignition_pool(force_refresh=True, http_client=object())
+                self.assertFalse(pool_res["isSnapshot"])
+                self.assertEqual(pool_res["breakout"]["items"], [])
+
+        asyncio.run(_run())
+
 
 if __name__ == "__main__":
     unittest.main()

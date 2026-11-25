@@ -382,6 +382,10 @@ export default function IgnitionPage({
         if ((item.dragonStars || 0) < 4.0) return false;
       } else if (stageFilter === 'MAIN_THEME') {
         if (!item.isMainTheme) return false;
+      } else if (stageFilter === 'RESILIENT') {
+        if (!item.isResilient) return false;
+      } else if (stageFilter === 'RIGHT_CONFIRMED') {
+        if (!item.rightSideConfirm) return false;
       } else if (stageFilter !== 'all' && item.stage !== stageFilter) {
         return false;
       }
@@ -583,6 +587,7 @@ export default function IgnitionPage({
   };
 
   const bCounts = breakoutData.stats?.counts || {};
+  const bRegime = breakoutData.stats?.marketRegime || null;
   const dCounts = dipData.stats?.counts || {};
 
   return (
@@ -1210,6 +1215,100 @@ export default function IgnitionPage({
             )}
           </div>
 
+          {bRegime && (
+            <div
+              style={{
+                padding: '10px 14px',
+                marginBottom: '10px',
+                background:
+                  bRegime.mode === 'BEAR_STRICT'
+                    ? 'var(--down-bg)'
+                    : bRegime.mode === 'RANGE_SELECTIVE'
+                    ? 'var(--info-bg)'
+                    : 'var(--up-bg)',
+                border: `1px solid ${
+                  bRegime.mode === 'BEAR_STRICT'
+                    ? 'var(--down-b)'
+                    : bRegime.mode === 'RANGE_SELECTIVE'
+                    ? 'var(--info-b)'
+                    : 'var(--up-b)'
+                }`,
+                borderRadius: '10px',
+                fontSize: '12px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '10px',
+              }}
+            >
+              <div style={{ flex: '1 1 520px', lineHeight: 1.55 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <b
+                    style={{
+                      color:
+                        bRegime.mode === 'BEAR_STRICT'
+                          ? 'var(--down-d)'
+                          : bRegime.mode === 'RANGE_SELECTIVE'
+                          ? 'var(--info-d)'
+                          : 'var(--up)',
+                      fontSize: '12.5px',
+                    }}
+                  >
+                    {bRegime.label}
+                  </b>
+                  <span
+                    style={{
+                      fontFamily: 'monospace',
+                      fontSize: '11px',
+                      padding: '1px 6px',
+                      borderRadius: '4px',
+                      background: 'var(--card)',
+                      border: '1px solid var(--line2)',
+                      color: 'var(--sub)',
+                    }}
+                  >
+                    上证 {bRegime.indexStructureLabel || '—'} · 今日 {fmtSignedPct(bRegime.shChg1d)} · 5日 {fmtSignedPct(bRegime.shChg5d)}
+                  </span>
+                  {(bRegime.filteredOutCount || 0) > 0 && (
+                    <span
+                      style={{
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        padding: '1px 7px',
+                        borderRadius: '99px',
+                        background: 'var(--card)',
+                        border: '1px solid var(--line2)',
+                        color: 'var(--text)',
+                      }}
+                    >
+                      🧹 已剔除跟跌杂毛 {bRegime.filteredOutCount} 只
+                    </span>
+                  )}
+                </div>
+                <div style={{ color: 'var(--sub)', marginTop: '3px' }}>{bRegime.advice}</div>
+              </div>
+
+              {bRegime.mode === 'BEAR_STRICT' && (
+                <button
+                  type="button"
+                  className="mini"
+                  onClick={() => setSubTab('dip')}
+                  style={{
+                    marginLeft: 0,
+                    fontWeight: 800,
+                    background: 'var(--card)',
+                    color: 'var(--down-d)',
+                    border: '1px solid var(--down-b)',
+                    padding: '5px 10px',
+                  }}
+                >
+                  🛟 切看方向二：深跌龙头抗跌 →
+                </button>
+              )}
+            </div>
+          )}
+
           <div
             style={{
               padding: '10px 14px',
@@ -1227,8 +1326,14 @@ export default function IgnitionPage({
           >
             <div style={{ color: '#9a3412', lineHeight: 1.5 }}>
               <b>漏斗机制：</b>近 {lookbackDays} 日涨停种子 <b>{breakoutData.stats?.seedCount ?? '—'}</b> 只 → 日线缩量防守筛出{' '}
-              <b>{breakoutData.stats?.dailyPassedCount ?? '—'}</b> 只 → 月放量(≥1.25x)+周向上共振{' '}
-              <b>{breakoutItems.length}</b> 只。
+              <b>{breakoutData.stats?.dailyPassedCount ?? '—'}</b> 只 → 月放量(≥1.25x)+周向上初筛{' '}
+              <b>{breakoutData.stats?.rawQualifiedCount ?? breakoutItems.length}</b> 只
+              {(breakoutData.stats?.filteredOutCount || 0) > 0 && (
+                <>
+                  {' '}→ 天时抗跌硬筛保留 <b>{breakoutItems.length}</b> 只（剔除 {breakoutData.stats.filteredOutCount} 只跟跌杂毛）
+                </>
+              )}
+              。
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
@@ -1268,12 +1373,26 @@ export default function IgnitionPage({
             </div>
           </div>
 
-          {/* 五星游龙与主线共振分档过滤 */}
+          {/* 五星游龙、逆势抗跌与右侧确认分档过滤 */}
           <div className="ignition-filter-pills">
             {[
               { k: 'all', label: `全部 (${breakoutItems.length})` },
-              { k: 'DRAGON_4P', label: `🐉 五星/准游龙 ≥4★ (${bCounts.fourPlusDragon || breakoutItems.filter((x) => (x.dragonStars || 0) >= 4).length})` },
-              { k: 'MAIN_THEME', label: `🎯 热点主线共振 (${bCounts.mainThemeResonance || breakoutItems.filter((x) => x.isMainTheme).length})` },
+              {
+                k: 'RESILIENT',
+                label: `🛡️ 逆势抗跌活口 (${bCounts.resilientCount ?? breakoutItems.filter((x) => x.isResilient).length})`,
+              },
+              {
+                k: 'RIGHT_CONFIRMED',
+                label: `✅ 右侧阳线确认 (${bCounts.rightConfirmedCount ?? breakoutItems.filter((x) => x.rightSideConfirm).length})`,
+              },
+              {
+                k: 'DRAGON_4P',
+                label: `🐉 五星/准游龙 ≥4★ (${bCounts.fourPlusDragon || breakoutItems.filter((x) => (x.dragonStars || 0) >= 4).length})`,
+              },
+              {
+                k: 'MAIN_THEME',
+                label: `🎯 热点主线共振 (${bCounts.mainThemeResonance || breakoutItems.filter((x) => x.isMainTheme).length})`,
+              },
               { k: 'SHAKEOUT_READY', label: `🔥 震仓完成·待起爆 (${bCounts.shakeoutReady || 0})` },
               { k: 'CONVERGED_WAIT', label: `⏳ 均线粘合·缩量蓄势 (${bCounts.convergedWait || 0})` },
               { k: 'DIGESTING', label: `👀 试盘缩量消化 (${bCounts.digesting || 0})` },
@@ -1310,8 +1429,16 @@ export default function IgnitionPage({
               )}
 
               {!loading && filteredBreakout.length === 0 && (
-                <div style={{ padding: '28px', textAlign: 'center', color: 'var(--sub)', fontSize: '13px' }}>
-                  当前筛选条件下暂无符合「近期涨停 + 月放量 + 周向上 + 日缩量」标的，可尝试切换分档或放宽板块范围。
+                <div style={{ padding: '28px', textAlign: 'center', color: 'var(--sub)', fontSize: '13px', lineHeight: 1.6 }}>
+                  {bRegime?.mode === 'BEAR_STRICT' ? (
+                    <>
+                      🛡️ 当前上证处于下跌结构/退潮期，已开启<b>逆势严选宁缺毋滥过滤</b>
+                      {bRegime.filteredOutCount > 0 ? `（已自动剔除 ${bRegime.filteredOutCount} 只跟跌杂毛）` : ''}。
+                      当下暂无同时满足「站稳20日线 + 5日显著跑赢大盘 + 极致缩量防守」的活口，建议空仓观望或切换至「方向二：深跌龙头抄底」。
+                    </>
+                  ) : (
+                    '当前筛选条件下暂无符合「近期涨停 + 月放量 + 周向上 + 日缩量」标的，可尝试切换分档或放宽板块范围。'
+                  )}
                 </div>
               )}
 
@@ -1422,6 +1549,39 @@ export default function IgnitionPage({
                             title={`命中热点主线：${item.mainThemeName} (${item.mainThemeStageLabel || ''})`}
                           >
                             🎯 主线·{item.mainThemeName}
+                          </span>
+                        )}
+                        {item.rs5d != null && (
+                          <span
+                            style={{
+                              fontSize: '10.5px',
+                              fontWeight: 800,
+                              padding: '1px 6px',
+                              borderRadius: '4px',
+                              fontFamily: 'monospace',
+                              background: item.isResilient ? 'var(--down-bg)' : 'var(--surface)',
+                              color: item.isResilient ? 'var(--down-d)' : chgColor(item.rs5d),
+                              border: `1px solid ${item.isResilient ? 'var(--down-b)' : 'var(--line2)'}`,
+                            }}
+                            title={`近5日相对上证超额收益 ${fmtSignedPct(item.rs5d, 1)} ｜ 今日超额 ${fmtSignedPct(item.rs1d, 1)}`}
+                          >
+                            {item.isResilient ? '🛡️ 抗跌RS ' : 'RS '}
+                            {fmtSignedPct(item.rs5d, 1)}
+                          </span>
+                        )}
+                        {item.entryModeLabel && (
+                          <span
+                            style={{
+                              fontSize: '10.5px',
+                              fontWeight: 800,
+                              padding: '1px 6px',
+                              borderRadius: '4px',
+                              background: item.rightSideConfirm ? 'var(--up-bg)' : 'var(--surface2)',
+                              color: item.rightSideConfirm ? 'var(--up)' : 'var(--sub)',
+                              border: `1px solid ${item.rightSideConfirm ? 'var(--up-b)' : 'var(--line2)'}`,
+                            }}
+                          >
+                            {item.entryModeLabel}
                           </span>
                         )}
                       </div>
