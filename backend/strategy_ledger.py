@@ -136,7 +136,9 @@ async def _ingest_node_engine_outputs(signals: Dict[str, dict], today_iso: str) 
         sig_date = _norm_iso_date(p_data.get("date") or fname[5:15])
         if sig_date < STRATEGY_BASELINE_DATE:
             continue
-        env_level = str((p_data.get("env") or {}).get("level") or "OK").upper()
+        p_env_obj = p_data.get("env") or {}
+        env_level = str(p_env_obj.get("level") or "OK").upper()
+        p_reg_mode = str(p_env_obj.get("regimeMode") or ("BEAR_STRICT" if env_level == "BAD" else ("RANGE_SELECTIVE" if env_level == "WARN" else "BULL_NORMAL")))
         for row in p_data["rows"]:
             code6 = _to_six(row.get("code"))
             if not code6.isdigit() or code6.startswith("30"):
@@ -155,6 +157,13 @@ async def _ingest_node_engine_outputs(signals: Dict[str, dict], today_iso: str) 
                 "code": code6,
                 "tcode": _to_tcode(code6),
                 "name": str(row.get("name") or code6).replace(" ", ""),
+                "hybk": str(row.get("sector") or ""),
+                "sectorTier": str(row.get("sectorTier") or ""),
+                "isMainTheme": bool(row.get("isMainTheme") or row.get("sectorTier") in ("A", "B")),
+                "rs5d": round(_sf(row.get("rs5d")), 2) if row.get("rs5d") is not None else None,
+                "isResilient": row.get("isResilient"),
+                "rightSideConfirm": row.get("rightSideConfirm"),
+                "regimeMode": str(row.get("regimeMode") or p_reg_mode),
                 "score": _sf(row.get("score")),
                 "verdict": str(row.get("verdict") or ""),
                 "action": str(row.get("action") or ""),
@@ -181,7 +190,11 @@ async def _ingest_node_engine_outputs(signals: Dict[str, dict], today_iso: str) 
         sig_date = _norm_iso_date(t_data.get("date") or fname[5:15])
         if sig_date < STRATEGY_BASELINE_DATE:
             continue
-        env_level = str((t_data.get("env") or {}).get("level") or "OK").upper()
+        t_env_obj = t_data.get("env") or {}
+        env_level = str(t_env_obj.get("level") or "OK").upper()
+        if env_level == "UNKNOWN":
+            env_level = "OK"
+        t_reg_mode = str(t_env_obj.get("regimeMode") or ("BEAR_STRICT" if env_level == "BAD" else ("RANGE_SELECTIVE" if env_level == "WARN" else "BULL_NORMAL")))
         for row in t_data["picks"]:
             code6 = _to_six(row.get("code"))
             if not code6.isdigit() or code6.startswith("30"):
@@ -198,6 +211,13 @@ async def _ingest_node_engine_outputs(signals: Dict[str, dict], today_iso: str) 
                 "code": code6,
                 "tcode": _to_tcode(code6),
                 "name": str(row.get("name") or code6).replace(" ", ""),
+                "hybk": str(row.get("sector") or row.get("mainThemeName") or ""),
+                "isMainTheme": bool(row.get("isMainTheme")),
+                "mainThemeName": str(row.get("mainThemeName") or ""),
+                "rs5d": round(_sf(row.get("rs5d")), 2) if row.get("rs5d") is not None else None,
+                "isResilient": row.get("isResilient"),
+                "rightSideConfirm": row.get("rightSideConfirm"),
+                "regimeMode": str(row.get("regimeMode") or t_reg_mode),
                 "score": _sf(row.get("score")),
                 "verdict": str(row.get("verdict") or "可挂"),
                 "env": env_level,
@@ -355,6 +375,11 @@ async def _ingest_ignition_signals(signals: Dict[str, dict], today_iso: str, htt
     if not sig_date or sig_date < STRATEGY_BASELINE_DATE:
         return {"ignitionAdded": 0, "bottomAdded": 0}
 
+    b_stats = ((ig.get("breakout") or {}).get("stats") or {})
+    mkt_reg = b_stats.get("marketRegime") or {}
+    ig_reg_mode = str(mkt_reg.get("mode") or "BULL_NORMAL")
+    ig_env = "BAD" if ig_reg_mode == "BEAR_STRICT" else ("WARN" if ig_reg_mode == "RANGE_SELECTIVE" else "OK")
+
     ig_added = 0
     for item in ((ig.get("breakout") or {}).get("items") or [])[:25]:
         if item.get("stage") not in ("SHAKEOUT_READY", "CONVERGED_WAIT"):
@@ -377,7 +402,16 @@ async def _ingest_ignition_signals(signals: Dict[str, dict], today_iso: str, htt
             "ztDate": str(item.get("ztDate") or ""),
             "volShrinkPct": round(_sf(item.get("volShrinkPct")), 1),
             "monthVolRatio": round(_sf(item.get("monthVolRatio")), 2),
-            "env": "OK",
+            "dragonStars": round(_sf(item.get("dragonStars")), 1) if item.get("dragonStars") is not None else None,
+            "dragonLabel": str(item.get("dragonLabel") or ""),
+            "isMainTheme": bool(item.get("isMainTheme")),
+            "mainThemeName": str(item.get("mainThemeName") or ""),
+            "rs5d": round(_sf(item.get("rs5d")), 2) if item.get("rs5d") is not None else None,
+            "isResilient": bool(item.get("isResilient")),
+            "rightSideConfirm": bool(item.get("rightSideConfirm")),
+            "entryMode": str(item.get("entryMode") or ""),
+            "regimeMode": ig_reg_mode,
+            "env": ig_env,
             "refPrice": px,
             "buy": px,
         }
@@ -405,7 +439,9 @@ async def _ingest_ignition_signals(signals: Dict[str, dict], today_iso: str, htt
             "verdict": str(item.get("dipLabel") or "抗跌抄底"),
             "stockDrawdownPct": round(_sf(item.get("stockDrawdownPct")), 1),
             "worstBoardDd": round(_sf(item.get("worstBoardDd")), 1),
-            "env": "OK",
+            "isResilient": True,
+            "regimeMode": ig_reg_mode,
+            "env": ig_env,
             "refPrice": px,
             "buy": px,
         }
@@ -651,6 +687,34 @@ def _evaluate_signal_record(sig: dict, bars: List[dict]) -> dict:
 
     if anchor_idx < 0 or not bars:
         return out
+
+    # 对历史存量建档记录无前视偏差补算信号当日技术确认特征（仅读取 <= anchor_idx 的收盘K线）
+    anchor_bar = bars[anchor_idx]
+    w5 = bars[max(0, anchor_idx - 4) : anchor_idx + 1]
+    w20 = bars[max(0, anchor_idx - 19) : anchor_idx + 1]
+    ma5_anc = sum(b["close"] for b in w5) / max(1, len(w5))
+    ma20_anc = sum(b["close"] for b in w20) / max(1, len(w20))
+    anc_chg = (
+        ((anchor_bar["close"] - bars[anchor_idx - 1]["close"]) / bars[anchor_idx - 1]["close"]) * 100.0
+        if anchor_idx >= 1 and bars[anchor_idx - 1]["close"] > 0
+        else 0.0
+    )
+    inferred_right = bool(
+        anchor_bar["close"] >= anchor_bar["open"]
+        and anchor_bar["close"] >= ma5_anc * 0.998
+        and anc_chg >= 0.6
+    )
+    inferred_resilient = bool(anchor_bar["close"] >= ma20_anc * 0.995 and anc_chg >= 0.8)
+    if out.get("rightSideConfirm") is None:
+        out["rightSideConfirm"] = inferred_right
+    if out.get("isResilient") is None:
+        out["isResilient"] = inferred_resilient
+    if out.get("isMainTheme") is None:
+        out["isMainTheme"] = bool(
+            out.get("sectorTier") in ("A", "B")
+            or out.get("isMysticResonant")
+            or (strategy == "board" and int(out.get("lbc") or 0) >= 2)
+        )
 
     future_bars = bars[anchor_idx + 1 :]
     last_bar = bars[-1]
@@ -1003,6 +1067,140 @@ def _build_strategy_summaries(evaluated: List[dict], last_exclude: dict) -> dict
     }
 
 
+def _build_factor_group_stats(rows: List[dict]) -> dict:
+    latest_vals = [float(r["retLatest"]) for r in rows if r.get("retLatest") is not None]
+    t1_vals = [float(r["horizons"]["t1"]) for r in rows if (r.get("horizons") or {}).get("t1") is not None]
+    t3_vals = [float(r["horizons"]["t3"]) for r in rows if (r.get("horizons") or {}).get("t3") is not None]
+    t5_vals = [float(r["horizons"]["t5"]) for r in rows if (r.get("horizons") or {}).get("t5") is not None]
+    return {
+        "totalSignals": len(rows),
+        "latest": _agg_numeric(latest_vals, -6.0),
+        "t1": _agg_numeric(t1_vals, -5.0),
+        "t3": _agg_numeric(t3_vals, -6.0),
+        "t5": _agg_numeric(t5_vals, -6.0),
+    }
+
+
+def _build_factor_attribution(evaluated: List[dict]) -> dict:
+    """
+    五步交易系统核心因子分层胜率与收益率证伪台：
+    对短线做T / 尾盘黑马 / 连板打板 / 横盘起爆 / 深跌抄底五条进攻赛道，
+    横向对比「顺天时 vs 逆天时」「主线共振 vs 非主线」「四星+游龙 vs 普通标的」「右侧/抗跌确认 vs 常规潜伏」。
+    """
+    tactical = [
+        r for r in evaluated
+        if r.get("strategy") in ("short", "tail", "board", "ignition", "bottom")
+    ]
+    active_tactical = [r for r in tactical if r.get("status") == "active" and r.get("retLatest") is not None]
+
+    def make_pair(
+        fid: str,
+        step_badge: str,
+        title: str,
+        question: str,
+        pool_rows: List[dict],
+        pred,
+        pos_label: str,
+        neg_label: str,
+    ) -> dict:
+        pos_rows = [r for r in pool_rows if pred(r)]
+        neg_rows = [r for r in pool_rows if not pred(r)]
+        pos_st = _build_factor_group_stats(pos_rows)
+        neg_st = _build_factor_group_stats(neg_rows)
+        p_lat = pos_st["latest"]
+        n_lat = neg_st["latest"]
+        wr_spread = (
+            round(float(p_lat["winRate"]) - float(n_lat["winRate"]), 1)
+            if p_lat["winRate"] is not None and n_lat["winRate"] is not None
+            else None
+        )
+        mean_spread = (
+            round(float(p_lat["mean"]) - float(n_lat["mean"]), 2)
+            if p_lat["mean"] is not None and n_lat["mean"] is not None
+            else None
+        )
+        if p_lat["count"] >= 2 and n_lat["count"] >= 2 and mean_spread is not None and wr_spread is not None:
+            if mean_spread >= 0.3 or wr_spread >= 4.0:
+                status = "verified"
+                verdict_text = f"有效正超额：均值高 {mean_spread:+.2f}% · 胜率差 {wr_spread:+.1f}pp"
+            elif mean_spread <= -0.5 and wr_spread <= -4.0:
+                status = "falsified"
+                verdict_text = f"反向预警：该因子近期跑输 {mean_spread:+.2f}%（需收紧阈值）"
+            else:
+                status = "neutral"
+                verdict_text = f"区分度温和：均值差 {mean_spread:+.2f}% · 胜率差 {wr_spread:+.1f}pp"
+        else:
+            status = "accumulating"
+            verdict_text = f"样本积累中（已结算 {p_lat['count']} vs {n_lat['count']}，随T+1自动充实）"
+
+        return {
+            "id": fid,
+            "step": step_badge,
+            "title": title,
+            "question": question,
+            "posGroup": {"label": pos_label, **pos_st},
+            "negGroup": {"label": neg_label, **neg_st},
+            "winRateSpread": wr_spread,
+            "meanSpread": mean_spread,
+            "status": status,
+            "verdictText": verdict_text,
+        }
+
+    ig_and_tail = [r for r in tactical if r.get("strategy") in ("ignition", "tail", "short")]
+
+    factors = [
+        make_pair(
+            "macro_timing",
+            "第一步 · 顺天时",
+            "大盘顺势/常态 vs 下行/红灯退潮",
+            "指数下跌结构或情绪红灯时强行出手，胜率是否显著滑坡？",
+            tactical,
+            lambda r: str(r.get("env") or "OK").upper() not in ("BAD", "RED") and str(r.get("regimeMode") or "") != "BEAR_STRICT",
+            "🌤️ 天时顺势/绿黄灯",
+            "🌧️ 大盘下行/红灯期",
+        ),
+        make_pair(
+            "main_theme",
+            "第二步 · 抓主线",
+            "热点主线前排共振 vs 非主线独立票",
+            "围绕主线资金抱团选股，相比杂毛独立票是否有更高溢价？",
+            tactical,
+            lambda r: bool(r.get("isMainTheme")),
+            "🎯 热点主线共振",
+            "⚪ 非主线普通股",
+        ),
+        make_pair(
+            "dragon_quality",
+            "第三步 · 选游龙",
+            "四星/五星游龙高分 vs 普通观察标的",
+            "五星游龙（≥4.0★ 或综合分≥82）是否具备更高胜率与抗回撤力？",
+            ig_and_tail if len(ig_and_tail) >= 2 else tactical,
+            lambda r: bool(
+                (r.get("dragonStars") is not None and _sf(r.get("dragonStars")) >= 4.0)
+                or (r.get("dragonStars") is None and _sf(r.get("score")) >= 82.0)
+            ),
+            "🐉 四星/五星游龙",
+            "📊 普通达标形态",
+        ),
+        make_pair(
+            "right_confirm",
+            "第四步 · 严执行",
+            "右侧阳线/RS抗跌确认 vs 常规左侧早潜伏",
+            "等站上5日线放量收阳或逆势跑赢大盘再出手，能否减少阴跌钝刀割肉？",
+            ig_and_tail if len(ig_and_tail) >= 2 else tactical,
+            lambda r: bool(r.get("rightSideConfirm") or r.get("isResilient")),
+            "✅ 右侧阳线/抗跌确认",
+            "⏳ 常规左侧潜伏",
+        ),
+    ]
+
+    return {
+        "totalTacticalSignals": len(tactical),
+        "settledTacticalSignals": len(active_tactical),
+        "factors": factors,
+    }
+
+
 async def get_strategy_performance(
     http_client: Optional[httpx.AsyncClient] = None,
     force_snapshot: bool = False,
@@ -1051,6 +1249,7 @@ async def get_strategy_performance(
     evaluated.sort(key=lambda x: (x["signalDate"], -(x.get("score") or 0), x["code"]), reverse=True)
 
     summaries = _build_strategy_summaries(evaluated, state.get("lastBoardExclude") or {})
+    factor_attribution = _build_factor_attribution(evaluated)
     out = {
         "ok": True,
         "baselineDate": STRATEGY_BASELINE_DATE,
@@ -1060,6 +1259,7 @@ async def get_strategy_performance(
         "feeRatePct": round(ROUND_TRIP_FEE * 100.0, 3),
         "totalSignals": len(evaluated),
         "summaries": summaries,
+        "factorAttribution": factor_attribution,
         "records": evaluated,
     }
     _PERF_CACHE["perf"] = (time.monotonic() + PERF_CACHE_TTL, out)

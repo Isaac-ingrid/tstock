@@ -22,6 +22,7 @@ const date = process.argv[2] || new Date().toLocaleDateString('sv-SE', { timeZon
 const picks = JSON.parse(fs.readFileSync(path.join(LEDGER, `picks-${date}.json`), 'utf8'));
 
 const { fetchDailyKline } = require('./vwap');
+const { evaluateLiveMacroGate, computeStockMacroMetrics } = require('./macro_gate');
 
 async function kline(code, n = 70) {
   const raw = await fetchDailyKline(code, n + 10);
@@ -36,38 +37,12 @@ const ma = (b, n) => { const w = b.slice(-n); return w.reduce((a, c) => a + c.cl
   const cands = picks.picks.filter((p) => p.score >= 60 && p.verdict !== '放弃');
   console.log(`候选 ${picks.picks.length} 只 → 进入计划 ${cands.length} 只\n`);
 
-  // 市场环境（第四条闸门）—— 双指数：上证代表大盘，中证1000代表候选的真实风格
-  const PROXY = [
-    { key: '上证指数', code: 'sh000001', role: '大盘' },
-    { key: '中证1000', code: 'sh000852', role: '小盘（候选所属风格）' },
-  ];
-  const envIdx = [];
-  for (const p2 of PROXY) {
-    const bars = await kline(p2.code, 70);
-    if (!bars) { envIdx.push({ ...p2, ok: false }); continue; }
-    const c = bars.at(-1).close, m20 = ma(bars, 20), m60 = bars.length >= 60 ? ma(bars, 60) : null;
-    envIdx.push({
-      ...p2, ok: true, close: +c.toFixed(2), ma20: +m20.toFixed(2), ma60: m60 ? +m60.toFixed(2) : null,
-      vsMa20: +((c / m20 - 1) * 100).toFixed(2),
-      below20: c < m20, below60: m60 ? c < m60 : false,
-    });
-  }
-  /* 判定：以「中证1000」为主（候选绝大多数是中小盘），上证为辅。
-     两个都破 → BAD；只破一个 → WARN；都在上方 → OK。
-     为什么小盘优先：大盘股护盘时上证可能还在 MA20 上方，而中小盘已经在杀，
-     这时按上证放行会放过一批注定下跌的票。 */
-  const s1 = envIdx.find((x) => x.key === '上证指数');
-  const s2 = envIdx.find((x) => x.key === '中证1000');
-  const bad = (x) => x?.ok && x.below20 && x.below60;
-  const warn = (x) => x?.ok && x.below20 && !x.below60;
-  let envLevel, envText;
-  if (bad(s1) && bad(s2)) { envLevel = 'BAD'; envText = '上证与中证1000 同时跌破 MA20/MA60 → 系统性下行，禁止新开正T'; }
-  else if (bad(s2)) { envLevel = 'BAD'; envText = '中证1000 跌破 MA20/MA60（候选所属风格走坏）→ 禁止新开正T'; }
-  else if (bad(s1)) { envLevel = 'WARN'; envText = '上证跌破 MA20/MA60 但小盘尚可 → 仓位减半'; }
-  else if (warn(s1) && warn(s2)) { envLevel = 'WARN'; envText = '两市均在 MA20 下方 → 仓位减半、止损收紧到 −1.0%'; }
-  else if (warn(s2) || warn(s1)) { envLevel = 'WARN'; envText = '其中一个指数在 MA20 下方 → 仓位减半'; }
-  else { envLevel = 'OK'; envText = '上证与中证1000 均在 MA20 上方，做T可正常执行'; }
-  const iClose = s1?.close, iMa20 = s1?.ma20, iMa60 = s1?.ma60;
+  // 统一接入五步交易系统同源实时天时闸门（上证指数 + 中证1000 结构三态 / BOLL / MACD顶底背离）
+  const liveGate = await evaluateLiveMacroGate(date);
+  const envIdx = liveGate.dual || [];
+  const envLevel = liveGate.level || 'OK';
+  const envText = `${liveGate.regimeLabel || ''} · ${liveGate.text || ''}`;
+  const iClose = liveGate.idx, iMa20 = liveGate.ma20, iMa60 = liveGate.ma60;
 
   const rows = [];
   for (const p of cands) {
@@ -106,6 +81,10 @@ const ma = (b, n) => { const w = b.slice(-n); return w.reduce((a, c) => a + c.cl
     else if (g1.c === 'wait') action = '放弃（振幅不足）';
     else if (pos === 0) action = '观察，不挂单';
 
+    const stockChg1d = prev.close > 0 ? ((pc - prev.close) / prev.close) * 100 : 0;
+    const macroMetrics = computeStockMacroMetrics(bars, pc, stockChg1d, liveGate);
+    const isMainTheme = p.isMainTheme ?? (p.sectorTier === 'A' || p.sectorTier === 'B');
+
     rows.push({
       code: p.code, name: p.name, score: p.score, verdict: p.verdict,
       pc, amp: +amp.toFixed(2), grid: +grid.toFixed(1), bull, bear,
@@ -113,6 +92,12 @@ const ma = (b, n) => { const w = b.slice(-n); return w.reduce((a, c) => a + c.cl
       sector: p.sector || '',
       sectorTier: p.sectorTier || '',
       sectorLabel: p.sectorLabel || '',
+      isMainTheme,
+      rs5d: macroMetrics.rs5d,
+      rs1d: macroMetrics.rs1d,
+      isResilient: macroMetrics.isResilient,
+      rightSideConfirm: macroMetrics.rightSideConfirm,
+      regimeMode: liveGate.regimeMode,
       leaderRole: p.leaderRole || '',
       roleLabel: p.roleLabel || '',
       chgRankInSector: p.chgRankInSector ?? null,
@@ -151,7 +136,7 @@ const ma = (b, n) => { const w = b.slice(-n); return w.reduce((a, c) => a + c.cl
       (r.pos + '%').padEnd(6) + r.action);
   }
 
-  const channelMode = envLevel === 'OK' ? 'UP' : 'DOWN';
+  const channelMode = liveGate.channelMode || (envLevel === 'OK' ? 'UP' : 'DOWN');
   const channelGuide = channelMode === 'UP'
     ? '上升通道：逢缩量回调顺势加仓，沿 MA5/MA10 拉长格局扩大战果，不轻易下车'
     : '下跌/弱势通道：严禁浮亏补仓摊平！建仓次日收绿果断割肉换票；连红 3 天主动减仓，出现首阴收盘清仓';
@@ -160,7 +145,24 @@ const ma = (b, n) => { const w = b.slice(-n); return w.reduce((a, c) => a + c.cl
     JSON.stringify({
       date,
       baseDate: picks.date,
-      env: { level: envLevel, text: envText, channelMode, channelGuide, idx: iClose, ma20: iMa20, ma60: iMa60, dual: envIdx },
+      env: {
+        level: envLevel,
+        regimeMode: liveGate.regimeMode,
+        regimeLabel: liveGate.regimeLabel,
+        shStructure: liveGate.shStructure,
+        shStructureLabel: liveGate.shStructureLabel,
+        shChg1d: liveGate.shChg1d,
+        shChg5d: liveGate.shChg5d,
+        bottomDivergence: liveGate.bottomDivergence,
+        topDivergence: liveGate.topDivergence,
+        text: envText,
+        channelMode,
+        channelGuide,
+        idx: iClose,
+        ma20: iMa20,
+        ma60: iMa60,
+        dual: envIdx,
+      },
       rows,
     }, null, 1));
   console.log(`\n→ out/plan-${date}.json`);

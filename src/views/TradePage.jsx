@@ -107,6 +107,7 @@ export default function TradePage({
         isTailAlertTime={isTailAlertTime}
         simTailAlert={simTailAlert}
         onSelectStock={handleSelectStock}
+        onAddStock={onAddStock}
         onUpdateStock={onUpdateStock}
         onBuyStock={onBuyStock}
         onRemoveStock={onRemoveStock}

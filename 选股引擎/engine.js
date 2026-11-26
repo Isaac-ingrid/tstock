@@ -413,14 +413,16 @@ async function fetchAll({ force = false } = {}) {
   return { rows, isFallback, fallbackFile };
 }
 
-/* ---------------- 日K：30 日涨停 + 空头趋势与顶部 K 线风控 ---------------- */
+/* ---------------- 日K：30 日涨停 + 空头趋势 + 顶部风控 + 相对大盘 RS ---------------- */
 const { detectBearishKlineRisk } = require('./backtest');
+const { evaluateLiveMacroGate, computeStockMacroMetrics } = require('./macro_gate');
 
-async function klineCheck(code, board, name) {
+async function klineCheck(code, board, name, curPrice, curChgPct, macroEnv) {
   const rawBars = await fetchDailyKline(code, 100);
   if (!rawBars) return { ok: false, reason: 'K线请求失败' };
   const bars = rawBars.filter((b) => b.date <= TODAY).slice(-90);
   if (bars.length < 20) return { ok: false, reason: 'K线不足' };
+  const macroMetrics = computeStockMacroMetrics(bars, curPrice, curChgPct, macroEnv);
   const effLimit = /ST/i.test(name) ? 5 : LIMIT_OF[board];
   let hit = null;
   let limitUpCount30d = 0;
@@ -453,9 +455,9 @@ async function klineCheck(code, board, name) {
   const isBull = ma5 > ma10 && ma10 > ma20 && last > ma5;
   const klineRisk = detectBearishKlineRisk(bars, bars.length - 1, effLimit);
 
-  if (brokeLow) return { ok: false, reason: '已跌破涨停日低点', hit, limitUpCount30d, maxStreak30d, ret20d, brokeLow: true, isBear, isBull, klineRisk };
-  if (isBear) return { ok: false, reason: '日线空头排列反压', hit, limitUpCount30d, maxStreak30d, ret20d, brokeLow: false, isBear: true, isBull, klineRisk };
-  if (klineRisk.risky) return { ok: false, reason: `顶部见顶K线(${klineRisk.reasons.join('/')})`, hit, limitUpCount30d, maxStreak30d, ret20d, brokeLow: false, isBear: false, isBull, klineRisk };
+  if (brokeLow) return { ok: false, reason: '已跌破涨停日低点', hit, limitUpCount30d, maxStreak30d, ret20d, brokeLow: true, isBear, isBull, klineRisk, ...macroMetrics };
+  if (isBear) return { ok: false, reason: '日线空头排列反压', hit, limitUpCount30d, maxStreak30d, ret20d, brokeLow: false, isBear: true, isBull, klineRisk, ...macroMetrics };
+  if (klineRisk.risky) return { ok: false, reason: `顶部见顶K线(${klineRisk.reasons.join('/')})`, hit, limitUpCount30d, maxStreak30d, ret20d, brokeLow: false, isBear: false, isBull, klineRisk, ...macroMetrics };
 
   return {
     ok: true,
@@ -468,6 +470,7 @@ async function klineCheck(code, board, name) {
     isBear: false,
     isBull,
     klineRisk,
+    ...macroMetrics,
   };
 }
 
@@ -482,6 +485,8 @@ const { scoreStock } = require('./score');
   const limitN = process.argv.includes('--limit') ? +process.argv[process.argv.indexOf('--limit') + 1] : 30;
 
   console.log(`\n【${TODAY}】全市场扫描`);
+  const macroEnv = await evaluateLiveMacroGate({ date: TODAY });
+  console.log(`🧭 天时结构 [${macroEnv.level}/${macroEnv.regimeMode}]：${macroEnv.text}`);
   let all, isFallback = false, fallbackFile = null;
   try {
     const snapRes = await fetchAll({ force: process.argv.includes('--force') });
@@ -574,10 +579,11 @@ const { scoreStock } = require('./score');
     return m;
   })();
 
+  const isStrictBear = macroEnv.regimeMode === 'BEAR_STRICT' || macroEnv.level === 'BAD';
   for (const code of pool) {
     const s = map[code];
     const board = boardOf(code);
-    const kl = await klineCheck(code, board, s.name);
+    const kl = await klineCheck(code, board, s.name, s.price, s.chgPct, macroEnv);
     const sm = sectorMeta.stockMap.get(code) || null;
     const roleInfo = classifyLeaderRole(s, kl, sm);
     const rec = {
@@ -592,6 +598,9 @@ const { scoreStock } = require('./score');
       roleLabel: roleInfo.label,
       isBackRowLaggard: roleInfo.isBackRowLaggard,
       backRowReason: roleInfo.reason || '',
+      rs5d: kl?.rs5d ?? null,
+      isResilient: Boolean(kl?.isResilient),
+      regimeMode: macroEnv.regimeMode,
       kl,
       vw: null,
       score: 0,
@@ -615,7 +624,11 @@ const { scoreStock } = require('./score');
   }
 
   const passed = results
-    .filter((r) => r.kl.ok && !r.isBackRowLaggard && r.verdict !== '放弃')
+    .filter((r) => {
+      if (!r.kl.ok || r.isBackRowLaggard || r.verdict === '放弃') return false;
+      if (isStrictBear && (r.kl.aboveMa20 === false || (r.kl.rs5d ?? 0) < 1.5)) return false;
+      return true;
+    })
     .sort((a, b) => b.score - a.score);
   const strictPass = passed.filter((r) => r.vw && r.vw.strictPass);
 

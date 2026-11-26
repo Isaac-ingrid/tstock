@@ -285,13 +285,19 @@ async function fetchSnapshot({ force = true } = {}) {
   return { rows, totalMarket: total };
 }
 
-/* ---------------- 日K：30 日内涨停史 + 顶部见顶 K 线风控 ---------------- */
+/* ---------------- 日K：30 日内涨停史 + 顶部见顶风控 + 相对上证抗跌 RS ---------------- */
 const { detectBearishKlineRisk } = require('./backtest');
+const {
+  evaluateLiveMacroGate,
+  resolveMainThemeSectors,
+  computeStockMacroMetrics,
+} = require('./macro_gate');
 
-async function klineCheck(code, board, name) {
+async function klineCheck(code, board, name, curPrice, curChgPct, macroEnv) {
   const bars = await fetchDailyKline(code, 90);
   if (!bars) return { ok: false, reason: 'K线请求失败', klineRisk: { risky: false, reasons: [] } };
   if (bars.length < 10) return { ok: false, reason: 'K线不足', klineRisk: { risky: false, reasons: [] } };
+  const macroMetrics = computeStockMacroMetrics(bars, curPrice, curChgPct, macroEnv);
   /* 末根若是今天（盘中未收盘），剔除，只用已收盘的历史算涨停史与风控 */
   const hist = bars.at(-1).date === TODAY ? bars.slice(0, -1) : bars;
   const effLimit = /ST/i.test(name) ? 5 : LIMIT_OF[board];
@@ -306,19 +312,22 @@ async function klineCheck(code, board, name) {
       hit = { date: scan[i].date, low: scan[i].low, close: scan[i].close, chg: +chg.toFixed(2) };
     }
   }
-  if (!hit) return { ok: false, reason: '30日内无涨停', klineRisk };
+  if (!hit) return { ok: false, reason: '30日内无涨停', klineRisk, ...macroMetrics };
   const last = hist.at(-1).close;
-  return { ok: true, hit, pullback: +(((hit.close - last) / hit.close) * 100).toFixed(2), brokeLow: last < hit.low, klineRisk };
+  return {
+    ok: true,
+    hit,
+    pullback: +(((hit.close - last) / hit.close) * 100).toFixed(2),
+    brokeLow: last < hit.low,
+    klineRisk,
+    ...macroMetrics,
+  };
 }
 
 const { vwapCheck, fetchDailyKline } = require('./vwap');
 
-/* ---------------- 打分：尾盘强度为主，涨停史只占 5 分 ----------------
- * 尾盘量能密度用「相对当日全市场中位数」打分，不用绝对值：
- * 14:00–15:00 是全天次低量时段，密度 0.4~0.7 是常态，缩量日整市场都低、
- * 放量日整市场都高。用固定阈值会在缩量日把候选筛空、在放量日放一堆垃圾进来。
- */
-function scoreTail(c, vw, kl, medianTI) {
+/* ---------------- 打分：尾盘强度 + 涨停基因 + 热点主线/逆势抗跌加权 ---------------- */
+function scoreTail(c, vw, kl, medianTI, isMainTheme = false) {
   const p = {};
   const chg = c.chgPct;
   p.chg = chg >= 4 && chg <= 6 ? 20 : chg >= 3 ? 14 : chg <= 7 ? 14 : 8;
@@ -342,8 +351,10 @@ function scoreTail(c, vw, kl, medianTI) {
   p.turn = tr >= 5 && tr <= 10 ? 10 : tr >= 3 && tr <= 15 ? 7 : 4;
 
   p.limitUp = kl?.ok ? (kl.brokeLow ? 0 : 5) : 0;
+  p.theme = isMainTheme ? 5 : 0;
+  p.rs = kl?.isResilient ? 3 : 0;
 
-  const total = Object.values(p).reduce((a, b) => a + b, 0);
+  const total = Math.min(100, Object.values(p).reduce((a, b) => a + b, 0));
   const verdict = kl?.klineRisk?.risky ? '放弃' : (total >= 80 ? '可挂' : total >= 70 ? '观察' : '放弃');
   return { parts: p, total, verdict, tailRel: rel == null ? null : +rel.toFixed(2) };
 }
@@ -357,19 +368,11 @@ function scoreTail(c, vw, kl, medianTI) {
   if (mins < 845 && !DRY) console.log('  ⚠ 当前早于 14:05，尾盘量能尚未成形，结果仅供参考');
   if (mins >= 900 && !DRY) console.log('  ⚠ 已收盘，尾盘战法请改用 engine.js 的收盘候选');
 
-  /* 0.5 环境闸门前置读取（BAD 环境提高门槛至 85+ 且强制降级为仅观察，避免熊市盲推 TOP 2） */
-  let env = { level: 'UNKNOWN', text: '缺少 plan-*.json，未做环境判定', posFactor: 0.5 };
-  try {
-    const files = fs.readdirSync(OUT_DIR).filter((f) => /^plan-\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort();
-    if (files.length) {
-      const pl = JSON.parse(fs.readFileSync(path.join(OUT_DIR, files.at(-1)), 'utf8'));
-      if (pl?.env) env = { level: pl.env.level, text: pl.env.text, posFactor: pl.env.level === 'OK' ? 1 : pl.env.level === 'WARN' ? 0.5 : 0 };
-    }
-  } catch { /* 保留中性 */ }
-  const effScoreMin = env.level === 'BAD' ? 85 : CFG.scoreMin;
-  if (env.level === 'BAD') {
-    console.log('  ⛔ 环境闸门 BAD（指数跌破 MA20/MA60），尾盘入池门槛已自动提高至 85 分，且仅作观察不建议重仓潜伏！');
-  }
+  /* 0.5 实时评估第一步「顺天时」双锚结构（绝不再因缺少当日 plan-*.json 而退化为 UNKNOWN 盲放行） */
+  const env = await evaluateLiveMacroGate({ date: TODAY });
+  const isStrictBear = env.regimeMode === 'BEAR_STRICT' || env.level === 'BAD';
+  const effScoreMin = isStrictBear ? 86 : (env.level === 'WARN' ? 76 : CFG.scoreMin);
+  console.log(`  🧭 天时闸门 [${env.level}/${env.regimeMode}]：${env.text}（入池门槛 ${effScoreMin} 分）`);
 
   /* 1. 实时全市场快照 */
   console.log('① 拉取全市场实时快照…');
@@ -384,7 +387,8 @@ function scoreTail(c, vw, kl, medianTI) {
     console.error('  东财 clist 限流时，可先跑 node snapshot_fallback.js 生成兜底快照（但那不是实时价，仅供试跑）。');
     process.exit(2);
   }
-  console.log(`  已抓取强势区间样本 ${all.length} 只（全市场 ${totalMarketCount} 只）`);
+  const mainThemeSet = resolveMainThemeSectors(all);
+  console.log(`  已抓取强势区间样本 ${all.length} 只（全市场 ${totalMarketCount} 只，识别热点主线 ${mainThemeSet.size} 个）`);
 
   /* 2. 快照级预筛 */
   const pre = all.filter((s) => {
@@ -445,27 +449,44 @@ function scoreTail(c, vw, kl, medianTI) {
     return true;
   });
 
-  // 12 并发 Worker 池并发核验 90 日 K 线涨停基因与顶部形态风控
+  // 12 并发 Worker 池并发核验 90 日 K 线涨停基因、相对上证抗跌 RS 与顶部形态风控
   await mapPool(survivors, 12, async (r) => {
-    r.kl = await klineCheck(r.code, r.board, r.name);
-    Object.assign(r, scoreTail(r, r.vw, r.kl, medianTI));
+    r.kl = await klineCheck(r.code, r.board, r.name, r.price, r.chgPct, env);
+    const sec = String(r.sector || r.hybk || '').trim();
+    r.isMainTheme = Boolean(sec && [...mainThemeSet].some((t) => sec.includes(t) || t.includes(sec)));
+    Object.assign(r, scoreTail(r, r.vw, r.kl, medianTI, r.isMainTheme));
   });
 
   const passed = survivors
-    .filter((r) => r.total >= effScoreMin && r.verdict !== '放弃' && !r.kl?.klineRisk?.risky)
-    .sort((a, b) => b.total - a.total);
+    .filter((r) => {
+      if (r.total < effScoreMin || r.verdict === '放弃' || r.kl?.klineRisk?.risky) return false;
+      // 大盘下跌结构/退潮期天时硬门禁：宁缺毋滥，必须站稳20日线+具备涨停基因+5日显著跑赢上证指数
+      if (isStrictBear) {
+        if (!r.kl?.ok || r.kl?.brokeLow) return false;
+        if (r.kl?.aboveMa20 === false) return false;
+        if ((r.kl?.rs5d ?? 0) < 2.0 || (r.kl?.rs1d ?? 0) < 1.2) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => (b.isMainTheme ? 1 : 0) - (a.isMainTheme ? 1 : 0) || b.total - a.total);
 
-  console.log(`③ 分时+涨停史+K线风控复核后合格 ${passed.length} 只（门槛 ${effScoreMin} 分），取 TOP ${Math.min(TOPN, passed.length)}`);
+  console.log(`③ 分时+涨停史+天时RS风控复核后合格 ${passed.length} 只（门槛 ${effScoreMin} 分${isStrictBear ? ' · 已开启大盘下行RS硬过滤' : ''}），取 TOP ${Math.min(TOPN, passed.length)}`);
 
   const picks = passed.slice(0, Math.max(TOPN, 2)).map((r, i) => {
     const px = +r.price;
     const lim = LIMIT_OF[r.board] ?? 10;
     const room = +(((r.prevClose * (1 + lim / 100)) / px - 1) * 100).toFixed(2);
+    const rs5Txt = r.kl?.rs5d != null ? `${r.kl.rs5d >= 0 ? '+' : ''}${r.kl.rs5d}%` : '—';
     return {
       rank: i + 1,
       code: r.raw || r.code.replace(/^(sh|sz|bj)/, ''),
       tcode: r.code,
       name: r.name,
+      sector: r.sector || '',
+      isMainTheme: Boolean(r.isMainTheme),
+      rs5d: r.kl?.rs5d ?? null,
+      isResilient: Boolean(r.kl?.isResilient),
+      regimeMode: env.regimeMode,
       pool: 'tail',
       poolLabel: '尾盘黑马',
       price: px,
@@ -474,7 +495,7 @@ function scoreTail(c, vw, kl, medianTI) {
       turnover: +r.turnover.toFixed(2),
       totalCap: +r.totalCap.toFixed(1),
       score: r.total,
-      verdict: env.level === 'BAD' ? '环境否决(观望)' : r.verdict,
+      verdict: env.level === 'BAD' ? '逆势轻仓试错' : r.verdict,
       parts: r.parts,
       high: +(r.high || 0).toFixed(2),
       low: +(r.low || 0).toFixed(2),
@@ -489,7 +510,7 @@ function scoreTail(c, vw, kl, medianTI) {
       limitUpDate: r.kl?.ok ? r.kl.hit.date : null,
       retOpen: +r.chgPct.toFixed(2),
       whyReasons: [
-        `📈 现价 ${px.toFixed(2)}，日内 +${r.chgPct.toFixed(2)}%，距涨停还有 ${room}% 空间（未封板，买得进）`,
+        `📈 现价 ${px.toFixed(2)}，日内 +${r.chgPct.toFixed(2)}%，5日相对上证超额 RS ${rs5Txt}${r.isMainTheme ? ` · 命中热点主线(${r.sector})` : ''}`,
         `🛡️ 分时均价线上方运行 ${r.vw.onlineRatio}%，现价站在当日最高价 ${r.vw.closeStrength}% 的位置`,
         r.vw.tailIntensity != null
           ? `🔥 14:00 后量能密度 ${r.vw.tailIntensity}×，为当日全市场中位的 ${r.tailRel} 倍（尾盘成交占全天 ${(r.vw.tailVolShare * 100).toFixed(1)}%）`

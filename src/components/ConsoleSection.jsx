@@ -34,6 +34,7 @@ export default function ConsoleSection({
   isTailAlertTime = false,
   simTailAlert = false,
   onSelectStock,
+  onAddStock,
   onUpdateStock,
   onBuyStock,
   onRemoveStock,
@@ -93,20 +94,49 @@ export default function ConsoleSection({
     const next = [entry, ...reclaimList.filter((x) => x.code !== code6)].slice(0, 20);
     persistReclaim(next);
     if (onRemoveStock) {
-      onRemoveStock(stock.code);
+      onRemoveStock(code6, { skipConfirm: true });
     }
     toastOk(`👁️ 已将 ${entry.name} 移入「破位收复观察池」，待重新站稳 ¥${f2(reclaimPx)} 自动亮灯提醒`);
   };
 
   const handleRestoreFromReclaim = (item) => {
-    if (onUpdateStock && pool.some((s) => String(s.code).padStart(6, '0') === item.code)) {
-      persistReclaim(reclaimList.filter((x) => x.code !== item.code));
+    persistReclaim(reclaimList.filter((x) => x.code !== item.code));
+    if (pool.some((s) => String(s.code).padStart(6, '0') === item.code)) {
       if (onSelectStock) onSelectStock(item.code);
       return;
     }
-    persistReclaim(reclaimList.filter((x) => x.code !== item.code));
-    toastOk(`✅ ${item.name} (${item.code}) 已重新站稳关键位 ¥${f2(item.reclaimPx)}，请在上方输入代码纳回自选池观察`);
+    if (onAddStock) {
+      onAddStock(
+        item.code,
+        {
+          name: item.name || item.code,
+          tier: 'short',
+          strategy: 'ignition',
+          strategyTag: '关键位收复',
+          refPrice: item.reclaimPx,
+          stopPrice: Number(((item.reclaimPx || 0) * 0.985).toFixed(2)),
+        },
+        { jumpToTrade: false, silentToast: true }
+      );
+      toastOk(`✅ 已将 ${item.name} (${item.code}) 带防守线 ¥${f2((item.reclaimPx || 0) * 0.985)} 重新纳回自选观察池！`);
+      return;
+    }
+    toastOk(`✅ ${item.name} (${item.code}) 已重新站稳关键位 ¥${f2(item.reclaimPx)}，可在上方输入代码纳回观察`);
   };
+
+  useEffect(() => {
+    const onSyncEvent = (ev) => {
+      if (Array.isArray(ev?.detail)) setReclaimList(ev.detail);
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('t-reclaim-updated', onSyncEvent);
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('t-reclaim-updated', onSyncEvent);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!reclaimList.length) return;

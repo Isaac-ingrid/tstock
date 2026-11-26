@@ -80,4 +80,7 @@ data/auth_secret.key
 data/*.bak
 data/zt_pool_history_cache.json
 data/board_list_cache.json
+data/herd_pool.json
+data/ignition_latest.json
+data/strategy_ledger.json
 

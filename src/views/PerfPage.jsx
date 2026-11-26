@@ -173,6 +173,7 @@ export default function PerfPage({
   const inPoolCodes = useMemo(() => new Set((pool || []).map(s => String(s.code).padStart(6, '0'))), [pool]);
   const records = useMemo(() => data?.records || [], [data]);
   const summaries = useMemo(() => data?.summaries || {}, [data]);
+  const factorAttribution = useMemo(() => data?.factorAttribution || { factors: [] }, [data]);
 
   const manualStats = useMemo(() => {
     const closed = (tradeLogs || []).filter(lg => {
@@ -524,6 +525,110 @@ export default function PerfPage({
         </div>
       </div>
 
+      {/* 五步交易系统 · 核心因子胜率证伪对比台 */}
+      {(factorAttribution?.factors || []).length > 0 && (
+        <div
+          style={{
+            marginTop: '14px',
+            marginBottom: '14px',
+            padding: '14px 16px',
+            borderRadius: '11px',
+            background: 'var(--surface)',
+            border: '1px solid var(--line2)',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <b style={{ fontSize: '14.5px' }}>🧬 五步交易系统 · 核心因子胜率证伪对比台</b>
+              <span style={{ fontSize: '11px', padding: '1px 7px', borderRadius: '4px', background: 'var(--accent-bg)', color: 'var(--accent-d)', border: '1px solid var(--accent-b)', fontWeight: 700 }}>
+                进攻样本 {factorAttribution.totalTacticalSignals || 0} 条 · 已结算 {factorAttribution.settledTacticalSignals || 0} 条
+              </span>
+            </div>
+            <span style={{ fontSize: '11.5px', color: 'var(--mute)' }}>
+              用真金白银净收益检验「顺天时 · 抓主线 · 五星游龙 · 右侧确认」每一步是否带来真实正超额
+            </span>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(265px, 1fr))', gap: '10px' }}>
+            {(factorAttribution.factors || []).map((f) => {
+              const pLat = f.posGroup?.latest || {};
+              const nLat = f.negGroup?.latest || {};
+              const statusTone =
+                f.status === 'verified'
+                  ? { bg: 'var(--up-bg)', color: 'var(--up)', border: 'var(--up-b)' }
+                  : f.status === 'falsified'
+                  ? { bg: 'var(--down-bg)', color: 'var(--down-d)', border: 'var(--down-b)' }
+                  : { bg: 'var(--card)', color: 'var(--sub)', border: 'var(--line)' };
+              return (
+                <div
+                  key={f.id}
+                  style={{
+                    padding: '11px 12px',
+                    borderRadius: '9px',
+                    background: 'var(--card)',
+                    border: '1px solid var(--line)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '7px',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '10.5px', fontWeight: 800, padding: '1px 6px', borderRadius: '4px', background: 'var(--info-bg)', color: 'var(--accent-d)', border: '1px solid var(--info-b)' }}>
+                      {f.step}
+                    </span>
+                    <span style={{ fontSize: '10.5px', fontWeight: 700, padding: '1px 6px', borderRadius: '4px', background: statusTone.bg, color: statusTone.color, border: `1px solid ${statusTone.border}` }}>
+                      {f.verdictText}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '13px', fontWeight: 800 }}>{f.title}</div>
+                  <div style={{ fontSize: '11px', color: 'var(--mute)', lineHeight: 1.4 }}>{f.question}</div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginTop: '2px' }}>
+                    <div style={{ padding: '7px 8px', borderRadius: '6px', background: 'var(--surface)', border: '1px solid var(--up-b)' }}>
+                      <div style={{ fontSize: '10.5px', fontWeight: 700, color: 'var(--text)', marginBottom: '2px' }}>
+                        {f.posGroup?.label} ({f.posGroup?.totalSignals || 0})
+                      </div>
+                      {pLat.count > 0 ? (
+                        <>
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: '5px', flexWrap: 'wrap' }}>
+                            <b style={{ fontSize: '13.5px', fontFamily: 'monospace', color: retColor(pLat.mean) }}>{fmtRet(pLat.mean)}</b>
+                            <span style={{ fontSize: '10.5px', color: 'var(--sub)' }}>胜率 <b>{pLat.winRate}%</b></span>
+                          </div>
+                          <div style={{ fontSize: '10px', color: 'var(--mute)', fontFamily: 'monospace', marginTop: '2px' }}>
+                            T+1 {fmtRet(f.posGroup?.t1?.mean, '—')} · T+3 {fmtRet(f.posGroup?.t3?.mean, '—')}
+                          </div>
+                        </>
+                      ) : (
+                        <div style={{ fontSize: '11px', color: 'var(--mute)' }}>待 T+1 结算</div>
+                      )}
+                    </div>
+
+                    <div style={{ padding: '7px 8px', borderRadius: '6px', background: 'var(--surface)', border: '1px solid var(--line)' }}>
+                      <div style={{ fontSize: '10.5px', fontWeight: 700, color: 'var(--sub)', marginBottom: '2px' }}>
+                        {f.negGroup?.label} ({f.negGroup?.totalSignals || 0})
+                      </div>
+                      {nLat.count > 0 ? (
+                        <>
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: '5px', flexWrap: 'wrap' }}>
+                            <b style={{ fontSize: '13.5px', fontFamily: 'monospace', color: retColor(nLat.mean) }}>{fmtRet(nLat.mean)}</b>
+                            <span style={{ fontSize: '10.5px', color: 'var(--sub)' }}>胜率 <b>{nLat.winRate}%</b></span>
+                          </div>
+                          <div style={{ fontSize: '10px', color: 'var(--mute)', fontFamily: 'monospace', marginTop: '2px' }}>
+                            T+1 {fmtRet(f.negGroup?.t1?.mean, '—')} · T+3 {fmtRet(f.negGroup?.t3?.mean, '—')}
+                          </div>
+                        </>
+                      ) : (
+                        <div style={{ fontSize: '11px', color: 'var(--mute)' }}>暂无对照样本</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* 明细筛选工具栏 */}
       <div className="perf-filter-toolbar">
         <div className="perf-strat-tabs">
@@ -630,11 +735,28 @@ export default function PerfPage({
                 </div>
 
                 <div className="pgr-col-ident" style={{ minWidth: 0 }}>
-                  <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    <b>{r.name}</b> <span style={{ fontFamily: 'monospace', fontSize: '11px', color: 'var(--mute)' }}>{c6}</span>
+                  <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <b>{r.name}</b>
+                    <span style={{ fontFamily: 'monospace', fontSize: '11px', color: 'var(--mute)' }}>{c6}</span>
+                    {r.dragonStars != null && r.dragonStars >= 4.0 && (
+                      <span style={{ fontSize: '9.5px', padding: '0 4px', borderRadius: '3px', background: 'var(--warn-bg)', color: 'var(--warn-d)', border: '1px solid var(--warn-b)', fontWeight: 700 }}>
+                        🐉{r.dragonStars}★
+                      </span>
+                    )}
+                    {r.isMainTheme && (
+                      <span style={{ fontSize: '9.5px', padding: '0 4px', borderRadius: '3px', background: 'var(--up-bg)', color: 'var(--up)', border: '1px solid var(--up-b)', fontWeight: 700 }}>
+                        🎯主线
+                      </span>
+                    )}
+                    {r.rightSideConfirm && (
+                      <span style={{ fontSize: '9.5px', padding: '0 4px', borderRadius: '3px', background: 'var(--info-bg)', color: 'var(--accent-d)', border: '1px solid var(--info-b)', fontWeight: 700 }}>
+                        ✅右侧
+                      </span>
+                    )}
                   </div>
                   <div style={{ fontSize: '10.5px', color: 'var(--sub)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {r.score ? `${Math.round(r.score)}分` : ''}{r.verdict ? ` · ${r.verdict}` : ''}{r.hybk ? ` · ${r.hybk}` : ''}
+                    {r.rs5d != null ? ` · RS5d ${r.rs5d >= 0 ? '+' : ''}${r.rs5d}%` : ''}
                     {r.isMysticResonant && r.mysticCluster ? ` · 🔮${r.mysticCluster}` : ''}
                   </div>
                 </div>

@@ -3199,6 +3199,62 @@ export function checkPriceAlerts(targetPool = null){
         summary: `已触及卖飞保护线 ¥${f2(c.fly)}，倒T筹码严禁追高接回`,
       });
     }
+
+    // 4) 持仓日线/分时顶背离主动锁盈推送（P1）
+    if (held && c.divSignal?.type === 'top') {
+      const refHigh = c.outA > 0 ? c.outA * 0.982 : (+s.avg || p) * 0.995;
+      if (p >= refHigh) {
+        candidates.push({
+          cdKey: `${code6}|top_div`,
+          code: code6,
+          name: s.name || code6,
+          priority: 'P1',
+          label: '顶背离锁盈令',
+          lv: c.outA || p,
+          p,
+          dev: 0.001,
+          cdMs: 25 * 60 * 1000,
+          summary: `${c.divSignal.badge} — ${c.divSignal.desc}`,
+        });
+      }
+    }
+
+    // 5) 自选观察池（起爆/五步严选/游龙/尾盘）右侧突破 5 日线放量点火推送（P1）
+    if (!held && !c.brokenLock && !c.bear && c.mktLevel !== 'BAD') {
+      const stratTxt = `${s.strategyTag || ''} ${s.planStrategy || ''} ${s.memo || ''}`;
+      const isKeyWatch = Boolean(
+        s.ignitionMeta ||
+        s.planStrategy === 'ignition' ||
+        c.ignitionActive ||
+        /起爆|游龙|五步|黑马|潜伏|主线/.test(stratTxt)
+      );
+      const ma5Val = +s.ma5 || 0;
+      const avgVal = +s.avg || 0;
+      const openVal = +s.open || +s.prevClose || p;
+      const rightBreakout =
+        isKeyWatch &&
+        ma5Val > 0 &&
+        p >= ma5Val * 1.001 &&
+        p >= openVal &&
+        (avgVal <= 0 || p >= avgVal * 0.999) &&
+        c.chg >= 1.2 &&
+        c.chg <= 6.8 &&
+        c.vr >= 1.15;
+      if (rightBreakout) {
+        candidates.push({
+          cdKey: `${code6}|right_ma5_ignite`,
+          code: code6,
+          name: s.name || code6,
+          priority: 'P1',
+          label: '右侧突破5日线点火',
+          lv: ma5Val,
+          p,
+          dev: Math.abs(p - ma5Val) / ma5Val,
+          cdMs: 30 * 60 * 1000,
+          summary: `放量收阳(${c.chg >= 0 ? '+' : ''}${c.chg.toFixed(2)}% · 量比${f2(c.vr)})站上5日线 ¥${f2(ma5Val)} 与分时均线，右侧启动确认（严守止损 ¥${f2(c.slA)}）`,
+        });
+      }
+    }
   });
 
   candidates.sort((a, b) => (PRIO_RANK[b.priority] - PRIO_RANK[a.priority]) || (a.dev - b.dev));
@@ -3249,6 +3305,104 @@ export function checkPriceAlerts(targetPool = null){
   if (highestFiredTone) {
     try { playAlertTone(highestFiredTone); } catch (_) {}
   }
+}
+
+/**
+ * 第四步闭环：监控「破位离场 · 关键位收复观察池」(t-reclaim-watch-v1)
+ * 当此前因跌破硬止损隔离的标的重新放量站稳 reclaimPx 关键位与分时均线时，主动触发 P1 召回提醒！
+ */
+const RECLAIM_WATCH_KEY = 't-reclaim-watch-v1';
+
+export function loadReclaimWatchPool() {
+  try {
+    if (typeof localStorage === 'undefined') return [];
+    const raw = localStorage.getItem(RECLAIM_WATCH_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+export function checkReclaimWatchAlerts(quoteMap = null, targetPool = null) {
+  if (isAlertMuted()) return [];
+  const watchList = loadReclaimWatchPool();
+  if (!watchList.length) return [];
+
+  const today = todayStr();
+  const now = Date.now();
+  const curPool = Array.isArray(targetPool) ? targetPool : pool;
+  const fired = [];
+  let updated = false;
+
+  const nextWatch = watchList.map((it) => {
+    if (!it || !it.code) return it;
+    const code6 = String(it.code).replace(/\D/g, '').padStart(6, '0');
+    const tc = tcodeFromCode(code6);
+    const targetPx = +(it.reclaimPx || it.stopPx || it.stopPrice || 0);
+    if (!(targetPx > 0)) return it;
+
+    const pStock = (curPool || []).find((s) => String(s.code || '').padStart(6, '0') === code6);
+    const q = (tc && quoteMap && quoteMap[tc]) || pStock || null;
+    const px = +(q?.price || 0);
+    const avgPx = +(q?.avg || 0);
+    const prevClose = +(q?.prevClose || 0);
+    if (!(px > 0)) return it;
+
+    const chgPct = prevClose > 0 ? ((px - prevClose) / prevClose) * 100 : 0;
+    const reclaimedStrong =
+      px >= targetPx * 1.002 &&
+      (avgPx <= 0 || px >= avgPx * 0.998) &&
+      chgPct >= 0;
+
+    if (!reclaimedStrong || it.alertedDate === today) {
+      return it;
+    }
+
+    const cdKey = `${code6}|reclaim_recall`;
+    if (!shouldFirePriceAlert(cdKey, 'P1', now, 45 * 60 * 1000)) {
+      return it;
+    }
+
+    updated = true;
+    const summary = `此前破位隔离标的现报 ¥${f2(px)}（${chgPct >= 0 ? '+' : ''}${chgPct.toFixed(2)}%），已重新站稳关键收复位 ¥${f2(targetPx)} 与分时均线，可纳回自选右侧跟踪`;
+    fired.push({ code: code6, name: it.name || code6, price: px, reclaimPx: targetPx, summary });
+
+    pushSystemAlertRecord({
+      id: now + Math.random(),
+      category: 'reclaim',
+      priority: 'P1',
+      time: nowStr(),
+      name: it.name || code6,
+      code: code6,
+      label: '关键位收复召回',
+      price: px,
+      target: targetPx,
+      dev: (px - targetPx) / targetPx,
+      summary,
+    });
+
+    toastOk(`🔔 关键位收复召回 · ${it.name || code6} 现报 ¥${f2(px)}，已重新站稳 ¥${f2(targetPx)}！`);
+    try {
+      if (typeof window !== 'undefined' && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        new Notification(`🔔 关键位收复召回: ${it.name || code6}`, { body: summary });
+      }
+    } catch (_) {}
+
+    return { ...it, alertedDate: today, lastReclaimPx: px };
+  });
+
+  if (updated) {
+    try {
+      localStorage.setItem(RECLAIM_WATCH_KEY, JSON.stringify(nextWatch));
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('t-reclaim-updated', { detail: nextWatch }));
+      }
+    } catch (_) {}
+    try { playAlertTone('P1'); } catch (_) {}
+  }
+
+  return fired;
 }
 
 /**

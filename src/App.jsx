@@ -39,6 +39,8 @@ import {
   resolveStockInput,
   selfTest,
   checkPriceAlerts,
+  checkReclaimWatchAlerts,
+  loadReclaimWatchPool,
   checkIntradayAnomalies,
   checkMarketAlerts,
   simulateIntradayAnomaly,
@@ -1116,10 +1118,19 @@ export default function App() {
       }
     })();
 
-    const [, updatedTail, ...results] = await Promise.all([mktTask, tailTask, ...stockTasks]);
+    const reclaimTask = (async () => {
+      const rw = loadReclaimWatchPool();
+      if (!rw.length) return null;
+      const tcs = Array.from(new Set(rw.map(it => tcodeFromCode(String(it.code || '').padStart(6, '0'))).filter(Boolean)));
+      if (!tcs.length) return null;
+      try { return await fetchQuotes(tcs); } catch (_) { return null; }
+    })();
+
+    const [, updatedTail, reclaimQuoteMap, ...results] = await Promise.all([mktTask, tailTask, reclaimTask, ...stockTasks]);
     results.forEach(x => { if (x) errs.push(x); });
 
     checkPriceAlerts(currentPool);
+    checkReclaimWatchAlerts(reclaimQuoteMap, currentPool);
     checkIntradayAnomalies(currentPool);
     checkMarketAlerts();
 
@@ -1444,11 +1455,23 @@ export default function App() {
     setPool(prev => prev.map(s => s.code === updated.code ? updated : s));
   };
 
-  const handleRemoveStock = (index) => {
-    const s = pool[index];
-    if (window.confirm(`确定要将 ${s.name} (${s.code}) 从自选池移除吗？`)) {
-      setPool(prev => prev.filter((_, i) => i !== index));
-      toast('标的已从自选池移除', 'info');
+  const handleRemoveStock = (indexOrCode, options = {}) => {
+    const { skipConfirm = false } = options || {};
+    const curList = poolRef.current || pool || [];
+    const idx =
+      typeof indexOrCode === 'number'
+        ? indexOrCode
+        : curList.findIndex(st => String(st.code || '').padStart(6, '0') === String(indexOrCode || '').padStart(6, '0'));
+    const s = idx >= 0 ? curList[idx] : null;
+    if (!s) return;
+    if (skipConfirm || window.confirm(`确定要将 ${s.name} (${s.code}) 从自选池移除吗？`)) {
+      const code6 = String(s.code || '').padStart(6, '0');
+      setPool(prev => {
+        const next = prev.filter(item => String(item.code || '').padStart(6, '0') !== code6);
+        poolRef.current = next;
+        return next;
+      });
+      if (!skipConfirm) toast('标的已从自选池移除', 'info');
     }
   };
 

@@ -2317,6 +2317,7 @@ async def get_ignition_tracking_pool(
     http_client: Optional[httpx.AsyncClient] = None,
     fresh_breakout_items: Optional[List[dict]] = None,
     fresh_date: Optional[str] = None,
+    fresh_regime_mode: Optional[str] = None,
 ) -> dict:
     """
     拉取所有已入库的起爆推荐、抗跌抄底、字辈共振与尾盘跟踪标的，
@@ -2338,6 +2339,8 @@ async def get_ignition_tracking_pool(
         # 若传入了当日最新扫描出的起爆标的，自动保全入库，确保次日绝不丢失（尊重用户手动移出标记）
         if fresh_breakout_items and fresh_date:
             modified = False
+            reg_mode = str(fresh_regime_mode or "BULL_NORMAL")
+            env_code = "BAD" if reg_mode == "BEAR_STRICT" else ("WARN" if reg_mode == "RANGE_SELECTIVE" else "OK")
             for it in fresh_breakout_items:
                 stg = it.get("stage")
                 if stg not in ("SHAKEOUT_READY", "CONVERGED_WAIT"):
@@ -2347,6 +2350,19 @@ async def get_ignition_tracking_pool(
                 if not c6.isdigit() or px <= 0:
                     continue
                 sig_id = f"ignition:{fresh_date}:{c6}"
+                meta_patch = {
+                    "env": env_code,
+                    "regimeMode": reg_mode,
+                    "dragonStars": round(_sf(it.get("dragonStars")), 1) if it.get("dragonStars") is not None else None,
+                    "dragonLabel": str(it.get("dragonLabel") or ""),
+                    "isMainTheme": bool(it.get("isMainTheme")),
+                    "mainThemeName": str(it.get("mainThemeName") or ""),
+                    "rs5d": round(_sf(it.get("rs5d")), 2) if it.get("rs5d") is not None else None,
+                    "isResilient": bool(it.get("isResilient")),
+                    "rightSideConfirm": bool(it.get("rightSideConfirm")),
+                    "entryMode": str(it.get("entryMode") or ""),
+                    "supportFloor": round(_sf(it.get("supportFloor")), 2) if _sf(it.get("supportFloor")) > 0 else None,
+                }
                 if sig_id not in signals_map:
                     signals_map[sig_id] = {
                         "id": sig_id,
@@ -2362,10 +2378,13 @@ async def get_ignition_tracking_pool(
                         "ztDate": str(it.get("ztDate") or ""),
                         "volShrinkPct": round(_sf(it.get("volShrinkPct")), 1),
                         "monthVolRatio": round(_sf(it.get("monthVolRatio")), 2),
-                        "env": "OK",
                         "refPrice": round(px, 2),
                         "buy": round(px, 2),
+                        **meta_patch,
                     }
+                    modified = True
+                elif signals_map[sig_id].get("dragonStars") is None:
+                    signals_map[sig_id].update({k: v for k, v in meta_patch.items() if v is not None})
                     modified = True
             if modified:
                 try:
@@ -2747,10 +2766,12 @@ async def get_ignition_pool(
         }
 
         try:
+            reg_mode_live = str(((breakout_res.get("stats") or {}).get("marketRegime") or {}).get("mode") or "BULL_NORMAL")
             tracking_pool_res = await get_ignition_tracking_pool(
                 http_client=http_client,
                 fresh_breakout_items=breakout_res.get("items"),
                 fresh_date=trade_date,
+                fresh_regime_mode=reg_mode_live,
             )
             payload["trackingPool"] = tracking_pool_res
         except Exception:
